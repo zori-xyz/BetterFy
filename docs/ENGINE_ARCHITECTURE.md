@@ -177,6 +177,16 @@ Timeout, unavailable Dota window, missing Steam, and unsupported platform have
 stable error codes. This command is intentionally not connected to the current
 staging-only preview; it becomes mandatory immediately before production deploy.
 
+Steam launch-option planning now has a BetterFy-owned, lossless VDF boundary.
+The parser walks the nested KeyValues path for app `570`, preserves every byte
+outside the `LaunchOptions` value, and adds only `-language dutch`. An existing
+foreign `-language` argument is reported as a conflict instead of being replaced.
+Missing launch options are inserted into the existing Dota app object, and the
+updated document is parsed again in tests. Plans expose before/after SHA-256
+values but perform no filesystem write. Account selection, verified backup,
+same-directory atomic replacement, and rollback journaling remain deployment
+gates before this planner can touch a real `localconfig.vdf`.
+
 Preset persistence is implemented as a separate BetterFy-owned boundary. The
 backend validates the schema and identifiers, rejects symlinks and oversized
 records, and commits JSON records through a temporary file and rollback-aware

@@ -49,6 +49,8 @@ npm run check
   registry and `libraryfolders.vdf` candidates
 - typed Windows runtime inspection plus a guarded graceful Dota/Steam shutdown
   preflight; it is not wired to the staging-only preview until deployment exists
+- lossless Steam KeyValues planning that preserves unrelated Dota launch options,
+  rejects foreign language conflicts, and performs no real config write yet
 - deterministic fixture `BuildPlan` with conflict detection and SHA-256 payloads
 - BetterFy-owned staging execution, verified journals, interrupted-journal
   recovery, operation listing, and idempotent rollback

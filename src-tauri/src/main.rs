@@ -3,6 +3,7 @@
 mod build_engine;
 mod presets;
 mod runtime_control;
+pub mod steam_config;
 
 use build_engine::{
     create_build_plan, execute_build as execute_staged_build,
