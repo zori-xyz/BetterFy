@@ -1,0 +1,12 @@
+{
+  "id": "fixture.ambient-clean",
+  "name": "Ambient Clean",
+  "version": "1.0.0",
+  "files": [
+    {
+      "source": "panorama/styles/ambient-clean.css",
+      "destination": "game/dota/pak01_dir/panorama/styles/betterfy-theme.css",
+      "size": 1536
+    }
+  ]
+}

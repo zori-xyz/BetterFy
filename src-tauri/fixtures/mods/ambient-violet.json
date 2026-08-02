@@ -1,0 +1,12 @@
+{
+  "id": "fixture.ambient-violet",
+  "name": "Ambient Violet",
+  "version": "1.0.0",
+  "files": [
+    {
+      "source": "panorama/styles/ambient-violet.css",
+      "destination": "game/dota/pak01_dir/panorama/styles/betterfy-theme.css",
+      "size": 2048
+    }
+  ]
+}

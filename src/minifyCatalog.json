@@ -1,0 +1,667 @@
+{
+  "source": "https://github.com/Egezenn/dota2-minify",
+  "commit": "db8c43d7df707851eca8eac3478ca5d355b6bcf1",
+  "snapshotDate": "2026-07-29",
+  "items": [
+    {
+      "id": "minify-auto-accept-match",
+      "sourceName": "Auto Accept Match",
+      "name": {
+        "ru": "Автопринятие матча",
+        "en": "Auto Accept Match"
+      },
+      "description": {
+        "ru": "Автоматически принимает диалоговое окно матча через задержку от 0 до 40 секунд. Задержку можно настроить в панели настроек.\n\nВажно: По умолчанию равно 10, если инструменты из мастерской не установлены.",
+        "en": "Automatically accepts the match dialog after 0-40 seconds of delay. Delay is adjustable through settings panel.\n\nNote: Defaults to 10 if workshop tools aren't installed."
+      },
+      "category": "utility",
+      "author": "MeGaNeKoS",
+      "preview": "auto-accept-match.jpg",
+      "sourcePath": "Minify/mods/Auto Accept Match",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 1,
+        "stylingRules": 0,
+        "scripts": 2
+      }
+    },
+    {
+      "id": "minify-custom-backgrounds",
+      "sourceName": "Custom Backgrounds",
+      "name": {
+        "ru": "Свои фоны",
+        "en": "Custom Backgrounds"
+      },
+      "description": {
+        "ru": "Заменяет большинство фоновых изображений.\n\nПеретащите изображение или видео с именем background.<ext> в папку config. По умолчанию используется изображение из Dota.\n\nФорматы, указанные ниже, будут автоматически преобразованы, если инструмент существует:\n\n• magick: .jpg, .jpeg, .webp (преобразуется в .png)\n• ffmpeg: .mp4 (преобразуется в .webm)",
+        "en": "Replaces most backgrounds.\n\nDrop an image or video named background.<ext> into the config folder. By default, it uses an image from Dota.\n\nFormats below will be automatically converted if the tool exists:\n\n• magick: .jpg, .jpeg, .webp (converted to .png)\n• ffmpeg: .mp4 (converted to .webm)"
+      },
+      "category": "custom",
+      "author": "Egezenn",
+      "preview": "custom-backgrounds.jpg",
+      "sourcePath": "Minify/mods/Custom Backgrounds",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 0,
+        "stylingRules": 31,
+        "scripts": 4
+      }
+    },
+    {
+      "id": "minify-custom-fonts",
+      "sourceName": "Custom Fonts",
+      "name": {
+        "ru": "Свои шрифты",
+        "en": "Custom Fonts"
+      },
+      "description": {
+        "ru": "Изменяет большинство, если не все, шрифты; шрифты можно изменить вручную в настройках.\n\nВажно: Некоторые шрифты могут не работать.",
+        "en": "Changes every font being used with:\n\n• A font dropped to config as font.<t|otf>\n• The font string in the config, finds the equalivent font from your system\n\nNote: Some fonts may cause problems."
+      },
+      "category": "custom",
+      "author": "Egezenn",
+      "preview": "custom-fonts.jpg",
+      "sourcePath": "Minify/mods/Custom Fonts",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 0,
+        "stylingRules": 0,
+        "scripts": 2
+      }
+    },
+    {
+      "id": "minify-custom-hero-grids",
+      "sourceName": "Custom Hero Grids",
+      "name": {
+        "ru": "Свои сетки героев",
+        "en": "Custom Hero Grids"
+      },
+      "description": {
+        "ru": "Импортирует пользовательские сетки героев (без нарушения ваших собственных) из удалённого источника или локального файла конфигурации в вашу сетку героев Dota 2.\n\nДоступно для просмотра по адресу https://egezenn.github.io/dota2-precompiled-grids\n\nВы можете поместить свой собственный файл hero_grid_config.json в папку config мода, чтобы использовать его вместо удалённой версии.",
+        "en": "Imports custom hero grids (without breaking your own) from a remote source or a local configuration file into your Dota 2 hero grid selection.\n\nAvailable for viewing at https://egezenn.github.io/dota2-precompiled-grids\n\nYou can drop your own hero_grid_config.json into the mod's config folder to use it instead of the remote version."
+      },
+      "category": "custom",
+      "author": "Egezenn",
+      "preview": null,
+      "sourcePath": "Minify/mods/Custom Hero Grids",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 0,
+        "stylingRules": 0,
+        "scripts": 3
+      }
+    },
+    {
+      "id": "minify-dark-terrain",
+      "sourceName": "Dark Terrain",
+      "name": {
+        "ru": "Тёмный ландшафт",
+        "en": "Dark Terrain"
+      },
+      "description": {
+        "ru": "Разработано для большей наглядности.\n\nВажно: Требуется стандартный ландшафт.\n\n• Делает все тайлы серыми/темно-серыми\n• Линии тумана\n• Удален туман\n• Темная вода\n• Пользовательские логотипы команд, продавцов",
+        "en": "Designed for visual clarity.\n\nNote: Default terrain is required.\n\n• Makes all tiles gray/dark gray\n• Fog lines\n• Removed fog mist\n• Dark water\n• Custom team logos, shopkeepers"
+      },
+      "category": "world",
+      "author": "robbyz512",
+      "preview": "dark-terrain.jpg",
+      "sourcePath": "Minify/mods/Dark Terrain",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 300,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-minify-base-attacks",
+      "sourceName": "Minify Base Attacks",
+      "name": {
+        "ru": "Облегчённые базовые атаки",
+        "en": "Minify Base Attacks"
+      },
+      "description": {
+        "ru": "Уменьшает кол-во частиц у авто атак героев дальнего боя.",
+        "en": "Reduces particles on auto attacks of ranged heroes."
+      },
+      "category": "core",
+      "author": "robbyz512",
+      "preview": "minify-base-attacks.jpg",
+      "sourcePath": "Minify/mods/Minify Base Attacks",
+      "evidence": {
+        "blacklistEntries": 248,
+        "includedFiles": 0,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-minify-spells-and-items",
+      "sourceName": "Minify Spells & Items",
+      "name": {
+        "ru": "Облегчённые способности и предметы",
+        "en": "Minify Spells & Items"
+      },
+      "description": {
+        "ru": "Упрощает использование стандартных заклинаний и предметов в игре.",
+        "en": "Simplifies default spells and items in the game."
+      },
+      "category": "core",
+      "author": "robbyz512",
+      "preview": "minify-spells-and-items.jpg",
+      "sourcePath": "Minify/mods/Minify Spells & Items",
+      "evidence": {
+        "blacklistEntries": 5366,
+        "includedFiles": 0,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-misc-optimization",
+      "sourceName": "Misc Optimization",
+      "name": {
+        "ru": "Общая оптимизация",
+        "en": "Misc Optimization"
+      },
+      "description": {
+        "ru": "Удаляет различные эффекты\n\n• Удаляет эффекты частиц на зданиях, такие как светящиеся синие эффекты на фонтанах, аванпостах, базовых зданиях и т. д.\n• Частицы снарядов/разрушений от атак башен\n• Частицы от чучел\n• Упрощенные иллюзии\n• Снаряжение героев, эмблемы событий, глифы...",
+        "en": "Removes miscellaneous effects\n\n• Removes particle effects on buildings such as the glowing blue effects on fountain, outpost, base buildings etc\n• Tower attack projectile / destruction particles\n• Effigy particles\n• Simplified illusions\n• Hero loadouts, event emblems, glyph.."
+      },
+      "category": "core",
+      "author": "robbyz512",
+      "preview": "misc-optimization.jpg",
+      "sourcePath": "Minify/mods/Misc Optimization",
+      "evidence": {
+        "blacklistEntries": 192,
+        "includedFiles": 0,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-mute-ambient-sounds",
+      "sourceName": "Mute Ambient Sounds",
+      "name": {
+        "ru": "Убрать звуки окружения",
+        "en": "Mute Ambient Sounds"
+      },
+      "description": {
+        "ru": "Приглушает окружающие звуки карты.",
+        "en": "Mutes ambient sounds of the map."
+      },
+      "category": "audio",
+      "author": "robbyz512",
+      "preview": null,
+      "sourcePath": "Minify/mods/Mute Ambient Sounds",
+      "evidence": {
+        "blacklistEntries": 18,
+        "includedFiles": 0,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-mute-default-announcer",
+      "sourceName": "Mute Default Announcer",
+      "name": {
+        "ru": "Убрать стандартного диктора",
+        "en": "Mute Default Announcer"
+      },
+      "description": {
+        "ru": "Отключает стандартные голосовые сообщения и сообщения о серии убийств.",
+        "en": "Mutes default announcers & killstreak lines."
+      },
+      "category": "audio",
+      "author": "Egezenn",
+      "preview": null,
+      "sourcePath": "Minify/mods/Mute Default Announcer",
+      "evidence": {
+        "blacklistEntries": 1,
+        "includedFiles": 0,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-mute-taunt-sounds",
+      "sourceName": "Mute Taunt Sounds",
+      "name": {
+        "ru": "Убрать звуки насмешек",
+        "en": "Mute Taunt Sounds"
+      },
+      "description": {
+        "ru": "Приглушает звуки насмешек.",
+        "en": "Mutes taunt sounds."
+      },
+      "category": "audio",
+      "author": "robbyz512",
+      "preview": null,
+      "sourcePath": "Minify/mods/Mute Taunt Sounds",
+      "evidence": {
+        "blacklistEntries": 1,
+        "includedFiles": 0,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-mute-voice-line-sounds",
+      "sourceName": "Mute Voice Line Sounds",
+      "name": {
+        "ru": "Убрать реплики героев",
+        "en": "Mute Voice Line Sounds"
+      },
+      "description": {
+        "ru": "Отключает звуки голосовых реплик.",
+        "en": "Mutes voice line sounds."
+      },
+      "category": "audio",
+      "author": "robbyz512",
+      "preview": null,
+      "sourcePath": "Minify/mods/Mute Voice Line Sounds",
+      "evidence": {
+        "blacklistEntries": 1147,
+        "includedFiles": 0,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-opendotaguides-guides",
+      "sourceName": "OpenDotaGuides Guides",
+      "name": {
+        "ru": "Гайды OpenDotaGuides",
+        "en": "OpenDotaGuides Guides"
+      },
+      "description": {
+        "ru": "Заменяет стандартные руководства на руководства из OpenDotaGuides.\n\nВажно: Для просмотра стандартных сборок в игре необходимо выбрать их.\n\nИсточник: https://github.com/Egezenn/OpenDotaGuides/releases/latest",
+        "en": "Replaces default guides with the ones from OpenDotaGuides.\n\nNote: Requires default builds to be selected to see them in-game.\n\nSource: https://github.com/Egezenn/OpenDotaGuides/releases/latest"
+      },
+      "category": "utility",
+      "author": "Egezenn",
+      "preview": "opendotaguides-guides.jpg",
+      "sourcePath": "Minify/mods/OpenDotaGuides Guides",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 1,
+        "stylingRules": 4,
+        "scripts": 3
+      }
+    },
+    {
+      "id": "minify-remove-foilage",
+      "sourceName": "Remove Foilage",
+      "name": {
+        "ru": "Убрать растительность",
+        "en": "Remove Foilage"
+      },
+      "description": {
+        "ru": "Удаляет все кусты, цветы, камни и любые другие элементы ландшафта, оставляя только тайлы.\n\nВажно: Требуется стандартный ландшафт.",
+        "en": "Removes all the bushes, flowers, rocks and any other ground props so there are only tiles.\n\nNote: Default terrain is required."
+      },
+      "category": "world",
+      "author": "robbyz512",
+      "preview": "remove-foilage.jpg",
+      "sourcePath": "Minify/mods/Remove Foilage",
+      "evidence": {
+        "blacklistEntries": 614,
+        "includedFiles": 0,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-remove-hero-renders",
+      "sourceName": "Remove Hero Renders",
+      "name": {
+        "ru": "Убрать рендеры героев",
+        "en": "Remove Hero Renders"
+      },
+      "description": {
+        "ru": "Удаляет предварительный просмотр героев и рендеры из пользовательского интерфейса.\n\nКонсольная переменная map_enable_portrait_worlds 0 достигает той же цели, однако вы застрянете на экранах MVP.",
+        "en": "Removes hero previews, renders from the UI.\n\nThe console variable map_enable_portrait_worlds 0 achieves the same goal, however you'll get stuck on MVP screens."
+      },
+      "category": "interface",
+      "author": "Egezenn",
+      "preview": "remove-hero-renders.jpg",
+      "sourcePath": "Minify/mods/Remove Hero Renders",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 0,
+        "stylingRules": 35,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-remove-main-menu-background",
+      "sourceName": "Remove Main Menu Background",
+      "name": {
+        "ru": "Убрать фон главного меню",
+        "en": "Remove Main Menu Background"
+      },
+      "description": {
+        "ru": "Удаляет фон главного меню.",
+        "en": "Removes main menu background."
+      },
+      "category": "interface",
+      "author": "Egezenn",
+      "preview": "remove-main-menu-background.jpg",
+      "sourcePath": "Minify/mods/Remove Main Menu Background",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 0,
+        "stylingRules": 7,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-remove-pings",
+      "sourceName": "Remove Pings",
+      "name": {
+        "ru": "Убрать пинги",
+        "en": "Remove Pings"
+      },
+      "description": {
+        "ru": "Удаляет все частицы пинга и звуки.",
+        "en": "Removes all ping particles, sounds."
+      },
+      "category": "audio",
+      "author": "robbyz512",
+      "preview": null,
+      "sourcePath": "Minify/mods/Remove Pings",
+      "evidence": {
+        "blacklistEntries": 2,
+        "includedFiles": 0,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-remove-river",
+      "sourceName": "Remove River",
+      "name": {
+        "ru": "Убрать реку",
+        "en": "Remove River"
+      },
+      "description": {
+        "ru": "Удаляет все элементы, связанные с реками.\n\nВключая рисование реки предметами из флаконов, звуковые эффекты ходьбы, эффекты брызг частиц.",
+        "en": "Removes all things related to rivers.\n\nIncluding painting river with vial items, walking sound effects, particle splash effects."
+      },
+      "category": "world",
+      "author": "robbyz512",
+      "preview": "remove-river.jpg",
+      "sourcePath": "Minify/mods/Remove River",
+      "evidence": {
+        "blacklistEntries": 9,
+        "includedFiles": 14,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-remove-showcases",
+      "sourceName": "Remove Showcases",
+      "name": {
+        "ru": "Убрать витрины профиля",
+        "en": "Remove Showcases"
+      },
+      "description": {
+        "ru": "Удаляет витрины профилей и анимацию.",
+        "en": "Removes profile showcases & animation."
+      },
+      "category": "interface",
+      "author": "Egezenn",
+      "preview": "remove-showcases.jpg",
+      "sourcePath": "Minify/mods/Remove Showcases",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 0,
+        "stylingRules": 13,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-remove-sprays",
+      "sourceName": "Remove Sprays",
+      "name": {
+        "ru": "Убрать граффити",
+        "en": "Remove Sprays"
+      },
+      "description": {
+        "ru": "Убирает отображение спреев.",
+        "en": "Removes all sprays."
+      },
+      "category": "interface",
+      "author": "robbyz512",
+      "preview": null,
+      "sourcePath": "Minify/mods/Remove Sprays",
+      "evidence": {
+        "blacklistEntries": 2,
+        "includedFiles": 0,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-remove-weather-effects",
+      "sourceName": "Remove Weather Effects",
+      "name": {
+        "ru": "Убрать погодные эффекты",
+        "en": "Remove Weather Effects"
+      },
+      "description": {
+        "ru": "Убирает все погодные эффекты от предметов которые её изменяют и от cl_weather консольной команды.\n\nhttps://liquipedia.net/dota2/Weather_Effects",
+        "en": "Removes all weather effects from weather items and from cl_weather console command.\n\nhttps://liquipedia.net/dota2/Weather_Effects"
+      },
+      "category": "world",
+      "author": "robbyz512",
+      "preview": null,
+      "sourcePath": "Minify/mods/Remove Weather Effects",
+      "evidence": {
+        "blacklistEntries": 11,
+        "includedFiles": 0,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-repopulate-unit-query-hud",
+      "sourceName": "Repopulate Unit Query HUD",
+      "name": {
+        "ru": "Вернуть расширенный HUD цели",
+        "en": "Repopulate Unit Query HUD"
+      },
+      "description": {
+        "ru": "Исправляет и повторно заполняет панель HUD запроса юнита, выпущенную в патче 7.00.\n\nДоступно с консольной переменной dota_hud_new_query_panel 1.",
+        "en": "Fixes and repopulates the Unit Query HUD panel that was released in patch 7.00.\n\nAvailable with the console variable dota_hud_new_query_panel 1."
+      },
+      "category": "interface",
+      "author": "MeGaNeKoS",
+      "preview": null,
+      "sourcePath": "Minify/mods/Repopulate Unit Query HUD",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 3,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-reposition-and-rescale-hud",
+      "sourceName": "Reposition & Rescale HUD",
+      "name": {
+        "ru": "Позиция и масштаб HUD",
+        "en": "Reposition & Rescale HUD"
+      },
+      "description": {
+        "ru": "Перемещает и масштабирует некоторые аспекты игрового HUD.",
+        "en": "Repositions & scales some aspects of the in-game HUD."
+      },
+      "category": "interface",
+      "author": "robbyz512",
+      "preview": "reposition-and-rescale-hud.jpg",
+      "sourcePath": "Minify/mods/Reposition & Rescale HUD",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 0,
+        "stylingRules": 21,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-revamp-hero-grid-layout",
+      "sourceName": "Revamp Hero Grid Layout",
+      "name": {
+        "ru": "Новая сетка выбора героев",
+        "en": "Revamp Hero Grid Layout"
+      },
+      "description": {
+        "ru": "Увеличивает размер карт героев.\nУдаляет ролики о героях, которые появляются при наведении курсора на карты, значки и ряд похожих героев.",
+        "en": "Makes hero cards bigger.\nRemoves hero movies that appear on card hovers, badges and similiar heroes row."
+      },
+      "category": "interface",
+      "author": "Egezenn",
+      "preview": "revamp-hero-grid-layout.jpg",
+      "sourcePath": "Minify/mods/Revamp Hero Grid Layout",
+      "evidence": {
+        "blacklistEntries": 1,
+        "includedFiles": 0,
+        "stylingRules": 56,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-revert-ping-sounds",
+      "sourceName": "Revert Ping Sounds",
+      "name": {
+        "ru": "Вернуть классические звуки пингов",
+        "en": "Revert Ping Sounds"
+      },
+      "description": {
+        "ru": "Возвращает звуки пингов к их звукам до патча 7.39.\n\nНовые звуки заменены на:\n\n• ping_heart = ping\n• ping_enemy_ward = ping_warning\n• ping_need_ward = ping",
+        "en": "Reverts pings sounds to their pre 7.39 patch sounds.\n\nNew sounds are replaced to:\n\n• ping_heart = ping\n• ping_enemy_ward = ping_warning\n• ping_need_ward = ping"
+      },
+      "category": "audio",
+      "author": "Egezenn",
+      "preview": null,
+      "sourcePath": "Minify/mods/Revert Ping Sounds",
+      "evidence": {
+        "blacklistEntries": 2,
+        "includedFiles": 8,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-show-networth",
+      "sourceName": "Show NetWorth",
+      "name": {
+        "ru": "Показывать свой Net Worth",
+        "en": "Show NetWorth"
+      },
+      "description": {
+        "ru": "Показывает твой текущий networth в панели быстрой статистики.",
+        "en": "Shows your current networth in the quick stats panel."
+      },
+      "category": "interface",
+      "author": "MeGaNeKoS",
+      "preview": "show-networth.jpg",
+      "sourcePath": "Minify/mods/Show NetWorth",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 1,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-stat-site-buttons",
+      "sourceName": "Stat Site Buttons",
+      "name": {
+        "ru": "Кнопки сервисов статистики",
+        "en": "Stat Site Buttons"
+      },
+      "description": {
+        "ru": "Добавляет ссылки на сторонние веб-сайты (dotabuff, stratsu, opendota) в профили других игроков и матчи.",
+        "en": "Adds 3rd party website links (dotabuff, stratz, opendota) to the profiles of other players and matches."
+      },
+      "category": "utility",
+      "author": "Egezenn",
+      "preview": "stat-site-buttons.jpg",
+      "sourcePath": "Minify/mods/Stat Site Buttons",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 1,
+        "stylingRules": 81,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-transparent-hud",
+      "sourceName": "Transparent HUD",
+      "name": {
+        "ru": "Прозрачный HUD",
+        "en": "Transparent HUD"
+      },
+      "description": {
+        "ru": "Делает большинство элементов HUD в игре прозрачными, удаляет некоторые бесполезные функции.\n\nВажно: Хотя он частично совместим с другими HUD, рекомендуется использовать стандартный вариант.",
+        "en": "Makes most in-game HUD elements transparent, removes some useless features.\n\nNote: While it's somewhat compatible with other HUDs, default is recommended."
+      },
+      "category": "interface",
+      "author": "ZerdacK / Egezenn",
+      "preview": "transparent-hud.jpg",
+      "sourcePath": "Minify/mods/Transparent HUD",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 0,
+        "stylingRules": 370,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-tree-mod",
+      "sourceName": "Tree Mod",
+      "name": {
+        "ru": "Упрощённые деревья",
+        "en": "Tree Mod"
+      },
+      "description": {
+        "ru": "Превращает все деревья в маленькие круглые кусты.\n\nВажно: Требуется стандартный ландшафт.",
+        "en": "Turns all trees into small circle bushes.\n\nNote: Default terrain is required."
+      },
+      "category": "world",
+      "author": "robbyz512",
+      "preview": "tree-mod.jpg",
+      "sourcePath": "Minify/mods/Tree Mod",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 21,
+        "stylingRules": 0,
+        "scripts": 0
+      }
+    },
+    {
+      "id": "minify-user-styles",
+      "sourceName": "User Styles",
+      "name": {
+        "ru": "Пользовательские стили",
+        "en": "User Styles"
+      },
+      "description": {
+        "ru": "Здесь вы можете добавить свои собственные, изменить или удалить существующие фрагменты кода стилей.\n\nЭти фрагменты кода могут быть нежелательны для большинства пользователей. Поэтому внимательно ознакомьтесь с их назначением и включайте с осторожностью.\n\nВам необходимо вручную создать файл styling.css, чтобы избежать непредвиденных проблем.",
+        "en": "Add your own / modify & remove existing style snippets here.\n\nThese snippets might not be desirable for the majority. So read through what the snippet does and enable with caution.\n\nYou're required to make a styling.css file manually so that you don't run into any unexpected behavior."
+      },
+      "category": "custom",
+      "author": "Egezenn",
+      "preview": null,
+      "sourcePath": "Minify/mods/User Styles",
+      "evidence": {
+        "blacklistEntries": 0,
+        "includedFiles": 0,
+        "stylingRules": 185,
+        "scripts": 1
+      }
+    }
+  ]
+}

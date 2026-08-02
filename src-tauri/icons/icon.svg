@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <style>
+      @font-face {
+        font-family: "BetterFy Display";
+        src: url("../../src/assets/fonts/days-one-latin.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "BetterFy Script";
+        src: url("../../src/assets/fonts/mrs-sheppards-latin.woff2") format("woff2");
+      }
+    </style>
+    <linearGradient id="fy" x1="652" y1="366" x2="874" y2="655" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D157FF"/>
+      <stop offset="1" stop-color="#A84DFF"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(753 523) rotate(90) scale(242)">
+      <stop stop-color="#A84DFF" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#A84DFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1024" height="1024" rx="220" fill="#050507"/>
+  <rect x="24" y="24" width="976" height="976" rx="198" fill="none" stroke="#FFFFFF" stroke-opacity=".08" stroke-width="4"/>
+  <circle cx="753" cy="523" r="242" fill="url(#glow)"/>
+
+  <g aria-label="BetterFy">
+    <text
+      x="94"
+      y="574"
+      fill="#F7F5FB"
+      font-family="BetterFy Display, sans-serif"
+      font-size="134"
+      font-weight="700"
+      letter-spacing="-8"
+    >Better</text>
+    <text
+      x="648"
+      y="615"
+      fill="url(#fy)"
+      font-family="BetterFy Script, cursive"
+      font-size="206"
+    >Fy</text>
+  </g>
+</svg>

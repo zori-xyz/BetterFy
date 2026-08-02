@@ -1,0 +1,19 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+.impeccable/
+.DS_Store
+*.log
+*.tmp
+*.bak
+.env
+.env.*
+!.env.example
+
+# Local installers and signing material never enter source control.
+*.pfx
+*.p12
+*.pem
+*.key
+*.sig

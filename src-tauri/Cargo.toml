@@ -1,0 +1,17 @@
+[package]
+name = "betterfy"
+version = "0.1.0"
+description = "BetterFy desktop application"
+authors = ["BetterFy contributors"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
