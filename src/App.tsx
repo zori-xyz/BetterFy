@@ -158,9 +158,9 @@ const copy = {
       interrupt: "Смоделировать ошибку",
       successEyebrow: "BUILD / READY",
       successTitle: "Можно отправляться в игру",
-      successText: "Preview-сборка прошла проверку. В production здесь появится запуск Dota 2 через подтверждённый engine.",
-      play: "Play Dota 2",
-      playUnavailable: "Запуск игры появится после подключения engine",
+      successText: "Preview-сборка прошла проверку. В production BetterFy запустит только Steam — Dota 2 ты откроешь сам.",
+      play: "Открыть Steam",
+      playUnavailable: "Steam запустится автоматически после безопасного патчинга",
       configTitle: "Сохрани эту конфигурацию",
       configText: "Вернись к ней позже или передай пресет другому игроку через менеджер конфигов.",
       openConfigs: "Открыть менеджер конфигов",
@@ -314,9 +314,9 @@ const copy = {
       interrupt: "Simulate an error",
       successEyebrow: "BUILD / READY",
       successTitle: "Ready for the match",
-      successText: "The preview build passed verification. Production will launch Dota 2 here through the verified engine.",
-      play: "Play Dota 2",
-      playUnavailable: "Game launch arrives with the engine",
+      successText: "The preview build passed verification. Production will start Steam only — you launch Dota 2 yourself.",
+      play: "Open Steam",
+      playUnavailable: "Steam will start automatically after a safe patch",
       configTitle: "Save this configuration",
       configText: "Return to it later or share the preset through the config manager.",
       openConfigs: "Open config manager",
@@ -978,7 +978,7 @@ function BuildRoute({
     setView("progress");
     const startedAt = Date.now();
     try {
-      const nextReceipt = await engineBridge.buildAndLaunch(
+      const nextReceipt = await engineBridge.buildProfile(
         [modId],
         language,
         (snapshot) => setTargetProgress(snapshot.progress),

@@ -31,7 +31,9 @@ without changing the screens.
 7. `builder` — assemble the selected profile in an isolated staging directory.
 8. `verifier` — compare the build plan, staged output, checksums, and required files.
 9. `installer` — commit the verified result atomically and write the journal.
-10. `launcher` — start Dota 2 through Steam only after a successful commit.
+10. `runtime` — inspect Dota/Steam, stop both before any production patch, and
+    restart Steam only after a successful verified commit. BetterFy never
+    auto-launches Dota.
 11. `recovery` — restore the last verified backup or finish an interrupted rollback.
 
 ## State machine
@@ -62,7 +64,9 @@ type EngineError = {
     | "build_failed"
     | "verification_failed"
     | "commit_failed"
-    | "launch_failed";
+    | "runtime_busy"
+    | "shutdown_failed"
+    | "steam_start_failed";
   message: string;
   recoverable: boolean;
   journalId?: string;
@@ -83,7 +87,9 @@ plan_build(request) -> BuildPlan
 execute_build(request) -> BuildReceipt
 restore_backup(backup_id) -> RestoreReceipt
 list_backups() -> BackupSummary[]
-launch_game(profile_id) -> LaunchReceipt
+inspect_runtime() -> RuntimeState
+prepare_runtime_for_patch(confirmation_id) -> RuntimeState
+start_steam(operation_id) -> RuntimeState
 list_presets() -> PresetRecord[]
 save_preset(request) -> PresetRecord
 delete_preset(preset_id) -> ()
@@ -156,8 +162,10 @@ the validated BetterFy-owned operation directory. Repeating rollback is safe.
 Tests inject failures after a staged write and before verification.
 
 This is not deployment: no command writes to Dota, creates a game backup, assembles
-a production VPK, downloads catalog content, or launches Steam. Those boundaries
-stay closed until the staging and recovery contract is verified on Windows.
+a production VPK, downloads catalog content, stops processes, or launches Steam.
+Those boundaries stay closed until the staging and recovery contract is verified
+on Windows. The researched production lifecycle is pinned in
+`docs/MINIFY_PATCHING_AUDIT.md`.
 
 Preset persistence is implemented as a separate BetterFy-owned boundary. The
 backend validates the schema and identifiers, rejects symlinks and oversized

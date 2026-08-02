@@ -68,6 +68,9 @@ Config storage, Steam/Dota marker validation, deterministic fixture planning,
 isolated staging, checksum verification, journaling, and staging rollback have real
 Rust boundaries. Downloads, archive ingestion, VPK assembly, game-file backup,
 deployment, Steam launch, and production authentication are not implemented yet.
+The pinned upstream Minify study and the approved Steam/Dota lifecycle are recorded
+in [`docs/MINIFY_PATCHING_AUDIT.md`](docs/MINIFY_PATCHING_AUDIT.md). Production
+patching must satisfy that contract before game-directory writes are enabled.
 The interface continues to label those paths as preview behavior.
 
 The planned Rust boundary and safe first implementation slice are documented in

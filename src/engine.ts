@@ -61,11 +61,19 @@ export type EngineOperationSummary = {
   stagedFiles: number;
 };
 
+export type RuntimeState = {
+  platformSupported: boolean;
+  steamRunning: boolean;
+  dotaRunning: boolean;
+  patchReady: boolean;
+};
+
 export interface EngineBridge {
   discoverGame(): Promise<GameInstallation[]>;
+  inspectRuntime(): Promise<RuntimeState>;
   validateGamePath(path: string): Promise<GameInstallation>;
   planBuild(modIds: string[]): Promise<BuildPlan>;
-  buildAndLaunch(
+  buildProfile(
     modIds: string[],
     language: "ru" | "en",
     onProgress: (snapshot: EngineSnapshot) => void,
@@ -119,6 +127,14 @@ const demoInstallation: GameInstallation = {
 };
 
 export const mockEngine: EngineBridge = {
+  async inspectRuntime() {
+    return {
+      platformSupported: false,
+      steamRunning: false,
+      dotaRunning: false,
+      patchReady: true,
+    };
+  },
   async discoverGame() {
     await wait(1450);
     if (new URLSearchParams(window.location.search).has("game-missing")) return [];
@@ -157,7 +173,7 @@ export const mockEngine: EngineBridge = {
       executable: operations.length > 0 && contenders.length < 2,
     };
   },
-  async buildAndLaunch(modIds, language, onProgress) {
+  async buildProfile(modIds, language, onProgress) {
     modIds = uniqueModIds(modIds);
     const stages: EngineSnapshot[] =
       language === "ru"
@@ -203,6 +219,14 @@ const isTauriRuntime = () =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export const engineBridge: EngineBridge = {
+  async inspectRuntime() {
+    if (!isTauriRuntime()) return mockEngine.inspectRuntime();
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "inspect_runtime",
+      invoke<RuntimeState>("inspect_runtime"),
+    );
+  },
   async discoverGame() {
     if (!isTauriRuntime()) return mockEngine.discoverGame();
     const { invoke } = await import("@tauri-apps/api/core");
@@ -231,8 +255,8 @@ export const engineBridge: EngineBridge = {
       invoke<BuildPlan>("plan_build", { request: { modIds: uniqueModIds(modIds) } }),
     );
   },
-  async buildAndLaunch(modIds, language, onProgress) {
-    if (!isTauriRuntime()) return mockEngine.buildAndLaunch(modIds, language, onProgress);
+  async buildProfile(modIds, language, onProgress) {
+    if (!isTauriRuntime()) return mockEngine.buildProfile(modIds, language, onProgress);
     const { invoke } = await import("@tauri-apps/api/core");
     const normalized = uniqueModIds(modIds);
     onProgress({

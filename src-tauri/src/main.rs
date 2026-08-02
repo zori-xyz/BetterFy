@@ -2,6 +2,7 @@
 
 mod build_engine;
 mod presets;
+mod runtime_control;
 
 use build_engine::{
     create_build_plan, execute_build as execute_staged_build,
@@ -9,6 +10,7 @@ use build_engine::{
     BuildReceipt, OperationSummary, RollbackReceipt,
 };
 use presets::{delete_preset, export_preset, import_preset, list_presets, save_preset};
+use runtime_control::RuntimeState;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::fs;
@@ -205,6 +207,11 @@ fn execute_build(app: AppHandle, request: BuildPlanRequest) -> Result<BuildRecei
 }
 
 #[tauri::command]
+fn inspect_runtime() -> Result<RuntimeState, String> {
+    runtime_control::inspect_runtime()
+}
+
+#[tauri::command]
 fn list_engine_operations(app: AppHandle) -> Result<Vec<OperationSummary>, String> {
     let app_data = app
         .path()
@@ -234,6 +241,7 @@ fn main() {
             validate_game_path,
             plan_build,
             execute_build,
+            inspect_runtime,
             list_engine_operations,
             rollback_engine_operation,
             list_presets,
