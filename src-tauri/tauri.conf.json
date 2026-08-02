@@ -28,6 +28,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
       "icons/32x32.png",
@@ -36,5 +37,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI5RjYxQTkzNTQxRDZFOTAKUldTUWJoMVVreHIyS2ZaRWFUVllzVGVUUElzM3UzU3pROXRRM0RsUGVzSGRUNXJBOWY1Q041c2UK",
+      "endpoints": [
+        "https://github.com/zori-xyz/BetterFy/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

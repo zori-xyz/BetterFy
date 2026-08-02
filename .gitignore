@@ -17,3 +17,4 @@ src-tauri/gen/
 *.pem
 *.key
 *.sig
+.release-signing/

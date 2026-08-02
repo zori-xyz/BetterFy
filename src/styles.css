@@ -2100,6 +2100,253 @@ html[lang="en"] .auth-view h1 { line-height: 1.1; letter-spacing: -.055em; }
   .setup-preview:hover { color: #b978dc; }
   .setup-preview:hover svg { transform: translateX(3px); }
 }
+
+/*
+ * Responsive density contract
+ *
+ * The desktop UI previously mixed 7–10px labels with route-specific fixed
+ * grids. That looked acceptable in a small preview but collapsed into a tiny,
+ * inconsistent interface on a 1080p Windows desktop. These rules establish a
+ * single readable density and a shared stage for every route without scaling
+ * the webview (which would also scale hit targets and blur text).
+ */
+:root {
+  --app-rail-width: clamp(76px, 4.7vw, 92px);
+  --app-topbar-height: clamp(76px, 4.8vw, 92px);
+  --app-stage-max: 1680px;
+  --app-page-gutter: clamp(28px, 3.2vw, 58px);
+  --type-caption: clamp(10px, .58vw, 12px);
+  --type-small: clamp(12px, .68vw, 14px);
+  --type-body: clamp(14px, .78vw, 16px);
+}
+
+.app-frame { grid-template-columns: var(--app-rail-width) minmax(0, 1fr); }
+.app-rail {
+  width: var(--app-rail-width);
+  padding-inline: clamp(8px, .72vw, 14px);
+}
+.app-rail button:not(.rail-brand) {
+  width: 100%;
+  max-width: 66px;
+  min-height: 56px;
+  margin-inline: auto;
+}
+.home-topbar {
+  flex-basis: var(--app-topbar-height);
+  min-height: var(--app-topbar-height);
+  padding-inline: var(--app-page-gutter);
+}
+.home-topbar > *:first-child,
+.home-topbar > *:last-child { position: relative; z-index: 1; }
+.workspace-route { width: 100%; }
+
+.home-content,
+.route-page,
+.build-studio,
+.build-operation,
+.build-result,
+.minify-mods-route,
+.wardrobe-catalog-route {
+  padding: var(--app-page-gutter);
+}
+.home-content > *,
+.route-page > *,
+.minify-mods-route > *,
+.wardrobe-catalog-route > * {
+  width: min(100%, var(--app-stage-max));
+  margin-inline: auto;
+}
+.build-studio,
+.build-operation,
+.build-result { max-width: var(--app-stage-max); }
+
+.auth-header,
+.setup-header { height: var(--app-topbar-height); padding-inline: var(--app-page-gutter); }
+.auth-stage { grid-template-columns: minmax(500px, 1fr) minmax(500px, 1fr); }
+.auth-workspace { padding: calc(var(--app-topbar-height) + 34px) var(--app-page-gutter) 42px; }
+.auth-view { max-width: 560px; }
+.auth-view h1 { max-width: 550px; }
+.auth-view > p { max-width: 530px; }
+.auth-art-placeholder { right: -2%; width: min(88%, 820px); }
+.scene-copy { left: var(--app-page-gutter); bottom: var(--app-page-gutter); width: min(560px, calc(100% - 2 * var(--app-page-gutter))); }
+.scene-copy p { max-width: 500px; }
+
+.section-label,
+.eyebrow,
+.scene-copy > span,
+.auth-art-placeholder > small,
+.build-preview > div:first-child > span,
+.community-card > div:nth-child(2) > span,
+.route-heading > span,
+.library-grid article span,
+.build-empty-copy > span,
+.build-decision > span,
+.catalog-heading > div > span,
+.catalog-feature-copy > span,
+.minify-heading > div > span,
+.minify-selection-summary > span,
+.minify-feature-copy > span,
+.catalog-feature-visual > span,
+.minify-feature-visual > span,
+.panel-section-title {
+  font-size: var(--type-caption);
+  line-height: 1.25;
+}
+
+.auth-view > p,
+.scene-copy p,
+.hero-copy > p,
+.route-heading p,
+.build-studio .route-heading p,
+.build-decision > p,
+.operation-copy > p,
+.result-copy > p,
+.catalog-heading > div > p,
+.catalog-feature-copy > p,
+.minify-heading > div > p,
+.minify-feature-copy > p,
+.library-grid article p,
+.community-card p,
+.panel-content > p {
+  font-size: var(--type-body);
+}
+
+.telegram-actions strong,
+.primary-action > b,
+.build-main-action,
+.build-quiet-action,
+.catalog-primary strong,
+.minify-primary strong,
+.catalog-card-copy strong,
+.minify-card-copy > strong,
+.panel-row strong,
+.config-card-copy h3 {
+  font-size: var(--type-small);
+}
+.telegram-actions small,
+.privacy-note,
+.have-code-button,
+.back-button,
+.code-feedback,
+.resend-code,
+.hero-copy > small,
+.art-caption small,
+.build-preview p,
+.community-card small,
+.build-empty-copy p,
+.conflict-choices button small,
+.build-text-action,
+.catalog-selection-summary > p,
+.catalog-selection-summary > small,
+.minify-selection-summary > p,
+.minify-selection-summary > small,
+.catalog-results > header span,
+.catalog-results > header small,
+.minify-results > header span,
+.minify-results > header small,
+.catalog-feature-copy dt,
+.catalog-feature-copy dd,
+.catalog-feature-copy > small,
+.catalog-source-line,
+.minify-evidence span,
+.minify-trust-line,
+.catalog-card-copy > p,
+.catalog-card-copy > small,
+.minify-card-copy > p,
+.minify-card-copy > small,
+.catalog-card-toggle span,
+.minify-card-toggle span,
+.library-grid article > small,
+.panel-row small,
+.diagnostic-result strong,
+.diagnostic-result small,
+.profile-facts dt,
+.profile-facts dd,
+.profile-community strong,
+.profile-community small {
+  font-size: var(--type-small);
+  line-height: 1.5;
+}
+
+.catalog-section-switch button strong { font-size: var(--type-body); }
+.catalog-section-switch button small,
+.catalog-controls input,
+.minify-controls input,
+.catalog-groups button,
+.minify-controls > div button,
+.catalog-fine-categories button,
+.catalog-filter-actions button,
+.catalog-filter-actions select { font-size: var(--type-small); }
+.catalog-section-switch button { min-height: 60px; padding-inline: 16px; }
+.catalog-controls > label,
+.minify-controls > label { min-height: 52px; }
+.catalog-groups button,
+.minify-controls > div button { min-height: 42px; }
+.catalog-fine-categories button,
+.catalog-filter-actions button,
+.catalog-filter-actions label { min-height: 38px; height: auto; }
+
+.home-hero { min-height: clamp(480px, 55vh, 660px); }
+.home-lower { grid-template-columns: minmax(0, 1fr) minmax(320px, 390px); }
+.build-preview { grid-template-columns: minmax(320px, 1fr) minmax(160px, 210px) minmax(170px, 220px); }
+.community-card { grid-template-columns: 110px minmax(320px, 1fr) minmax(220px, 300px); }
+.library-grid { width: min(100%, var(--app-stage-max)); }
+
+.catalog-section-switch { top: 12px; padding-inline: var(--app-page-gutter); }
+.catalog-hub.is-scrolled .catalog-section-switch { top: 8px; }
+.catalog-controls,
+.minify-controls { top: calc(var(--app-topbar-height) + 6px); }
+.catalog-hub.is-scrolled .catalog-controls,
+.catalog-hub.is-scrolled .minify-controls { top: 66px; }
+.catalog-feature,
+.minify-feature { grid-template-columns: minmax(480px, 1.08fr) minmax(440px, .92fr); }
+.catalog-grid,
+.minify-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.catalog-grid article,
+.minify-grid article { min-height: 340px; }
+.catalog-card-copy > p,
+.minify-card-copy > p { height: auto; min-height: 42px; }
+
+@media (min-width: 1700px) {
+  .auth-stage { grid-template-columns: minmax(700px, 1.08fr) minmax(620px, .92fr); }
+  .auth-view { max-width: 600px; }
+  .auth-view h1 { font-size: clamp(56px, 3.4vw, 68px); }
+  .scene-copy h2 { font-size: clamp(58px, 3.8vw, 76px); }
+  .hero-copy h1 { font-size: clamp(78px, 5.1vw, 98px); }
+  .route-heading h1,
+  .catalog-heading h1,
+  .minify-heading h1 { font-size: clamp(62px, 4vw, 78px); }
+  .catalog-feature-copy h2,
+  .minify-feature-copy h2 { font-size: clamp(44px, 2.8vw, 56px); }
+}
+
+@media (max-width: 1280px) {
+  :root {
+    --app-page-gutter: clamp(24px, 2.8vw, 38px);
+    --type-caption: 10px;
+    --type-small: 12px;
+    --type-body: 14px;
+  }
+  .auth-stage { grid-template-columns: minmax(430px, .96fr) minmax(480px, 1.04fr); }
+  .home-lower { grid-template-columns: minmax(0, 1fr) 310px; }
+  .community-card { grid-template-columns: 90px minmax(260px, 1fr) minmax(190px, 240px); }
+  .catalog-feature,
+  .minify-feature { grid-template-columns: minmax(390px, 1.04fr) minmax(360px, .96fr); }
+  .catalog-grid,
+  .minify-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1050px) {
+  .auth-stage { grid-template-columns: minmax(390px, .9fr) minmax(500px, 1.1fr); }
+  .auth-art-placeholder { right: -13%; width: 104%; }
+  .home-hero { grid-template-columns: minmax(340px, .9fr) minmax(390px, 1.1fr); }
+  .home-lower { grid-template-columns: 1fr; }
+  .system-strip { grid-template-columns: repeat(3, 1fr); }
+  .system-state { min-height: 70px; border-right: 1px solid var(--line); border-bottom: 0; }
+  .system-state:last-child { border-right: 0; }
+  .catalog-grid,
+  .minify-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .telegram-actions > a:active, .primary-action:active, .confirm-code:not(:disabled):active { transform: scale(.97); }
 
 @media (max-width: 1080px) {
@@ -5703,5 +5950,288 @@ html[data-theme="light"] .sign-out-button {
   html[data-theme="light"] .catalog-filter-actions button:hover {
     color: #70238f;
     background: rgba(125,42,163,.07);
+  }
+}
+
+/* Final responsive authority — keep after theme and feature rules. */
+html .app-frame { grid-template-columns: var(--app-rail-width) minmax(0, 1fr); }
+html .app-rail { width: var(--app-rail-width); }
+html .home-topbar {
+  flex-basis: var(--app-topbar-height);
+  min-height: var(--app-topbar-height);
+  padding-inline: var(--app-page-gutter);
+}
+html .home-content,
+html .route-page,
+html .build-studio,
+html .build-operation,
+html .build-result,
+html .minify-mods-route,
+html .wardrobe-catalog-route { padding: var(--app-page-gutter); }
+html .home-content > *,
+html .route-page > *,
+html .minify-mods-route > *,
+html .wardrobe-catalog-route > * {
+  width: min(100%, var(--app-stage-max));
+  margin-inline: auto;
+}
+html .build-studio,
+html .build-operation,
+html .build-result { max-width: var(--app-stage-max); }
+
+html .section-label,
+html .eyebrow,
+html .scene-copy > span,
+html .build-preview > div:first-child > span,
+html .community-card > div:nth-child(2) > span,
+html .route-heading > span,
+html .library-grid article span,
+html .build-empty-copy > span,
+html .build-decision > span,
+html .catalog-heading > div > span,
+html .catalog-feature-copy > span,
+html .minify-heading > div > span,
+html .minify-selection-summary > span,
+html .minify-feature-copy > span,
+html .catalog-feature-visual > span,
+html .minify-feature-visual > span { font-size: var(--type-caption); line-height: 1.25; }
+
+html .auth-view > p,
+html .scene-copy p,
+html .hero-copy > p,
+html .route-heading p,
+html .build-studio .route-heading p,
+html .build-decision > p,
+html .catalog-heading > div > p,
+html .catalog-feature-copy > p,
+html .minify-heading > div > p,
+html .minify-feature-copy > p,
+html .library-grid article p,
+html .community-card p { font-size: var(--type-body); }
+
+html .telegram-actions strong,
+html .primary-action > b,
+html .build-main-action,
+html .build-quiet-action,
+html .catalog-primary strong,
+html .minify-primary strong,
+html .catalog-card-copy strong,
+html .minify-card-copy > strong,
+html .panel-row strong { font-size: var(--type-small); }
+
+html .telegram-actions small,
+html .privacy-note,
+html .have-code-button,
+html .back-button,
+html .code-feedback,
+html .resend-code,
+html .hero-copy > small,
+html .art-caption small,
+html .build-preview p,
+html .community-card small,
+html .build-empty-copy p,
+html .conflict-choices button small,
+html .build-text-action,
+html .catalog-selection-summary > p,
+html .catalog-selection-summary > small,
+html .minify-selection-summary > p,
+html .minify-selection-summary > small,
+html .catalog-results > header span,
+html .catalog-results > header small,
+html .minify-results > header span,
+html .minify-results > header small,
+html .catalog-feature-copy dt,
+html .catalog-feature-copy dd,
+html .catalog-feature-copy > small,
+html .catalog-source-line,
+html .minify-evidence span,
+html .minify-trust-line,
+html .catalog-card-copy > p,
+html .catalog-card-copy > small,
+html .minify-card-copy > p,
+html .minify-card-copy > small,
+html .catalog-card-toggle span,
+html .minify-card-toggle span,
+html .library-grid article > small,
+html .panel-row small,
+html .diagnostic-result strong,
+html .diagnostic-result small,
+html .profile-facts dt,
+html .profile-facts dd,
+html .profile-community strong,
+html .profile-community small { font-size: var(--type-small); line-height: 1.5; }
+
+html .catalog-section-switch button strong { font-size: var(--type-body); }
+html .catalog-section-switch button small,
+html .catalog-controls input,
+html .minify-controls input,
+html .catalog-groups button,
+html .minify-controls > div button,
+html .catalog-fine-categories button,
+html .catalog-filter-actions button,
+html .catalog-filter-actions select { font-size: var(--type-small); }
+html .catalog-section-switch button { min-height: 60px; }
+html .catalog-controls > label,
+html .minify-controls > label { min-height: 52px; }
+html .catalog-groups button,
+html .minify-controls > div button { min-height: 42px; }
+html .catalog-fine-categories button,
+html .catalog-filter-actions button,
+html .catalog-filter-actions label { min-height: 38px; height: auto; }
+
+html .catalog-controls,
+html .minify-controls { top: calc(var(--app-topbar-height) + 6px); }
+html .catalog-hub.is-scrolled .catalog-controls,
+html .catalog-hub.is-scrolled .minify-controls { top: 66px; }
+html .catalog-feature,
+html .minify-feature { grid-template-columns: minmax(480px, 1.08fr) minmax(440px, .92fr); }
+html .catalog-grid,
+html .minify-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+html .catalog-grid article,
+html .minify-grid article { min-height: 340px; }
+html .catalog-card-copy > p,
+html .minify-card-copy > p { height: auto; min-height: 42px; }
+
+@media (max-width: 1280px) {
+  html .catalog-feature,
+  html .minify-feature { grid-template-columns: minmax(390px, 1.04fr) minmax(360px, .96fr); }
+}
+@media (max-width: 1050px) {
+  html .catalog-grid,
+  html .minify-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.app-update-card {
+  position: fixed;
+  z-index: 1000;
+  right: clamp(18px, 2.2vw, 36px);
+  bottom: clamp(18px, 2.2vw, 36px);
+  width: min(560px, calc(100vw - 36px));
+  min-height: 108px;
+  padding: 16px 52px 16px 16px;
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 15px;
+  border: 1px solid rgba(209,87,255,.28);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 0 0, rgba(209,87,255,.14), transparent 40%),
+    rgba(13,13,19,.96);
+  box-shadow: 0 28px 80px rgba(0,0,0,.42);
+  backdrop-filter: blur(22px);
+  animation: update-card-in 420ms var(--ease-out) both;
+}
+.app-update-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  color: #e6b8ff;
+  background: rgba(187,73,240,.12);
+}
+.app-update-icon svg { width: 22px; }
+.app-update-card.is-downloading .app-update-icon svg { animation: icon-spin 1.2s linear infinite; }
+.app-update-card.is-installed { border-color: rgba(168,240,75,.3); }
+.app-update-card.is-installed .app-update-icon { color: #cfff91; background: rgba(168,240,75,.1); }
+.app-update-copy { min-width: 0; }
+.app-update-copy > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #bd6de7;
+  font: 600 10px/1.2 "JetBrains Mono", monospace;
+  letter-spacing: .12em;
+}
+.app-update-copy > span svg { width: 13px; }
+.app-update-copy > strong,
+.app-update-copy > small { display: block; }
+.app-update-copy > strong { margin-top: 8px; font-size: 15px; }
+.app-update-copy > small { margin-top: 5px; color: #9b96a2; font-size: 12px; line-height: 1.45; }
+.app-update-action {
+  min-height: 44px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(115deg, #9c37e8, #ce57f4);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.app-update-action:disabled { opacity: .58; cursor: wait; }
+.app-update-dismiss {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  color: #77727f;
+  background: transparent;
+  cursor: pointer;
+}
+.app-update-dismiss svg { width: 15px; }
+.app-update-progress { height: 3px; margin-top: 10px; overflow: hidden; border-radius: 4px; background: rgba(255,255,255,.08); }
+.app-update-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #9c37e8, #e58bff); transition: width 180ms ease; }
+html[data-theme="light"] .app-update-card {
+  color: #211a25;
+  border-color: rgba(125,42,163,.24);
+  background:
+    radial-gradient(circle at 0 0, rgba(157,44,199,.1), transparent 40%),
+    rgba(255,254,255,.97);
+  box-shadow: 0 28px 80px rgba(62,39,70,.2);
+}
+html[data-theme="light"] .app-update-copy > span { color: #792898; }
+html[data-theme="light"] .app-update-copy > small { color: #5f5664; }
+@media (max-width: 680px) {
+  .app-update-card { grid-template-columns: 46px minmax(0, 1fr); }
+  .app-update-icon { width: 46px; height: 46px; }
+  .app-update-action { grid-column: 1 / -1; width: 100%; }
+}
+@keyframes update-card-in {
+  from { opacity: 0; transform: translateY(18px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Final viewport readability pass: every route shares one left edge and type floor. */
+html .route-page > .route-heading {
+  width: min(var(--app-stage-max), calc(100% - (var(--app-page-gutter) * 2)));
+  max-width: var(--app-stage-max);
+}
+html .route-heading > h1,
+html .route-heading > p { max-width: 820px; }
+
+html .home-content p,
+html .route-page p,
+html .build-experience p { font-size: var(--type-small); line-height: 1.55; }
+html .home-content small,
+html .route-page small,
+html .build-experience small { font-size: var(--type-caption); line-height: 1.45; }
+
+html .home-hero-copy > p,
+html .route-heading > p,
+html .catalog-header-copy > p,
+html .catalog-feature-copy > p,
+html .minify-feature-copy > p,
+html .build-hero-copy > p { font-size: var(--type-body); line-height: 1.55; }
+
+html .catalog-groups button,
+html .minify-controls > div button,
+html .catalog-fine-categories button,
+html .catalog-filter-actions button { color: #aaa4b0; }
+html[data-theme="light"] .catalog-groups button,
+html[data-theme="light"] .minify-controls > div button,
+html[data-theme="light"] .catalog-fine-categories button,
+html[data-theme="light"] .catalog-filter-actions button { color: #514756; }
+
+@media (max-width: 760px) {
+  html .route-page > .route-heading {
+    width: min(var(--app-stage-max), calc(100% - 32px));
   }
 }

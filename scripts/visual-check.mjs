@@ -493,6 +493,7 @@ const captureLightEntry = async (viewport, suffix, full = false) => {
 };
 
 const desktop = await capture({ width: 1440, height: 900 }, "1440");
+const fullscreen = await capture({ width: 1920, height: 1080 }, "1920");
 const minimum = await capture({ width: 980, height: 660 }, "980");
 const missingGame = await captureMissingGame();
 const reducedMotion = await auditReducedMotion();
@@ -521,6 +522,7 @@ console.log(JSON.stringify({
   contrastIssues: uniqueContrastIssues,
   contrastIssueCount: uniqueContrastIssues.length,
   desktop,
+  fullscreen,
   minimum,
   missingGame,
   reducedMotion,

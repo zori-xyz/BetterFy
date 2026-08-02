@@ -49,6 +49,6 @@ jobs:
       - name: Build unsigned Windows installer
         uses: tauri-apps/tauri-action@v1
         with:
-          args: --bundles nsis
+          args: --bundles nsis --config src-tauri/tauri.ci.conf.json
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: BetterFy-Windows-[arch]-[bundle]

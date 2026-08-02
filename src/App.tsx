@@ -39,6 +39,7 @@ import {
   X,
 } from "lucide-react";
 import AuthFlow from "./AuthFlow";
+import AppUpdater from "./AppUpdater";
 import AccentTitle from "./AccentTitle";
 import BetterFyMark from "./BetterFyMark";
 import BetterFyWordmark from "./BetterFyWordmark";
@@ -434,23 +435,26 @@ export default function App() {
     transitionUI(() => setStage("workspace"));
   };
 
-  if (stage === "loading") return <LoadingScreen />;
-  if (stage === "auth") return <AuthFlow onComplete={completeAuth} />;
-  if (stage === "setup") return <OnboardingFlow onComplete={completeSetup} />;
-  if (!installation) return <OnboardingFlow onComplete={completeSetup} />;
-  return (
-    <Workspace
-      installation={installation}
-      session={session}
-      theme={theme}
-      onThemeChange={setTheme}
-      onReconnect={() => transitionUI(() => setStage("setup"))}
-      onSignOut={() => {
-        setSession(null);
-        transitionUI(() => setStage("auth"));
-      }}
-    />
-  );
+  let content;
+  if (stage === "loading") content = <LoadingScreen />;
+  else if (stage === "auth") content = <AuthFlow onComplete={completeAuth} />;
+  else if (stage === "setup" || !installation) content = <OnboardingFlow onComplete={completeSetup} />;
+  else {
+    content = (
+      <Workspace
+        installation={installation}
+        session={session}
+        theme={theme}
+        onThemeChange={setTheme}
+        onReconnect={() => transitionUI(() => setStage("setup"))}
+        onSignOut={() => {
+          setSession(null);
+          transitionUI(() => setStage("auth"));
+        }}
+      />
+    );
+  }
+  return <>{content}<AppUpdater /></>;
 }
 
 function LoadingScreen() {
