@@ -92,8 +92,10 @@ fn process_entries() -> Result<Vec<ProcessEntry>, String> {
         return Err("runtime_inspection_failed".to_string());
     }
 
-    let mut entry = PROCESSENTRY32W::default();
-    entry.dwSize = size_of::<PROCESSENTRY32W>() as u32;
+    let mut entry = PROCESSENTRY32W {
+        dwSize: size_of::<PROCESSENTRY32W>() as u32,
+        ..Default::default()
+    };
     let mut entries = Vec::new();
     let mut has_entry = unsafe { Process32FirstW(snapshot, &mut entry) } != 0;
 
