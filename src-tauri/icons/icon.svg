@@ -10,11 +10,11 @@
         src: url("../../src/assets/fonts/mrs-sheppards-latin.woff2") format("woff2");
       }
     </style>
-    <linearGradient id="fy" x1="652" y1="366" x2="874" y2="655" gradientUnits="userSpaceOnUse">
+    <linearGradient id="fy" x1="620" y1="330" x2="925" y2="720" gradientUnits="userSpaceOnUse">
       <stop stop-color="#D157FF"/>
       <stop offset="1" stop-color="#A84DFF"/>
     </linearGradient>
-    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(753 523) rotate(90) scale(242)">
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(748 523) rotate(90) scale(286)">
       <stop stop-color="#A84DFF" stop-opacity=".18"/>
       <stop offset="1" stop-color="#A84DFF" stop-opacity="0"/>
     </radialGradient>
@@ -22,24 +22,24 @@
 
   <rect width="1024" height="1024" rx="220" fill="#050507"/>
   <rect x="24" y="24" width="976" height="976" rx="198" fill="none" stroke="#FFFFFF" stroke-opacity=".08" stroke-width="4"/>
-  <circle cx="753" cy="523" r="242" fill="url(#glow)"/>
+  <circle cx="748" cy="523" r="286" fill="url(#glow)"/>
 
   <g aria-label="BetterFy">
     <text
-      x="94"
-      y="574"
+      x="43"
+      y="596"
       fill="#F7F5FB"
       font-family="BetterFy Display, sans-serif"
-      font-size="134"
+      font-size="188"
       font-weight="700"
-      letter-spacing="-8"
+      letter-spacing="-10"
     >Better</text>
     <text
-      x="648"
-      y="615"
+      x="670"
+      y="648"
       fill="url(#fy)"
       font-family="BetterFy Script, cursive"
-      font-size="206"
+      font-size="282"
     >Fy</text>
   </g>
 </svg>

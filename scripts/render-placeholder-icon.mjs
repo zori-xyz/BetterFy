@@ -47,20 +47,20 @@ await page.setContent(`
     .wordmark {
       display: flex;
       align-items: center;
-      transform: translateY(-5px);
+      transform: translateY(-8px);
       white-space: nowrap;
     }
     .better {
       color: #f7f5fb;
-      font: 400 134px/1 "Days One BetterFy", sans-serif;
-      letter-spacing: -7px;
+      font: 400 188px/1 "Days One BetterFy", sans-serif;
+      letter-spacing: -10px;
     }
     .fy {
-      margin-left: -5px;
+      margin-left: -10px;
       color: #c84ff4;
-      font: 400 207px/.7 "Mrs Sheppards BetterFy", cursive;
-      transform: translateY(21px);
-      text-shadow: 0 0 42px rgba(168,77,255,.23);
+      font: 400 282px/.7 "Mrs Sheppards BetterFy", cursive;
+      transform: translateY(27px);
+      text-shadow: 0 0 52px rgba(168,77,255,.25);
     }
   </style>
   <main class="icon" aria-label="BetterFy">
@@ -69,6 +69,16 @@ await page.setContent(`
 `);
 
 await page.evaluate(() => document.fonts.ready);
+const wordmarkBounds = await page.locator(".wordmark").boundingBox();
+if (
+  !wordmarkBounds ||
+  wordmarkBounds.width < 760 ||
+  wordmarkBounds.width > 900 ||
+  wordmarkBounds.x < 40 ||
+  wordmarkBounds.x + wordmarkBounds.width > 984
+) {
+  throw new Error(`BetterFy wordmark is outside the icon safe area: ${JSON.stringify(wordmarkBounds)}`);
+}
 await page.locator(".icon").screenshot({ path: output, omitBackground: true });
 await browser.close();
 

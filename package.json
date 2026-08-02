@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "check": "npm run build && cargo test --locked --manifest-path src-tauri/Cargo.toml",
+    "check": "npm run build && npm run icon:check && cargo test --locked --manifest-path src-tauri/Cargo.toml",
     "build:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1",
     "visual:check": "node scripts/visual-check.mjs",
-    "icon:placeholder": "node scripts/render-placeholder-icon.mjs && tauri icon src-tauri/icons/icon-source.png",
+    "icon:placeholder": "node scripts/render-placeholder-icon.mjs && tauri icon src-tauri/icons/icon-source.png && npm run icon:check",
+    "icon:check": "node scripts/verify-windows-icon.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },
