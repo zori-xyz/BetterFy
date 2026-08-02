@@ -68,6 +68,31 @@ export type RuntimeState = {
   patchReady: boolean;
 };
 
+export type SteamProfileSummary = {
+  profileToken: string;
+  profileIndex: number;
+  status: "ready" | "already_managed" | "launch_option_conflict" | "invalid_config";
+};
+
+export type SteamLaunchOptionPreview = {
+  profileToken: string;
+  changed: boolean;
+  beforeSha256: string;
+  afterSha256: string;
+  confirmationToken: string;
+};
+
+export type SteamConfigReceipt = {
+  operationId: string | null;
+  profileToken: string;
+  changed: boolean;
+  beforeSha256: string;
+  afterSha256: string;
+  backupVerified: boolean;
+  committed: boolean;
+  rolledBack: boolean;
+};
+
 export interface EngineBridge {
   discoverGame(): Promise<GameInstallation[]>;
   inspectRuntime(): Promise<RuntimeState>;
@@ -81,6 +106,11 @@ export interface EngineBridge {
   ): Promise<BuildReceipt>;
   rollbackOperation(operationId: string): Promise<RollbackReceipt>;
   listOperations(): Promise<EngineOperationSummary[]>;
+  listSteamProfiles(): Promise<SteamProfileSummary[]>;
+  previewSteamLaunchOptions(profileToken: string): Promise<SteamLaunchOptionPreview>;
+  applySteamLaunchOptions(preview: SteamLaunchOptionPreview): Promise<SteamConfigReceipt>;
+  rollbackSteamLaunchOptions(operationId: string): Promise<SteamConfigReceipt>;
+  recoverSteamLaunchOptions(): Promise<SteamConfigReceipt[]>;
 }
 
 const wait = (duration: number) => new Promise((resolve) => window.setTimeout(resolve, duration));
@@ -217,6 +247,21 @@ export const mockEngine: EngineBridge = {
   async listOperations() {
     return [];
   },
+  async listSteamProfiles() {
+    return [];
+  },
+  async previewSteamLaunchOptions() {
+    throw new EngineFault("bridge_error", "preview_steam_launch_options");
+  },
+  async applySteamLaunchOptions() {
+    throw new EngineFault("bridge_error", "apply_steam_launch_options");
+  },
+  async rollbackSteamLaunchOptions() {
+    throw new EngineFault("bridge_error", "rollback_steam_launch_options");
+  },
+  async recoverSteamLaunchOptions() {
+    return [];
+  },
 };
 
 const isTauriRuntime = () =>
@@ -333,6 +378,65 @@ export const engineBridge: EngineBridge = {
     );
     if (!Array.isArray(result)) {
       throw new EngineFault("invalid_response", "list_engine_operations");
+    }
+    return result;
+  },
+  async listSteamProfiles() {
+    if (!isTauriRuntime()) return mockEngine.listSteamProfiles();
+    const { invoke } = await import("@tauri-apps/api/core");
+    const result = await guardedEngineCall(
+      "list_steam_profiles",
+      invoke<SteamProfileSummary[]>("list_steam_profiles"),
+    );
+    if (!Array.isArray(result)) {
+      throw new EngineFault("invalid_response", "list_steam_profiles");
+    }
+    return result;
+  },
+  async previewSteamLaunchOptions(profileToken) {
+    if (!isTauriRuntime()) return mockEngine.previewSteamLaunchOptions(profileToken);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "preview_steam_launch_options",
+      invoke<SteamLaunchOptionPreview>("preview_steam_launch_options", { profileToken }),
+    );
+  },
+  async applySteamLaunchOptions(preview) {
+    if (!isTauriRuntime()) return mockEngine.applySteamLaunchOptions(preview);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "apply_steam_launch_options",
+      invoke<SteamConfigReceipt>("apply_steam_launch_options", {
+        request: {
+          profileToken: preview.profileToken,
+          confirmationToken: preview.confirmationToken,
+          confirmed: true,
+        },
+      }),
+      30_000,
+    );
+  },
+  async rollbackSteamLaunchOptions(operationId) {
+    if (!isTauriRuntime()) return mockEngine.rollbackSteamLaunchOptions(operationId);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "rollback_steam_launch_options",
+      invoke<SteamConfigReceipt>("rollback_steam_launch_options", {
+        request: { operationId, confirmed: true },
+      }),
+      30_000,
+    );
+  },
+  async recoverSteamLaunchOptions() {
+    if (!isTauriRuntime()) return mockEngine.recoverSteamLaunchOptions();
+    const { invoke } = await import("@tauri-apps/api/core");
+    const result = await guardedEngineCall(
+      "recover_steam_launch_options",
+      invoke<SteamConfigReceipt[]>("recover_steam_launch_options", { confirmed: true }),
+      30_000,
+    );
+    if (!Array.isArray(result)) {
+      throw new EngineFault("invalid_response", "recover_steam_launch_options");
     }
     return result;
   },

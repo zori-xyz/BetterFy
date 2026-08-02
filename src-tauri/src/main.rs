@@ -3,6 +3,7 @@
 mod build_engine;
 mod presets;
 mod runtime_control;
+mod steam_accounts;
 pub mod steam_config;
 
 use build_engine::{
@@ -16,6 +17,10 @@ use serde::Serialize;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use steam_accounts::{
+    ApplySteamLaunchOptionRequest, SteamConfigOperationRequest, SteamConfigReceipt,
+    SteamLaunchOptionPreview, SteamProfileSummary,
+};
 use tauri::{AppHandle, Manager};
 
 #[derive(Serialize)]
@@ -242,6 +247,80 @@ fn rollback_engine_operation(
     rollback_operation(&app_data, &operation_id)
 }
 
+#[tauri::command]
+fn list_steam_profiles() -> Result<Vec<SteamProfileSummary>, String> {
+    steam_accounts::list_platform_profiles()
+}
+
+#[tauri::command]
+fn preview_steam_launch_options(profile_token: String) -> Result<SteamLaunchOptionPreview, String> {
+    steam_accounts::preview_platform_profile(&profile_token)
+}
+
+fn require_patch_ready_runtime() -> Result<(), String> {
+    if !cfg!(target_os = "windows") {
+        return Err("platform_not_supported".to_string());
+    }
+    if !runtime_control::inspect_runtime()?.patch_ready {
+        return Err("runtime_busy".to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn apply_steam_launch_options(
+    app: AppHandle,
+    request: ApplySteamLaunchOptionRequest,
+) -> Result<SteamConfigReceipt, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "backup_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        require_patch_ready_runtime()?;
+        steam_accounts::apply_platform_profile(&app_data, request)
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+#[tauri::command]
+async fn rollback_steam_launch_options(
+    app: AppHandle,
+    request: SteamConfigOperationRequest,
+) -> Result<SteamConfigReceipt, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "rollback_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        require_patch_ready_runtime()?;
+        steam_accounts::rollback_platform_operation(&app_data, request)
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+#[tauri::command]
+async fn recover_steam_launch_options(
+    app: AppHandle,
+    confirmed: bool,
+) -> Result<Vec<SteamConfigReceipt>, String> {
+    if !confirmed {
+        return Err("steam_config_confirmation_required".to_string());
+    }
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "rollback_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        require_patch_ready_runtime()?;
+        steam_accounts::recover_platform_operations(&app_data)
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
@@ -255,6 +334,11 @@ fn main() {
             prepare_runtime_for_patch,
             list_engine_operations,
             rollback_engine_operation,
+            list_steam_profiles,
+            preview_steam_launch_options,
+            apply_steam_launch_options,
+            rollback_steam_launch_options,
+            recover_steam_launch_options,
             list_presets,
             save_preset,
             delete_preset,

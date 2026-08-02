@@ -66,7 +66,14 @@ type EngineError = {
     | "commit_failed"
     | "runtime_busy"
     | "shutdown_failed"
-    | "steam_start_failed";
+    | "steam_start_failed"
+    | "steam_profile_not_found"
+    | "steam_config_confirmation_required"
+    | "steam_config_plan_stale"
+    | "steam_config_locked"
+    | "steam_recovery_required"
+    | "steam_config_commit_failed"
+    | "steam_config_rollback_conflict";
   message: string;
   recoverable: boolean;
   journalId?: string;
@@ -89,6 +96,11 @@ restore_backup(backup_id) -> RestoreReceipt
 list_backups() -> BackupSummary[]
 inspect_runtime() -> RuntimeState
 prepare_runtime_for_patch(confirmation_id) -> RuntimeState
+list_steam_profiles() -> SteamProfileSummary[]
+preview_steam_launch_options(profile_token) -> SteamLaunchOptionPreview
+apply_steam_launch_options(request) -> SteamConfigReceipt
+rollback_steam_launch_options(request) -> SteamConfigReceipt
+recover_steam_launch_options(confirmed) -> SteamConfigReceipt[]
 start_steam(operation_id) -> RuntimeState
 list_presets() -> PresetRecord[]
 save_preset(request) -> PresetRecord
@@ -183,9 +195,22 @@ outside the `LaunchOptions` value, and adds only `-language dutch`. An existing
 foreign `-language` argument is reported as a conflict instead of being replaced.
 Missing launch options are inserted into the existing Dota app object, and the
 updated document is parsed again in tests. Plans expose before/after SHA-256
-values but perform no filesystem write. Account selection, verified backup,
-same-directory atomic replacement, and rollback journaling remain deployment
-gates before this planner can touch a real `localconfig.vdf`.
+values. Steam profile discovery exposes only an opaque path-derived token and a
+neutral ordinal; Steam IDs, account names, and `userdata` paths never cross IPC
+or enter the journal. Applying a plan requires the exact confirmation token for
+its before/after hashes and repeats discovery and hash validation while holding
+an exclusive transaction lock.
+
+The production write boundary creates and verifies a private BetterFy backup,
+writes a same-directory temporary VDF, reparses it, verifies its SHA-256, and on
+Windows publishes it with `ReplaceFileW` plus write-through. The journal records
+only operation/profile tokens, hashes, phase, and a BetterFy-relative backup
+path. An interruption before or after replacement is recovered idempotently
+from the verified backup; an unrelated post-commit Steam edit blocks rollback
+instead of being overwritten. Apply, rollback, and recovery Tauri commands are
+Windows-only and reject the operation unless both Steam and Dota are stopped.
+This transaction currently owns only BetterFy's `-language dutch` argument; it
+is not yet connected to production VPK deployment or the visible build flow.
 
 Preset persistence is implemented as a separate BetterFy-owned boundary. The
 backend validates the schema and identifiers, rejects symlinks and oversized
