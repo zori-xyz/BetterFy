@@ -661,7 +661,7 @@ fn temp_path(target: &Path, operation_id: &str) -> Result<PathBuf, String> {
 #[cfg(target_os = "windows")]
 fn atomic_replace(target: &Path, replacement: &Path) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Storage::FileSystem::{ReplaceFileW, REPLACE_FILE_WRITE_THROUGH};
+    use windows_sys::Win32::Storage::FileSystem::{ReplaceFileW, REPLACEFILE_WRITE_THROUGH};
 
     let target_wide = target
         .as_os_str()
@@ -678,7 +678,7 @@ fn atomic_replace(target: &Path, replacement: &Path) -> Result<(), String> {
             target_wide.as_ptr(),
             replacement_wide.as_ptr(),
             std::ptr::null(),
-            REPLACE_FILE_WRITE_THROUGH,
+            REPLACEFILE_WRITE_THROUGH,
             std::ptr::null(),
             std::ptr::null(),
         )
