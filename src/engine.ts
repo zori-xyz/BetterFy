@@ -25,10 +25,40 @@ export type BuildPlan = {
   planId: string;
   dryRun: boolean;
   inputs: Array<{ id: string; name: string; version: string }>;
-  operations: Array<{ ownerId: string; source: string; destination: string; size: number }>;
+  operations: Array<{
+    ownerId: string;
+    source: string;
+    destination: string;
+    size: number;
+    expectedSha256: string;
+  }>;
   conflicts: Array<{ destination: string; contenders: string[] }>;
   spaceEstimate: number;
   executable: boolean;
+};
+
+export type BuildReceipt = {
+  operationId: string;
+  planId: string;
+  phase: "ready";
+  stagedRoot: string;
+  stagedFiles: number;
+  stagedBytes: number;
+  checksumsVerified: boolean;
+};
+
+export type RollbackReceipt = {
+  operationId: string;
+  phase: "rolled_back";
+  removedStaging: boolean;
+};
+
+export type EngineOperationSummary = {
+  operationId: string;
+  planId: string;
+  phase: "staging" | "verifying" | "ready" | "failed" | "rolled_back";
+  createdAtMs: number;
+  stagedFiles: number;
 };
 
 export interface EngineBridge {
@@ -39,7 +69,9 @@ export interface EngineBridge {
     modIds: string[],
     language: "ru" | "en",
     onProgress: (snapshot: EngineSnapshot) => void,
-  ): Promise<void>;
+  ): Promise<BuildReceipt>;
+  rollbackOperation(operationId: string): Promise<RollbackReceipt>;
+  listOperations(): Promise<EngineOperationSummary[]>;
 }
 
 const wait = (duration: number) => new Promise((resolve) => window.setTimeout(resolve, duration));
@@ -110,6 +142,7 @@ export const mockEngine: EngineBridge = {
       source: index ? "panorama/styles/ambient-clean.css" : "panorama/styles/ambient-violet.css",
       destination: "game/dota/pak01_dir/panorama/styles/betterfy-theme.css",
       size: index ? 1536 : 2048,
+      expectedSha256: "preview-only",
     }));
     const contenders = operations.map((operation) => operation.ownerId);
     return {
@@ -147,6 +180,22 @@ export const mockEngine: EngineBridge = {
       onProgress(stage);
       await wait(stage.phase === "building" ? 900 : 560);
     }
+    return {
+      operationId: `preview-${Date.now()}`,
+      planId: "fixture-plan-v1",
+      phase: "ready",
+      stagedRoot: "BetterFy / preview staging",
+      stagedFiles: Math.max(1, modIds.length),
+      stagedBytes: 0,
+      checksumsVerified: false,
+    };
+  },
+  async rollbackOperation(operationId) {
+    await wait(780);
+    return { operationId, phase: "rolled_back", removedStaging: true };
+  },
+  async listOperations() {
+    return [];
   },
 };
 
@@ -182,5 +231,70 @@ export const engineBridge: EngineBridge = {
       invoke<BuildPlan>("plan_build", { request: { modIds: uniqueModIds(modIds) } }),
     );
   },
-  buildAndLaunch: mockEngine.buildAndLaunch,
+  async buildAndLaunch(modIds, language, onProgress) {
+    if (!isTauriRuntime()) return mockEngine.buildAndLaunch(modIds, language, onProgress);
+    const { invoke } = await import("@tauri-apps/api/core");
+    const normalized = uniqueModIds(modIds);
+    onProgress({
+      phase: "checking",
+      progress: 12,
+      message: language === "ru" ? "Проверяем состав" : "Checking build contents",
+    });
+    const plan = await guardedEngineCall(
+      "plan_build",
+      invoke<BuildPlan>("plan_build", { request: { modIds: normalized } }),
+    );
+    if (!plan.executable) {
+      throw new EngineFault("invalid_response", "plan_build");
+    }
+    onProgress({
+      phase: "resolving",
+      progress: 36,
+      message: language === "ru" ? "План зафиксирован" : "Build plan locked",
+    });
+    onProgress({
+      phase: "building",
+      progress: 64,
+      message: language === "ru" ? "Собираем в staging BetterFy" : "Building in BetterFy staging",
+    });
+    const receipt = await guardedEngineCall(
+      "execute_build",
+      invoke<BuildReceipt>("execute_build", { request: { modIds: normalized } }),
+    );
+    if (!receipt.checksumsVerified || receipt.phase !== "ready") {
+      throw new EngineFault("invalid_response", "execute_build");
+    }
+    onProgress({
+      phase: "verifying",
+      progress: 90,
+      message: language === "ru" ? "Контрольные суммы совпали" : "Checksums verified",
+    });
+    await wait(420);
+    onProgress({
+      phase: "ready",
+      progress: 100,
+      message: language === "ru" ? "Безопасная сборка готова" : "Safe staging build ready",
+    });
+    return receipt;
+  },
+  async rollbackOperation(operationId) {
+    if (!isTauriRuntime()) return mockEngine.rollbackOperation(operationId);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "rollback_engine_operation",
+      invoke<RollbackReceipt>("rollback_engine_operation", { operationId }),
+    );
+  },
+  async listOperations() {
+    if (!isTauriRuntime()) return mockEngine.listOperations();
+    const { invoke } = await import("@tauri-apps/api/core");
+    const result = await guardedEngineCall(
+      "list_engine_operations",
+      invoke<EngineOperationSummary[]>("list_engine_operations"),
+    );
+    if (!Array.isArray(result)) {
+      throw new EngineFault("invalid_response", "list_engine_operations");
+    }
+    return result;
+  },
 };

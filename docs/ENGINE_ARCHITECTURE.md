@@ -91,7 +91,7 @@ export_preset(preset_id) -> String
 import_preset(payload) -> PresetRecord
 ```
 
-Long-running commands emit one event:
+Long-running commands will emit one event once deployment is introduced:
 
 ```text
 betterfy://engine-progress
@@ -109,8 +109,10 @@ type EngineProgress = {
 };
 ```
 
-The frontend listens only while its operation is active and always removes the
-listener when the screen unmounts.
+The current staging-only slice reports progress through the existing bridge while
+the command runs. The event contract is reserved for the later cancellable worker;
+the frontend must then listen only while its operation is active and always remove
+the listener when the screen unmounts.
 
 ## First vertical slice
 
@@ -134,15 +136,28 @@ The current Tauri prototype exposes `discover_game` and
 `validate_game_path`. Both are read-only. Rust canonicalizes the candidate,
 requires the `dota 2 beta` directory name, and checks the platform executable
 plus `game/dota/pak01_dir.vpk`. Browser preview uses an explicitly unverified
-demo result. Additional libraries are read from `libraryfolders.vdf`; Windows
-registry discovery and real Windows verification remain pending.
+demo result. Additional libraries are read from `libraryfolders.vdf`. Windows
+candidates also come from the current-user and machine Steam registry keys plus
+both Program Files locations. Every candidate still passes canonical marker
+validation; registry data is never trusted as proof of an installation.
 
-`plan_build` is also implemented for two repository-owned fixture manifests.
-It accepts only allowlisted fixture IDs, rejects absolute/traversing
-destinations, sorts operations deterministically, estimates staged bytes, and
-reports a real same-destination conflict. The returned plan is dry-run only and
-cannot write to Dota. Staging, cryptographic verification, journaling, rollback,
-and deployment remain the next engine boundary.
+`plan_build` is implemented for two repository-owned fixture manifests. It accepts
+only allowlisted fixture IDs, rejects absolute, drive-prefixed, backslash, and
+traversing destinations, sorts operations deterministically, hashes embedded
+payloads with SHA-256, estimates staged bytes, and reports a real same-destination
+conflict.
+
+`execute_build` executes a conflict-free fixture plan only inside
+`app_data/engine-v1/operations/<operation>/staging`. It creates files with
+`create_new`, verifies size and SHA-256 after writing, and commits an atomically
+recoverable JSON journal after every material step. `list_engine_operations`
+recovers interrupted journal renames, and `rollback_engine_operation` removes only
+the validated BetterFy-owned operation directory. Repeating rollback is safe.
+Tests inject failures after a staged write and before verification.
+
+This is not deployment: no command writes to Dota, creates a game backup, assembles
+a production VPK, downloads catalog content, or launches Steam. Those boundaries
+stay closed until the staging and recovery contract is verified on Windows.
 
 Preset persistence is implemented as a separate BetterFy-owned boundary. The
 backend validates the schema and identifiers, rejects symlinks and oversized

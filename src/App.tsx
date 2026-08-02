@@ -48,7 +48,7 @@ import enigmaProgress from "./assets/enigma-progress.webp";
 import pudgeRecovery from "./assets/pudge-recovery.png";
 import wukongBuild from "./assets/wukong-build.png";
 import type { AuthSession } from "./auth";
-import { engineBridge, type BuildPlan, type GameInstallation } from "./engine";
+import { engineBridge, type BuildPlan, type BuildReceipt, type GameInstallation } from "./engine";
 import { useLocale, type Language } from "./i18n";
 import OnboardingFlow from "./OnboardingFlow";
 import PresetManager from "./PresetManager";
@@ -682,6 +682,7 @@ function Workspace({
           {route === "build" && (
             <BuildRoute
               t={t}
+              language={language}
               selectedCount={selectedModIds.length}
               onHome={() => navigate("home")}
               onOpenConfigs={() => navigate("library")}
@@ -909,11 +910,13 @@ function HomeRoute({
 
 function BuildRoute({
   t,
+  language,
   selectedCount,
   onHome,
   onOpenConfigs,
 }: {
   t: typeof copy.ru;
+  language: Language;
   selectedCount: number;
   onHome: () => void;
   onOpenConfigs: () => void;
@@ -923,6 +926,9 @@ function BuildRoute({
   const [view, setView] = useState<BuildView>("review");
   const [choice, setChoice] = useState<"violet" | "clean" | null>(null);
   const [progress, setProgress] = useState(0);
+  const [targetProgress, setTargetProgress] = useState(0);
+  const [receipt, setReceipt] = useState<BuildReceipt | null>(null);
+  const [recoveryOperationId, setRecoveryOperationId] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(false);
 
   const inspectPlan = async () => {
@@ -940,42 +946,76 @@ function BuildRoute({
   };
 
   useEffect(() => {
-    if (view !== "progress") return;
-    setProgress(2);
-    let finishTimer = 0;
-    const interval = window.setInterval(() => {
-      setProgress((value) => {
-        const next = Math.min(100, value + 2);
-        if (next === 100) {
-          window.clearInterval(interval);
-          finishTimer = window.setTimeout(() => setView("success"), 520);
-        }
-        return next;
-      });
-    }, 78);
-    return () => {
-      window.clearInterval(interval);
-      window.clearTimeout(finishTimer);
-    };
-  }, [view]);
+    if (view !== "progress" || progress >= targetProgress) return;
+    const timer = window.setTimeout(
+      () => setProgress((value) => Math.min(targetProgress, value + Math.max(1, Math.ceil((targetProgress - value) / 12)))),
+      42,
+    );
+    return () => window.clearTimeout(timer);
+  }, [progress, targetProgress, view]);
+
+  useEffect(() => {
+    if (view !== "progress" || progress < 100 || !receipt) return;
+    const timer = window.setTimeout(() => setView("success"), 520);
+    return () => window.clearTimeout(timer);
+  }, [progress, receipt, view]);
 
   const chooseVariant = (nextChoice: "violet" | "clean") => {
     setChoice(nextChoice);
     setView("ready");
   };
 
-  const restorePreview = () => {
+  const startBuild = async () => {
+    const modId = choice === "clean" ? "fixture.ambient-clean" : "fixture.ambient-violet";
+    setProgress(2);
+    setTargetProgress(8);
+    setReceipt(null);
+    setRecoveryOperationId(null);
+    setView("progress");
+    const startedAt = Date.now();
+    try {
+      const nextReceipt = await engineBridge.buildAndLaunch(
+        [modId],
+        language,
+        (snapshot) => setTargetProgress(snapshot.progress),
+      );
+      setReceipt(nextReceipt);
+      setTargetProgress(100);
+    } catch {
+      try {
+        const operations = await engineBridge.listOperations();
+        const interrupted = operations.find(
+          (operation) => operation.createdAtMs >= startedAt - 1000
+            && operation.phase !== "ready"
+            && operation.phase !== "rolled_back",
+        );
+        setRecoveryOperationId(interrupted?.operationId ?? null);
+      } catch {
+        setRecoveryOperationId(null);
+      }
+      setView("recovery");
+    }
+  };
+
+  const restorePreview = async () => {
     setRestoring(true);
-    window.setTimeout(() => {
+    try {
+      const operationId = receipt?.operationId ?? recoveryOperationId;
+      if (operationId) await engineBridge.rollbackOperation(operationId);
       setRestoring(false);
       setView("restored");
-    }, 1250);
+    } catch {
+      setRestoring(false);
+    }
   };
 
   const resetBuild = () => {
     setPlan(null);
     setChoice(null);
     setProgress(0);
+    setTargetProgress(0);
+    setReceipt(null);
+    setRecoveryOperationId(null);
     setView("review");
   };
 
@@ -1020,7 +1060,7 @@ function BuildRoute({
                   </button>
                 )}
                 {view === "ready" && (
-                  <button className="build-main-action" onClick={() => setView("progress")}>
+                  <button className="build-main-action" onClick={startBuild}>
                     <Play />{t.build.start}<ArrowRight />
                   </button>
                 )}

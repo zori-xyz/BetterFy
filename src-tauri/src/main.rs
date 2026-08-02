@@ -1,12 +1,19 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod build_engine;
 mod presets;
 
+use build_engine::{
+    create_build_plan, execute_build as execute_staged_build,
+    list_operations as list_staged_operations, rollback_operation, BuildPlan, BuildPlanRequest,
+    BuildReceipt, OperationSummary, RollbackReceipt,
+};
 use presets::{delete_preset, export_preset, import_preset, list_presets, save_preset};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use tauri::{AppHandle, Manager};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,65 +24,6 @@ struct GameInstallation {
     client: String,
     source: &'static str,
     verified: bool,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct FixtureManifest {
-    id: String,
-    name: String,
-    version: String,
-    files: Vec<FixtureFile>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct FixtureFile {
-    source: String,
-    destination: String,
-    size: u64,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct BuildPlanRequest {
-    mod_ids: Vec<String>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PlanInput {
-    id: String,
-    name: String,
-    version: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PlanOperation {
-    owner_id: String,
-    source: String,
-    destination: String,
-    size: u64,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PlanConflict {
-    destination: String,
-    contenders: Vec<String>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct BuildPlan {
-    plan_id: &'static str,
-    dry_run: bool,
-    inputs: Vec<PlanInput>,
-    operations: Vec<PlanOperation>,
-    conflicts: Vec<PlanConflict>,
-    space_estimate: u64,
-    executable: bool,
 }
 
 fn validate_candidate(path: &Path, source: &'static str) -> Result<GameInstallation, String> {
@@ -135,6 +83,7 @@ fn discovery_candidates() -> Vec<PathBuf> {
 
     #[cfg(target_os = "windows")]
     {
+        steam_roots.extend(windows_registry_steam_roots());
         for key in ["PROGRAMFILES(X86)", "PROGRAMFILES"] {
             if let Some(base) = std::env::var_os(key) {
                 steam_roots.push(PathBuf::from(base).join("Steam"));
@@ -173,6 +122,46 @@ fn discovery_candidates() -> Vec<PathBuf> {
     candidates
 }
 
+#[cfg(target_os = "windows")]
+fn windows_registry_steam_roots() -> Vec<PathBuf> {
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_32KEY};
+    use winreg::RegKey;
+
+    let mut roots = Vec::new();
+    let candidates = [
+        (
+            HKEY_CURRENT_USER,
+            "Software\\Valve\\Steam",
+            "SteamPath",
+            KEY_READ,
+        ),
+        (
+            HKEY_LOCAL_MACHINE,
+            "Software\\Valve\\Steam",
+            "InstallPath",
+            KEY_READ | KEY_WOW64_32KEY,
+        ),
+        (
+            HKEY_LOCAL_MACHINE,
+            "Software\\WOW6432Node\\Valve\\Steam",
+            "InstallPath",
+            KEY_READ,
+        ),
+    ];
+    for (hive, key_path, value_name, flags) in candidates {
+        let hive = RegKey::predef(hive);
+        if let Ok(key) = hive.open_subkey_with_flags(key_path, flags) {
+            if let Ok(value) = key.get_value::<String, _>(value_name) {
+                let value = value.trim();
+                if !value.is_empty() {
+                    roots.push(PathBuf::from(value));
+                }
+            }
+        }
+    }
+    roots
+}
+
 fn parse_library_paths(contents: &str) -> Vec<PathBuf> {
     contents
         .lines()
@@ -186,89 +175,6 @@ fn parse_library_paths(contents: &str) -> Vec<PathBuf> {
                 .map(|value| PathBuf::from(value.replace("\\\\", "\\")))
         })
         .collect()
-}
-
-fn fixture_manifests() -> Result<Vec<FixtureManifest>, String> {
-    [
-        include_str!("../fixtures/mods/ambient-violet.json"),
-        include_str!("../fixtures/mods/ambient-clean.json"),
-    ]
-    .iter()
-    .map(|contents| serde_json::from_str(contents).map_err(|_| "catalog_invalid".to_string()))
-    .collect()
-}
-
-fn create_build_plan(request: BuildPlanRequest) -> Result<BuildPlan, String> {
-    let available = fixture_manifests()?;
-    let mut selected = Vec::new();
-    let mut selected_ids = HashSet::new();
-    for requested in &request.mod_ids {
-        if !selected_ids.insert(requested.clone()) {
-            continue;
-        }
-        let manifest = available
-            .iter()
-            .find(|manifest| &manifest.id == requested)
-            .ok_or_else(|| "catalog_invalid".to_string())?;
-        selected.push(manifest);
-    }
-
-    let mut operations = Vec::new();
-    let mut destinations: std::collections::BTreeMap<String, Vec<String>> =
-        std::collections::BTreeMap::new();
-    for manifest in &selected {
-        for file in &manifest.files {
-            if Path::new(&file.destination).is_absolute()
-                || file.destination.split('/').any(|part| part == "..")
-            {
-                return Err("catalog_invalid".to_string());
-            }
-            destinations
-                .entry(file.destination.clone())
-                .or_default()
-                .push(manifest.id.clone());
-            operations.push(PlanOperation {
-                owner_id: manifest.id.clone(),
-                source: file.source.clone(),
-                destination: file.destination.clone(),
-                size: file.size,
-            });
-        }
-    }
-
-    operations.sort_by(|left, right| {
-        left.destination
-            .cmp(&right.destination)
-            .then(left.owner_id.cmp(&right.owner_id))
-    });
-    let conflicts: Vec<PlanConflict> = destinations
-        .into_iter()
-        .filter_map(|(destination, contenders)| {
-            (contenders.len() > 1).then_some(PlanConflict {
-                destination,
-                contenders,
-            })
-        })
-        .collect();
-    let space_estimate = operations.iter().map(|operation| operation.size).sum();
-    let inputs = selected
-        .iter()
-        .map(|manifest| PlanInput {
-            id: manifest.id.clone(),
-            name: manifest.name.clone(),
-            version: manifest.version.clone(),
-        })
-        .collect();
-
-    Ok(BuildPlan {
-        plan_id: "fixture-plan-v1",
-        dry_run: true,
-        inputs,
-        operations,
-        executable: conflicts.is_empty() && !selected.is_empty(),
-        conflicts,
-        space_estimate,
-    })
 }
 
 #[tauri::command]
@@ -289,12 +195,45 @@ fn plan_build(request: BuildPlanRequest) -> Result<BuildPlan, String> {
     create_build_plan(request)
 }
 
+#[tauri::command]
+fn execute_build(app: AppHandle, request: BuildPlanRequest) -> Result<BuildReceipt, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "build_failed".to_string())?;
+    execute_staged_build(&app_data, request)
+}
+
+#[tauri::command]
+fn list_engine_operations(app: AppHandle) -> Result<Vec<OperationSummary>, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "journal_invalid".to_string())?;
+    list_staged_operations(&app_data)
+}
+
+#[tauri::command]
+fn rollback_engine_operation(
+    app: AppHandle,
+    operation_id: String,
+) -> Result<RollbackReceipt, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "rollback_failed".to_string())?;
+    rollback_operation(&app_data, &operation_id)
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             discover_game,
             validate_game_path,
             plan_build,
+            execute_build,
+            list_engine_operations,
+            rollback_engine_operation,
             list_presets,
             save_preset,
             delete_preset,
@@ -386,50 +325,5 @@ mod tests {
             Some("invalid_game_path")
         );
         fs::remove_dir_all(base).expect("cleanup");
-    }
-
-    #[test]
-    fn fixture_plan_is_deterministic_and_reports_conflict() {
-        let request = BuildPlanRequest {
-            mod_ids: vec![
-                "fixture.ambient-violet".to_string(),
-                "fixture.ambient-clean".to_string(),
-            ],
-        };
-        let plan = create_build_plan(request).expect("plan");
-        assert_eq!(plan.inputs.len(), 2);
-        assert_eq!(plan.operations.len(), 2);
-        assert_eq!(plan.conflicts.len(), 1);
-        assert_eq!(
-            plan.conflicts[0].destination,
-            "game/dota/pak01_dir/panorama/styles/betterfy-theme.css"
-        );
-        assert!(!plan.executable);
-    }
-
-    #[test]
-    fn fixture_plan_rejects_unknown_mod() {
-        let request = BuildPlanRequest {
-            mod_ids: vec!["fixture.unknown".to_string()],
-        };
-        assert_eq!(
-            create_build_plan(request).err().as_deref(),
-            Some("catalog_invalid")
-        );
-    }
-
-    #[test]
-    fn fixture_plan_deduplicates_repeated_mod_ids() {
-        let request = BuildPlanRequest {
-            mod_ids: vec![
-                "fixture.ambient-violet".to_string(),
-                "fixture.ambient-violet".to_string(),
-            ],
-        };
-        let plan = create_build_plan(request).expect("plan");
-        assert_eq!(plan.inputs.len(), 1);
-        assert_eq!(plan.operations.len(), 1);
-        assert!(plan.conflicts.is_empty());
-        assert!(plan.executable);
     }
 }

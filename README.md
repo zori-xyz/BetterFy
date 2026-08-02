@@ -3,10 +3,11 @@
 BetterFy is a desktop manager for Dota 2 mods and skin packs, built with Tauri,
 React, and TypeScript.
 
-The current build is an interactive product prototype. Authentication, backups,
-patching, and launch progress are simulated. Tauri game discovery performs a
-read-only marker-file check for standard Steam locations; browser discovery is
-explicitly simulated. BetterFy does not modify Dota 2 files yet.
+The current build combines an interactive product prototype with the first real,
+safe engine slice. Authentication, Dota backups, deployment, and launch remain
+simulated. Tauri discovers Steam libraries and validates Dota through marker files;
+browser discovery is explicitly simulated. BetterFy does not modify Dota 2 files
+yet.
 
 ## Run locally
 
@@ -44,8 +45,11 @@ npm run check
 
 - Russian and English interface
 - sign-in and first-launch scenarios
-- read-only Tauri Dota path discovery and validation
-- deterministic fixture `BuildPlan` with conflict detection
+- read-only Tauri Dota path discovery and validation, including Windows Steam
+  registry and `libraryfolders.vdf` candidates
+- deterministic fixture `BuildPlan` with conflict detection and SHA-256 payloads
+- BetterFy-owned staging execution, verified journals, interrupted-journal
+  recovery, operation listing, and idempotent rollback
 - Home workspace and complete preview Build journey: conflict resolution,
   progress, success, and recovery
 - mod catalog, selection states, guide, details, and conflict resolver
@@ -60,9 +64,10 @@ npm run check
 
 ## Production boundary
 
-Config storage, Steam/Dota marker validation, and deterministic fixture planning
-have real Rust boundaries. Build execution, downloads, VPK assembly, deployment,
-rollback, game launch, and production authentication are not implemented yet.
+Config storage, Steam/Dota marker validation, deterministic fixture planning,
+isolated staging, checksum verification, journaling, and staging rollback have real
+Rust boundaries. Downloads, archive ingestion, VPK assembly, game-file backup,
+deployment, Steam launch, and production authentication are not implemented yet.
 The interface continues to label those paths as preview behavior.
 
 The planned Rust boundary and safe first implementation slice are documented in
