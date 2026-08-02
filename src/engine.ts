@@ -71,6 +71,7 @@ export type RuntimeState = {
 export interface EngineBridge {
   discoverGame(): Promise<GameInstallation[]>;
   inspectRuntime(): Promise<RuntimeState>;
+  prepareRuntimeForPatch(): Promise<RuntimeState>;
   validateGamePath(path: string): Promise<GameInstallation>;
   planBuild(modIds: string[]): Promise<BuildPlan>;
   buildProfile(
@@ -96,12 +97,12 @@ export class EngineFault extends Error {
   }
 }
 
-async function guardedEngineCall<T>(operation: string, task: Promise<T>) {
+async function guardedEngineCall<T>(operation: string, task: Promise<T>, timeoutMs = engineTimeoutMs) {
   let timer = 0;
   const timeout = new Promise<never>((_, reject) => {
     timer = window.setTimeout(
       () => reject(new EngineFault("timeout", operation)),
-      engineTimeoutMs,
+      timeoutMs,
     );
   });
   try {
@@ -134,6 +135,9 @@ export const mockEngine: EngineBridge = {
       dotaRunning: false,
       patchReady: true,
     };
+  },
+  async prepareRuntimeForPatch() {
+    return this.inspectRuntime();
   },
   async discoverGame() {
     await wait(1450);
@@ -225,6 +229,17 @@ export const engineBridge: EngineBridge = {
     return guardedEngineCall(
       "inspect_runtime",
       invoke<RuntimeState>("inspect_runtime"),
+    );
+  },
+  async prepareRuntimeForPatch() {
+    if (!isTauriRuntime()) return mockEngine.prepareRuntimeForPatch();
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "prepare_runtime_for_patch",
+      invoke<RuntimeState>("prepare_runtime_for_patch", {
+        request: { confirmed: true },
+      }),
+      70_000,
     );
   },
   async discoverGame() {

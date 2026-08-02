@@ -167,6 +167,16 @@ Those boundaries stay closed until the staging and recovery contract is verified
 on Windows. The researched production lifecycle is pinned in
 `docs/MINIFY_PATCHING_AUDIT.md`.
 
+The runtime preflight is now implemented behind typed Tauri commands. Windows
+process enumeration uses Tool Help APIs and recognizes the Steam client, Web
+Helper, overlay, and Dota processes without invoking a shell. With explicit
+confirmation, `prepare_runtime_for_patch` requests a normal `WM_CLOSE` for Dota,
+waits for it to exit, invokes the registry-resolved `steam.exe -exitsteam`, and
+then waits until both products are absent. It never force-terminates a process.
+Timeout, unavailable Dota window, missing Steam, and unsupported platform have
+stable error codes. This command is intentionally not connected to the current
+staging-only preview; it becomes mandatory immediately before production deploy.
+
 Preset persistence is implemented as a separate BetterFy-owned boundary. The
 backend validates the schema and identifiers, rejects symlinks and oversized
 records, and commits JSON records through a temporary file and rollback-aware

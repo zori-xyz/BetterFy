@@ -47,6 +47,8 @@ npm run check
 - sign-in and first-launch scenarios
 - read-only Tauri Dota path discovery and validation, including Windows Steam
   registry and `libraryfolders.vdf` candidates
+- typed Windows runtime inspection plus a guarded graceful Dota/Steam shutdown
+  preflight; it is not wired to the staging-only preview until deployment exists
 - deterministic fixture `BuildPlan` with conflict detection and SHA-256 payloads
 - BetterFy-owned staging execution, verified journals, interrupted-journal
   recovery, operation listing, and idempotent rollback

@@ -10,7 +10,7 @@ use build_engine::{
     BuildReceipt, OperationSummary, RollbackReceipt,
 };
 use presets::{delete_preset, export_preset, import_preset, list_presets, save_preset};
-use runtime_control::RuntimeState;
+use runtime_control::{RuntimePrepareRequest, RuntimeState};
 use serde::Serialize;
 use std::collections::HashSet;
 use std::fs;
@@ -212,6 +212,15 @@ fn inspect_runtime() -> Result<RuntimeState, String> {
 }
 
 #[tauri::command]
+async fn prepare_runtime_for_patch(request: RuntimePrepareRequest) -> Result<RuntimeState, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        runtime_control::prepare_runtime_for_patch(request)
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+#[tauri::command]
 fn list_engine_operations(app: AppHandle) -> Result<Vec<OperationSummary>, String> {
     let app_data = app
         .path()
@@ -242,6 +251,7 @@ fn main() {
             plan_build,
             execute_build,
             inspect_runtime,
+            prepare_runtime_for_patch,
             list_engine_operations,
             rollback_engine_operation,
             list_presets,
