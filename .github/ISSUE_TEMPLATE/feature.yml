@@ -1,0 +1,69 @@
+name: Product proposal
+description: Suggest an improvement grounded in a player workflow
+title: "[Proposal] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Player problem
+      description: Describe the friction before proposing a control or screen.
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current journey
+      description: What does the player do today, inside or outside BetterFy?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the result and feedback the player should receive.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Product area
+      options:
+        - Catalog and wardrobe
+        - Build composition
+        - Patching and recovery
+        - Presets and Workshop
+        - Authentication and account
+        - Updates and release
+        - Accessibility and themes
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: boundary
+    attributes:
+      label: Required boundary
+      options:
+        - Interface only
+        - Local desktop engine
+        - Remote service
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Failure and recovery
+      description: If this changes files, processes, accounts, or updates, what should happen when it fails?
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: truth
+    attributes:
+      label: Product truth
+      options:
+        - label: I have not presented a preview idea as existing behavior.
+          required: true

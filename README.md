@@ -1,84 +1,195 @@
-# BetterFy
+<p align="center">
+  <img src="src-tauri/icons/icon-source.png" width="132" alt="BetterFy application icon" />
+</p>
 
-BetterFy is a desktop manager for Dota 2 mods and skin packs, built with Tauri,
-React, and TypeScript.
+<h1 align="center">BetterFy</h1>
 
-The current build combines an interactive product prototype with the first real,
-safe engine slice. Authentication, Dota backups, and VPK deployment remain
-simulated. Tauri discovers Steam libraries, validates Dota through marker files,
-and can activate a confirmed local Steam profile through a journaled launch-option
-transaction before starting Steam only. Browser discovery and activation remain
-explicitly simulated. BetterFy does not modify Dota 2 files yet.
+<p align="center">
+  A Windows-first desktop workspace for building a custom Dota 2 setup.<br />
+  Discover, inspect, resolve, build, verify, activate, and recover in one place.
+</p>
 
-## Run locally
+<p align="center">
+  <a href="https://github.com/zori-xyz/BetterFy/actions/workflows/windows-build.yml"><img alt="Windows build" src="https://github.com/zori-xyz/BetterFy/actions/workflows/windows-build.yml/badge.svg" /></a>
+  <a href="https://github.com/zori-xyz/BetterFy/actions/workflows/release.yml"><img alt="Windows release" src="https://github.com/zori-xyz/BetterFy/actions/workflows/release.yml/badge.svg" /></a>
+  <img alt="Tauri" src="https://img.shields.io/badge/Tauri_2-Rust-24C8DB?style=flat" />
+  <img alt="React" src="https://img.shields.io/badge/React-TypeScript-61DAFB?style=flat" />
+</p>
+
+<p align="center">
+  <a href="#what-it-does">Product</a> ·
+  <a href="#current-status">Status</a> ·
+  <a href="#run-it-locally">Development</a> ·
+  <a href="#repository-map">Repository map</a> ·
+  <a href="docs/README.md">Documentation</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
+
+---
+
+## What it does
+
+BetterFy brings functional mods, visual content, local configurations, build
+review, and recovery into one desktop application. The product is designed for
+players who want a coherent setup without manually collecting scripts and packs
+from unrelated sources.
+
+The intended journey is deliberately simple:
+
+```text
+Connect Dota → choose content → resolve conflicts → review the build
+→ verify → activate → open Steam → recover or rebuild
+```
+
+Windows is the release target. macOS is used for interface development and
+synthetic testing.
+
+## Current status
+
+BetterFy is in active development. The interface is broad; the engine is being
+enabled in small, recoverable slices.
+
+| Area | State | What is true today |
+| --- | --- | --- |
+| Dota discovery | Implemented | Steam libraries are discovered and candidate installations are verified through marker files. |
+| Build planning | Implemented for fixtures | Deterministic plans, content hashes, conflict detection, staging, journals, verification, and rollback run in BetterFy-owned app data. |
+| Steam profile activation | Implemented | A confirmed profile can be backed up, updated atomically, verified, rolled back, and followed by a Steam-only restart. |
+| Catalog and wardrobe | Product preview | Navigation, filtering, provenance fields, and local selection work; content download is not enabled. |
+| Presets | Implemented locally | Configurations are validated and stored atomically; JSON import and export are available. |
+| Authentication | Preview boundary | Telegram verification has a backend boundary and an explicit demo fallback. Production auth is not live. |
+| Dota file deployment | Not enabled | BetterFy does not write a production VPK or replace Dota 2 files yet. |
+| Public updates | Prepared, not released | Signed updater infrastructure exists; public releases require signing secrets and release approval. |
+
+No current build claims VAC safety, ban immunity, universal compatibility, or
+production-ready game-file recovery.
+
+## Run it locally
+
+Requirements:
+
+- Node.js 22+
+- Rust stable
+- platform prerequisites for Tauri 2
 
 ```bash
 npm install
 npm run tauri dev
 ```
 
-For browser-only UI work:
+For interface-only work in a browser:
 
 ```bash
 npm run dev
 ```
 
-## Build on Windows
+Browser mode uses explicit demo boundaries for desktop-only behavior.
 
-On a Windows PC with Node.js, stable Rust, and Microsoft C++ Build Tools:
+### Quality checks
+
+```bash
+npm run check
+npm run visual:check
+cargo fmt --all --manifest-path src-tauri/Cargo.toml -- --check
+cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
+```
+
+`npm run visual:check` walks the main RU/EN and light/dark journeys at the
+supported desktop viewports. The Windows workflow repeats the build, tests,
+format check, Clippy, and NSIS packaging on a native runner.
+
+## Build for Windows
+
+On Windows 10 or 11 with Microsoft C++ Build Tools installed:
 
 ```powershell
 .\scripts\build-windows.ps1
 ```
 
-The script installs locked dependencies, builds the UI, runs Rust tests, and
-creates an unsigned NSIS installer. Detailed prerequisites and artifact paths
-are in [docs/WINDOWS_BUILD.md](docs/WINDOWS_BUILD.md). GitHub Actions also
-produces a Windows installer artifact for every push to `main` and pull request.
+The unsigned internal installer is written to:
 
-## Checks
-
-```bash
-npm run check
+```text
+src-tauri\target\release\bundle\nsis\
 ```
 
-## Current surface
+Every push to `main` and every pull request produces a native Windows check.
+Unsigned artifacts are for internal testing; signed public releases use a
+separate tag-driven workflow.
 
-- Russian and English interface
-- sign-in and first-launch scenarios
-- read-only Tauri Dota path discovery and validation, including Windows Steam
-  registry and `libraryfolders.vdf` candidates
-- typed Windows runtime inspection plus a guarded graceful Dota/Steam shutdown
-  preflight and a verified Steam-only restart
-- lossless Steam KeyValues planning that preserves unrelated Dota launch options,
-  rejects foreign language conflicts, and commits through a verified backup,
-  atomic replacement, journal, and exact rollback
-- deterministic fixture `BuildPlan` with conflict detection and SHA-256 payloads
-- BetterFy-owned staging execution, verified journals, interrupted-journal
-  recovery, operation listing, and idempotent rollback
-- Home workspace and complete preview Build journey: conflict resolution,
-  progress, success, and recovery
-- mod catalog, selection states, guide, details, and conflict resolver
-- curated BetterFy skin packs
-- imported Dota2PornFxWeb catalog
-- settings and profile flows
-- contextual BetterFy community surfaces linked to `@BetterFyBot`
-- mock engine behind a replaceable `EngineBridge`
-- Telegram auth bridge with demo fallback and a configurable HTTPS backend boundary
-- local config manager with validated Rust persistence, JSON import/export, and
-  three built-in BetterFy Workshop compositions
+- [Windows build guide](docs/WINDOWS_BUILD.md)
+- [Release and updater guide](docs/RELEASING.md)
+- [Latest Windows workflow runs](https://github.com/zori-xyz/BetterFy/actions/workflows/windows-build.yml)
 
-## Production boundary
+## Repository map
 
-Config storage, Steam/Dota marker validation, deterministic fixture planning,
-isolated staging, checksum verification, journaling, staging rollback, confirmed
-Steam launch-option activation, and Steam-only restart have real Rust boundaries.
-Downloads, archive ingestion, VPK assembly, game-file backup, deployment, and
-production authentication are not implemented yet.
-The pinned upstream Minify study and the approved Steam/Dota lifecycle are recorded
-in [`docs/MINIFY_PATCHING_AUDIT.md`](docs/MINIFY_PATCHING_AUDIT.md). Production
-patching must satisfy that contract before game-directory writes are enabled.
-The interface continues to label those paths as preview behavior.
+| Path | Purpose |
+| --- | --- |
+| [`src/`](src/) | React interface, product routes, localization, catalogs, and the typed engine bridge |
+| [`src-tauri/src/`](src-tauri/src/) | Rust commands, Dota discovery, staging, journals, Steam configuration, presets, and runtime control |
+| [`src-tauri/fixtures/`](src-tauri/fixtures/) | Repository-owned engine fixtures used to prove planning and recovery safely |
+| [`scripts/`](scripts/) | Windows builds, catalog checks, icon verification, and visual journey audits |
+| [`docs/`](docs/) | Architecture, product rules, Minify research, Windows builds, releases, and roadmap |
+| [`.github/`](.github/) | Native Windows CI, signed releases, ownership, and contribution templates |
 
-The planned Rust boundary and safe first implementation slice are documented in
-[docs/ENGINE_ARCHITECTURE.md](docs/ENGINE_ARCHITECTURE.md).
+For a guided tour, start with [the documentation index](docs/README.md).
+
+## Engine safety model
+
+Privileged decisions live in Rust. React presents state and collects explicit
+confirmation; it does not decide whether a path or operation is safe.
+
+The current engine follows these rules:
+
+- reject unknown inputs, traversal, symlinks, stale plans, and foreign launch-option conflicts;
+- stop Dota and Steam before a privileged Steam configuration write;
+- create and verify a private backup before replacement;
+- publish through an atomic operation and keep a durable journal;
+- verify the committed bytes before starting Steam;
+- start Steam only, never Dota 2;
+- refuse rollback when an unrelated external edit would be overwritten.
+
+The production game-file pipeline must meet the same contract before Dota
+deployment is enabled. See [engine architecture](docs/ENGINE_ARCHITECTURE.md)
+and the [patching audit](docs/MINIFY_PATCHING_AUDIT.md).
+
+## Branches and changes
+
+`main` is the integration branch and must remain green. Work is prepared in
+short-lived branches:
+
+```text
+feature/<scope>   product or engine work
+fix/<scope>       bug fixes
+docs/<scope>      documentation only
+chore/<scope>     tooling and maintenance
+release/vX.Y.Z    release preparation
+```
+
+Pull requests should be small enough to review, state the tested operating
+system, and distinguish real behavior from preview behavior. Full conventions
+are in [CONTRIBUTING.md](CONTRIBUTING.md) and
+[the repository guide](docs/REPOSITORY_GUIDE.md).
+
+## Documentation
+
+- [Product definition](PRODUCT.md)
+- [Design system](DESIGN.md)
+- [Experience constitution](docs/EXPERIENCE_CONSTITUTION.md)
+- [Engine architecture](docs/ENGINE_ARCHITECTURE.md)
+- [Minify patching audit](docs/MINIFY_PATCHING_AUDIT.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
+
+## Community
+
+Early Access news, setup help, and product feedback are handled through
+[@BetterFyBot](https://t.me/BetterFyBot).
+
+## Legal status
+
+The BetterFy source license has not been selected yet. Public repository access
+does not by itself grant redistribution rights. Third-party catalog metadata and
+prototype imagery have separate provenance and release restrictions documented
+in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [DESIGN.md](DESIGN.md).
+
+Dota 2 and related marks and assets belong to Valve Corporation. BetterFy is an
+independent project and is not affiliated with or endorsed by Valve.

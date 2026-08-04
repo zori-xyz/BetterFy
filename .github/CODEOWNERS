@@ -1,0 +1,8 @@
+* @zori-xyz
+
+/src-tauri/src/ @zori-xyz
+/src-tauri/tauri.conf.json @zori-xyz
+/.github/workflows/ @zori-xyz
+/docs/ENGINE_ARCHITECTURE.md @zori-xyz
+/docs/MINIFY_PATCHING_AUDIT.md @zori-xyz
+
