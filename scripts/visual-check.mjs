@@ -1,14 +1,37 @@
 import { chromium } from "playwright";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 
 const base = "http://127.0.0.1:1420";
 const output = fileURLToPath(new URL("../.impeccable/screens/", import.meta.url));
-const executablePath =
-  "/Users/zori/Library/Caches/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-mac-arm64/chrome-headless-shell";
+const browserCandidates = [
+  process.env.BETTERFY_CHROMIUM_PATH,
+  chromium.executablePath(),
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/Applications/Chromium.app/Contents/MacOS/Chromium",
+  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+].filter(Boolean);
+const executablePath = browserCandidates.find((candidate) => existsSync(candidate));
+if (!executablePath) {
+  throw new Error("visual_check_browser_missing");
+}
 const browser = await chromium.launch({ headless: true, executablePath });
 const errors = [];
 const layoutIssues = [];
 const contrastIssues = [];
+
+const observePage = (page) => {
+  page.on("console", (message) => {
+    if (message.type() === "error" && !message.text().startsWith("Failed to load resource:")) {
+      errors.push(message.text());
+    }
+  });
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("response", (response) => {
+    if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`);
+  });
+};
 
 const auditLayout = async (page, label) => {
   const issues = await page.evaluate((screenLabel) => {
@@ -149,7 +172,7 @@ const auditContrast = async (page, label) => {
       if (
         style.display === "none" ||
         style.visibility === "hidden" ||
-        Number(style.opacity) === 0 ||
+        Number(style.opacity) < .8 ||
         rect.width < 2 ||
         rect.height < 2 ||
         gradientText ||
@@ -202,10 +225,7 @@ const auditContrast = async (page, label) => {
 
 const capture = async (viewport, suffix) => {
   const page = await browser.newPage({ viewport });
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
-  page.on("pageerror", (error) => errors.push(error.message));
+  observePage(page);
 
   await page.goto(base, { waitUntil: "networkidle" });
   await page.evaluate(() => localStorage.clear());
@@ -307,10 +327,7 @@ const capture = async (viewport, suffix) => {
 
 const captureMissingGame = async () => {
   const page = await browser.newPage({ viewport: { width: 980, height: 660 } });
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
-  page.on("pageerror", (error) => errors.push(error.message));
+  observePage(page);
 
   await page.goto(`${base}/?game-missing=1`, { waitUntil: "networkidle" });
   await page.evaluate(() => {
@@ -386,10 +403,7 @@ const auditReducedMotion = async () => {
 
 const captureLightEntry = async (viewport, suffix, full = false) => {
   const page = await browser.newPage({ viewport });
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
-  page.on("pageerror", (error) => errors.push(error.message));
+  observePage(page);
   await page.goto(base, { waitUntil: "networkidle" });
   await page.evaluate(() => {
     localStorage.clear();

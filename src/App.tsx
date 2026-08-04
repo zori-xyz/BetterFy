@@ -49,7 +49,16 @@ import enigmaProgress from "./assets/enigma-progress.webp";
 import pudgeRecovery from "./assets/pudge-recovery.png";
 import wukongBuild from "./assets/wukong-build.png";
 import type { AuthSession } from "./auth";
-import { engineBridge, type BuildPlan, type BuildReceipt, type GameInstallation } from "./engine";
+import {
+  EngineFault,
+  engineBridge,
+  type BuildPlan,
+  type BuildReceipt,
+  type GameInstallation,
+  type SteamConfigReceipt,
+  type SteamLaunchOptionPreview,
+  type SteamProfileSummary,
+} from "./engine";
 import { useLocale, type Language } from "./i18n";
 import OnboardingFlow from "./OnboardingFlow";
 import PresetManager from "./PresetManager";
@@ -161,6 +170,25 @@ const copy = {
       successText: "Preview-сборка прошла проверку. В production BetterFy запустит только Steam — Dota 2 ты откроешь сам.",
       play: "Открыть Steam",
       playUnavailable: "Steam запустится автоматически после безопасного патчинга",
+      activationTitle: "Активировать Steam-профиль",
+      activationText: "BetterFy добавит только свой launch option в выбранный локальный профиль, проверит запись и запустит Steam. Dota 2 остаётся закрытой.",
+      activationDesktopOnly: "Активация доступна только в Windows desktop-сборке с проверенной Dota 2.",
+      activationLoading: "Ищем локальные Steam-профили…",
+      activationEmpty: "Локальные Steam-профили не найдены. Один раз войди в Steam на этом компьютере и повтори.",
+      activationProfile: "Профиль Steam",
+      activationReady: "Готов к активации",
+      activationManaged: "Уже настроен BetterFy",
+      activationConflict: "Конфликт launch options",
+      activationInvalid: "Конфиг повреждён",
+      activationConfirm: "Я понимаю: BetterFy закроет Dota 2 и Steam, изменит launch options этого профиля и снова запустит только Steam.",
+      activationAction: "Активировать и открыть Steam",
+      activationStopping: "Закрываем Dota 2 и Steam…",
+      activationApplying: "Создаём backup и применяем настройку…",
+      activationStarting: "Проверяем результат и запускаем Steam…",
+      activationComplete: "Steam запущен. Теперь открой Dota 2 самостоятельно.",
+      activationRetry: "Повторить активацию",
+      activationError: "Активация остановлена безопасно. Проверь Steam-профиль и повтори.",
+      activationRecovery: "Откатить настройку BetterFy",
       configTitle: "Сохрани эту конфигурацию",
       configText: "Вернись к ней позже или передай пресет другому игроку через менеджер конфигов.",
       openConfigs: "Открыть менеджер конфигов",
@@ -170,14 +198,16 @@ const copy = {
       recoveryEyebrow: "RECOVERY / RESTORE",
       recoveryTitle: "Вернём всё в спокойное состояние",
       recoveryText: "Этот экран показывает будущий путь восстановления. В прототипе очищается только временное состояние интерфейса.",
+      activationRecoveryText: "BetterFy закроет Steam, сверит журнал и восстановит точные байты launch options из проверенного backup. Steam после отката нужно открыть вручную.",
       restore: "Восстановить staging",
+      restoreActivation: "Откатить профиль и staging",
       restoring: "Восстанавливаем…",
       restoredLabel: "RECOVERY / COMPLETE",
       restoredTitle: "Временное состояние очищено",
       restoredText: "Никакие игровые файлы не изменялись. Можно вернуться к плану и повторить проверку.",
       rebuild: "Вернуться к плану",
       recoverySafe: "В production восстановление будет подтверждаться журналом операции",
-      prototype: "Preview Build · запись, восстановление и запуск игры не выполняются",
+      prototype: "Build staging работает локально · Steam launch options активируются только после подтверждения · файлы Dota 2 пока не изменяются",
     },
     library: {
       eyebrow: "LIBRARY / LOCAL",
@@ -317,6 +347,25 @@ const copy = {
       successText: "The preview build passed verification. Production will start Steam only — you launch Dota 2 yourself.",
       play: "Open Steam",
       playUnavailable: "Steam will start automatically after a safe patch",
+      activationTitle: "Activate a Steam profile",
+      activationText: "BetterFy adds only its owned launch option to the selected local profile, verifies the write, and starts Steam. Dota 2 stays closed.",
+      activationDesktopOnly: "Activation is available only in the Windows desktop build with a verified Dota 2 installation.",
+      activationLoading: "Looking for local Steam profiles…",
+      activationEmpty: "No local Steam profiles were found. Sign in to Steam once on this PC and try again.",
+      activationProfile: "Steam profile",
+      activationReady: "Ready to activate",
+      activationManaged: "Already managed by BetterFy",
+      activationConflict: "Launch options conflict",
+      activationInvalid: "Invalid config",
+      activationConfirm: "I understand: BetterFy will close Dota 2 and Steam, change this profile's launch options, and start Steam only.",
+      activationAction: "Activate and open Steam",
+      activationStopping: "Closing Dota 2 and Steam…",
+      activationApplying: "Creating a backup and applying the setting…",
+      activationStarting: "Verifying the result and starting Steam…",
+      activationComplete: "Steam is running. Launch Dota 2 yourself when ready.",
+      activationRetry: "Retry activation",
+      activationError: "Activation stopped safely. Check the Steam profile and try again.",
+      activationRecovery: "Roll back the BetterFy setting",
       configTitle: "Save this configuration",
       configText: "Return to it later or share the preset through the config manager.",
       openConfigs: "Open config manager",
@@ -326,14 +375,16 @@ const copy = {
       recoveryEyebrow: "RECOVERY / RESTORE",
       recoveryTitle: "Return to a calm state",
       recoveryText: "This demonstrates the future recovery path. The prototype only clears temporary interface state.",
+      activationRecoveryText: "BetterFy will close Steam, verify the journal, and restore the exact launch-option bytes from the checked backup. Start Steam manually after rollback.",
       restore: "Restore staging",
+      restoreActivation: "Roll back profile and staging",
       restoring: "Restoring…",
       restoredLabel: "RECOVERY / COMPLETE",
       restoredTitle: "Temporary state cleared",
       restoredText: "No game files were changed. Return to the plan and run the preview again.",
       rebuild: "Return to plan",
       recoverySafe: "Production recovery will be verified against the operation journal",
-      prototype: "Preview Build · no file writes, restore, or game launch are performed",
+      prototype: "Build staging runs locally · Steam launch options activate only after confirmation · Dota 2 files are still untouched",
     },
     library: {
       eyebrow: "LIBRARY / LOCAL",
@@ -687,6 +738,7 @@ function Workspace({
             <BuildRoute
               t={t}
               language={language}
+              installation={installation}
               selectedCount={selectedModIds.length}
               onHome={() => navigate("home")}
               onOpenConfigs={() => navigate("library")}
@@ -915,12 +967,14 @@ function HomeRoute({
 function BuildRoute({
   t,
   language,
+  installation,
   selectedCount,
   onHome,
   onOpenConfigs,
 }: {
   t: typeof copy.ru;
   language: Language;
+  installation: GameInstallation;
   selectedCount: number;
   onHome: () => void;
   onOpenConfigs: () => void;
@@ -934,6 +988,7 @@ function BuildRoute({
   const [receipt, setReceipt] = useState<BuildReceipt | null>(null);
   const [recoveryOperationId, setRecoveryOperationId] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(false);
+  const [steamReceipt, setSteamReceipt] = useState<SteamConfigReceipt | null>(null);
 
   const inspectPlan = async () => {
     setPlanning(true);
@@ -1004,6 +1059,10 @@ function BuildRoute({
   const restorePreview = async () => {
     setRestoring(true);
     try {
+      if (steamReceipt?.operationId) {
+        await engineBridge.prepareRuntimeForPatch();
+        await engineBridge.rollbackSteamLaunchOptions(steamReceipt.operationId);
+      }
       const operationId = receipt?.operationId ?? recoveryOperationId;
       if (operationId) await engineBridge.rollbackOperation(operationId);
       setRestoring(false);
@@ -1019,7 +1078,8 @@ function BuildRoute({
     setProgress(0);
     setTargetProgress(0);
     setReceipt(null);
-    setRecoveryOperationId(null);
+      setRecoveryOperationId(null);
+      setSteamReceipt(null);
     setView("review");
   };
 
@@ -1148,10 +1208,12 @@ function BuildRoute({
             <span className="result-status ready"><CircleCheckBig />{t.build.successEyebrow}</span>
             <h1 className="accent-title"><AccentTitle text={t.build.successTitle} /></h1>
             <p>{t.build.successText}</p>
-            <button className="play-action" disabled title={t.build.playUnavailable}>
-              <span><Play /></span><strong>{t.build.play}</strong><ArrowRight />
-            </button>
-            <small className="result-truth">{t.build.playUnavailable}</small>
+            <SteamActivationPanel
+              t={t}
+              installation={installation}
+              onCommitted={setSteamReceipt}
+              onRequestRecovery={() => setView("recovery")}
+            />
             <div className="success-config-panel">
               <div className="success-config-copy">
                 <span><Save /></span>
@@ -1178,11 +1240,11 @@ function BuildRoute({
             <h1 className="accent-title">
               <AccentTitle text={view === "restored" ? t.build.restoredTitle : t.build.recoveryTitle} />
             </h1>
-            <p>{view === "restored" ? t.build.restoredText : t.build.recoveryText}</p>
+            <p>{view === "restored" ? t.build.restoredText : steamReceipt?.operationId ? t.build.activationRecoveryText : t.build.recoveryText}</p>
             {view === "recovery" ? (
               <button className="restore-action" onClick={restorePreview} disabled={restoring}>
                 <span>{restoring ? <LoaderCircle /> : <ArchiveRestore />}</span>
-                <strong>{restoring ? t.build.restoring : t.build.restore}</strong>
+                <strong>{restoring ? t.build.restoring : steamReceipt?.operationId ? t.build.restoreActivation : t.build.restore}</strong>
                 <ArrowRight />
               </button>
             ) : (
@@ -1201,6 +1263,218 @@ function BuildRoute({
         </section>
       )}
     </div>
+  );
+}
+
+type SteamActivationPhase =
+  | "loading"
+  | "ready"
+  | "stopping"
+  | "applying"
+  | "starting"
+  | "complete"
+  | "error";
+
+function SteamActivationPanel({
+  t,
+  installation,
+  onCommitted,
+  onRequestRecovery,
+}: {
+  t: typeof copy.ru;
+  installation: GameInstallation;
+  onCommitted: (receipt: SteamConfigReceipt) => void;
+  onRequestRecovery: () => void;
+}) {
+  const [profiles, setProfiles] = useState<SteamProfileSummary[]>([]);
+  const [selectedToken, setSelectedToken] = useState("");
+  const [preview, setPreview] = useState<SteamLaunchOptionPreview | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const [phase, setPhase] = useState<SteamActivationPhase>("loading");
+  const [errorCode, setErrorCode] = useState("");
+  const [canRecover, setCanRecover] = useState(false);
+  const [appliedReceipt, setAppliedReceipt] = useState<SteamConfigReceipt | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
+  const windowsDesktop = installation.verified
+    && navigator.userAgent.toLowerCase().includes("windows");
+
+  useEffect(() => {
+    if (!windowsDesktop) {
+      setPhase("ready");
+      return;
+    }
+    let active = true;
+    setPhase("loading");
+    engineBridge.listSteamProfiles()
+      .then((items) => {
+        if (!active) return;
+        setProfiles(items);
+        const first = items.find((item) => item.status === "ready" || item.status === "already_managed");
+        setSelectedToken(first?.profileToken ?? "");
+        setPhase("ready");
+      })
+      .catch((error) => {
+        if (!active) return;
+        setErrorCode(error instanceof EngineFault ? error.code : "bridge_error");
+        setPhase("error");
+      });
+    return () => {
+      active = false;
+    };
+  }, [windowsDesktop, reloadNonce]);
+
+  useEffect(() => {
+    if (!selectedToken || !windowsDesktop) {
+      setPreview(null);
+      return;
+    }
+    let active = true;
+    setPreview(null);
+    setConfirmed(false);
+    engineBridge.previewSteamLaunchOptions(selectedToken)
+      .then((result) => {
+        if (active) setPreview(result);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setErrorCode(error instanceof EngineFault ? error.code : "bridge_error");
+        setPhase("error");
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedToken, windowsDesktop]);
+
+  const statusLabel = (status: SteamProfileSummary["status"]) => {
+    if (status === "ready") return t.build.activationReady;
+    if (status === "already_managed") return t.build.activationManaged;
+    if (status === "launch_option_conflict") return t.build.activationConflict;
+    return t.build.activationInvalid;
+  };
+
+  const activate = async () => {
+    if (!preview || !confirmed) return;
+    setErrorCode("");
+    setCanRecover(false);
+    try {
+      setPhase("stopping");
+      await engineBridge.prepareRuntimeForPatch();
+      let applied = appliedReceipt;
+      if (!applied) {
+        setPhase("applying");
+        applied = await engineBridge.applySteamLaunchOptions(preview);
+        setAppliedReceipt(applied);
+        onCommitted(applied);
+        setCanRecover(Boolean(applied.operationId));
+      }
+      setPhase("starting");
+      await engineBridge.startSteamAfterProfile(applied.profileToken, applied.operationId);
+      await new Promise((resolve) => window.setTimeout(resolve, 900));
+      setPhase("complete");
+    } catch (error) {
+      setErrorCode(error instanceof EngineFault ? error.code : "bridge_error");
+      setPhase("error");
+    }
+  };
+
+  const working = phase === "stopping" || phase === "applying" || phase === "starting";
+  const phaseLabel = phase === "stopping"
+    ? t.build.activationStopping
+    : phase === "applying"
+      ? t.build.activationApplying
+      : t.build.activationStarting;
+
+  return (
+    <section className={`steam-activation phase-${phase}`} aria-labelledby="steam-activation-title">
+      <header>
+        <span><Power /></span>
+        <div>
+          <strong id="steam-activation-title">{t.build.activationTitle}</strong>
+          <small>{t.build.activationText}</small>
+        </div>
+      </header>
+
+      {!windowsDesktop ? (
+        <div className="steam-activation-notice"><Monitor />{t.build.activationDesktopOnly}</div>
+      ) : phase === "loading" ? (
+        <div className="steam-activation-notice"><LoaderCircle />{t.build.activationLoading}</div>
+      ) : phase === "error" && profiles.length === 0 ? (
+        <div className="steam-activation-load-error" role="alert">
+          <div><TriangleAlert /><span>{t.build.activationError}<small>{errorCode}</small></span></div>
+          <button onClick={() => setReloadNonce((value) => value + 1)}><RotateCcw />{t.build.activationRetry}</button>
+        </div>
+      ) : profiles.length === 0 ? (
+        <div className="steam-activation-notice"><CircleUserRound />{t.build.activationEmpty}</div>
+      ) : (
+        <>
+          <div className="steam-profile-list" role="radiogroup" aria-label={t.build.activationProfile}>
+            {profiles.map((profile) => {
+              const selectable = profile.status === "ready" || profile.status === "already_managed";
+              return (
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={selectedToken === profile.profileToken}
+                  className={selectedToken === profile.profileToken ? "selected" : ""}
+                  disabled={!selectable || working || phase === "complete"}
+                  key={profile.profileToken}
+                  onClick={() => {
+                    setSelectedToken(profile.profileToken);
+                    setAppliedReceipt(null);
+                    setCanRecover(false);
+                  }}
+                >
+                  <span>{profile.profileIndex.toString().padStart(2, "0")}</span>
+                  <div><strong>{t.build.activationProfile} {profile.profileIndex}</strong><small>{statusLabel(profile.status)}</small></div>
+                  {selectedToken === profile.profileToken ? <Check /> : <CircleUserRound />}
+                </button>
+              );
+            })}
+          </div>
+
+          {phase === "complete" ? (
+            <div className="steam-activation-complete" role="status"><CircleCheckBig />{t.build.activationComplete}</div>
+          ) : working ? (
+            <div className="steam-activation-progress" role="status" aria-live="polite">
+              <LoaderCircle /><span>{phaseLabel}</span><i />
+            </div>
+          ) : (
+            <>
+              <label className="steam-activation-confirm">
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(event) => setConfirmed(event.target.checked)}
+                />
+                <span><Check /></span>
+                <small>{t.build.activationConfirm}</small>
+              </label>
+              <button
+                className="play-action"
+                disabled={!preview || !confirmed}
+                onClick={activate}
+              >
+                <span>{phase === "error" ? <RotateCcw /> : <Power />}</span>
+                <strong>{phase === "error" ? t.build.activationRetry : t.build.activationAction}</strong>
+                <ArrowRight />
+              </button>
+            </>
+          )}
+
+          {phase === "error" && (
+            <div className="steam-activation-error" role="alert">
+              <TriangleAlert />
+              <span>{t.build.activationError}<small>{errorCode}</small></span>
+            </div>
+          )}
+          {canRecover && (
+            <button className="steam-activation-recovery" onClick={onRequestRecovery}>
+              <ArchiveRestore />{t.build.activationRecovery}<ArrowRight />
+            </button>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

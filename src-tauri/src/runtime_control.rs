@@ -20,6 +20,12 @@ pub struct RuntimePrepareRequest {
     pub confirmed: bool,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SteamStartRequest {
+    pub confirmed: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ProcessEntry {
     pid: u32,
@@ -76,6 +82,26 @@ where
         }
     }
     Err("shutdown_timeout".to_string())
+}
+
+fn wait_for_steam_started<F>(
+    mut inspect: F,
+    max_polls: usize,
+    interval: Duration,
+) -> Result<RuntimeState, String>
+where
+    F: FnMut() -> Result<RuntimeState, String>,
+{
+    for poll in 0..=max_polls {
+        let state = inspect()?;
+        if state.steam_running && !state.dota_running {
+            return Ok(state);
+        }
+        if poll < max_polls && !interval.is_zero() {
+            thread::sleep(interval);
+        }
+    }
+    Err("steam_start_timeout".to_string())
 }
 
 #[cfg(target_os = "windows")]
@@ -245,6 +271,28 @@ fn request_steam_close() -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
+fn request_steam_start() -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    use std::process::{Command, Stdio};
+    use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+
+    let executable = resolve_steam_executable()?;
+    Command::new(executable)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|_| "steam_start_failed".to_string())?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn request_steam_start() -> Result<(), String> {
+    Err("platform_not_supported".to_string())
+}
+
 #[cfg(not(target_os = "windows"))]
 fn request_steam_close() -> Result<(), String> {
     Err("platform_not_supported".to_string())
@@ -286,6 +334,26 @@ pub fn prepare_runtime_for_patch(request: RuntimePrepareRequest) -> Result<Runti
     }
 
     wait_for_patch_ready(inspect_runtime, SHUTDOWN_MAX_POLLS, SHUTDOWN_POLL_INTERVAL)
+}
+
+pub fn start_steam(request: SteamStartRequest) -> Result<RuntimeState, String> {
+    if !request.confirmed {
+        return Err("runtime_confirmation_required".to_string());
+    }
+    if !cfg!(target_os = "windows") {
+        return Err("platform_not_supported".to_string());
+    }
+
+    let state = inspect_runtime()?;
+    if state.dota_running {
+        return Err("runtime_busy".to_string());
+    }
+    if state.steam_running {
+        return Ok(state);
+    }
+
+    request_steam_start()?;
+    wait_for_steam_started(inspect_runtime, SHUTDOWN_MAX_POLLS, SHUTDOWN_POLL_INTERVAL)
 }
 
 #[cfg(test)]
@@ -357,6 +425,36 @@ mod tests {
     #[test]
     fn preparation_requires_explicit_confirmation() {
         let result = prepare_runtime_for_patch(RuntimePrepareRequest { confirmed: false });
+        assert_eq!(
+            result.err().as_deref(),
+            Some("runtime_confirmation_required")
+        );
+    }
+
+    #[test]
+    fn steam_start_wait_accepts_a_delayed_client() {
+        let mut calls = 0;
+        let state = wait_for_steam_started(
+            || {
+                calls += 1;
+                Ok(RuntimeState {
+                    platform_supported: true,
+                    steam_running: calls >= 3,
+                    dota_running: false,
+                    patch_ready: calls < 3,
+                })
+            },
+            3,
+            Duration::ZERO,
+        )
+        .expect("started state");
+        assert!(state.steam_running);
+        assert_eq!(calls, 3);
+    }
+
+    #[test]
+    fn steam_start_requires_explicit_confirmation() {
+        let result = start_steam(SteamStartRequest { confirmed: false });
         assert_eq!(
             result.err().as_deref(),
             Some("runtime_confirmation_required")

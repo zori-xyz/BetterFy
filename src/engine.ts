@@ -111,6 +111,10 @@ export interface EngineBridge {
   applySteamLaunchOptions(preview: SteamLaunchOptionPreview): Promise<SteamConfigReceipt>;
   rollbackSteamLaunchOptions(operationId: string): Promise<SteamConfigReceipt>;
   recoverSteamLaunchOptions(): Promise<SteamConfigReceipt[]>;
+  startSteamAfterProfile(
+    profileToken: string,
+    operationId: string | null,
+  ): Promise<RuntimeState>;
 }
 
 const wait = (duration: number) => new Promise((resolve) => window.setTimeout(resolve, duration));
@@ -118,13 +122,22 @@ const engineTimeoutMs = 15_000;
 
 export class EngineFault extends Error {
   constructor(
-    public readonly code: "timeout" | "bridge_error" | "invalid_response",
+    public readonly code: string,
     public readonly operation: string,
     options?: { cause?: unknown },
   ) {
     super(`${operation}:${code}`, options);
     this.name = "EngineFault";
   }
+}
+
+function backendErrorCode(error: unknown) {
+  const candidate = typeof error === "string"
+    ? error
+    : error instanceof Error
+      ? error.message
+      : "";
+  return /^[a-z][a-z0-9_]{2,63}$/.test(candidate) ? candidate : "bridge_error";
 }
 
 async function guardedEngineCall<T>(operation: string, task: Promise<T>, timeoutMs = engineTimeoutMs) {
@@ -139,7 +152,7 @@ async function guardedEngineCall<T>(operation: string, task: Promise<T>, timeout
     return await Promise.race([task, timeout]);
   } catch (error) {
     if (error instanceof EngineFault) throw error;
-    throw new EngineFault("bridge_error", operation, { cause: error });
+    throw new EngineFault(backendErrorCode(error), operation, { cause: error });
   } finally {
     window.clearTimeout(timer);
   }
@@ -261,6 +274,9 @@ export const mockEngine: EngineBridge = {
   },
   async recoverSteamLaunchOptions() {
     return [];
+  },
+  async startSteamAfterProfile() {
+    throw new EngineFault("platform_not_supported", "start_steam_after_profile");
   },
 };
 
@@ -439,5 +455,22 @@ export const engineBridge: EngineBridge = {
       throw new EngineFault("invalid_response", "recover_steam_launch_options");
     }
     return result;
+  },
+  async startSteamAfterProfile(profileToken, operationId) {
+    if (!isTauriRuntime()) {
+      return mockEngine.startSteamAfterProfile(profileToken, operationId);
+    }
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "start_steam_after_profile",
+      invoke<RuntimeState>("start_steam_after_profile", {
+        request: {
+          profileToken,
+          operationId,
+          confirmed: true,
+        },
+      }),
+      30_000,
+    );
   },
 };

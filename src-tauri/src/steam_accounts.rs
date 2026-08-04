@@ -729,6 +729,56 @@ pub fn apply_platform_profile(
     )
 }
 
+pub fn verify_platform_activation(
+    app_data_root: &Path,
+    profile_token: &str,
+    operation_id: Option<&str>,
+) -> Result<(), String> {
+    verify_activation(
+        app_data_root,
+        &platform_steam_roots(),
+        profile_token,
+        operation_id,
+    )
+}
+
+fn verify_activation(
+    app_data_root: &Path,
+    roots: &[PathBuf],
+    profile_token: &str,
+    operation_id: Option<&str>,
+) -> Result<(), String> {
+    validate_profile_token(profile_token)?;
+    let (operations_root, journals_root) = transaction_roots(app_data_root)?;
+    let _lock = acquire_transaction_lock(app_data_root)?;
+    cleanup_orphan_operations(&operations_root, &journals_root)?;
+    if !pending_operations(&journals_root)?.is_empty() {
+        return Err("steam_recovery_required".to_string());
+    }
+
+    let profile = resolve_profile(roots, profile_token)?;
+    let contents = read_localconfig(&profile.localconfig_path)?;
+    let current_hash = sha256(contents.as_bytes());
+    let current_plan = plan_managed_launch_option(&contents)?;
+    if current_plan.changed {
+        return Err("steam_activation_not_ready".to_string());
+    }
+
+    let Some(operation_id) = operation_id else {
+        return Ok(());
+    };
+    validate_operation_id(operation_id)?;
+    let journal = read_journal(&journals_root.join(format!("{operation_id}.json")))?;
+    if journal.operation_id != operation_id
+        || journal.profile_token != profile_token
+        || journal.phase != SteamConfigPhase::Committed
+        || journal.after_sha256 != current_hash
+    {
+        return Err("steam_activation_not_ready".to_string());
+    }
+    Ok(())
+}
+
 fn apply_profile_with_failure(
     app_data_root: &Path,
     roots: &[PathBuf],
@@ -1135,6 +1185,72 @@ mod tests {
             },
         )
         .expect("idempotent rollback");
+        fs::remove_dir_all(base).expect("cleanup");
+    }
+
+    #[test]
+    fn activation_requires_the_committed_profile_and_current_hash() {
+        let original = local_config("-novid");
+        let (base, steam, app_data) = fixture("activation", "43", &original);
+        let request = request_for(&steam);
+        let profile_token = request.profile_token.clone();
+        let receipt = apply_profile_with_failure(
+            &app_data,
+            std::slice::from_ref(&steam),
+            request,
+            FailurePoint::None,
+        )
+        .expect("apply");
+        let operation_id = receipt.operation_id.expect("operation");
+
+        verify_activation(
+            &app_data,
+            std::slice::from_ref(&steam),
+            &profile_token,
+            Some(&operation_id),
+        )
+        .expect("authorized");
+        assert_eq!(
+            verify_activation(
+                &app_data,
+                std::slice::from_ref(&steam),
+                &format!("{PROFILE_TOKEN_PREFIX}{}", "0".repeat(64)),
+                Some(&operation_id),
+            )
+            .err()
+            .as_deref(),
+            Some("steam_profile_not_found")
+        );
+
+        let target = steam.join("userdata/43/config/localconfig.vdf");
+        fs::write(&target, local_config("-novid -language dutch -console"))
+            .expect("external change");
+        assert_eq!(
+            verify_activation(
+                &app_data,
+                std::slice::from_ref(&steam),
+                &profile_token,
+                Some(&operation_id),
+            )
+            .err()
+            .as_deref(),
+            Some("steam_activation_not_ready")
+        );
+        fs::remove_dir_all(base).expect("cleanup");
+    }
+
+    #[test]
+    fn activation_accepts_an_already_managed_profile_without_an_operation() {
+        let (base, steam, app_data) = fixture(
+            "activation-managed",
+            "44",
+            &local_config("-novid -language dutch"),
+        );
+        let roots = vec![steam.clone()];
+        let profile = discover_profiles_in_roots(&roots)
+            .expect("profiles")
+            .remove(0);
+        verify_activation(&app_data, &roots, &profile.token, None).expect("authorized");
         fs::remove_dir_all(base).expect("cleanup");
     }
 

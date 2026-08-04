@@ -4,10 +4,11 @@ BetterFy is a desktop manager for Dota 2 mods and skin packs, built with Tauri,
 React, and TypeScript.
 
 The current build combines an interactive product prototype with the first real,
-safe engine slice. Authentication, Dota backups, deployment, and launch remain
-simulated. Tauri discovers Steam libraries and validates Dota through marker files;
-browser discovery is explicitly simulated. BetterFy does not modify Dota 2 files
-yet.
+safe engine slice. Authentication, Dota backups, and VPK deployment remain
+simulated. Tauri discovers Steam libraries, validates Dota through marker files,
+and can activate a confirmed local Steam profile through a journaled launch-option
+transaction before starting Steam only. Browser discovery and activation remain
+explicitly simulated. BetterFy does not modify Dota 2 files yet.
 
 ## Run locally
 
@@ -48,9 +49,10 @@ npm run check
 - read-only Tauri Dota path discovery and validation, including Windows Steam
   registry and `libraryfolders.vdf` candidates
 - typed Windows runtime inspection plus a guarded graceful Dota/Steam shutdown
-  preflight; it is not wired to the staging-only preview until deployment exists
+  preflight and a verified Steam-only restart
 - lossless Steam KeyValues planning that preserves unrelated Dota launch options,
-  rejects foreign language conflicts, and performs no real config write yet
+  rejects foreign language conflicts, and commits through a verified backup,
+  atomic replacement, journal, and exact rollback
 - deterministic fixture `BuildPlan` with conflict detection and SHA-256 payloads
 - BetterFy-owned staging execution, verified journals, interrupted-journal
   recovery, operation listing, and idempotent rollback
@@ -69,9 +71,10 @@ npm run check
 ## Production boundary
 
 Config storage, Steam/Dota marker validation, deterministic fixture planning,
-isolated staging, checksum verification, journaling, and staging rollback have real
-Rust boundaries. Downloads, archive ingestion, VPK assembly, game-file backup,
-deployment, Steam launch, and production authentication are not implemented yet.
+isolated staging, checksum verification, journaling, staging rollback, confirmed
+Steam launch-option activation, and Steam-only restart have real Rust boundaries.
+Downloads, archive ingestion, VPK assembly, game-file backup, deployment, and
+production authentication are not implemented yet.
 The pinned upstream Minify study and the approved Steam/Dota lifecycle are recorded
 in [`docs/MINIFY_PATCHING_AUDIT.md`](docs/MINIFY_PATCHING_AUDIT.md). Production
 patching must satisfy that contract before game-directory writes are enabled.

@@ -12,8 +12,8 @@ use build_engine::{
     BuildReceipt, OperationSummary, RollbackReceipt,
 };
 use presets::{delete_preset, export_preset, import_preset, list_presets, save_preset};
-use runtime_control::{RuntimePrepareRequest, RuntimeState};
-use serde::Serialize;
+use runtime_control::{RuntimePrepareRequest, RuntimeState, SteamStartRequest};
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,6 +22,14 @@ use steam_accounts::{
     SteamLaunchOptionPreview, SteamProfileSummary,
 };
 use tauri::{AppHandle, Manager};
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StartSteamAfterProfileRequest {
+    profile_token: String,
+    operation_id: Option<String>,
+    confirmed: bool,
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -321,6 +329,30 @@ async fn recover_steam_launch_options(
     .map_err(|_| "runtime_worker_failed".to_string())?
 }
 
+#[tauri::command]
+async fn start_steam_after_profile(
+    app: AppHandle,
+    request: StartSteamAfterProfileRequest,
+) -> Result<RuntimeState, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "steam_activation_not_ready".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        require_patch_ready_runtime()?;
+        steam_accounts::verify_platform_activation(
+            &app_data,
+            &request.profile_token,
+            request.operation_id.as_deref(),
+        )?;
+        runtime_control::start_steam(SteamStartRequest {
+            confirmed: request.confirmed,
+        })
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
@@ -339,6 +371,7 @@ fn main() {
             apply_steam_launch_options,
             rollback_steam_launch_options,
             recover_steam_launch_options,
+            start_steam_after_profile,
             list_presets,
             save_preset,
             delete_preset,

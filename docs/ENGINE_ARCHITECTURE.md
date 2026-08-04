@@ -101,7 +101,7 @@ preview_steam_launch_options(profile_token) -> SteamLaunchOptionPreview
 apply_steam_launch_options(request) -> SteamConfigReceipt
 rollback_steam_launch_options(request) -> SteamConfigReceipt
 recover_steam_launch_options(confirmed) -> SteamConfigReceipt[]
-start_steam(operation_id) -> RuntimeState
+start_steam_after_profile(request) -> RuntimeState
 list_presets() -> PresetRecord[]
 save_preset(request) -> PresetRecord
 delete_preset(preset_id) -> ()
@@ -134,7 +134,8 @@ the listener when the screen unmounts.
 
 ## First vertical slice
 
-Build this before downloads, authentication, subscriptions, or Steam launch:
+The first staging slice was built before downloads, authentication, subscriptions,
+or Steam activation:
 
 1. Detect Dota 2 on Windows and validate a manually selected folder.
 2. Load two local fixture mods from the repository.
@@ -174,9 +175,10 @@ the validated BetterFy-owned operation directory. Repeating rollback is safe.
 Tests inject failures after a staged write and before verification.
 
 This is not deployment: no command writes to Dota, creates a game backup, assembles
-a production VPK, downloads catalog content, stops processes, or launches Steam.
-Those boundaries stay closed until the staging and recovery contract is verified
-on Windows. The researched production lifecycle is pinned in
+a production VPK, or downloads catalog content. A separate confirmed activation
+step now stops Dota and Steam, commits BetterFy's owned launch option, verifies the
+committed profile against its journal, and starts Steam only. The game-directory
+write boundary stays closed. The researched production lifecycle is pinned in
 `docs/MINIFY_PATCHING_AUDIT.md`.
 
 The runtime preflight is now implemented behind typed Tauri commands. Windows
@@ -186,8 +188,8 @@ confirmation, `prepare_runtime_for_patch` requests a normal `WM_CLOSE` for Dota,
 waits for it to exit, invokes the registry-resolved `steam.exe -exitsteam`, and
 then waits until both products are absent. It never force-terminates a process.
 Timeout, unavailable Dota window, missing Steam, and unsupported platform have
-stable error codes. This command is intentionally not connected to the current
-staging-only preview; it becomes mandatory immediately before production deploy.
+stable error codes. This preflight is used by the visible profile-activation step
+and remains mandatory immediately before future production deploy.
 
 Steam launch-option planning now has a BetterFy-owned, lossless VDF boundary.
 The parser walks the nested KeyValues path for app `570`, preserves every byte
@@ -209,8 +211,13 @@ path. An interruption before or after replacement is recovered idempotently
 from the verified backup; an unrelated post-commit Steam edit blocks rollback
 instead of being overwritten. Apply, rollback, and recovery Tauri commands are
 Windows-only and reject the operation unless both Steam and Dota are stopped.
-This transaction currently owns only BetterFy's `-language dutch` argument; it
-is not yet connected to production VPK deployment or the visible build flow.
+The visible Build success route exposes this transaction as a separate, honest
+activation step. It lists profiles by neutral ordinal, requires explicit shutdown
+confirmation, applies the selected preview, verifies either the matching committed
+journal or an already-managed profile, then resolves `steam.exe` from the registry
+and starts Steam. Dota is never launched. A changed transaction exposes its exact
+rollback path. This transaction currently owns only BetterFy's `-language dutch`
+argument and is not yet connected to production VPK deployment.
 
 Preset persistence is implemented as a separate BetterFy-owned boundary. The
 backend validates the schema and identifiers, rejects symlinks and oversized
