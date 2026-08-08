@@ -14,7 +14,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 reqwest = { version = "=0.13.4", default-features = false, features = ["blocking", "rustls"] }
-zip = { version = "=4.6.1", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "=4.6.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 
