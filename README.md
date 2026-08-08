@@ -14,6 +14,7 @@
   <a href="https://github.com/zori-xyz/BetterFy/actions/workflows/release.yml"><img alt="Windows release" src="https://github.com/zori-xyz/BetterFy/actions/workflows/release.yml/badge.svg" /></a>
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri_2-Rust-24C8DB?style=flat" />
   <img alt="React" src="https://img.shields.io/badge/React-TypeScript-61DAFB?style=flat" />
+  <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/License-GPL--3.0-red.svg" /></a>
 </p>
 
 <p align="center">
