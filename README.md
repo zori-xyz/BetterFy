@@ -182,14 +182,15 @@ are in [CONTRIBUTING.md](CONTRIBUTING.md) and
 ## Community
 
 Early Access news, setup help, and product feedback are handled through
-[@BetterFyBot](https://t.me/BetterFyBot).
+[@BetterFyBot](https://t.me/BeterFyBot).
 
 ## Legal status
 
-The BetterFy source license has not been selected yet. Public repository access
-does not by itself grant redistribution rights. Third-party catalog metadata and
-prototype imagery have separate provenance and release restrictions documented
-in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [DESIGN.md](DESIGN.md).
+BetterFy is licensed under the [GNU General Public License v3.0](LICENSE).
+Third-party catalog metadata and prototype imagery have separate provenance
+and release restrictions documented in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [DESIGN.md](DESIGN.md).
 
 Dota 2 and related marks and assets belong to Valve Corporation. BetterFy is an
 independent project and is not affiliated with or endorsed by Valve.
+
