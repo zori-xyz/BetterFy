@@ -1,8 +1,9 @@
 # BetterFy engine architecture
 
-BetterFy is still running on the mock bridge in `src/engine.ts`. The UI contract is
-already isolated from the implementation, so the Rust engine can replace the mock
-without changing the screens.
+BetterFy uses a typed bridge in `src/engine.ts`: the Tauri desktop runtime invokes
+Rust commands, while browser preview returns explicit fixture or unsupported
+states. React presents the result but does not decide whether a path, profile, or
+operation is safe.
 
 ## Product rules
 
@@ -91,7 +92,7 @@ Start with these Tauri commands:
 discover_game() -> GameInstallation[]
 validate_game_path(path) -> GameInstallation
 plan_build(request) -> BuildPlan
-execute_build(request) -> BuildReceipt
+execute_build(mod_ids, expected_plan_id, confirmed) -> BuildReceipt
 restore_backup(backup_id) -> RestoreReceipt
 list_backups() -> BackupSummary[]
 inspect_runtime() -> RuntimeState
@@ -107,6 +108,8 @@ save_preset(request) -> PresetRecord
 delete_preset(preset_id) -> ()
 export_preset(preset_id) -> String
 import_preset(payload) -> PresetRecord
+collect_system_diagnostics(game_path?) -> SystemDiagnosticReport
+intake_fixture_content(request) -> ContentReceipt[]
 ```
 
 Long-running commands will emit one event once deployment is introduced:
@@ -171,8 +174,10 @@ conflict.
 `create_new`, verifies size and SHA-256 after writing, and commits an atomically
 recoverable JSON journal after every material step. `list_engine_operations`
 recovers interrupted journal renames, and `rollback_engine_operation` removes only
-the validated BetterFy-owned operation directory. Repeating rollback is safe.
-Tests inject failures after a staged write and before verification.
+the validated BetterFy-owned operation directory. Execution requires explicit
+confirmation and the exact `planId` returned for the reviewed selection; a stale
+or substituted plan is rejected before an operation journal is created. Repeating
+rollback is safe. Tests inject failures after a staged write and before verification.
 
 This is not deployment: no command writes to Dota, creates a game backup, assembles
 a production VPK, or downloads catalog content. A separate confirmed activation
@@ -224,6 +229,49 @@ backend validates the schema and identifiers, rejects symlinks and oversized
 records, and commits JSON records through a temporary file and rollback-aware
 rename. Import creates a new local preset and cannot overwrite built-in
 workshop entries.
+
+### Implemented Windows readiness report
+
+`collect_system_diagnostics` gives the interface one factual preflight before a
+native test or future production transaction. Rust revalidates the stored Dota
+path, inspects the Windows process snapshot, aggregates neutral Steam-profile
+states, and counts recoverable BetterFy staging journals. The report contains
+stable codes, states, counts, application version, platform, and generation time.
+
+The report never contains filesystem paths, Steam IDs, account names, Telegram
+data, or authentication material. Diagnostics may prepare empty BetterFy-owned
+app-data roots and listing staging journals may finish an interrupted journal
+rename there; it does not modify Dota, Steam, launch options, or game content.
+Browser and unsupported platforms return an explicit unsupported state instead
+of imitating Windows readiness.
+
+### Implemented trusted content foundation
+
+The fixture build now consumes a versioned package manifest and verified bytes
+from `content-v1`, not directly from the interface or an arbitrary filesystem
+path. Rust validates required localized metadata, provenance, permission state,
+artifact format, byte size, lowercase SHA-256, relationships, recipe version,
+compatibility state, and explicit signature state. Unknown fields and unknown
+package IDs are rejected.
+
+Artifacts are addressed by SHA-256 and published without replacement. BetterFy
+writes and syncs a uniquely named temporary file, verifies it again, and uses a
+same-directory hard link to claim the final object name atomically. A competing
+or repeated intake must verify the existing bytes; it cannot overwrite them.
+The normalized manifest is published through the same no-clobber boundary.
+Interruption before object publication leaves no final object. Interruption
+between object and manifest publication is repaired by an idempotent retry.
+
+The visible fixture build automatically ensures its selected packages are in
+this store, then re-reads and re-hashes the stored object before staging. The
+package version, recipe version, artifact filename, byte size, and SHA-256 must
+also match the declarative build recipe. That content identity is included in the
+deterministic plan ID. A tampered object or drifted recipe blocks the build before
+an operation journal or Dota-facing state exists. The current command accepts
+repository-owned fixture IDs only.
+Remote downloads, archives, local imports, signatures, VPK construction, and
+Dota deployment remain disabled. The full threat model is documented in
+`docs/CONTENT_INTAKE_SECURITY.md`.
 
 ## Definition of done for filesystem writes
 

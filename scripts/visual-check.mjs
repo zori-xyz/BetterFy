@@ -495,6 +495,10 @@ const captureLightEntry = async (viewport, suffix, full = false) => {
     await page.getByRole("button", { name: /Настройки|Settings/ }).click();
     await page.waitForTimeout(520);
     await snapshot("settings");
+    await page.getByRole("button", { name: /Запустить проверку|Run diagnostics/ }).click();
+    await page.locator(".system-diagnostic-report").waitFor();
+    await page.waitForTimeout(300);
+    await snapshot("diagnostics");
     await page.getByRole("button", { name: /Закрыть|Close/ }).click();
     await page.locator(".side-panel-layer").waitFor({ state: "detached" });
     await page.getByRole("button", { name: /Профиль|Profile/ }).click();

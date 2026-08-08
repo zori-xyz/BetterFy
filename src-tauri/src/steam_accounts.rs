@@ -38,6 +38,15 @@ pub struct SteamProfileSummary {
     status: SteamProfileStatus,
 }
 
+#[derive(Clone, Debug)]
+pub struct SteamProfileDiagnosticCounts {
+    pub total: usize,
+    pub ready: usize,
+    pub already_managed: usize,
+    pub conflicts: usize,
+    pub invalid: usize,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SteamLaunchOptionPreview {
@@ -353,6 +362,26 @@ fn confirmation_token(profile_token: &str, plan: &LaunchOptionPlan) -> String {
 
 pub fn list_platform_profiles() -> Result<Vec<SteamProfileSummary>, String> {
     list_profiles(&platform_steam_roots())
+}
+
+pub fn platform_profile_diagnostic_counts() -> Result<SteamProfileDiagnosticCounts, String> {
+    let profiles = list_platform_profiles()?;
+    let mut counts = SteamProfileDiagnosticCounts {
+        total: profiles.len(),
+        ready: 0,
+        already_managed: 0,
+        conflicts: 0,
+        invalid: 0,
+    };
+    for profile in profiles {
+        match profile.status {
+            SteamProfileStatus::Ready => counts.ready += 1,
+            SteamProfileStatus::AlreadyManaged => counts.already_managed += 1,
+            SteamProfileStatus::LaunchOptionConflict => counts.conflicts += 1,
+            SteamProfileStatus::InvalidConfig => counts.invalid += 1,
+        }
+    }
+    Ok(counts)
 }
 
 fn list_profiles(roots: &[PathBuf]) -> Result<Vec<SteamProfileSummary>, String> {

@@ -1978,8 +1978,111 @@ button:disabled { cursor: not-allowed; }
 }
 .diagnostic-result.ready { border-color: rgba(168,240,75,.18); }
 .diagnostic-result.ready > svg, .diagnostic-result.ready small { color: #8fbf59; }
+.diagnostic-result.attention { border-color: rgba(255,184,77,.2); }
+.diagnostic-result.attention > svg, .diagnostic-result.attention small { color: #d9a34e; }
+.diagnostic-result.blocked { border-color: rgba(255,110,112,.2); }
+.diagnostic-result.blocked > svg, .diagnostic-result.blocked small { color: #d77e80; }
+.diagnostic-result.unsupported { border-color: rgba(168,77,255,.2); }
 .diagnostic-result.error { border-color: rgba(255,110,112,.2); }
 .diagnostic-result.error > svg, .diagnostic-result.error small { color: #d77e80; }
+.system-diagnostic-report {
+  margin-top: 9px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: rgba(255,255,255,.018);
+}
+.system-diagnostic-report > header {
+  min-height: 62px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.system-diagnostic-report > header span,
+.system-diagnostic-report > header strong { display: block; }
+.system-diagnostic-report > header span {
+  color: #756d7c;
+  font: 500 7px/1 "JetBrains Mono", monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.system-diagnostic-report > header strong {
+  margin-top: 6px;
+  font: 700 9px/1.2 "JetBrains Mono", monospace;
+}
+.system-diagnostic-report > header em {
+  max-width: 145px;
+  color: #9f98a6;
+  font: 600 7px/1.4 "JetBrains Mono", monospace;
+  text-align: right;
+}
+.system-diagnostic-report > header em.ready { color: #9dcc68; }
+.system-diagnostic-report > header em.attention { color: #e0aa54; }
+.system-diagnostic-report > header em.blocked { color: #e28385; }
+.system-diagnostic-report > header em.unsupported { color: #bd74df; }
+.system-diagnostic-report ul { margin: 0; padding: 0; list-style: none; }
+.system-diagnostic-report li {
+  min-height: 61px;
+  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.system-diagnostic-report li > span {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #b4aeba;
+  background: rgba(255,255,255,.035);
+}
+.system-diagnostic-report li > span svg { width: 13px; }
+.system-diagnostic-report li.ready > span { color: #a8f04b; background: rgba(168,240,75,.07); }
+.system-diagnostic-report li.attention > span { color: #ffb84d; background: rgba(255,184,77,.07); }
+.system-diagnostic-report li.blocked > span { color: #ff6e70; background: rgba(255,110,112,.07); }
+.system-diagnostic-report li.unsupported > span { color: #c16ce8; background: rgba(168,77,255,.07); }
+.system-diagnostic-report li strong,
+.system-diagnostic-report li small { display: block; }
+.system-diagnostic-report li strong { font-size: 9px; }
+.system-diagnostic-report li small { margin-top: 4px; color: #716b77; font-size: 8px; line-height: 1.4; }
+.system-diagnostic-report li > b {
+  color: #77717e;
+  font: 600 8px/1 "JetBrains Mono", monospace;
+}
+.system-diagnostic-report > footer { padding: 11px 12px 12px; }
+.system-diagnostic-report > footer small {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #6f6875;
+  font-size: 7px;
+  line-height: 1.4;
+}
+.system-diagnostic-report > footer small svg { flex: 0 0 auto; width: 13px; color: #ae68ce; }
+.system-diagnostic-report > footer button {
+  width: 100%;
+  min-height: 38px;
+  margin-top: 10px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(209,87,255,.2);
+  border-radius: 10px;
+  color: #c891df;
+  background: rgba(168,77,255,.055);
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 700;
+}
+.system-diagnostic-report > footer button svg { width: 13px; }
 .motion-switch {
   position: relative;
   width: 43px;
@@ -5920,6 +6023,29 @@ html[data-theme="light"] .diagnostic-result.ready > svg,
 html[data-theme="light"] .diagnostic-result.ready small { color: #3f711d; }
 html[data-theme="light"] .diagnostic-result.error > svg,
 html[data-theme="light"] .diagnostic-result.error small { color: #aa3547; }
+html[data-theme="light"] .diagnostic-result.attention > svg,
+html[data-theme="light"] .diagnostic-result.attention small { color: #8a5d16; }
+html[data-theme="light"] .diagnostic-result.blocked > svg,
+html[data-theme="light"] .diagnostic-result.blocked small { color: #aa3547; }
+html[data-theme="light"] .system-diagnostic-report {
+  color: #29202e;
+  border-color: var(--line);
+  background: rgba(255,255,255,.84);
+}
+html[data-theme="light"] .system-diagnostic-report > header,
+html[data-theme="light"] .system-diagnostic-report li { border-color: var(--line); }
+html[data-theme="light"] .system-diagnostic-report > header span,
+html[data-theme="light"] .system-diagnostic-report li small,
+html[data-theme="light"] .system-diagnostic-report > footer small { color: #675d6c; }
+html[data-theme="light"] .system-diagnostic-report li > span { background: #eee7f1; }
+html[data-theme="light"] .system-diagnostic-report li.ready > span { color: #3f711d; background: rgba(63,113,29,.08); }
+html[data-theme="light"] .system-diagnostic-report li.attention > span { color: #8a5d16; background: rgba(138,93,22,.08); }
+html[data-theme="light"] .system-diagnostic-report li.blocked > span { color: #aa3547; background: rgba(170,53,71,.08); }
+html[data-theme="light"] .system-diagnostic-report > footer button {
+  color: #70238f;
+  border-color: rgba(125,42,163,.2);
+  background: rgba(125,42,163,.06);
+}
 html[data-theme="light"] .profile-community {
   color: #29202e;
   border-color: rgba(8,127,181,.18);

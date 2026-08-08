@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "fixture.ambient-violet",
+  "version": "1.0.0",
+  "name": {
+    "ru": "Фиолетовая атмосфера",
+    "en": "Ambient Violet"
+  },
+  "description": {
+    "ru": "Репозиторный пакет для проверки безопасного content intake.",
+    "en": "Repository package for testing trusted content intake."
+  },
+  "category": "customization",
+  "resourceType": "panorama_style",
+  "author": "BetterFy fixtures",
+  "source": "https://github.com/zori-xyz/BetterFy",
+  "licenseStatus": "repository_fixture",
+  "trustRationale": "repository_fixture",
+  "artifact": {
+    "format": "raw",
+    "fileName": "ambient-violet.css",
+    "mediaType": "text/css",
+    "size": 61,
+    "sha256": "e2c06353f3a5c99162512e40c6a2e318778d1c73bc0ba79126df5a4beff13c64"
+  },
+  "dependencies": [],
+  "incompatibilities": ["fixture.ambient-clean"],
+  "recipeVersion": 1,
+  "dotaCompatibility": "unknown",
+  "lastVerification": "repository_fixture",
+  "signatureStatus": "not_provided"
+}

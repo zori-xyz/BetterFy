@@ -53,6 +53,8 @@ enabled in small, recoverable slices.
 | Area | State | What is true today |
 | --- | --- | --- |
 | Dota discovery | Implemented | Steam libraries are discovered and candidate installations are verified through marker files. |
+| Windows readiness diagnostics | Implemented | Settings exposes a Rust-backed report for platform, Dota discovery, runtime, Steam profiles, staging, and verified content without exporting personal paths or account identifiers. |
+| Trusted content intake | Implemented for fixtures | Versioned manifests, size and SHA-256 verification, immutable no-clobber storage, idempotent retry, and tamper rejection run in BetterFy-owned app data. Remote downloads and archives remain disabled. |
 | Build planning | Implemented for fixtures | Deterministic plans, content hashes, conflict detection, staging, journals, verification, and rollback run in BetterFy-owned app data. |
 | Steam profile activation | Implemented | A confirmed profile can be backed up, updated atomically, verified, rolled back, and followed by a Steam-only restart. |
 | Catalog and wardrobe | Product preview | Navigation, filtering, provenance fields, and local selection work; content download is not enabled. |
@@ -117,6 +119,7 @@ Unsigned artifacts are for internal testing; signed public releases use a
 separate tag-driven workflow.
 
 - [Windows build guide](docs/WINDOWS_BUILD.md)
+- [Windows test checklist](docs/WINDOWS_TEST_CHECKLIST.md)
 - [Release and updater guide](docs/RELEASING.md)
 - [Latest Windows workflow runs](https://github.com/zori-xyz/BetterFy/actions/workflows/windows-build.yml)
 
@@ -176,6 +179,7 @@ are in [CONTRIBUTING.md](CONTRIBUTING.md) and
 - [Design system](DESIGN.md)
 - [Experience constitution](docs/EXPERIENCE_CONSTITUTION.md)
 - [Engine architecture](docs/ENGINE_ARCHITECTURE.md)
+- [Trusted content intake](docs/CONTENT_INTAKE_SECURITY.md)
 - [Minify patching audit](docs/MINIFY_PATCHING_AUDIT.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)

@@ -24,7 +24,12 @@ export type GameInstallation = {
 export type BuildPlan = {
   planId: string;
   dryRun: boolean;
-  inputs: Array<{ id: string; name: string; version: string }>;
+  inputs: Array<{
+    id: string;
+    name: string;
+    version: string;
+    contentIdentity: string;
+  }>;
   operations: Array<{
     ownerId: string;
     source: string;
@@ -68,6 +73,55 @@ export type RuntimeState = {
   patchReady: boolean;
 };
 
+export type DiagnosticState = "ready" | "attention" | "blocked" | "unsupported";
+
+export type DiagnosticDetail =
+  | "windows_supported"
+  | "development_only"
+  | "game_verified"
+  | "game_missing"
+  | "demo_game"
+  | "runtime_ready"
+  | "dota_running"
+  | "steam_running"
+  | "runtime_unavailable"
+  | "profiles_missing"
+  | "profiles_need_attention"
+  | "profiles_managed"
+  | "profiles_ready"
+  | "profiles_unavailable"
+  | "staging_recovery_available"
+  | "staging_history_ready"
+  | "staging_clean"
+  | "staging_unavailable"
+  | "content_store_ready"
+  | "content_store_empty"
+  | "content_store_invalid";
+
+export type SystemDiagnosticReport = {
+  schemaVersion: 1;
+  appVersion: string;
+  platform: "windows" | "macos" | "other";
+  generatedAtMs: number;
+  overall: DiagnosticState;
+  checks: Array<{
+    code: "platform" | "game" | "runtime" | "steam_profiles" | "staging" | "content";
+    state: DiagnosticState;
+    detail: DiagnosticDetail;
+    value: number;
+  }>;
+};
+
+export type ContentReceipt = {
+  packageId: string;
+  version: string;
+  contentIdentity: string;
+  size: number;
+  alreadyPresent: boolean;
+  signatureStatus: "not_provided" | "unverified" | "verified";
+  compatibility: "unknown" | "verified" | "unsupported";
+};
+
 export type SteamProfileSummary = {
   profileToken: string;
   profileIndex: number;
@@ -94,6 +148,8 @@ export type SteamConfigReceipt = {
 };
 
 export interface EngineBridge {
+  intakeFixtureContent(packageIds: string[]): Promise<ContentReceipt[]>;
+  collectSystemDiagnostics(gamePath: string | null): Promise<SystemDiagnosticReport>;
   discoverGame(): Promise<GameInstallation[]>;
   inspectRuntime(): Promise<RuntimeState>;
   prepareRuntimeForPatch(): Promise<RuntimeState>;
@@ -171,6 +227,34 @@ const demoInstallation: GameInstallation = {
 };
 
 export const mockEngine: EngineBridge = {
+  async intakeFixtureContent(packageIds) {
+    return [...new Set(packageIds)].sort().map((packageId) => ({
+      packageId,
+      version: "1.0.0",
+      contentIdentity: `preview:${packageId}`,
+      size: 0,
+      alreadyPresent: false,
+      signatureStatus: "not_provided" as const,
+      compatibility: "unknown" as const,
+    }));
+  },
+  async collectSystemDiagnostics() {
+    return {
+      schemaVersion: 1,
+      appVersion: "0.1.0-preview",
+      platform: "other",
+      generatedAtMs: Date.now(),
+      overall: "unsupported",
+      checks: [
+        { code: "platform", state: "unsupported", detail: "development_only", value: 0 },
+        { code: "game", state: "attention", detail: "demo_game", value: 0 },
+        { code: "runtime", state: "unsupported", detail: "runtime_unavailable", value: 0 },
+        { code: "steam_profiles", state: "unsupported", detail: "profiles_unavailable", value: 0 },
+        { code: "staging", state: "ready", detail: "staging_clean", value: 0 },
+        { code: "content", state: "ready", detail: "content_store_empty", value: 0 },
+      ],
+    } satisfies SystemDiagnosticReport;
+  },
   async inspectRuntime() {
     return {
       platformSupported: false,
@@ -197,15 +281,25 @@ export const mockEngine: EngineBridge = {
     await wait(780);
     modIds = uniqueModIds(modIds);
     const inputs = [
-      { id: "fixture.ambient-violet", name: "Ambient Violet", version: "1.0.0" },
-      { id: "fixture.ambient-clean", name: "Ambient Clean", version: "1.0.0" },
+      {
+        id: "fixture.ambient-violet",
+        name: "Ambient Violet",
+        version: "1.0.0",
+        contentIdentity: "sha256:e2c06353f3a5c99162512e40c6a2e318778d1c73bc0ba79126df5a4beff13c64",
+      },
+      {
+        id: "fixture.ambient-clean",
+        name: "Ambient Clean",
+        version: "1.0.0",
+        contentIdentity: "sha256:1146e6e8922159c697679d77ab6a9b3972409df6552f5929ad93720e3e4e09f0",
+      },
     ].filter((input) => modIds.includes(input.id));
     const operations = inputs.map((input, index) => ({
       ownerId: input.id,
       source: index ? "panorama/styles/ambient-clean.css" : "panorama/styles/ambient-violet.css",
       destination: "game/dota/pak01_dir/panorama/styles/betterfy-theme.css",
-      size: index ? 1536 : 2048,
-      expectedSha256: "preview-only",
+      size: 61,
+      expectedSha256: input.contentIdentity.slice("sha256:".length),
     }));
     const contenders = operations.map((operation) => operation.ownerId);
     return {
@@ -284,6 +378,28 @@ const isTauriRuntime = () =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export const engineBridge: EngineBridge = {
+  async intakeFixtureContent(packageIds) {
+    if (!isTauriRuntime()) return mockEngine.intakeFixtureContent(packageIds);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "intake_fixture_content",
+      invoke<ContentReceipt[]>("intake_fixture_content", { request: { packageIds } }),
+      20_000,
+    );
+  },
+  async collectSystemDiagnostics(gamePath) {
+    if (!isTauriRuntime()) return mockEngine.collectSystemDiagnostics(gamePath);
+    const { invoke } = await import("@tauri-apps/api/core");
+    const report = await guardedEngineCall(
+      "collect_system_diagnostics",
+      invoke<SystemDiagnosticReport>("collect_system_diagnostics", { gamePath }),
+      20_000,
+    );
+    if (report.schemaVersion !== 1 || !Array.isArray(report.checks)) {
+      throw new EngineFault("invalid_response", "collect_system_diagnostics");
+    }
+    return report;
+  },
   async inspectRuntime() {
     if (!isTauriRuntime()) return mockEngine.inspectRuntime();
     const { invoke } = await import("@tauri-apps/api/core");
@@ -359,7 +475,13 @@ export const engineBridge: EngineBridge = {
     });
     const receipt = await guardedEngineCall(
       "execute_build",
-      invoke<BuildReceipt>("execute_build", { request: { modIds: normalized } }),
+      invoke<BuildReceipt>("execute_build", {
+        request: {
+          modIds: normalized,
+          expectedPlanId: plan.planId,
+          confirmed: true,
+        },
+      }),
     );
     if (!receipt.checksumsVerified || receipt.phase !== "ready") {
       throw new EngineFault("invalid_response", "execute_build");

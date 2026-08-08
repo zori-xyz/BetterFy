@@ -1,16 +1,20 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod build_engine;
+mod content_store;
 mod presets;
 mod runtime_control;
 mod steam_accounts;
 pub mod steam_config;
+mod system_diagnostics;
 
 use build_engine::{
     create_build_plan, execute_build as execute_staged_build,
-    list_operations as list_staged_operations, rollback_operation, BuildPlan, BuildPlanRequest,
-    BuildReceipt, OperationSummary, RollbackReceipt,
+    list_operations as list_staged_operations, operation_diagnostic_counts, rollback_operation,
+    BuildPlan, BuildPlanRequest, BuildReceipt, ExecuteBuildRequest, OperationSummary,
+    RollbackReceipt,
 };
+use content_store::{ContentIntakeRequest, ContentReceipt};
 use presets::{delete_preset, export_preset, import_preset, list_presets, save_preset};
 use runtime_control::{RuntimePrepareRequest, RuntimeState, SteamStartRequest};
 use serde::{Deserialize, Serialize};
@@ -21,6 +25,7 @@ use steam_accounts::{
     ApplySteamLaunchOptionRequest, SteamConfigOperationRequest, SteamConfigReceipt,
     SteamLaunchOptionPreview, SteamProfileSummary,
 };
+use system_diagnostics::SystemDiagnosticReport;
 use tauri::{AppHandle, Manager};
 
 #[derive(Deserialize)]
@@ -207,12 +212,55 @@ fn validate_game_path(path: String) -> Result<GameInstallation, String> {
 }
 
 #[tauri::command]
+fn collect_system_diagnostics(app: AppHandle, game_path: Option<String>) -> SystemDiagnosticReport {
+    let stored_game_verified = game_path
+        .as_deref()
+        .filter(|path| !path.trim().is_empty())
+        .map(|path| validate_candidate(Path::new(path), "manual").is_ok())
+        .unwrap_or(false);
+    let game_verified = stored_game_verified
+        || discovery_candidates()
+            .iter()
+            .any(|path| validate_candidate(path, "auto").is_ok());
+    let app_data = app.path().app_data_dir();
+    let staging = app_data
+        .as_deref()
+        .map(operation_diagnostic_counts)
+        .unwrap_or_else(|_| Err("diagnostics_unavailable".to_string()));
+    let content = app_data
+        .as_deref()
+        .map(content_store::content_diagnostic_counts)
+        .unwrap_or_else(|_| Err("diagnostics_unavailable".to_string()));
+
+    system_diagnostics::assemble_report(
+        cfg!(target_os = "windows"),
+        game_verified,
+        runtime_control::inspect_runtime(),
+        steam_accounts::platform_profile_diagnostic_counts(),
+        staging,
+        content,
+    )
+}
+
+#[tauri::command]
+fn intake_fixture_content(
+    app: AppHandle,
+    request: ContentIntakeRequest,
+) -> Result<Vec<ContentReceipt>, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "content_store_unavailable".to_string())?;
+    content_store::intake_fixture_content(&app_data, request)
+}
+
+#[tauri::command]
 fn plan_build(request: BuildPlanRequest) -> Result<BuildPlan, String> {
     create_build_plan(request)
 }
 
 #[tauri::command]
-fn execute_build(app: AppHandle, request: BuildPlanRequest) -> Result<BuildReceipt, String> {
+fn execute_build(app: AppHandle, request: ExecuteBuildRequest) -> Result<BuildReceipt, String> {
     let app_data = app
         .path()
         .app_data_dir()
@@ -360,6 +408,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             discover_game,
             validate_game_path,
+            collect_system_diagnostics,
+            intake_fixture_content,
             plan_build,
             execute_build,
             inspect_runtime,

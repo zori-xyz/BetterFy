@@ -9,6 +9,8 @@ import {
   Check,
   CircleCheckBig,
   CircleUserRound,
+  ClipboardCheck,
+  Copy,
   ExternalLink,
   FolderOpen,
   Gamepad2,
@@ -58,6 +60,7 @@ import {
   type SteamConfigReceipt,
   type SteamLaunchOptionPreview,
   type SteamProfileSummary,
+  type SystemDiagnosticReport,
 } from "./engine";
 import { useLocale, type Language } from "./i18n";
 import OnboardingFlow from "./OnboardingFlow";
@@ -250,12 +253,52 @@ const copy = {
       demo: "Демонстрационный путь",
       reconnect: "Проверить другую установку",
       diagnostics: "Диагностика подключения",
-      diagnosticsText: "Повторно проверить путь и обязательные файлы.",
+      diagnosticsText: "Проверить Windows, Dota 2, процессы, Steam-профили и staging BetterFy.",
       runDiagnostics: "Запустить проверку",
+      runDiagnosticsAgain: "Проверить снова",
       checking: "Проверяем…",
-      diagnosticReady: "Путь подтверждён",
-      diagnosticDemo: "Демо-проверка завершена",
-      diagnosticError: "Путь требует внимания",
+      diagnosticError: "Диагностика недоступна",
+      diagnosticVersion: "BetterFy",
+      diagnosticCopy: "Скопировать безопасный отчёт",
+      diagnosticCopied: "Отчёт скопирован",
+      diagnosticPrivacy: "Без путей, Steam ID и данных Telegram",
+      diagnosticOverall: {
+        ready: "Система готова к тесту",
+        attention: "Есть пункты для проверки",
+        blocked: "Сначала нужен обязательный шаг",
+        unsupported: "Режим разработки",
+      },
+      diagnosticLabels: {
+        platform: "Платформа",
+        game: "Dota 2",
+        runtime: "Процессы",
+        steam_profiles: "Steam-профили",
+        staging: "Staging BetterFy",
+        content: "Проверенный контент",
+      },
+      diagnosticDetails: {
+        windows_supported: "Windows runtime доступен",
+        development_only: "Интеграция проверяется только на Windows",
+        game_verified: "Установка и обязательные файлы подтверждены",
+        game_missing: "Установка Dota 2 не подтверждена",
+        demo_game: "В браузере используется демонстрационный путь",
+        runtime_ready: "Steam и Dota 2 закрыты — запись разрешена",
+        dota_running: "Dota 2 запущена; перед патчингом она будет закрыта",
+        steam_running: "Steam запущен; перед патчингом он будет закрыт",
+        runtime_unavailable: "Не удалось прочитать состояние процессов",
+        profiles_missing: "Локальные профили не найдены — войди в Steam один раз",
+        profiles_need_attention: "Некоторые launch options требуют решения",
+        profiles_managed: "Есть профиль, уже активированный BetterFy",
+        profiles_ready: "Локальные профили готовы к активации",
+        profiles_unavailable: "Профили недоступны в этой среде",
+        staging_recovery_available: "Есть незавершённая или ошибочная staging-операция",
+        staging_history_ready: "Журнал staging читается корректно",
+        staging_clean: "Незавершённых staging-операций нет",
+        staging_unavailable: "Журнал staging требует проверки",
+        content_store_ready: "Проверенные пакеты доступны движку",
+        content_store_empty: "Хранилище готово; пакеты появятся при первой сборке",
+        content_store_invalid: "Целостность хранилища контента нарушена",
+      },
       profile: "Профиль",
       profileText: "Демонстрационный локальный профиль раннего доступа.",
       signedIn: "Вход через Telegram",
@@ -427,12 +470,52 @@ const copy = {
       demo: "Demonstration path",
       reconnect: "Check another installation",
       diagnostics: "Connection diagnostics",
-      diagnosticsText: "Check the path and required marker files again.",
+      diagnosticsText: "Check Windows, Dota 2, processes, Steam profiles, and BetterFy staging.",
       runDiagnostics: "Run diagnostics",
+      runDiagnosticsAgain: "Run again",
       checking: "Checking…",
-      diagnosticReady: "Path verified",
-      diagnosticDemo: "Demo check completed",
-      diagnosticError: "Path needs attention",
+      diagnosticError: "Diagnostics unavailable",
+      diagnosticVersion: "BetterFy",
+      diagnosticCopy: "Copy safe report",
+      diagnosticCopied: "Report copied",
+      diagnosticPrivacy: "No paths, Steam IDs, or Telegram data",
+      diagnosticOverall: {
+        ready: "System ready for testing",
+        attention: "A few items need attention",
+        blocked: "A required step is missing",
+        unsupported: "Development environment",
+      },
+      diagnosticLabels: {
+        platform: "Platform",
+        game: "Dota 2",
+        runtime: "Processes",
+        steam_profiles: "Steam profiles",
+        staging: "BetterFy staging",
+        content: "Verified content",
+      },
+      diagnosticDetails: {
+        windows_supported: "Windows runtime is available",
+        development_only: "Integration is verified on Windows only",
+        game_verified: "Installation and required markers are verified",
+        game_missing: "The Dota 2 installation is not verified",
+        demo_game: "Browser mode uses a demonstration path",
+        runtime_ready: "Steam and Dota 2 are closed — writes are allowed",
+        dota_running: "Dota 2 is running and will be closed before patching",
+        steam_running: "Steam is running and will be closed before patching",
+        runtime_unavailable: "Process state could not be inspected",
+        profiles_missing: "No local profiles found — sign in to Steam once",
+        profiles_need_attention: "Some launch options need a decision",
+        profiles_managed: "A profile is already activated by BetterFy",
+        profiles_ready: "Local profiles are ready for activation",
+        profiles_unavailable: "Profiles are unavailable in this environment",
+        staging_recovery_available: "An interrupted or failed staging operation exists",
+        staging_history_ready: "The staging journal is readable",
+        staging_clean: "No unfinished staging operations",
+        staging_unavailable: "The staging journal needs attention",
+        content_store_ready: "Verified packages are available to the engine",
+        content_store_empty: "The store is ready; packages appear with the first build",
+        content_store_invalid: "Content-store integrity is invalid",
+      },
       profile: "Profile",
       profileText: "A local Early Access demonstration profile.",
       signedIn: "Signed in with Telegram",
@@ -558,11 +641,14 @@ function Workspace({
   const [panel, setPanel] = useState<SidePanel>(null);
   const [panelClosing, setPanelClosing] = useState(false);
   const panelCloseTimer = useRef<number | null>(null);
+  const diagnosticCopyTimer = useRef<number | null>(null);
   const [route, setRoute] = useState<WorkspaceRoute>("home");
   const [catalogCompact, setCatalogCompact] = useState(false);
   const [motion, setMotion] = useState(() => getStorageItem("betterfy:motion") !== "off");
   const [startup, setStartup] = useState(() => getStorageItem("betterfy:startup-preference") === "on");
-  const [diagnostic, setDiagnostic] = useState<"idle" | "checking" | "ready" | "demo" | "error">("idle");
+  const [diagnostic, setDiagnostic] = useState<"idle" | "checking" | "complete" | "error">("idle");
+  const [diagnosticReport, setDiagnosticReport] = useState<SystemDiagnosticReport | null>(null);
+  const [diagnosticCopied, setDiagnosticCopied] = useState(false);
   const [selectedModIds, setSelectedModIds] = useState<string[]>(() =>
     getStoredStringArray("betterfy:selected-mods"));
 
@@ -589,7 +675,12 @@ function Workspace({
     }, 180);
   };
 
-  useEffect(() => () => clearPanelCloseTimer(), []);
+  useEffect(() => () => {
+    clearPanelCloseTimer();
+    if (diagnosticCopyTimer.current !== null) {
+      window.clearTimeout(diagnosticCopyTimer.current);
+    }
+  }, []);
 
   useEffect(() => {
     document.documentElement.classList.toggle("motion-disabled", !motion);
@@ -628,11 +719,31 @@ function Workspace({
 
   const runDiagnostics = async () => {
     setDiagnostic("checking");
+    setDiagnosticCopied(false);
     try {
-      const result = await engineBridge.validateGamePath(installation.path);
-      setDiagnostic(result.verified ? "ready" : "demo");
+      const report = await engineBridge.collectSystemDiagnostics(installation.path);
+      setDiagnosticReport(report);
+      setDiagnostic("complete");
     } catch {
+      setDiagnosticReport(null);
       setDiagnostic("error");
+    }
+  };
+
+  const copyDiagnostics = async () => {
+    if (!diagnosticReport) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(diagnosticReport, null, 2));
+      setDiagnosticCopied(true);
+      if (diagnosticCopyTimer.current !== null) {
+        window.clearTimeout(diagnosticCopyTimer.current);
+      }
+      diagnosticCopyTimer.current = window.setTimeout(() => {
+        setDiagnosticCopied(false);
+        diagnosticCopyTimer.current = null;
+      }, 1800);
+    } catch {
+      setDiagnosticCopied(false);
     }
   };
 
@@ -855,26 +966,54 @@ function Workspace({
                   <button className="panel-inline-action" onClick={onReconnect}>
                     <FolderOpen />{t.panel.reconnect}<ArrowRight />
                   </button>
-                  <div className={`diagnostic-result ${diagnostic}`}>
+                  <div className={`diagnostic-result ${diagnosticReport?.overall ?? diagnostic}`}>
                     <Stethoscope />
                     <div>
                       <strong>{t.panel.diagnostics}</strong>
                       <small>
                         {diagnostic === "checking"
                           ? t.panel.checking
-                          : diagnostic === "ready"
-                            ? t.panel.diagnosticReady
-                            : diagnostic === "demo"
-                              ? t.panel.diagnosticDemo
-                              : diagnostic === "error"
-                                ? t.panel.diagnosticError
-                                : t.panel.diagnosticsText}
+                          : diagnostic === "error"
+                            ? t.panel.diagnosticError
+                            : diagnosticReport
+                              ? t.panel.diagnosticOverall[diagnosticReport.overall]
+                              : t.panel.diagnosticsText}
                       </small>
                     </div>
                     <button onClick={runDiagnostics} disabled={diagnostic === "checking"}>
-                      {t.panel.runDiagnostics}
+                      {diagnosticReport ? t.panel.runDiagnosticsAgain : t.panel.runDiagnostics}
                     </button>
                   </div>
+                  {diagnosticReport && (
+                    <section className="system-diagnostic-report" aria-live="polite">
+                      <header>
+                        <div>
+                          <span>{t.panel.diagnosticVersion}</span>
+                          <strong>v{diagnosticReport.appVersion} · {diagnosticReport.platform}</strong>
+                        </div>
+                        <em className={diagnosticReport.overall}>{t.panel.diagnosticOverall[diagnosticReport.overall]}</em>
+                      </header>
+                      <ul>
+                        {diagnosticReport.checks.map((check) => (
+                          <li key={check.code} className={check.state}>
+                            <span>{check.state === "ready" ? <CircleCheckBig /> : <TriangleAlert />}</span>
+                            <div>
+                              <strong>{t.panel.diagnosticLabels[check.code]}</strong>
+                              <small>{t.panel.diagnosticDetails[check.detail] ?? check.detail}</small>
+                            </div>
+                            {check.value > 0 && <b>{String(check.value).padStart(2, "0")}</b>}
+                          </li>
+                        ))}
+                      </ul>
+                      <footer>
+                        <small><ShieldCheck />{t.panel.diagnosticPrivacy}</small>
+                        <button onClick={copyDiagnostics}>
+                          {diagnosticCopied ? <ClipboardCheck /> : <Copy />}
+                          {diagnosticCopied ? t.panel.diagnosticCopied : t.panel.diagnosticCopy}
+                        </button>
+                      </footer>
+                    </section>
+                  )}
                 </section>
               </div>
             ) : (

@@ -14,15 +14,28 @@ Completed:
 - deterministic fixture planning, staging, journaling, verification, rollback;
 - local preset manager with validated JSON import and export;
 - signed updater and Windows installer infrastructure;
-- Steam profile selection and verified launch-option activation.
+- Steam profile selection and verified launch-option activation;
+- privacy-safe Windows readiness diagnostics for discovery, runtime, profiles,
+  and staging recovery;
 
 ## Active milestone: trusted content intake
 
 The next engine slice turns catalog entries into verifiable local inputs without
 touching the Dota installation.
 
-- define a versioned package manifest and content identity;
-- record source, author, license, hashes, size, and compatibility metadata;
+Implemented foundation:
+
+- strict version 1 package manifests with explicit provenance, permission,
+  compatibility, and signature states;
+- SHA-256 content identity and byte-size verification;
+- immutable no-clobber publication under BetterFy application data;
+- idempotent retry across both sides of object publication;
+- fixture build consumption from the verified store;
+- recipe-to-package cross-checking and exact reviewed-plan confirmation;
+- diagnostics for an empty, verified, or corrupt content store.
+
+Still required before remote content is accepted:
+
 - download into BetterFy-owned storage with strict limits and cancellation;
 - verify declared hashes before archive inspection;
 - reject traversal, symlinks, unsupported layouts, and ambiguous payloads;
@@ -81,4 +94,3 @@ A public build does not ship until all applicable gates are green:
 - keyboard navigation and reduced motion remain usable;
 - no temporary Dota assets or unverified safety claims are present;
 - release notes distinguish implemented behavior from preview behavior.
-

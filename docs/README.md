@@ -21,6 +21,8 @@ disagreement as a bug and verify the behavior before changing either side.
   flow, state, recovery, and the path from fixtures to production deployment.
 - [Minify patching audit](MINIFY_PATCHING_AUDIT.md) — source-backed research
   into the upstream patching workflow and the constraints BetterFy must retain.
+- [Trusted content intake](CONTENT_INTAKE_SECURITY.md) — manifest, artifact,
+  immutable-store, and recovery boundaries before downloads or extraction.
 
 The interface may demonstrate a future operation only when it labels that
 boundary clearly. A screen is not evidence that the corresponding privileged
@@ -30,6 +32,9 @@ operation is live.
 
 - [Windows build guide](WINDOWS_BUILD.md) — local prerequisites, internal NSIS
   build, artifacts, and troubleshooting.
+- [Windows test checklist](WINDOWS_TEST_CHECKLIST.md) — the first native test
+  pass, safe diagnostics, Steam activation, staging recovery, and evidence to
+  report.
 - [Release and updater guide](RELEASING.md) — versioning, signing, tag-driven
   publication, updater manifests, and rollback expectations.
 
@@ -56,4 +61,3 @@ Use these labels consistently in code review and documentation:
 | **Preview** | The interface exists, but the production backend is deliberately unavailable. |
 | **Prepared** | Infrastructure exists but cannot be used publicly until a release gate is satisfied. |
 | **Planned** | Design or research only; no working product claim. |
-

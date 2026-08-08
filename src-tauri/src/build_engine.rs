@@ -7,6 +7,8 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::content_store::{self, ContentIntakeRequest, FixturePackageContract};
+
 const ENGINE_SCHEMA_VERSION: u32 = 1;
 const MAX_OPERATION_FILES: usize = 256;
 const MAX_STAGED_BYTES: u64 = 64 * 1024 * 1024;
@@ -35,12 +37,21 @@ pub struct BuildPlanRequest {
     pub mod_ids: Vec<String>,
 }
 
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExecuteBuildRequest {
+    pub mod_ids: Vec<String>,
+    pub expected_plan_id: String,
+    pub confirmed: bool,
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlanInput {
     id: String,
     name: String,
     version: String,
+    content_identity: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -129,6 +140,12 @@ pub struct OperationSummary {
     staged_files: usize,
 }
 
+#[derive(Clone, Debug)]
+pub struct OperationDiagnosticCounts {
+    pub total: usize,
+    pub recoverable: usize,
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RollbackReceipt {
@@ -178,6 +195,31 @@ fn validate_relative_path(value: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_recipe_contract(
+    manifest: &FixtureManifest,
+    contract: &FixturePackageContract,
+) -> Result<(), String> {
+    if manifest.version != contract.version
+        || contract.recipe_version != 1
+        || manifest.files.len() != 1
+    {
+        return Err("catalog_invalid".to_string());
+    }
+    let file = &manifest.files[0];
+    let source_name = Path::new(&file.source)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "catalog_invalid".to_string())?;
+    if source_name != contract.file_name || file.size != contract.size {
+        return Err("catalog_invalid".to_string());
+    }
+    let payload = fixture_payload(&file.source).ok_or_else(|| "catalog_invalid".to_string())?;
+    if payload.len() as u64 != contract.size || sha256(payload) != contract.sha256 {
+        return Err("catalog_invalid".to_string());
+    }
+    Ok(())
+}
+
 pub fn create_build_plan(request: BuildPlanRequest) -> Result<BuildPlan, String> {
     let available = fixture_manifests()?;
     let requested: BTreeSet<String> = request
@@ -192,19 +234,17 @@ pub fn create_build_plan(request: BuildPlanRequest) -> Result<BuildPlan, String>
             .iter()
             .find(|manifest| manifest.id == requested_id)
             .ok_or_else(|| "catalog_invalid".to_string())?;
-        selected.push(manifest);
+        let contract = content_store::fixture_package_contract(&requested_id)
+            .map_err(|_| "catalog_invalid".to_string())?;
+        validate_recipe_contract(manifest, &contract)?;
+        selected.push((manifest, contract));
     }
 
     let mut operations = Vec::new();
     let mut destinations: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for manifest in &selected {
+    for (manifest, contract) in &selected {
         for file in &manifest.files {
             validate_relative_path(&file.destination)?;
-            let payload =
-                fixture_payload(&file.source).ok_or_else(|| "catalog_invalid".to_string())?;
-            if payload.len() as u64 != file.size {
-                return Err("catalog_invalid".to_string());
-            }
             destinations
                 .entry(file.destination.clone())
                 .or_default()
@@ -214,7 +254,7 @@ pub fn create_build_plan(request: BuildPlanRequest) -> Result<BuildPlan, String>
                 source: file.source.clone(),
                 destination: file.destination.clone(),
                 size: file.size,
-                expected_sha256: sha256(payload),
+                expected_sha256: contract.sha256.clone(),
             });
         }
     }
@@ -243,10 +283,11 @@ pub fn create_build_plan(request: BuildPlanRequest) -> Result<BuildPlan, String>
     }
     let inputs = selected
         .iter()
-        .map(|manifest| PlanInput {
+        .map(|(manifest, contract)| PlanInput {
             id: manifest.id.clone(),
             name: manifest.name.clone(),
             version: manifest.version.clone(),
+            content_identity: format!("sha256:{}", contract.sha256),
         })
         .collect::<Vec<_>>();
 
@@ -255,6 +296,8 @@ pub fn create_build_plan(request: BuildPlanRequest) -> Result<BuildPlan, String>
         plan_hasher.update(input.id.as_bytes());
         plan_hasher.update([0]);
         plan_hasher.update(input.version.as_bytes());
+        plan_hasher.update([0]);
+        plan_hasher.update(input.content_identity.as_bytes());
         plan_hasher.update([0]);
     }
     for operation in &operations {
@@ -304,6 +347,17 @@ fn reject_symlink(path: &Path) -> Result<(), String> {
 fn prepare_owned_roots(app_data_root: &Path) -> Result<(PathBuf, PathBuf), String> {
     reject_symlink(app_data_root)?;
     fs::create_dir_all(app_data_root).map_err(|_| "build_failed".to_string())?;
+    reject_symlink(app_data_root)?;
+    let engine_root = app_data_root.join("engine-v1");
+    reject_symlink(&engine_root)?;
+    fs::create_dir(&engine_root)
+        .or_else(|error| {
+            (error.kind() == std::io::ErrorKind::AlreadyExists)
+                .then_some(())
+                .ok_or(error)
+        })
+        .map_err(|_| "build_failed".to_string())?;
+    reject_symlink(&engine_root)?;
     let (operations, journals) = engine_paths(app_data_root);
     for path in [&operations, &journals] {
         reject_symlink(path)?;
@@ -413,20 +467,34 @@ enum FailurePoint {
 
 pub fn execute_build(
     app_data_root: &Path,
-    request: BuildPlanRequest,
+    request: ExecuteBuildRequest,
 ) -> Result<BuildReceipt, String> {
     execute_build_with_failure(app_data_root, request, FailurePoint::None)
 }
 
 fn execute_build_with_failure(
     app_data_root: &Path,
-    request: BuildPlanRequest,
+    request: ExecuteBuildRequest,
     failure: FailurePoint,
 ) -> Result<BuildReceipt, String> {
-    let plan = create_build_plan(request)?;
+    if !request.confirmed {
+        return Err("build_confirmation_required".to_string());
+    }
+    let plan = create_build_plan(BuildPlanRequest {
+        mod_ids: request.mod_ids,
+    })?;
+    if request.expected_plan_id != plan.plan_id {
+        return Err("build_plan_stale".to_string());
+    }
     if !plan.executable {
         return Err("conflict_unresolved".to_string());
     }
+    content_store::intake_fixture_content(
+        app_data_root,
+        ContentIntakeRequest {
+            package_ids: plan.inputs.iter().map(|input| input.id.clone()).collect(),
+        },
+    )?;
     let (operations_root, journals_root) = prepare_owned_roots(app_data_root)?;
     let operation_id = new_operation_id()?;
     let operation_root = operations_root.join(&operation_id);
@@ -464,7 +532,12 @@ fn execute_build_with_failure(
         for (index, operation) in plan.operations.iter().enumerate() {
             validate_relative_path(&operation.destination)?;
             let payload =
-                fixture_payload(&operation.source).ok_or_else(|| "catalog_invalid".to_string())?;
+                content_store::read_verified_fixture_artifact(app_data_root, &operation.owner_id)?;
+            if payload.len() as u64 != operation.size
+                || sha256(&payload) != operation.expected_sha256
+            {
+                return Err("content_store_corrupt".to_string());
+            }
             let target = staging_root.join(&operation.destination);
             let parent = target.parent().ok_or_else(|| "build_failed".to_string())?;
             fs::create_dir_all(parent).map_err(|_| "build_failed".to_string())?;
@@ -474,7 +547,7 @@ fn execute_build_with_failure(
                 .write(true)
                 .open(&target)
                 .map_err(|_| "build_failed".to_string())?;
-            file.write_all(payload)
+            file.write_all(&payload)
                 .and_then(|_| file.sync_all())
                 .map_err(|_| "build_failed".to_string())?;
             journal.files[index].staged = true;
@@ -614,6 +687,24 @@ pub fn list_operations(app_data_root: &Path) -> Result<Vec<OperationSummary>, St
     Ok(summaries)
 }
 
+pub fn operation_diagnostic_counts(
+    app_data_root: &Path,
+) -> Result<OperationDiagnosticCounts, String> {
+    let operations = list_operations(app_data_root)?;
+    Ok(OperationDiagnosticCounts {
+        total: operations.len(),
+        recoverable: operations
+            .iter()
+            .filter(|operation| {
+                matches!(
+                    operation.phase,
+                    OperationPhase::Staging | OperationPhase::Verifying | OperationPhase::Failed
+                )
+            })
+            .count(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -631,6 +722,16 @@ mod tests {
         }
     }
 
+    fn confirmed_build() -> ExecuteBuildRequest {
+        let request = one_mod();
+        let plan = create_build_plan(request.clone()).expect("plan");
+        ExecuteBuildRequest {
+            mod_ids: request.mod_ids,
+            expected_plan_id: plan.plan_id,
+            confirmed: true,
+        }
+    }
+
     #[test]
     fn plan_is_deterministic_and_hashes_payloads() {
         let first = create_build_plan(one_mod()).expect("first plan");
@@ -638,7 +739,36 @@ mod tests {
         assert_eq!(first.plan_id, second.plan_id);
         assert_eq!(first.operations.len(), 1);
         assert_eq!(first.operations[0].expected_sha256.len(), 64);
+        assert_eq!(
+            first.inputs[0].content_identity,
+            format!("sha256:{}", first.operations[0].expected_sha256)
+        );
         assert!(first.executable);
+    }
+
+    #[test]
+    fn recipe_must_match_the_trusted_package_contract() {
+        let manifest = fixture_manifests().expect("fixtures").remove(0);
+        let contract = content_store::fixture_package_contract(&manifest.id).expect("contract");
+        assert!(validate_recipe_contract(&manifest, &contract).is_ok());
+
+        let mut wrong_version = contract.clone();
+        wrong_version.version = "9.9.9".to_string();
+        assert_eq!(
+            validate_recipe_contract(&manifest, &wrong_version)
+                .err()
+                .as_deref(),
+            Some("catalog_invalid")
+        );
+
+        let mut wrong_hash = contract;
+        wrong_hash.sha256 = "0".repeat(64);
+        assert_eq!(
+            validate_recipe_contract(&manifest, &wrong_hash)
+                .err()
+                .as_deref(),
+            Some("catalog_invalid")
+        );
     }
 
     #[test]
@@ -678,7 +808,7 @@ mod tests {
     #[test]
     fn stages_verifies_journals_and_rolls_back_idempotently() {
         let root = temp_root("success");
-        let receipt = execute_build(&root, one_mod()).expect("execute");
+        let receipt = execute_build(&root, confirmed_build()).expect("execute");
         assert!(receipt.checksums_verified);
         assert!(Path::new(&receipt.staged_root).is_dir());
         let operations = list_operations(&root).expect("list");
@@ -697,7 +827,7 @@ mod tests {
     fn failure_is_persisted_and_recoverable() {
         let root = temp_root("failure");
         assert_eq!(
-            execute_build_with_failure(&root, one_mod(), FailurePoint::AfterFirstWrite)
+            execute_build_with_failure(&root, confirmed_build(), FailurePoint::AfterFirstWrite)
                 .err()
                 .as_deref(),
             Some("injected_failure")
@@ -714,7 +844,7 @@ mod tests {
     fn failure_before_verification_keeps_a_recoverable_journal() {
         let root = temp_root("pre-verification-failure");
         assert_eq!(
-            execute_build_with_failure(&root, one_mod(), FailurePoint::BeforeVerification)
+            execute_build_with_failure(&root, confirmed_build(), FailurePoint::BeforeVerification,)
                 .err()
                 .as_deref(),
             Some("injected_failure")
@@ -726,9 +856,33 @@ mod tests {
     }
 
     #[test]
+    fn build_refuses_a_tampered_content_object() {
+        let root = temp_root("tampered-content");
+        content_store::intake_fixture_content(
+            &root,
+            ContentIntakeRequest {
+                package_ids: vec!["fixture.ambient-violet".to_string()],
+            },
+        )
+        .expect("content intake");
+        let object = root
+            .join("content-v1")
+            .join("objects")
+            .join("sha256")
+            .join("e2c06353f3a5c99162512e40c6a2e318778d1c73bc0ba79126df5a4beff13c64");
+        fs::write(object, b"tampered").expect("tamper content object");
+        assert_eq!(
+            execute_build(&root, confirmed_build()).err().as_deref(),
+            Some("content_store_corrupt")
+        );
+        assert!(list_operations(&root).expect("operations").is_empty());
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn recovers_an_interrupted_atomic_journal_commit() {
         let root = temp_root("journal-recovery");
-        let receipt = execute_build(&root, one_mod()).expect("execute");
+        let receipt = execute_build(&root, confirmed_build()).expect("execute");
         let (_, journals) = engine_paths(&root);
         let journal = journals.join(format!("{}.json", receipt.operation_id));
         let temporary = journal.with_extension("json.tmp");
@@ -755,5 +909,50 @@ mod tests {
             rollback_operation(&root, "../escape").err().as_deref(),
             Some("operation_not_found")
         );
+    }
+
+    #[test]
+    fn execution_requires_confirmation_and_the_exact_reviewed_plan() {
+        let root = temp_root("plan-confirmation");
+        let mut request = confirmed_build();
+        request.confirmed = false;
+        assert_eq!(
+            execute_build(&root, request).err().as_deref(),
+            Some("build_confirmation_required")
+        );
+
+        let mut request = confirmed_build();
+        request.expected_plan_id = format!("{}-changed", request.expected_plan_id);
+        assert_eq!(
+            execute_build(&root, request).err().as_deref(),
+            Some("build_plan_stale")
+        );
+        assert!(list_operations(&root).expect("operations").is_empty());
+        if root.exists() {
+            fs::remove_dir_all(root).expect("cleanup");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn execution_rejects_a_symlinked_engine_root_component() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_root("symlink-engine-root");
+        let outside = temp_root("symlink-engine-outside");
+        fs::create_dir_all(&root).expect("root");
+        fs::create_dir_all(&outside).expect("outside");
+        symlink(&outside, root.join("engine-v1")).expect("symlink");
+        assert_eq!(
+            execute_build(&root, confirmed_build()).err().as_deref(),
+            Some("build_failed")
+        );
+        assert!(fs::read_dir(&outside)
+            .expect("outside contents")
+            .next()
+            .is_none());
+        fs::remove_file(root.join("engine-v1")).expect("remove symlink");
+        fs::remove_dir_all(root).expect("cleanup root");
+        fs::remove_dir_all(outside).expect("cleanup outside");
     }
 }

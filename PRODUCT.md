@@ -55,6 +55,9 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - Existing catalog and localization in `src/catalog.ts` and `src/i18n.tsx`.
 - Read-only Steam/Dota discovery and deterministic fixture BuildPlan commands
   in `src-tauri/src/main.rs`.
+- A versioned fixture-package contract and immutable SHA-256 content store that
+  verifies bytes before the fixture builder may consume them. Remote downloads,
+  archives, and production Dota deployment remain disabled.
 - A real local config manager backed by validated, atomic app-data storage,
   plus three built-in BetterFy Workshop presets resolved against the same
   Minify catalog IDs as the selection UI.

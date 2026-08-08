@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "fixture.ambient-clean",
+  "version": "1.0.0",
+  "name": {
+    "ru": "Чистая атмосфера",
+    "en": "Ambient Clean"
+  },
+  "description": {
+    "ru": "Репозиторный пакет для проверки безопасного content intake.",
+    "en": "Repository package for testing trusted content intake."
+  },
+  "category": "customization",
+  "resourceType": "panorama_style",
+  "author": "BetterFy fixtures",
+  "source": "https://github.com/zori-xyz/BetterFy",
+  "licenseStatus": "repository_fixture",
+  "trustRationale": "repository_fixture",
+  "artifact": {
+    "format": "raw",
+    "fileName": "ambient-clean.css",
+    "mediaType": "text/css",
+    "size": 61,
+    "sha256": "1146e6e8922159c697679d77ab6a9b3972409df6552f5929ad93720e3e4e09f0"
+  },
+  "dependencies": [],
+  "incompatibilities": ["fixture.ambient-violet"],
+  "recipeVersion": 1,
+  "dotaCompatibility": "unknown",
+  "lastVerification": "repository_fixture",
+  "signatureStatus": "not_provided"
+}
