@@ -87,6 +87,19 @@ npm run dev
 
 Browser mode uses explicit demo boundaries for desktop-only behavior.
 
+The public website is an independent static build that shares the BetterFy
+wordmark and design tokens without exposing Tauri or engine commands:
+
+```bash
+npm run site:dev
+npm run site:build
+```
+
+It is deployed through GitHub Pages at
+`https://zori-xyz.github.io/BetterFy/`. Telegram confirmation remains visibly
+unavailable until the protected auth service and bot are connected; the static
+site never receives a bot secret.
+
 ### Quality checks
 
 ```bash
