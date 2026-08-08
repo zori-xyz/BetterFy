@@ -23,6 +23,8 @@ disagreement as a bug and verify the behavior before changing either side.
   into the upstream patching workflow and the constraints BetterFy must retain.
 - [Trusted content intake](CONTENT_INTAKE_SECURITY.md) — manifest, artifact,
   immutable-store, and recovery boundaries before downloads or extraction.
+- [Identity and web architecture](IDENTITY_AND_WEB_ARCHITECTURE.md) — profiles,
+  Telegram device verification, session ownership, and the public-site boundary.
 
 The interface may demonstrate a future operation only when it labels that
 boundary clearly. A screen is not evidence that the corresponding privileged

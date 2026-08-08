@@ -54,7 +54,7 @@ enabled in small, recoverable slices.
 | --- | --- | --- |
 | Dota discovery | Implemented | Steam libraries are discovered and candidate installations are verified through marker files. |
 | Windows readiness diagnostics | Implemented | Settings exposes a Rust-backed report for platform, Dota discovery, runtime, Steam profiles, staging, and verified content without exporting personal paths or account identifiers. |
-| Trusted content intake | Implemented for fixtures | Versioned manifests, size and SHA-256 verification, immutable no-clobber storage, idempotent retry, and tamper rejection run in BetterFy-owned app data. Remote downloads and archives remain disabled. |
+| Trusted content intake | Implemented for fixtures | Versioned manifests, bounded cancellable HTTPS acquisition, SHA-256 verification, immutable no-clobber storage, idempotent retry, tamper rejection, and ZIP metadata preflight run in BetterFy-owned app data. Production catalog delivery and extraction remain disabled. |
 | Build planning | Implemented for fixtures | Deterministic plans, content hashes, conflict detection, staging, journals, verification, and rollback run in BetterFy-owned app data. |
 | Steam profile activation | Implemented | A confirmed profile can be backed up, updated atomically, verified, rolled back, and followed by a Steam-only restart. |
 | Catalog and wardrobe | Product preview | Navigation, filtering, provenance fields, and local selection work; content download is not enabled. |
@@ -198,4 +198,3 @@ and release restrictions documented in
 
 Dota 2 and related marks and assets belong to Valve Corporation. BetterFy is an
 independent project and is not affiliated with or endorsed by Valve.
-

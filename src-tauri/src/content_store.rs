@@ -10,7 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const CONTENT_SCHEMA_VERSION: u32 = 1;
 const MAX_MANIFEST_BYTES: usize = 64 * 1024;
-const MAX_ARTIFACT_BYTES: u64 = 64 * 1024 * 1024;
+pub(crate) const MAX_ARTIFACT_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_RELATIONS: usize = 64;
 static PUBLISH_COUNTER: AtomicU64 = AtomicU64::new(0);
 static CONTENT_STORE_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
@@ -27,6 +27,7 @@ struct LocalizedText {
 struct ArtifactManifest {
     format: String,
     file_name: String,
+    download_url: String,
     media_type: String,
     size: u64,
     sha256: String,
@@ -64,13 +65,13 @@ pub struct ContentIntakeRequest {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentReceipt {
-    package_id: String,
-    version: String,
-    content_identity: String,
-    size: u64,
-    already_present: bool,
-    signature_status: String,
-    compatibility: String,
+    pub(crate) package_id: String,
+    pub(crate) version: String,
+    pub(crate) content_identity: String,
+    pub(crate) size: u64,
+    pub(crate) already_present: bool,
+    pub(crate) signature_status: String,
+    pub(crate) compatibility: String,
 }
 
 #[derive(Clone, Debug)]
@@ -85,6 +86,18 @@ pub(crate) struct FixturePackageContract {
     pub size: u64,
     pub sha256: String,
     pub recipe_version: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RemotePackageSpec {
+    pub package_id: String,
+    pub version: String,
+    pub format: String,
+    pub file_name: String,
+    pub download_url: String,
+    pub media_type: String,
+    pub size: u64,
+    pub sha256: String,
 }
 
 fn fixture_manifest_source(id: &str) -> Option<&'static str> {
@@ -124,6 +137,25 @@ pub(crate) fn fixture_package_contract(package_id: &str) -> Result<FixturePackag
         size: manifest.artifact.size,
         sha256: manifest.artifact.sha256,
         recipe_version: manifest.recipe_version,
+    })
+}
+
+pub(crate) fn remote_package_spec(package_id: &str) -> Result<RemotePackageSpec, String> {
+    let source =
+        fixture_manifest_source(package_id).ok_or_else(|| "content_package_unknown".to_string())?;
+    let manifest = validate_manifest(source)?;
+    if manifest.id != package_id {
+        return Err("content_manifest_invalid".to_string());
+    }
+    Ok(RemotePackageSpec {
+        package_id: manifest.id,
+        version: manifest.version,
+        format: manifest.artifact.format,
+        file_name: manifest.artifact.file_name,
+        download_url: manifest.artifact.download_url,
+        media_type: manifest.artifact.media_type,
+        size: manifest.artifact.size,
+        sha256: manifest.artifact.sha256,
     })
 }
 
@@ -230,6 +262,13 @@ fn validate_manifest(contents: &str) -> Result<PackageManifest, String> {
         || !valid_text(&manifest.trust_rationale, 300)
         || manifest.artifact.format != "raw"
         || !valid_leaf_name(&manifest.artifact.file_name)
+        || manifest.artifact.download_url.len() > 2048
+        || !manifest.artifact.download_url.starts_with("https://")
+        || manifest
+            .artifact
+            .download_url
+            .chars()
+            .any(char::is_whitespace)
         || manifest.artifact.media_type != "text/css"
         || manifest.artifact.size == 0
         || manifest.artifact.size > MAX_ARTIFACT_BYTES
@@ -294,6 +333,21 @@ fn prepare_roots(app_data_root: &Path) -> Result<(PathBuf, PathBuf), String> {
         reject_symlink(path)?;
     }
     Ok((objects, manifests))
+}
+
+pub(crate) fn prepare_download_root(app_data_root: &Path) -> Result<PathBuf, String> {
+    prepare_roots(app_data_root)?;
+    let downloads = app_data_root.join("content-v1").join("downloads");
+    reject_symlink(&downloads)?;
+    fs::create_dir(&downloads)
+        .or_else(|error| {
+            (error.kind() == ErrorKind::AlreadyExists)
+                .then_some(())
+                .ok_or(error)
+        })
+        .map_err(|_| "content_store_unavailable".to_string())?;
+    reject_symlink(&downloads)?;
+    Ok(downloads)
 }
 
 fn temporary_path(parent: &Path, final_name: &str) -> Result<PathBuf, String> {
@@ -485,6 +539,25 @@ pub fn intake_fixture_content(
     Ok(receipts)
 }
 
+pub(crate) fn store_remote_fixture_content(
+    app_data_root: &Path,
+    package_id: &str,
+    payload: &[u8],
+) -> Result<ContentReceipt, String> {
+    let source =
+        fixture_manifest_source(package_id).ok_or_else(|| "content_package_unknown".to_string())?;
+    let manifest = validate_manifest(source)?;
+    if manifest.id != package_id {
+        return Err("content_manifest_invalid".to_string());
+    }
+    let mutex = CONTENT_STORE_MUTEX.get_or_init(|| Mutex::new(()));
+    let _guard = mutex
+        .lock()
+        .map_err(|_| "content_store_unavailable".to_string())?;
+    let (objects, manifests) = prepare_roots(app_data_root)?;
+    store_one(&objects, &manifests, &manifest, payload)
+}
+
 pub fn read_verified_fixture_artifact(
     app_data_root: &Path,
     package_id: &str,
@@ -573,6 +646,14 @@ mod tests {
         let unsafe_source = source.replace("https://github.com", "file:///tmp");
         assert_eq!(
             validate_manifest(&unsafe_source).err().as_deref(),
+            Some("content_manifest_invalid")
+        );
+        let unsafe_download = source.replace(
+            "https://raw.githubusercontent.com",
+            "http://raw.githubusercontent.com",
+        );
+        assert_eq!(
+            validate_manifest(&unsafe_download).err().as_deref(),
             Some("content_manifest_invalid")
         );
         let unsafe_name = source.replace("ambient-violet.css", "../ambient-violet.css");

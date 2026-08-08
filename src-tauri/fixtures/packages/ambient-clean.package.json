@@ -19,6 +19,7 @@
   "artifact": {
     "format": "raw",
     "fileName": "ambient-clean.css",
+    "downloadUrl": "https://raw.githubusercontent.com/zori-xyz/BetterFy/9e3f4a34dead140ccfaba6b0003ad62ba19c7347/src-tauri/fixtures/payloads/ambient-clean.css",
     "mediaType": "text/css",
     "size": 61,
     "sha256": "1146e6e8922159c697679d77ab6a9b3972409df6552f5929ad93720e3e4e09f0"

@@ -19,6 +19,7 @@
   "artifact": {
     "format": "raw",
     "fileName": "ambient-violet.css",
+    "downloadUrl": "https://raw.githubusercontent.com/zori-xyz/BetterFy/9e3f4a34dead140ccfaba6b0003ad62ba19c7347/src-tauri/fixtures/payloads/ambient-violet.css",
     "mediaType": "text/css",
     "size": 61,
     "sha256": "e2c06353f3a5c99162512e40c6a2e318778d1c73bc0ba79126df5a4beff13c64"

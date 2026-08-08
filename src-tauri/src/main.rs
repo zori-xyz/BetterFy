@@ -1,8 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod archive_inspector;
 mod build_engine;
 mod content_store;
 mod presets;
+mod remote_intake;
 mod runtime_control;
 mod steam_accounts;
 pub mod steam_config;
@@ -16,6 +18,7 @@ use build_engine::{
 };
 use content_store::{ContentIntakeRequest, ContentReceipt};
 use presets::{delete_preset, export_preset, import_preset, list_presets, save_preset};
+use remote_intake::ContentDownloadStatus;
 use runtime_control::{RuntimePrepareRequest, RuntimeState, SteamStartRequest};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -255,6 +258,28 @@ fn intake_fixture_content(
 }
 
 #[tauri::command]
+fn begin_content_download(
+    app: AppHandle,
+    package_id: String,
+) -> Result<ContentDownloadStatus, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "content_store_unavailable".to_string())?;
+    remote_intake::begin(app_data, package_id)
+}
+
+#[tauri::command]
+fn content_download_status(operation_id: String) -> Result<ContentDownloadStatus, String> {
+    remote_intake::status(&operation_id)
+}
+
+#[tauri::command]
+fn cancel_content_download(operation_id: String) -> Result<ContentDownloadStatus, String> {
+    remote_intake::cancel(&operation_id)
+}
+
+#[tauri::command]
 fn plan_build(request: BuildPlanRequest) -> Result<BuildPlan, String> {
     create_build_plan(request)
 }
@@ -410,6 +435,9 @@ fn main() {
             validate_game_path,
             collect_system_diagnostics,
             intake_fixture_content,
+            begin_content_download,
+            content_download_status,
+            cancel_content_download,
             plan_build,
             execute_build,
             inspect_runtime,

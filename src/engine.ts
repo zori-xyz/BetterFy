@@ -122,6 +122,22 @@ export type ContentReceipt = {
   compatibility: "unknown" | "verified" | "unsupported";
 };
 
+export type ContentDownloadStatus = {
+  operationId: string;
+  packageId: string;
+  phase: "queued" | "downloading" | "verifying" | "ready" | "failed" | "cancelled";
+  receivedBytes: number;
+  expectedBytes: number;
+  contentIdentity: string | null;
+  errorCode: string | null;
+  archiveReport: {
+    entries: number;
+    files: number;
+    expandedBytes: number;
+    compressedBytes: number;
+  } | null;
+};
+
 export type SteamProfileSummary = {
   profileToken: string;
   profileIndex: number;
@@ -149,6 +165,9 @@ export type SteamConfigReceipt = {
 
 export interface EngineBridge {
   intakeFixtureContent(packageIds: string[]): Promise<ContentReceipt[]>;
+  beginContentDownload(packageId: string): Promise<ContentDownloadStatus>;
+  contentDownloadStatus(operationId: string): Promise<ContentDownloadStatus>;
+  cancelContentDownload(operationId: string): Promise<ContentDownloadStatus>;
   collectSystemDiagnostics(gamePath: string | null): Promise<SystemDiagnosticReport>;
   discoverGame(): Promise<GameInstallation[]>;
   inspectRuntime(): Promise<RuntimeState>;
@@ -237,6 +256,24 @@ export const mockEngine: EngineBridge = {
       signatureStatus: "not_provided" as const,
       compatibility: "unknown" as const,
     }));
+  },
+  async beginContentDownload(packageId) {
+    return {
+      operationId: `preview-download-${Date.now()}`,
+      packageId,
+      phase: "failed",
+      receivedBytes: 0,
+      expectedBytes: 0,
+      contentIdentity: null,
+      errorCode: "desktop_runtime_required",
+      archiveReport: null,
+    };
+  },
+  async contentDownloadStatus() {
+    throw new EngineFault("desktop_runtime_required", "content_download_status");
+  },
+  async cancelContentDownload() {
+    throw new EngineFault("desktop_runtime_required", "cancel_content_download");
   },
   async collectSystemDiagnostics() {
     return {
@@ -385,6 +422,30 @@ export const engineBridge: EngineBridge = {
       "intake_fixture_content",
       invoke<ContentReceipt[]>("intake_fixture_content", { request: { packageIds } }),
       20_000,
+    );
+  },
+  async beginContentDownload(packageId) {
+    if (!isTauriRuntime()) return mockEngine.beginContentDownload(packageId);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "begin_content_download",
+      invoke<ContentDownloadStatus>("begin_content_download", { packageId: packageId.trim() }),
+    );
+  },
+  async contentDownloadStatus(operationId) {
+    if (!isTauriRuntime()) return mockEngine.contentDownloadStatus(operationId);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "content_download_status",
+      invoke<ContentDownloadStatus>("content_download_status", { operationId }),
+    );
+  },
+  async cancelContentDownload(operationId) {
+    if (!isTauriRuntime()) return mockEngine.cancelContentDownload(operationId);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "cancel_content_download",
+      invoke<ContentDownloadStatus>("cancel_content_download", { operationId }),
     );
   },
   async collectSystemDiagnostics(gamePath) {

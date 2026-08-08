@@ -33,14 +33,20 @@ Implemented foundation:
 - fixture build consumption from the verified store;
 - recipe-to-package cross-checking and exact reviewed-plan confirmation;
 - diagnostics for an empty, verified, or corrupt content store.
+- cancellable, bounded HTTPS acquisition for commit-pinned repository fixtures;
+- proxy bypass, public-address DNS pinning, connected-peer verification, and
+  bounded same-origin redirects;
+- hash-before-publication and a second read before the immutable store;
+- metadata-only ZIP rejection for traversal, links, ambiguous names, executables,
+  unsupported compression, and archive-bomb limits;
+- typed queued/downloading/verifying/ready/failed/cancelled operation states.
 
-Still required before remote content is accepted:
+Still required before production catalog content is accepted:
 
-- download into BetterFy-owned storage with strict limits and cancellation;
-- verify declared hashes before archive inspection;
-- reject traversal, symlinks, unsupported layouts, and ambiguous payloads;
 - normalize accepted packages into immutable staging content;
-- expose progress, failure reason, and retry without inventing success states.
+- repeat containment and output limits during extraction;
+- add manifest signature and key-rotation policy;
+- connect retry/progress UI only after the production catalog registry exists.
 
 Exit condition: a catalog item can become a verified staged package, and every
 failure leaves the game and Steam untouched.
@@ -64,7 +70,8 @@ resumed or recovered without relying on interface state.
 
 ### Production services
 
-- production Telegram authentication and device sessions;
+- implement the profile, Telegram authentication, and website sequence defined
+  in `IDENTITY_AND_WEB_ARCHITECTURE.md`;
 - catalog delivery with authenticated manifests;
 - release signing, public updater endpoints, and rollback policy;
 - privacy and retention documentation for every remote service.

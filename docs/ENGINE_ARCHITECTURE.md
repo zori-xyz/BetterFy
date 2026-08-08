@@ -110,6 +110,9 @@ export_preset(preset_id) -> String
 import_preset(payload) -> PresetRecord
 collect_system_diagnostics(game_path?) -> SystemDiagnosticReport
 intake_fixture_content(request) -> ContentReceipt[]
+begin_content_download(package_id) -> ContentDownloadStatus
+content_download_status(operation_id) -> ContentDownloadStatus
+cancel_content_download(operation_id) -> ContentDownloadStatus
 ```
 
 Long-running commands will emit one event once deployment is introduced:
@@ -267,10 +270,18 @@ this store, then re-reads and re-hashes the stored object before staging. The
 package version, recipe version, artifact filename, byte size, and SHA-256 must
 also match the declarative build recipe. That content identity is included in the
 deterministic plan ID. A tampered object or drifted recipe blocks the build before
-an operation journal or Dota-facing state exists. The current command accepts
-repository-owned fixture IDs only.
-Remote downloads, archives, local imports, signatures, VPK construction, and
-Dota deployment remain disabled. The full threat model is documented in
+an operation journal or Dota-facing state exists. The current commands accept
+repository-owned fixture IDs only. A cancellable worker can stream their
+commit-pinned HTTPS artifacts into a bounded BetterFy-owned sidecar, with proxy
+bypass, DNS/peer checks, manual same-origin redirects, exact size and SHA-256
+verification, and no-clobber publication. The frontend receives only an opaque
+operation ID and factual phases; URLs and paths stay inside Rust.
+
+A ZIP metadata preflight rejects traversal, links, ambiguous names, executable
+content, unsupported compression, and archive-bomb limits without extracting any
+entry. No ZIP package is enabled in the registry yet. Local imports, signatures,
+archive extraction, VPK construction, catalog wiring, and Dota deployment remain
+disabled. The full threat model is documented in
 `docs/CONTENT_INTAKE_SECURITY.md`.
 
 ## Definition of done for filesystem writes
