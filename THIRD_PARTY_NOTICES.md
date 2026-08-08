@@ -30,3 +30,17 @@ The upstream repository states that some preview and mod assets originate from
 Dota 2 and remain property of Valve Corporation. Included previews are approved
 for the BetterFy prototype only and require a redistribution review or
 replacement before release.
+
+## License compatibility
+
+BetterFy is licensed under GPL-3.0 (see [LICENSE](LICENSE)). Both third-party
+sources referenced above — h6rd/Dota2PornFxWeb and Egezenn/dota2-minify — are
+also licensed under GPL-3.0. Using their GPL-3.0 metadata within a GPL-3.0
+project satisfies upstream license terms without requiring a separate
+compatibility review.
+
+The dota2-minify patching *implementation* is not reused: BetterFy studies its
+documented behavior (see
+[MINIFY_PATCHING_AUDIT.md](docs/MINIFY_PATCHING_AUDIT.md)) and ships an
+independent Rust implementation, written without reference to the upstream
+Python source.
