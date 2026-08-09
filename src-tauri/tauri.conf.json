@@ -36,7 +36,25 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "allowDowngrades": false,
+      "nsis": {
+        "headerImage": "windows/installer/header.bmp",
+        "sidebarImage": "windows/installer/sidebar.bmp",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "uninstallerHeaderImage": "windows/installer/header.bmp",
+        "installMode": "currentUser",
+        "languages": ["Russian", "English"],
+        "displayLanguageSelector": false,
+        "compression": "lzma",
+        "startMenuFolder": "BetterFy"
+      }
+    }
   },
   "plugins": {
     "updater": {

@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BetterFy installer artwork</title>
+    <style>
+      @font-face {
+        font-family: "Days One BetterFy";
+        src: url("../src/assets/fonts/days-one-latin.woff2") format("woff2");
+        font-display: block;
+      }
+
+      @font-face {
+        font-family: "Mrs Sheppards BetterFy";
+        src: url("../src/assets/fonts/mrs-sheppards-latin.woff2") format("woff2");
+        font-display: block;
+      }
+
+      :root {
+        color-scheme: dark;
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: #050508;
+        color: #f7f5fb;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        padding: 40px;
+        background:
+          radial-gradient(circle at 52% 0%, rgba(168, 77, 255, .1), transparent 31%),
+          #050508;
+      }
+
+      .asset-bank {
+        position: fixed;
+        left: -2000px;
+        top: 0;
+      }
+
+      .sidebar-art {
+        position: relative;
+        width: 164px;
+        height: 314px;
+        overflow: hidden;
+        background:
+          linear-gradient(148deg, rgba(209, 87, 255, .12), transparent 37%),
+          linear-gradient(180deg, #0d0d13 0%, #07070b 100%);
+      }
+
+      .sidebar-art::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(90deg, transparent 0 81%, rgba(209, 87, 255, .25) 81% 81.6%, transparent 81.6%),
+          linear-gradient(0deg, transparent 0 73%, rgba(168, 77, 255, .16) 73% 73.6%, transparent 73.6%);
+      }
+
+      .sidebar-art::after {
+        content: "";
+        position: absolute;
+        width: 172px;
+        height: 172px;
+        right: -82px;
+        top: 71px;
+        border-radius: 50%;
+        background: rgba(168, 77, 255, .22);
+        filter: blur(28px);
+      }
+
+      .wordmark {
+        position: relative;
+        display: inline-flex;
+        align-items: baseline;
+        z-index: 2;
+        white-space: nowrap;
+      }
+
+      .wordmark-better {
+        font: 400 22px/1 "Days One BetterFy", sans-serif;
+        letter-spacing: -.075em;
+        color: #f7f5fb;
+      }
+
+      .wordmark-fy {
+        position: relative;
+        top: 6px;
+        margin-left: 1px;
+        font: 400 31px/.7 "Mrs Sheppards BetterFy", cursive;
+        color: #d157ff;
+        transform: rotate(-4deg);
+        transform-origin: center;
+        text-shadow: 0 0 18px rgba(209, 87, 255, .34);
+      }
+
+      .sidebar-art .wordmark {
+        position: absolute;
+        left: 18px;
+        top: 22px;
+      }
+
+      .capsules {
+        position: absolute;
+        z-index: 2;
+        top: 108px;
+        left: 28px;
+        display: flex;
+        gap: 8px;
+        transform: rotate(-13deg);
+      }
+
+      .capsules span {
+        display: block;
+        width: 18px;
+        height: 94px;
+        border-radius: 9px;
+        background:
+          linear-gradient(90deg, rgba(255,255,255,.22), transparent 26% 74%, rgba(255,255,255,.1)),
+          linear-gradient(180deg, #d157ff 0%, #8e2cde 42%, #421176 100%);
+        box-shadow:
+          0 0 0 1px rgba(226, 152, 255, .42) inset,
+          0 16px 32px rgba(95, 28, 179, .3),
+          0 0 16px rgba(209, 87, 255, .18);
+      }
+
+      .sidebar-copy {
+        position: absolute;
+        z-index: 2;
+        left: 18px;
+        right: 16px;
+        bottom: 22px;
+      }
+
+      .sidebar-copy strong {
+        display: block;
+        margin-bottom: 6px;
+        font: 400 9px/1.35 "Days One BetterFy", sans-serif;
+        letter-spacing: .05em;
+        color: #f7f5fb;
+      }
+
+      .sidebar-copy span {
+        display: block;
+        font: 600 6px/1.5 "Segoe UI", Arial, sans-serif;
+        letter-spacing: .17em;
+        color: #8f8c9b;
+      }
+
+      .header-art {
+        position: relative;
+        width: 150px;
+        height: 57px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 83% 55%, rgba(209, 87, 255, .31), transparent 36%),
+          linear-gradient(105deg, #0d0d13 0%, #08080d 100%);
+      }
+
+      .header-art::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 2px;
+        background: linear-gradient(90deg, #7e25ce, #d157ff 64%, rgba(209,87,255,0));
+      }
+
+      .header-art .wordmark {
+        position: absolute;
+        left: 13px;
+        top: 14px;
+        transform: scale(.72);
+        transform-origin: left top;
+      }
+
+      .header-kicker {
+        position: absolute;
+        right: 11px;
+        top: 24px;
+        font: 700 5px/1 "Segoe UI", Arial, sans-serif;
+        letter-spacing: .18em;
+        color: #a9a5b2;
+      }
+
+      .previews {
+        display: grid;
+        grid-template-columns: repeat(2, 660px);
+        gap: 34px;
+        width: max-content;
+      }
+
+      .installer-window {
+        width: 660px;
+        height: 430px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,.16);
+        border-radius: 12px;
+        background: #f6f3f8;
+        color: #201a25;
+        box-shadow: 0 36px 90px rgba(0,0,0,.52), 0 0 0 1px rgba(168,77,255,.08);
+      }
+
+      .titlebar {
+        height: 46px;
+        display: flex;
+        align-items: center;
+        padding: 0 14px 0 16px;
+        border-bottom: 1px solid #dcd6df;
+        background: #ece8ef;
+        color: #443d49;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .titlebar-dots {
+        display: flex;
+        gap: 12px;
+        margin-left: auto;
+        align-items: center;
+        color: #625b68;
+      }
+
+      .titlebar-dots span:last-child { font-size: 19px; line-height: 1; }
+
+      .native-body {
+        height: 326px;
+        display: grid;
+        grid-template-columns: 164px 1fr;
+      }
+
+      .native-content {
+        padding: 47px 44px 28px;
+        background:
+          radial-gradient(circle at 100% 0%, rgba(209,87,255,.075), transparent 42%),
+          #f8f6fa;
+      }
+
+      .native-kicker {
+        margin-bottom: 13px;
+        color: #8e2cde;
+        font-size: 10px;
+        line-height: 1;
+        font-weight: 800;
+        letter-spacing: .15em;
+        text-transform: uppercase;
+      }
+
+      .native-content h1 {
+        margin: 0 0 16px;
+        max-width: 390px;
+        font-family: "Segoe UI", Arial, sans-serif;
+        font-size: 29px;
+        line-height: 1.12;
+        letter-spacing: -.035em;
+        font-weight: 700;
+        color: #19151d;
+      }
+
+      .native-content p {
+        max-width: 390px;
+        margin: 0;
+        color: #655e6a;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .native-content p + p { margin-top: 10px; }
+
+      .progress-track {
+        width: 100%;
+        height: 8px;
+        margin: 28px 0 13px;
+        overflow: hidden;
+        border-radius: 6px;
+        background: #e0dbe4;
+        box-shadow: 0 0 0 1px rgba(73, 56, 80, .08) inset;
+      }
+
+      .progress-fill {
+        width: 72%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #9c37e8, #ce57f4);
+        box-shadow: 0 5px 13px rgba(156,55,232,.23);
+      }
+
+      .progress-meta {
+        display: flex;
+        justify-content: space-between;
+        color: #7a717f;
+        font-size: 11px;
+      }
+
+      .checkline {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-top: 26px;
+        color: #4f4855;
+        font-size: 12px;
+      }
+
+      .checkbox {
+        width: 17px;
+        height: 17px;
+        display: grid;
+        place-items: center;
+        border-radius: 4px;
+        background: #9c37e8;
+        color: white;
+        font-size: 11px;
+        font-weight: 900;
+      }
+
+      .native-footer {
+        height: 58px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 9px;
+        padding: 0 18px;
+        border-top: 1px solid #dcd6df;
+        background: #eeebf0;
+      }
+
+      button {
+        min-width: 92px;
+        height: 32px;
+        padding: 0 17px;
+        border: 1px solid #c7c0cb;
+        border-radius: 5px;
+        background: #f9f8fa;
+        color: #2b2530;
+        font: 600 12px/1 "Segoe UI", Arial, sans-serif;
+      }
+
+      button.primary {
+        border-color: #8e2cde;
+        background: linear-gradient(115deg, #9c37e8, #ce57f4);
+        color: #fff;
+        box-shadow: 0 7px 18px rgba(156,55,232,.22);
+      }
+
+      .header-layout .native-body {
+        display: block;
+        height: 326px;
+      }
+
+      .installer-header {
+        height: 70px;
+        display: flex;
+        align-items: center;
+        padding: 0 22px 0 30px;
+        border-bottom: 1px solid #ddd8e1;
+        background: #faf8fb;
+      }
+
+      .installer-header-copy strong {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 15px;
+        color: #211b26;
+      }
+
+      .installer-header-copy span { font-size: 11px; color: #766e7b; }
+      .installer-header .header-art { margin-left: auto; flex: 0 0 auto; }
+      .header-layout .native-content { height: 256px; padding-top: 35px; }
+    </style>
+  </head>
+  <body>
+    <div class="asset-bank" aria-hidden="true">
+      <div id="sidebar-image" class="sidebar-art">
+        <div class="wordmark"><span class="wordmark-better">Better</span><span class="wordmark-fy">Fy</span></div>
+        <div class="capsules"><span></span><span></span><span></span></div>
+        <div class="sidebar-copy"><strong>Твоя Dota.<br />Твоя сборка.</strong><span>SELECT · CHECK · BUILD · PLAY</span></div>
+      </div>
+      <div id="header-image" class="header-art">
+        <div class="wordmark"><span class="wordmark-better">Better</span><span class="wordmark-fy">Fy</span></div>
+        <span class="header-kicker">WINDOWS</span>
+      </div>
+    </div>
+
+    <main class="previews">
+      <section id="preview-welcome-ru" class="installer-window">
+        <div class="titlebar">Установка BetterFy <div class="titlebar-dots"><span>—</span><span>×</span></div></div>
+        <div class="native-body">
+          <div class="sidebar-art">
+            <div class="wordmark"><span class="wordmark-better">Better</span><span class="wordmark-fy">Fy</span></div>
+            <div class="capsules"><span></span><span></span><span></span></div>
+            <div class="sidebar-copy"><strong>Твоя Dota.<br />Твоя сборка.</strong><span>SELECT · CHECK · BUILD · PLAY</span></div>
+          </div>
+          <div class="native-content">
+            <div class="native-kicker">BetterFy · Windows</div>
+            <h1>Установка BetterFy</h1>
+            <p>Мастер установит приложение для текущего пользователя. Права администратора не понадобятся.</p>
+            <p>Закрой BetterFy перед обновлением, затем нажми «Далее».</p>
+          </div>
+        </div>
+        <div class="native-footer"><button>Отмена</button><button class="primary">Далее →</button></div>
+      </section>
+
+      <section id="preview-progress-ru" class="installer-window header-layout">
+        <div class="titlebar">Установка BetterFy <div class="titlebar-dots"><span>—</span><span>×</span></div></div>
+        <div class="native-body">
+          <div class="installer-header">
+            <div class="installer-header-copy"><strong>Установка BetterFy</strong><span>Копируем файлы приложения</span></div>
+            <div class="header-art">
+              <div class="wordmark"><span class="wordmark-better">Better</span><span class="wordmark-fy">Fy</span></div>
+              <span class="header-kicker">WINDOWS</span>
+            </div>
+          </div>
+          <div class="native-content">
+            <div class="native-kicker">INSTALL · 02</div>
+            <h1>Подготавливаем BetterFy</h1>
+            <p>Устанавливаем приложение и ярлык в меню «Пуск».</p>
+            <div class="progress-track"><div class="progress-fill"></div></div>
+            <div class="progress-meta"><span>BetterFy.exe</span><span>72%</span></div>
+          </div>
+        </div>
+        <div class="native-footer"><button>Отмена</button></div>
+      </section>
+
+      <section id="preview-finish-ru" class="installer-window">
+        <div class="titlebar">Установка BetterFy <div class="titlebar-dots"><span>—</span><span>×</span></div></div>
+        <div class="native-body">
+          <div class="sidebar-art">
+            <div class="wordmark"><span class="wordmark-better">Better</span><span class="wordmark-fy">Fy</span></div>
+            <div class="capsules"><span></span><span></span><span></span></div>
+            <div class="sidebar-copy"><strong>Твоя Dota.<br />Твоя сборка.</strong><span>SELECT · CHECK · BUILD · PLAY</span></div>
+          </div>
+          <div class="native-content">
+            <div class="native-kicker">READY · 03</div>
+            <h1>BetterFy установлен</h1>
+            <p>Приложение готово к первому запуску. Подключение Dota 2 выполняется уже внутри BetterFy.</p>
+            <div class="checkline"><span class="checkbox">✓</span><span>Запустить BetterFy</span></div>
+          </div>
+        </div>
+        <div class="native-footer"><button class="primary">Готово</button></div>
+      </section>
+
+      <section id="preview-welcome-en" class="installer-window">
+        <div class="titlebar">BetterFy Setup <div class="titlebar-dots"><span>—</span><span>×</span></div></div>
+        <div class="native-body">
+          <div class="sidebar-art">
+            <div class="wordmark"><span class="wordmark-better">Better</span><span class="wordmark-fy">Fy</span></div>
+            <div class="capsules"><span></span><span></span><span></span></div>
+            <div class="sidebar-copy"><strong>Your Dota.<br />Your build.</strong><span>SELECT · CHECK · BUILD · PLAY</span></div>
+          </div>
+          <div class="native-content">
+            <div class="native-kicker">BetterFy · Windows</div>
+            <h1>Install BetterFy</h1>
+            <p>Setup installs the app for your Windows account. Administrator access is not required.</p>
+            <p>Close BetterFy before updating, then select Next.</p>
+          </div>
+        </div>
+        <div class="native-footer"><button>Cancel</button><button class="primary">Next →</button></div>
+      </section>
+    </main>
+  </body>
+</html>

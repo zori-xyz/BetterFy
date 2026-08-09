@@ -36,6 +36,32 @@ Alternative bundles:
 The script uses `npm ci`, builds the TypeScript interface, runs the locked Rust
 test suite, builds Tauri, and fails if no installer is produced.
 
+## Installer artwork
+
+The NSIS bundle uses the BetterFy wordmark as its primary identity and two
+release-owned bitmaps:
+
+```text
+src-tauri/windows/installer/sidebar.bmp   164 × 314
+src-tauri/windows/installer/header.bmp    150 × 57
+```
+
+Both are opaque Windows BMP files and are checked during `npm run check`.
+Russian and English are bundled into the same installer; Windows chooses the
+matching language and falls back to Russian. Installation is scoped to the
+current Windows account, so the normal path does not request administrator
+access.
+
+On the macOS design machine, regenerate the bitmaps and the review images with:
+
+```bash
+npm run installer:render
+```
+
+The review images are written to `artifacts/installer-preview/`. They reproduce
+the intended native NSIS composition for visual review; the Windows CI artifact
+remains the source of truth for packaging and runtime behavior.
+
 ## GitHub Actions
 
 `.github/workflows/windows-build.yml` runs the same checks on `windows-latest`

@@ -218,6 +218,8 @@ design-system decision.
 | `website/public/bot/code-ru.png` / `code-en.png` | One-time-code message cards | Approved variants of the founder master; only the central headline changes |
 | `website/public/bot/approved-ru.png` / `approved-en.png` | Successful sign-in message cards | Approved variants of the founder master; only the central headline changes |
 | `src-tauri/icons/icon.svg` | Temporary application-icon master | Black BetterFy wordmark placeholder; replace with the final brand icon before release |
+| `src-tauri/windows/installer/sidebar.bmp` | NSIS welcome/finish brand panel | Newly authored BetterFy-only installer art; release-ready |
+| `src-tauri/windows/installer/header.bmp` | NSIS install/uninstall page banner | Newly authored BetterFy-only installer art; release-ready |
 | Lucide icons | Controls and status cues | Existing icon library |
 
 Legacy files under `src/assets/workshop-*.png` are not approved for current
