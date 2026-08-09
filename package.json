@@ -10,6 +10,7 @@
     "site:build": "tsc -p website/tsconfig.json && vite build --config website/vite.config.ts",
     "site:check": "node scripts/site-check.mjs",
     "site:preview": "vite preview --config website/vite.config.ts",
+    "bot:test": "npm --prefix services/auth-worker test",
     "check": "npm run build && npm run icon:check && cargo test --locked --manifest-path src-tauri/Cargo.toml",
     "build:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1",
     "visual:check": "node scripts/visual-check.mjs",

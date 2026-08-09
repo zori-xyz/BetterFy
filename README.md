@@ -96,9 +96,20 @@ npm run site:build
 ```
 
 It is deployed through GitHub Pages at
-`https://zori-xyz.github.io/BetterFy/`. Telegram confirmation remains visibly
-unavailable until the protected auth service and bot are connected; the static
-site never receives a bot secret.
+`https://zori-xyz.github.io/BetterFy/`. Telegram confirmation uses the protected
+auth Worker; the static site receives only an opaque session and never receives
+the bot secret.
+
+The deployable Telegram code service lives in `services/auth-worker`. Its local
+tests do not require a bot token:
+
+```bash
+npm run bot:test
+```
+
+Deployment and webhook setup are documented in
+`services/auth-worker/README.md`. Production secrets are added to the Worker
+environment and never to this repository.
 
 ### Quality checks
 
@@ -194,6 +205,7 @@ are in [CONTRIBUTING.md](CONTRIBUTING.md) and
 - [Engine architecture](docs/ENGINE_ARCHITECTURE.md)
 - [Trusted content intake](docs/CONTENT_INTAKE_SECURITY.md)
 - [Minify patching audit](docs/MINIFY_PATCHING_AUDIT.md)
+- [Payments and entitlements](docs/PAYMENTS_ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 

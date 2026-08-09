@@ -212,6 +212,9 @@ design-system decision.
 | `src/assets/courier-success.png` | Success → Play scene anchor | Founder-approved 1200×1200 prototype screenshot; temporary and prohibited from release |
 | `src/assets/pudge-recovery.png` | Recovery / Restore scene anchor | Founder-approved prototype screenshot; temporary and prohibited from release |
 | `src/assets/minify/*.jpg` | Functional-mod previews on the Minify catalog page | Imported from the official Egezenn/dota2-minify snapshot by founder request; prototype-only pending Valve/redistribution review |
+| `website/public/bot/message-master.png` | Telegram bot welcome card | Founder-owned and founder-approved master; composition must remain unchanged |
+| `website/public/bot/code-ru.png` / `code-en.png` | One-time-code message cards | Approved variants of the founder master; only the central headline changes |
+| `website/public/bot/approved-ru.png` / `approved-en.png` | Successful sign-in message cards | Approved variants of the founder master; only the central headline changes |
 | `src-tauri/icons/icon.svg` | Temporary application-icon master | Black BetterFy wordmark placeholder; replace with the final brand icon before release |
 | Lucide icons | Controls and status cues | Existing icon library |
 

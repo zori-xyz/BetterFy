@@ -3670,6 +3670,8 @@ html.motion-disabled *, html.motion-disabled *::before, html.motion-disabled *::
   border: 1px solid rgba(209,87,255,.2);
 }
 .profile-brand-avatar svg { width: 39px; height: 39px; }
+.profile-brand-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.rail-profile.has-avatar img { width: 26px; height: 26px; border-radius: 9px; object-fit: cover; box-shadow: 0 0 0 1px rgba(209,87,255,.28); }
 .profile-community strong { font-size: 10px; }
 .profile-community small { font-size: 8px; }
 

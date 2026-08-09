@@ -11,6 +11,9 @@ src-tauri/gen/
 .env
 .env.*
 !.env.example
+.dev.vars
+.wrangler/
+.idea/
 
 # Local installers and signing material never enter source control.
 *.pfx

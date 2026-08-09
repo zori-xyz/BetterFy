@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "betterfy-auth",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-08-01",
+  "vars": {
+    "BOT_USERNAME": "BeterFyBot",
+    "PUBLIC_WORKER_URL": "https://betterfy-auth.zori-xyz.workers.dev",
+    "BOT_ASSET_BASE_URL": "https://betterfy-auth.zori-xyz.workers.dev",
+    "BETTERFY_PLAN_3D_STARS": "75",
+    "BETTERFY_PLAN_15D_STARS": "225",
+    "BETTERFY_PLAN_30D_STARS": "525",
+    "ALLOWED_ORIGINS": "https://zori-xyz.github.io,http://localhost:1420,https://tauri.localhost,http://tauri.localhost"
+  },
+  "assets": {
+    "directory": "../../website/public/bot"
+  },
+  "d1_databases": [
+    {
+      "binding": "AUTH_DB",
+      "database_name": "betterfy-auth",
+      "database_id": "3a08e1c8-2793-4733-bf75-9325af3a8ebf",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

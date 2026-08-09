@@ -50,7 +50,7 @@ import courierSuccess from "./assets/courier-success.png";
 import enigmaProgress from "./assets/enigma-progress.webp";
 import pudgeRecovery from "./assets/pudge-recovery.png";
 import wukongBuild from "./assets/wukong-build.png";
-import type { AuthSession } from "./auth";
+import { fetchTelegramAvatar, revokeAuthSession, type AuthSession } from "./auth";
 import {
   EngineFault,
   engineBridge,
@@ -651,6 +651,27 @@ function Workspace({
   const [diagnosticCopied, setDiagnosticCopied] = useState(false);
   const [selectedModIds, setSelectedModIds] = useState<string[]>(() =>
     getStoredStringArray("betterfy:selected-mods"));
+  const [telegramAvatarUrl, setTelegramAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let active = true;
+    if (!session) {
+      setTelegramAvatarUrl(null);
+      return undefined;
+    }
+    fetchTelegramAvatar(session)
+      .then((blob) => {
+        if (!active || !blob) return;
+        objectUrl = URL.createObjectURL(blob);
+        setTelegramAvatarUrl(objectUrl);
+      })
+      .catch(() => setTelegramAvatarUrl(null));
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [session]);
 
   const clearPanelCloseTimer = () => {
     if (panelCloseTimer.current === null) return;
@@ -799,7 +820,10 @@ function Workspace({
         </nav>
         <div className="rail-bottom">
           <button onClick={() => openPanel("settings")}><Settings /><span>{t.nav.settings}</span></button>
-          <button onClick={() => openPanel("profile")}><CircleUserRound /><span>{t.nav.profile}</span></button>
+          <button className={telegramAvatarUrl ? "rail-profile has-avatar" : "rail-profile"} onClick={() => openPanel("profile")}>
+            {telegramAvatarUrl ? <img src={telegramAvatarUrl} alt="" /> : <CircleUserRound />}
+            <span>{t.nav.profile}</span>
+          </button>
         </div>
       </aside>
 
@@ -1020,7 +1044,9 @@ function Workspace({
               <div className="panel-content">
                 <p>{t.panel.profileText}</p>
                 <div className="profile-identity">
-                  <span className="profile-brand-avatar" aria-label="BetterFy"><BetterFyMark /></span>
+                  <span className="profile-brand-avatar" aria-label={session?.displayName ?? "BetterFy"}>
+                    {telegramAvatarUrl ? <img src={telegramAvatarUrl} alt="" /> : <BetterFyMark />}
+                  </span>
                   <div>
                     <h3>{session?.displayName ?? "BetterFy Tester"}</h3>
                     <p>{session?.username ? `@${session.username}` : "@BeterFyBot"}</p>
@@ -1038,7 +1064,7 @@ function Workspace({
                     <ExternalLink />
                   </a>
                 </section>
-                <button className="panel-signout" onClick={onSignOut}><LogOut />{t.panel.signout}</button>
+                <button className="panel-signout" onClick={() => { void revokeAuthSession(session); onSignOut(); }}><LogOut />{t.panel.signout}</button>
               </div>
             )}
           </aside>

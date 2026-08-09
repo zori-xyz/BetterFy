@@ -23,9 +23,21 @@ type ReleaseState =
   | { phase: "ready"; version: string; date: string; url: string; direct: boolean }
   | { phase: "fallback"; url: string };
 
+type WebSession = {
+  userId: string;
+  displayName: string;
+  username?: string;
+  accessTier: string;
+  avatarAvailable: boolean;
+};
+
+type AuthStage = "idle" | "checking" | "code" | "verifying" | "ready";
+
 const RELEASES_URL = "https://github.com/zori-xyz/BetterFy/releases/latest";
 const REPOSITORY_URL = "https://github.com/zori-xyz/BetterFy";
 const BOT_URL = "https://t.me/BeterFyBot?start=web_login";
+const SESSION_STORAGE_KEY = "betterfy:web-session";
+const DEFAULT_AUTH_URL = "https://betterfy-auth.zori-xyz.workers.dev";
 
 function allowlistedExternalUrl(value: string | undefined, kind: "auth" | "release") {
   if (!value) return undefined;
@@ -91,7 +103,7 @@ const copy = {
     statusItems: [
       ["01", "Работает", "Поиск Dota и чтение состояния"],
       ["02", "На тестах", "План сборки, архивы и staging"],
-      ["03", "Выключено", "Telegram-профиль и установка в Dota"],
+      ["03", "Подключено", "Telegram-вход и единый профиль"],
     ],
     statusNote: "BetterFy пока не изменяет игровые файлы. Сначала мы проверим полный цикл установки и восстановления на Windows.",
     communityBody: "Ошибки, идеи и результаты Windows-тестов собираем через @BeterFyBot. Код и задачи открыты на GitHub.",
@@ -105,11 +117,19 @@ const copy = {
       ["Что будет с исходными файлами?", "Движок уже ведёт журнал тестовых операций. Обещать восстановление реальных файлов мы будем только после полного Windows-теста: установка, ошибка, откат и повторная проверка."],
     ],
     modalEyebrow: "ACCOUNT / EARLY ACCESS",
-    modalTitle: "Вход ещё не подключён.",
-    modalBody: "Для общего аккаунта сайта и приложения нужен отдельный auth-сервис. Мы подключим его после проверки одноразовых кодов и привязки устройства.",
-    modalPending: "Пока эта кнопка ведёт в @BeterFyBot. Сайт не создаёт тестовый аккаунт и не сохраняет Telegram-данные.",
-    authCta: "Открыть @BeterFyBot",
-    authReady: "Открыть вход",
+    modalTitle: "Войди через Telegram.",
+    modalBody: "Открой @BeterFyBot, получи одноразовый код и введи шесть цифр здесь.",
+    modalPending: "Код живёт 10 минут и срабатывает один раз. BetterFy не получает доступ к перепискам.",
+    authCta: "Получить код в @BeterFyBot",
+    codeLabel: "Одноразовый код",
+    codePlaceholder: "000000",
+    verifyCode: "Подтвердить вход",
+    verifying: "Проверяем код…",
+    invalidCode: "Код не подошёл или уже истёк. Получи новый в боте.",
+    signedIn: "Telegram подключён",
+    signOut: "Выйти",
+    downloadLocked: "Войди через Telegram, чтобы скачать сборку.",
+    downloadError: "Сборка пока недоступна. Попробуй ещё раз позже.",
     close: "Закрыть",
     footer: "BetterFy разрабатывается открыто. Код, сборки и список задач лежат на GitHub.",
     footerMeta: "EARLY ACCESS · OPEN DEVELOPMENT",
@@ -162,7 +182,7 @@ const copy = {
     statusItems: [
       ["01", "Working", "Dota discovery and read-only state"],
       ["02", "Under test", "Build plans, archives, and staging"],
-      ["03", "Disabled", "Telegram profile and Dota installation"],
+      ["03", "Connected", "Telegram sign-in and shared profile"],
     ],
     statusNote: "BetterFy does not modify game files yet. The complete install and recovery cycle must pass on Windows first.",
     communityBody: "Send bugs, ideas, and Windows test results through @BeterFyBot. Code and issues are public on GitHub.",
@@ -176,11 +196,19 @@ const copy = {
       ["What happens to the original files?", "The engine already journals fixture operations. We will only promise recovery for real game files after the entire Windows cycle passes: install, failure, rollback, and verification."],
     ],
     modalEyebrow: "ACCOUNT / EARLY ACCESS",
-    modalTitle: "Sign-in is not connected yet.",
-    modalBody: "A shared web and desktop account needs a separate auth service. We will connect it after one-time codes and device binding are verified.",
-    modalPending: "For now, this button opens @BeterFyBot. The website does not create a demo account or store Telegram data.",
-    authCta: "Open @BeterFyBot",
-    authReady: "Open sign-in",
+    modalTitle: "Sign in with Telegram.",
+    modalBody: "Open @BeterFyBot, request a one-time code, and enter the six digits here.",
+    modalPending: "The code lasts 10 minutes and works once. BetterFy cannot read your chats.",
+    authCta: "Get a code from @BeterFyBot",
+    codeLabel: "One-time code",
+    codePlaceholder: "000000",
+    verifyCode: "Confirm sign-in",
+    verifying: "Checking the code…",
+    invalidCode: "That code has expired or was already used. Request another one in the bot.",
+    signedIn: "Telegram connected",
+    signOut: "Sign out",
+    downloadLocked: "Sign in with Telegram to download the build.",
+    downloadError: "The build is unavailable right now. Try again later.",
     close: "Close",
     footer: "BetterFy is developed in public. Source, builds, and open tasks are on GitHub.",
     footerMeta: "EARLY ACCESS · OPEN DEVELOPMENT",
@@ -256,10 +284,140 @@ function Site() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [headerCompact, setHeaderCompact] = useState(false);
+  const [authStage, setAuthStage] = useState<AuthStage>("checking");
+  const [authSession, setAuthSession] = useState<WebSession | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(() => {
+    try { return window.sessionStorage.getItem(SESSION_STORAGE_KEY); } catch { return null; }
+  });
+  const [authCode, setAuthCode] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState("");
   const accountTrigger = useRef<HTMLButtonElement>(null);
   const t = copy[language];
   const release = useLatestRelease(language);
-  const authUrl = allowlistedExternalUrl(import.meta.env.VITE_BETTERFY_AUTH_URL?.trim(), "auth");
+  const authUrl = allowlistedExternalUrl(import.meta.env.VITE_BETTERFY_AUTH_URL?.trim() || DEFAULT_AUTH_URL, "auth")!;
+
+  useEffect(() => {
+    if (!sessionToken) {
+      setAuthStage("idle");
+      setAuthSession(null);
+      return;
+    }
+    const controller = new AbortController();
+    setAuthStage("checking");
+    fetch(new URL("/v1/session/profile", authUrl), {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+      credentials: "omit",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("session_invalid");
+        return response.json() as Promise<WebSession>;
+      })
+      .then((profile) => {
+        setAuthSession(profile);
+        setAuthStage("ready");
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        try { window.sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch { /* no-op */ }
+        setSessionToken(null);
+        setAuthStage("idle");
+      });
+    return () => controller.abort();
+  }, [authUrl, sessionToken]);
+
+  useEffect(() => {
+    if (!sessionToken || !authSession?.avatarAvailable) {
+      setAvatarUrl(null);
+      return;
+    }
+    const controller = new AbortController();
+    let objectUrl: string | null = null;
+    fetch(new URL("/v1/session/avatar", authUrl), {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+      credentials: "omit",
+      signal: controller.signal,
+    })
+      .then((response) => response.ok ? response.blob() : Promise.reject(new Error("avatar_unavailable")))
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        setAvatarUrl(objectUrl);
+      })
+      .catch(() => setAvatarUrl(null));
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [authSession?.avatarAvailable, authUrl, sessionToken]);
+
+  const verifyCode = async () => {
+    const code = authCode.replace(/\D/g, "");
+    if (!/^\d{6}$/.test(code)) {
+      setAuthError(t.invalidCode);
+      return;
+    }
+    setAuthStage("verifying");
+    setAuthError("");
+    try {
+      const response = await fetch(new URL("/v1/auth/telegram/code", authUrl), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code }),
+        credentials: "omit",
+      });
+      if (!response.ok) throw new Error("invalid_code");
+      const payload = await response.json() as WebSession & { sessionToken?: string };
+      if (!payload.sessionToken || !payload.displayName) throw new Error("invalid_response");
+      window.sessionStorage.setItem(SESSION_STORAGE_KEY, payload.sessionToken);
+      setAuthSession(payload);
+      setSessionToken(payload.sessionToken);
+      setAuthStage("ready");
+      setAuthCode("");
+    } catch {
+      setAuthStage("code");
+      setAuthError(t.invalidCode);
+    }
+  };
+
+  const signOut = async () => {
+    const token = sessionToken;
+    try { window.sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch { /* no-op */ }
+    setSessionToken(null);
+    setAuthSession(null);
+    setAvatarUrl(null);
+    setAuthStage("idle");
+    if (token) {
+      fetch(new URL("/v1/session/logout", authUrl), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: "omit",
+      }).catch(() => undefined);
+    }
+  };
+
+  const downloadBuild = async () => {
+    setDownloadError("");
+    if (!sessionToken || !authSession) {
+      setAccountOpen(true);
+      setAuthStage("idle");
+      return;
+    }
+    try {
+      const response = await fetch(new URL("/v1/releases/latest", authUrl), {
+        headers: { Authorization: `Bearer ${sessionToken}` },
+        credentials: "omit",
+      });
+      if (!response.ok) throw new Error("release_unavailable");
+      const payload = await response.json() as { downloadUrl?: string };
+      const url = allowlistedExternalUrl(payload.downloadUrl, "release");
+      if (!url) throw new Error("release_invalid");
+      window.location.assign(url);
+    } catch {
+      setDownloadError(t.downloadError);
+    }
+  };
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -313,8 +471,6 @@ function Site() {
     return `${t.latest} · ${release.version}`;
   }, [release, t]);
 
-  const releaseUrl = release.phase === "loading" ? RELEASES_URL : release.url;
-
   return (
     <div className="site-shell">
       <a className="skip-link" href="#main">{t.skip}</a>
@@ -336,7 +492,10 @@ function Site() {
             <button className={language === "ru" ? "is-active" : ""} onClick={() => setLanguage("ru")}>RU</button>
             <button className={language === "en" ? "is-active" : ""} onClick={() => setLanguage("en")}>EN</button>
           </div>
-          <button ref={accountTrigger} className="account-button" onClick={() => setAccountOpen(true)}><CircleUserRound />{t.account}</button>
+          <button ref={accountTrigger} className="account-button" onClick={() => setAccountOpen(true)}>
+            {avatarUrl ? <img src={avatarUrl} alt="" /> : <CircleUserRound />}
+            {authSession?.displayName ?? t.account}
+          </button>
           <button className="menu-button" aria-label="Menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)}>
             {menuOpen ? <X /> : <Menu />}
           </button>
@@ -350,7 +509,7 @@ function Site() {
             <h1><span>{t.heroLine1}</span><strong>{t.heroLine2}</strong></h1>
             <p>{t.heroBody}</p>
             <div className="hero-actions">
-              <a className="primary-action" href={releaseUrl} target="_blank" rel="noreferrer"><ArrowDownToLine />{t.download}<ArrowRight /></a>
+              <button className="primary-action" type="button" onClick={downloadBuild}><ArrowDownToLine />{t.download}<ArrowRight /></button>
               <a className="text-action" href="#journey">{t.explore}<ChevronRight /></a>
             </div>
           </div>
@@ -441,10 +600,11 @@ function Site() {
               <strong>{t.requirements}</strong>
               <small>{release.phase === "ready" ? release.date : t.integrity}</small>
             </div>
-            <a href={releaseUrl} target="_blank" rel="noreferrer" className={release.phase === "loading" ? "is-loading" : ""}>
+            <button type="button" onClick={downloadBuild} className={release.phase === "loading" ? "is-loading" : ""}>
               {t.releaseButton}<ArrowRight />
-            </a>
-            <p><PackageCheck />{t.integrity}</p>
+            </button>
+            <p><PackageCheck />{authSession ? t.integrity : t.downloadLocked}</p>
+            {downloadError && <p className="release-error">{downloadError}</p>}
           </div>
         </section>
 
@@ -490,14 +650,46 @@ function Site() {
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setAccountOpen(false); }}>
           <section className="account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title">
             <button className="modal-close" autoFocus onClick={() => { setAccountOpen(false); accountTrigger.current?.focus(); }} aria-label={t.close}><X /></button>
-            <div className="modal-icon"><CircleUserRound /></div>
+            <div className={avatarUrl ? "modal-icon has-avatar" : "modal-icon"}>
+              {avatarUrl ? <img src={avatarUrl} alt="" /> : <CircleUserRound />}
+            </div>
             <span className="eyebrow">{t.modalEyebrow}</span>
-            <h2 id="account-title">{t.modalTitle}</h2>
-            <p>{t.modalBody}</p>
-            <div className="pending-note"><ShieldCheck /><span>{t.modalPending}</span></div>
-            <a className="telegram-action" href={authUrl || BOT_URL} target="_blank" rel="noreferrer">
-              <Globe2 />{authUrl ? t.authReady : t.authCta}<ArrowRight />
-            </a>
+            {authSession ? (
+              <>
+                <h2 id="account-title">{authSession.displayName}</h2>
+                <p>{authSession.username ? `@${authSession.username}` : t.signedIn}</p>
+                <div className="pending-note"><ShieldCheck /><span>{t.signedIn} · {authSession.accessTier}</span></div>
+                <button className="secondary-action modal-signout" type="button" onClick={signOut}>{t.signOut}</button>
+              </>
+            ) : (
+              <>
+                <h2 id="account-title">{t.modalTitle}</h2>
+                <p>{t.modalBody}</p>
+                <div className="pending-note"><ShieldCheck /><span>{t.modalPending}</span></div>
+                <a className="telegram-action" href={BOT_URL} target="_blank" rel="noreferrer" onClick={() => setAuthStage("code")}>
+                  <Globe2 />{t.authCta}<ArrowRight />
+                </a>
+                {(authStage === "code" || authStage === "verifying") && (
+                  <form className="auth-code-form" onSubmit={(event) => { event.preventDefault(); void verifyCode(); }}>
+                    <label htmlFor="telegram-code">{t.codeLabel}</label>
+                    <input
+                      id="telegram-code"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={authCode}
+                      placeholder={t.codePlaceholder}
+                      onChange={(event) => { setAuthCode(event.target.value.replace(/\D/g, "").slice(0, 6)); setAuthError(""); }}
+                      disabled={authStage === "verifying"}
+                    />
+                    <button type="submit" className="primary-action" disabled={authStage === "verifying" || authCode.length !== 6}>
+                      {authStage === "verifying" ? t.verifying : t.verifyCode}<ArrowRight />
+                    </button>
+                    {authError && <p role="alert">{authError}</p>}
+                  </form>
+                )}
+              </>
+            )}
           </section>
         </div>
       )}

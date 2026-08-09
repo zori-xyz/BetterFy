@@ -1,0 +1,6 @@
+TELEGRAM_BOT_TOKEN=replace_locally
+TELEGRAM_WEBHOOK_SECRET=replace_with_random_header_secret
+AUTH_CODE_PEPPER=replace_with_at_least_32_random_bytes
+BETTERFY_PLAN_3D_STARS=75
+BETTERFY_PLAN_15D_STARS=225
+BETTERFY_PLAN_30D_STARS=525

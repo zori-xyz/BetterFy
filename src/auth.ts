@@ -3,6 +3,8 @@ export type AuthSession = {
   displayName: string;
   username?: string;
   accessTier: string;
+  sessionToken?: string;
+  avatarAvailable?: boolean;
   source: "demo" | "server";
 };
 
@@ -17,8 +19,41 @@ const isAuthSession = (value: unknown): value is Omit<AuthSession, "source"> => 
     && typeof record.displayName === "string"
     && (record.username === undefined || typeof record.username === "string")
     && typeof record.accessTier === "string"
+    && (record.sessionToken === undefined || typeof record.sessionToken === "string")
+    && (record.avatarAvailable === undefined || typeof record.avatarAvailable === "boolean")
   );
 };
+
+function authenticatedEndpoint(path: string, session: AuthSession) {
+  if (!authEndpoint || !session.sessionToken) throw new Error("auth_session_unavailable");
+  const endpoint = new URL(path, authEndpoint);
+  if (endpoint.protocol !== "https:" && endpoint.hostname !== "127.0.0.1" && endpoint.hostname !== "localhost") {
+    throw new Error("auth_endpoint_insecure");
+  }
+  return endpoint;
+}
+
+export async function fetchTelegramAvatar(session: AuthSession): Promise<Blob | null> {
+  if (session.source !== "server" || !session.avatarAvailable || !session.sessionToken) return null;
+  const response = await fetch(authenticatedEndpoint("/v1/session/avatar", session), {
+    headers: { Authorization: `Bearer ${session.sessionToken}` },
+    credentials: "omit",
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error("auth_avatar_unavailable");
+  const blob = await response.blob();
+  if (!blob.type.startsWith("image/") || blob.size > 5 * 1024 * 1024) throw new Error("auth_avatar_invalid");
+  return blob;
+}
+
+export async function revokeAuthSession(session: AuthSession | null): Promise<void> {
+  if (!session || session.source !== "server" || !session.sessionToken) return;
+  await fetch(authenticatedEndpoint("/v1/session/logout", session), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session.sessionToken}` },
+    credentials: "omit",
+  }).catch(() => undefined);
+}
 
 export const authMode: "demo" | "server" = authEndpoint ? "server" : "demo";
 

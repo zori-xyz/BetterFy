@@ -1,0 +1,16 @@
+{
+  "name": "@betterfy/auth-worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply AUTH_DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply AUTH_DB --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^4.28.1"
+  }
+}

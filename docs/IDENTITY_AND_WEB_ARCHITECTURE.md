@@ -80,8 +80,11 @@ The first site ships as a separate deployable application with:
 - no catalog install button until signed catalog delivery exists.
 
 The desktop API origin and website origin are separate allowlisted clients.
-Browser sessions use secure, HTTP-only, same-site cookies and CSRF protection;
-desktop sessions use the device-code token flow. CORS is deny-by-default. Security
+The current static GitHub Pages slice keeps its opaque twelve-hour bearer token
+in `sessionStorage`, so closing the tab clears it; the desktop keeps the token in
+memory only. The production target remains secure HTTP-only same-site cookies
+for browsers and an OS credential vault with rotation for desktop. CORS is
+deny-by-default. Security
 headers, rate limits, structured redacted logs, database backups, and token-key
 rotation are release requirements rather than later cleanup.
 
@@ -93,3 +96,33 @@ rotation are release requirements rather than later cleanup.
 - profile conflict/offline/revocation tests;
 - website accessibility, RU/EN, theme, CSP, and download-integrity checks;
 - a documented account deletion and retention path before public launch.
+
+## Implemented first slice
+
+`services/auth-worker` now provides the narrow manual-code slice used by the
+current desktop UI:
+
+- Telegram webhook requests require Telegram's secret header before their body
+  is parsed;
+- `/start`, `/code`, `/help`, `/privacy`, language switching, and inline code
+  issue actions are available in Russian and English;
+- six-digit codes expire after ten minutes, are limited per Telegram profile,
+  are stored only as HMAC-SHA-256 values, and are consumed atomically once;
+- verification attempts are rate-limited using a keyed hash of the requester
+  address, and CORS allows only explicit desktop/site origins;
+- founder-approved Telegram cards are served from the public site, while every
+  bot and signing secret remains in the Worker deployment environment.
+- 3-day and 15-day one-time Stars passes plus recurring 30-day access share the
+  same pre-checkout validation, idempotent payment event, refund, cancellation,
+  and Premium-entitlement boundary;
+- a twelve-hour opaque session joins the website and current desktop flow;
+  profile photos are referenced by Telegram `file_id` and proxied server-side,
+  so the bot token never appears in client code or image URLs;
+- the website download control requires a valid BetterFy session. The Windows
+  artifact itself remains public on GitHub Releases, so this is an account UX
+  gate rather than access control over the public repository.
+
+This is deliberately not presented as complete account infrastructure.
+Challenge-bound deep links, refresh-token rotation, device management, secure
+browser cookies, and OS credential-vault storage remain required before the
+identity layer is declared production-complete.

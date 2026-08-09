@@ -22,6 +22,8 @@ concurrency:
 jobs:
   build:
     name: Build public website
+    env:
+      VITE_BETTERFY_AUTH_URL: https://betterfy-auth.zori-xyz.workers.dev
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:

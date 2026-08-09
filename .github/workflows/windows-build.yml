@@ -18,6 +18,8 @@ jobs:
     name: BetterFy NSIS artifact
     runs-on: windows-latest
     timeout-minutes: 40
+    env:
+      VITE_BETTERFY_AUTH_URL: https://betterfy-auth.zori-xyz.workers.dev
 
     steps:
       - name: Check out source
