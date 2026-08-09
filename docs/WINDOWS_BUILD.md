@@ -52,6 +52,14 @@ matching language and falls back to Russian. Installation is scoped to the
 current Windows account, so the normal path does not request administrator
 access.
 
+`src-tauri/windows/installer.nsi` is pinned to the official Tauri CLI 2.11.4
+NSIS template and carries a deliberately small BetterFy patch. The native
+finish page keeps the launch checkbox, offers the desktop-shortcut checkbox,
+and adds explicit buttons for the BetterFy website and the founder's GitHub.
+The installation page retains native progress behavior while applying the
+BetterFy violet/ivory control colors. Updater, uninstall, WebView2 and passive
+install behavior remain inherited from the matching Tauri template.
+
 On the macOS design machine, regenerate the bitmaps and the review images with:
 
 ```bash

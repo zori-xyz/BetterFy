@@ -29,4 +29,20 @@ for (const [name, width, height] of expected) {
   }
 }
 
-console.log("BetterFy installer artwork is valid.");
+const template = readFileSync(path.join(projectRoot, "src-tauri", "windows", "installer.nsi"), "utf8");
+const requiredTemplateContracts = [
+  "MUI_FINISHPAGE_SHOWREADME_FUNCTION CreateOrUpdateDesktopShortcut",
+  "MUI_FINISHPAGE_RUN_FUNCTION RunMainBinary",
+  "https://zori-xyz.github.io/BetterFy/",
+  "https://github.com/zori-xyz",
+  "Function BetterFyInstFilesShow",
+  "Function BetterFyFinishShow",
+];
+
+for (const contract of requiredTemplateContracts) {
+  if (!template.includes(contract)) {
+    throw new Error(`installer.nsi is missing required contract: ${contract}`);
+  }
+}
+
+console.log("BetterFy installer artwork and finish actions are valid.");

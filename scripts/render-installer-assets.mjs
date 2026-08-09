@@ -26,6 +26,7 @@ try {
     ["#preview-progress-ru", path.join(previewDir, "02-progress-ru.png")],
     ["#preview-finish-ru", path.join(previewDir, "03-finish-ru.png")],
     ["#preview-welcome-en", path.join(previewDir, "04-welcome-en.png")],
+    ["#preview-finish-en", path.join(previewDir, "05-finish-en.png")],
   ];
 
   for (const [selector, output] of captures) {

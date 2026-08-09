@@ -102,28 +102,15 @@
         top: 22px;
       }
 
-      .capsules {
+      .sidebar-signature {
         position: absolute;
         z-index: 2;
-        top: 108px;
-        left: 28px;
-        display: flex;
-        gap: 8px;
-        transform: rotate(-13deg);
-      }
-
-      .capsules span {
-        display: block;
-        width: 18px;
-        height: 94px;
-        border-radius: 9px;
-        background:
-          linear-gradient(90deg, rgba(255,255,255,.22), transparent 26% 74%, rgba(255,255,255,.1)),
-          linear-gradient(180deg, #d157ff 0%, #8e2cde 42%, #421176 100%);
-        box-shadow:
-          0 0 0 1px rgba(226, 152, 255, .42) inset,
-          0 16px 32px rgba(95, 28, 179, .3),
-          0 0 16px rgba(209, 87, 255, .18);
+        right: -2px;
+        top: 82px;
+        font: 400 126px/.8 "Mrs Sheppards BetterFy", cursive;
+        color: rgba(209, 87, 255, .12);
+        transform: rotate(-8deg);
+        text-shadow: 0 0 32px rgba(168, 77, 255, .11);
       }
 
       .sidebar-copy {
@@ -304,6 +291,49 @@
         font-size: 12px;
       }
 
+      .finish-options {
+        display: grid;
+        gap: 10px;
+        margin-top: 23px;
+      }
+
+      .finish-options .checkline { margin-top: 0; }
+
+      .finish-links {
+        display: flex;
+        gap: 9px;
+        margin-top: 18px;
+      }
+
+      .finish-links button {
+        height: 30px;
+        min-width: 118px;
+        color: #6f287f;
+        background: #fbf8fc;
+        border-color: #d5c9da;
+      }
+
+      .install-steps {
+        display: flex;
+        gap: 8px;
+        margin-top: 24px;
+      }
+
+      .install-step {
+        padding: 7px 10px;
+        border: 1px solid #ded5e3;
+        border-radius: 6px;
+        color: #6f6674;
+        background: rgba(255,255,255,.62);
+        font-size: 10px;
+      }
+
+      .install-step.active {
+        color: #6f287f;
+        border-color: rgba(156,55,232,.34);
+        background: rgba(168,77,255,.08);
+      }
+
       .checkbox {
         width: 17px;
         height: 17px;
@@ -375,7 +405,7 @@
     <div class="asset-bank" aria-hidden="true">
       <div id="sidebar-image" class="sidebar-art">
         <div class="wordmark"><span class="wordmark-better">Better</span><span class="wordmark-fy">Fy</span></div>
-        <div class="capsules"><span></span><span></span><span></span></div>
+        <div class="sidebar-signature">Fy</div>
         <div class="sidebar-copy"><strong>Твоя Dota.<br />Твоя сборка.</strong><span>SELECT · CHECK · BUILD · PLAY</span></div>
       </div>
       <div id="header-image" class="header-art">
@@ -390,7 +420,7 @@
         <div class="native-body">
           <div class="sidebar-art">
             <div class="wordmark"><span class="wordmark-better">Better</span><span class="wordmark-fy">Fy</span></div>
-            <div class="capsules"><span></span><span></span><span></span></div>
+            <div class="sidebar-signature">Fy</div>
             <div class="sidebar-copy"><strong>Твоя Dota.<br />Твоя сборка.</strong><span>SELECT · CHECK · BUILD · PLAY</span></div>
           </div>
           <div class="native-content">
@@ -415,10 +445,11 @@
           </div>
           <div class="native-content">
             <div class="native-kicker">INSTALL · 02</div>
-            <h1>Подготавливаем BetterFy</h1>
-            <p>Устанавливаем приложение и ярлык в меню «Пуск».</p>
+            <h1>Устанавливаем BetterFy</h1>
+            <p>Копируем файлы приложения и проверяем готовую установку.</p>
+            <div class="install-steps"><span class="install-step">Файлы</span><span class="install-step active">Ярлыки</span><span class="install-step">Проверка</span></div>
             <div class="progress-track"><div class="progress-fill"></div></div>
-            <div class="progress-meta"><span>BetterFy.exe</span><span>72%</span></div>
+            <div class="progress-meta"><span>Создаём меню «Пуск»</span><span>72%</span></div>
           </div>
         </div>
         <div class="native-footer"><button>Отмена</button></div>
@@ -429,14 +460,18 @@
         <div class="native-body">
           <div class="sidebar-art">
             <div class="wordmark"><span class="wordmark-better">Better</span><span class="wordmark-fy">Fy</span></div>
-            <div class="capsules"><span></span><span></span><span></span></div>
+            <div class="sidebar-signature">Fy</div>
             <div class="sidebar-copy"><strong>Твоя Dota.<br />Твоя сборка.</strong><span>SELECT · CHECK · BUILD · PLAY</span></div>
           </div>
           <div class="native-content">
             <div class="native-kicker">READY · 03</div>
             <h1>BetterFy установлен</h1>
             <p>Приложение готово к первому запуску. Подключение Dota 2 выполняется уже внутри BetterFy.</p>
-            <div class="checkline"><span class="checkbox">✓</span><span>Запустить BetterFy</span></div>
+            <div class="finish-options">
+              <div class="checkline"><span class="checkbox">✓</span><span>Запустить BetterFy</span></div>
+              <div class="checkline"><span class="checkbox">✓</span><span>Создать ярлык на рабочем столе</span></div>
+            </div>
+            <div class="finish-links"><button>Открыть сайт</button><button>GitHub · zori-xyz</button></div>
           </div>
         </div>
         <div class="native-footer"><button class="primary">Готово</button></div>
@@ -447,7 +482,7 @@
         <div class="native-body">
           <div class="sidebar-art">
             <div class="wordmark"><span class="wordmark-better">Better</span><span class="wordmark-fy">Fy</span></div>
-            <div class="capsules"><span></span><span></span><span></span></div>
+            <div class="sidebar-signature">Fy</div>
             <div class="sidebar-copy"><strong>Your Dota.<br />Your build.</strong><span>SELECT · CHECK · BUILD · PLAY</span></div>
           </div>
           <div class="native-content">
@@ -458,6 +493,28 @@
           </div>
         </div>
         <div class="native-footer"><button>Cancel</button><button class="primary">Next →</button></div>
+      </section>
+
+      <section id="preview-finish-en" class="installer-window">
+        <div class="titlebar">BetterFy Setup <div class="titlebar-dots"><span>—</span><span>×</span></div></div>
+        <div class="native-body">
+          <div class="sidebar-art">
+            <div class="wordmark"><span class="wordmark-better">Better</span><span class="wordmark-fy">Fy</span></div>
+            <div class="sidebar-signature">Fy</div>
+            <div class="sidebar-copy"><strong>Your Dota.<br />Your build.</strong><span>SELECT · CHECK · BUILD · PLAY</span></div>
+          </div>
+          <div class="native-content">
+            <div class="native-kicker">READY · 03</div>
+            <h1>BetterFy is installed</h1>
+            <p>The app is ready to open. Dota 2 connection is handled inside BetterFy.</p>
+            <div class="finish-options">
+              <div class="checkline"><span class="checkbox">✓</span><span>Launch BetterFy</span></div>
+              <div class="checkline"><span class="checkbox">✓</span><span>Create a desktop shortcut</span></div>
+            </div>
+            <div class="finish-links"><button>Open website</button><button>GitHub · zori-xyz</button></div>
+          </div>
+        </div>
+        <div class="native-footer"><button class="primary">Finish</button></div>
       </section>
     </main>
   </body>
