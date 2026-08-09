@@ -1,22 +1,18 @@
-name: Signed Windows release
+name: Early Access Windows installer
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
-      - "!v*-ea.*"
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: early-access-release
   cancel-in-progress: false
 
 jobs:
   windows:
-    name: BetterFy signed NSIS release
+    name: Build Early Access NSIS installer
     runs-on: windows-latest
     timeout-minutes: 45
     env:
@@ -43,25 +39,19 @@ jobs:
       - name: Verify frontend and engine
         run: npm run check
 
-      - name: Build and publish signed updater
-        uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        with:
-          tagName: v__VERSION__
-          releaseName: BetterFy v__VERSION__
-          releaseBody: Signed BetterFy Windows installer and in-app update package.
-          releaseDraft: false
-          prerelease: false
-          uploadUpdaterJson: true
-          updaterJsonPreferNsis: true
-          uploadUpdaterSignatures: true
-          args: --bundles nsis
+      - name: Check Rust formatting
+        run: cargo fmt --all --manifest-path src-tauri/Cargo.toml -- --check
 
-      - name: Publish fixed website installer asset
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Lint Rust engine
+        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+      - name: Build unsigned NSIS installer
+        uses: tauri-apps/tauri-action@v1
+        with:
+          args: --bundles nsis --config src-tauri/tauri.ci.conf.json
+
+      - name: Prepare fixed release assets
+        id: release
         shell: pwsh
         run: |
           $installer = Get-ChildItem "src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1
@@ -71,8 +61,21 @@ jobs:
           $hash = (Get-FileHash "release-assets/BetterFy-Windows-x64-setup.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  BetterFy-Windows-x64-setup.exe" | Set-Content -Encoding ascii "release-assets/BetterFy-Windows-x64-setup.exe.sha256"
           $version = node -p "require('./package.json').version"
-          gh release upload "v$version" `
+          "tag=v$version-ea.${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+          "title=BetterFy v$version · Early Access ${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+
+      - name: Publish immutable Early Access release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TITLE: ${{ steps.release.outputs.title }}
+        shell: pwsh
+        run: |
+          gh release create "$env:RELEASE_TAG" `
             "release-assets/BetterFy-Windows-x64-setup.exe" `
             "release-assets/BetterFy-Windows-x64-setup.exe.sha256" `
             --repo "${{ github.repository }}" `
-            --clobber
+            --target "${{ github.sha }}" `
+            --title "$env:RELEASE_TITLE" `
+            --notes "Unsigned Early Access installer for Windows testing. Windows may show an unknown publisher warning. Production Dota deployment remains disabled." `
+            --prerelease

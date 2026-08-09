@@ -79,4 +79,6 @@ The public bot cards are served from `/bot` on the BetterFy GitHub Pages site.
   BetterFy profile.
 - `GET /v1/releases/latest` resolves the latest allowlisted Windows asset for an
   authenticated client. GitHub releases remain public; this route gates the
-  BetterFy website flow, not direct GitHub access.
+  BetterFy website flow, not direct GitHub access. A stable release is preferred;
+  until signing is configured, the route falls back to the newest immutable
+  Early Access prerelease containing `BetterFy-Windows-x64-setup.exe`.

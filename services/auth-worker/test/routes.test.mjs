@@ -8,9 +8,15 @@ import {
   refreshFamilyCompromised,
   refreshCredentialState,
   route,
+  selectWindowsInstallerRelease,
   selectTelegramAvatarFileId,
   supportsRotatingDesktopCredentials,
 } from "../src/index.mjs";
+
+const releaseAsset = (url = "https://github.com/zori-xyz/BetterFy/releases/download/v0.1.0/BetterFy-Windows-x64-setup.exe") => ({
+  name: "BetterFy-Windows-x64-setup.exe",
+  browser_download_url: url,
+});
 
 const env = {
   ALLOWED_ORIGINS: "https://zori-xyz.github.io,http://localhost:1420",
@@ -27,6 +33,21 @@ test("avatar selection prefers the largest valid Telegram photo", () => {
   }), "large");
   assert.equal(selectTelegramAvatarFileId({ photos: [] }), null);
   assert.equal(selectTelegramAvatarFileId(null), null);
+});
+
+test("website downloads prefer a stable installer over an Early Access build", () => {
+  const early = { tag_name: "v0.1.0-ea.9", prerelease: true, draft: false, assets: [releaseAsset()] };
+  const stable = { tag_name: "v0.1.0", prerelease: false, draft: false, assets: [releaseAsset()] };
+  assert.equal(selectWindowsInstallerRelease([early, stable])?.release, stable);
+});
+
+test("website downloads fall back to an immutable Early Access installer", () => {
+  const draft = { tag_name: "v0.1.1", prerelease: false, draft: true, assets: [releaseAsset()] };
+  const wrongAsset = { tag_name: "v0.1.0", prerelease: false, draft: false, assets: [{ name: "unknown.exe" }] };
+  const early = { tag_name: "v0.1.0-ea.10", prerelease: true, draft: false, assets: [releaseAsset()] };
+  assert.equal(selectWindowsInstallerRelease([draft, wrongAsset, early])?.release, early);
+  assert.equal(selectWindowsInstallerRelease([]), null);
+  assert.equal(selectWindowsInstallerRelease(null), null);
 });
 
 test("avatar proxy identifies image bytes instead of trusting Telegram headers", () => {

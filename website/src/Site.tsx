@@ -44,7 +44,9 @@ type DeviceSession = {
   current: boolean;
 };
 
-const RELEASES_URL = "https://github.com/zori-xyz/BetterFy/releases/latest";
+const RELEASES_URL = "https://github.com/zori-xyz/BetterFy/releases";
+const RELEASES_API = "https://api.github.com/repos/zori-xyz/BetterFy/releases";
+const INSTALLER_NAME = "BetterFy-Windows-x64-setup.exe";
 const REPOSITORY_URL = "https://github.com/zori-xyz/BetterFy";
 const BOT_URL = "https://t.me/BeterFyBot?start=web_login";
 const SESSION_STORAGE_KEY = "betterfy:web-session";
@@ -99,13 +101,13 @@ const copy = {
     proofBody: "Rust и TypeScript проходят автоматические тесты, после чего GitHub Actions собирает NSIS-инсталлятор. Запись в Dota пока отключена.",
     releaseEyebrow: "LATEST / WINDOWS",
     releaseTitle: "Скачать Windows-сборку.",
-    releaseBody: "Кнопка ведёт к последнему `.exe` в GitHub Releases. Если готового установщика ещё нет, откроется список выпусков.",
+    releaseBody: "После входа кнопка скачивает последний Windows-инсталлятор из GitHub Releases. До настройки подписи это тестовая Early Access-сборка.",
     checking: "Проверяем последний релиз…",
     latest: "Последний релиз",
     fallback: "Страница релизов",
     releaseButton: "Скачать BetterFy",
     requirements: "Windows 10/11 · x64 · Early Access",
-    integrity: "Источник файла: github.com/zori-xyz/BetterFy",
+    integrity: "Early Access без подписи · источник: github.com/zori-xyz/BetterFy",
     communityEyebrow: "BETTERFY / COMMUNITY",
     communityTitle: "Поймал баг — пиши.",
     statusEyebrow: "BETTERFY / СЕЙЧАС",
@@ -190,13 +192,13 @@ const copy = {
     proofBody: "Rust and TypeScript pass automated tests before GitHub Actions produces the NSIS installer. Writes to Dota are still disabled.",
     releaseEyebrow: "LATEST / WINDOWS",
     releaseTitle: "Download the Windows build.",
-    releaseBody: "The button points to the latest `.exe` in GitHub Releases. If there is no installer yet, it opens the releases list.",
+    releaseBody: "After sign-in, the button downloads the latest Windows installer from GitHub Releases. Until signing is configured, it is an Early Access test build.",
     checking: "Checking the latest release…",
     latest: "Latest release",
     fallback: "Releases page",
     releaseButton: "Download BetterFy",
     requirements: "Windows 10/11 · x64 · Early Access",
-    integrity: "File source: github.com/zori-xyz/BetterFy",
+    integrity: "Unsigned Early Access · source: github.com/zori-xyz/BetterFy",
     communityEyebrow: "BETTERFY / COMMUNITY",
     communityTitle: "Found a bug? Tell us.",
     statusEyebrow: "BETTERFY / NOW",
@@ -279,26 +281,33 @@ function useLatestRelease(language: Language): ReleaseState {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("https://api.github.com/repos/zori-xyz/BetterFy/releases/latest", {
+    fetch(`${RELEASES_API}?per_page=20`, {
       headers: { Accept: "application/vnd.github+json" },
       signal: controller.signal,
     })
       .then((response) => {
         if (!response.ok) throw new Error("release_unavailable");
-        return response.json() as Promise<{
+        return response.json() as Promise<Array<{
           tag_name?: string;
+          name?: string;
           published_at?: string;
           html_url?: string;
+          draft?: boolean;
+          prerelease?: boolean;
           assets?: Array<{ name?: string; browser_download_url?: string }>;
-        }>;
+        }>>;
       })
-      .then((data) => {
-        const installer = data.assets?.find((asset) => asset.name?.toLowerCase().endsWith(".exe"));
+      .then((releases) => {
+        const candidates = releases.filter((item) => !item.draft);
+        const data = candidates.find((item) => !item.prerelease && item.assets?.some((asset) => asset.name === INSTALLER_NAME))
+          ?? candidates.find((item) => item.prerelease && item.assets?.some((asset) => asset.name === INSTALLER_NAME));
+        if (!data) throw new Error("installer_unavailable");
+        const installer = data.assets?.find((asset) => asset.name === INSTALLER_NAME);
         const installerUrl = allowlistedExternalUrl(installer?.browser_download_url, "release");
         const releasePage = allowlistedExternalUrl(data.html_url, "release");
         setRelease({
           phase: "ready",
-          version: data.tag_name ?? "BetterFy",
+          version: data.name ?? data.tag_name ?? "BetterFy",
           date: data.published_at ? formatDate(data.published_at, language) : "GitHub Releases",
           url: installerUrl ?? releasePage ?? RELEASES_URL,
           direct: Boolean(installerUrl),

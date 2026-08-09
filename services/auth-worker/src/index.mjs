@@ -518,22 +518,34 @@ function allowedReleaseUrl(value) {
   }
 }
 
+export function selectWindowsInstallerRelease(releases) {
+  if (!Array.isArray(releases)) return null;
+  const available = releases.filter((candidate) => candidate && candidate.draft !== true);
+  const hasInstaller = (candidate) => Array.isArray(candidate?.assets)
+    && candidate.assets.some((asset) => asset?.name === "BetterFy-Windows-x64-setup.exe");
+  const release = available.find((candidate) => candidate.prerelease !== true && hasInstaller(candidate))
+    ?? available.find((candidate) => candidate.prerelease === true && hasInstaller(candidate));
+  if (!release) return null;
+  const asset = release.assets.find((candidate) => candidate?.name === "BetterFy-Windows-x64-setup.exe");
+  return asset ? { release, asset } : null;
+}
+
 async function latestRelease(request, env, origin) {
   const headers = corsHeaders(origin);
   const user = await authenticatedUser(request, env, Math.floor(Date.now() / 1000));
   if (!user) return json({ error: "unauthorized" }, 401, headers);
-  const response = await fetch("https://api.github.com/repos/zori-xyz/BetterFy/releases/latest", {
+  const response = await fetch("https://api.github.com/repos/zori-xyz/BetterFy/releases?per_page=20", {
     headers: { accept: "application/vnd.github+json", "user-agent": "BetterFy-Auth-Worker" },
   });
   if (!response.ok) return json({ error: "release_unavailable" }, 503, headers);
-  const release = await response.json();
-  const asset = Array.isArray(release.assets)
-    ? release.assets.find((candidate) => typeof candidate?.name === "string" && candidate.name.toLowerCase().endsWith(".exe"))
-    : null;
+  const releases = await response.json();
+  const selected = selectWindowsInstallerRelease(releases);
+  const release = selected?.release;
+  const asset = selected?.asset;
   const downloadUrl = allowedReleaseUrl(asset?.browser_download_url);
   if (!downloadUrl) return json({ error: "installer_unavailable" }, 404, headers);
   return json({
-    version: typeof release.tag_name === "string" ? release.tag_name : "BetterFy",
+    version: typeof release?.name === "string" ? release.name : (typeof release?.tag_name === "string" ? release.tag_name : "BetterFy"),
     publishedAt: typeof release.published_at === "string" ? release.published_at : null,
     downloadUrl,
   }, 200, headers);

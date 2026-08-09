@@ -4,6 +4,12 @@ BetterFy updates are distributed only through signed GitHub Releases. Ordinary
 push and pull-request builds remain test artifacts and are never offered by the
 in-app updater.
 
+The public website may offer a clearly labelled unsigned Early Access installer
+for Windows testing. Run the `Early Access Windows installer` workflow manually;
+it creates an immutable prerelease with a fixed installer filename and a SHA-256
+sidecar. These prereleases are never used by the in-app updater. Once a signed
+stable release exists, the website and authenticated release resolver prefer it.
+
 ## One-time repository setup
 
 The updater public key is committed in `src-tauri/tauri.conf.json`. Its private
