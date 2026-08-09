@@ -4,6 +4,15 @@ export const CODE_TTL_SECONDS = 10 * 60;
 export const SESSION_TTL_SECONDS = 12 * 60 * 60;
 export const DESKTOP_SESSION_TTL_SECONDS = 15 * 60;
 export const REFRESH_FAMILY_TTL_SECONDS = 30 * 24 * 60 * 60;
+export const DEVICE_CHALLENGE_TTL_SECONDS = 10 * 60;
+
+export function normalizeDeviceId(value) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value) ? value : null;
+}
+
+export function normalizeChallengeToken(value) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value) ? value : null;
+}
 
 export function normalizeCode(value) {
   if (typeof value !== "string") return null;

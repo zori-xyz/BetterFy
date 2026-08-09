@@ -21,9 +21,22 @@ export type DeviceSession = {
   current: boolean;
 };
 
+export type DeviceChallengeStart = {
+  deepLink: string;
+  expiresAt: number;
+  pollAfterSeconds: number;
+};
+
+export type DeviceChallengePoll = {
+  state: "pending" | "confirmed" | "denied" | "expired";
+  profile?: AuthSession;
+};
+
 const authEndpoint = import.meta.env.VITE_BETTERFY_AUTH_URL as string | undefined;
 const wait = (duration: number) => new Promise((resolve) => window.setTimeout(resolve, duration));
 const isNativeDesktop = () => "__TAURI_INTERNALS__" in window;
+
+export const supportsDeviceChallenge = () => isNativeDesktop();
 
 const isAuthSession = (value: unknown): value is Omit<AuthSession, "source"> => {
   if (!value || typeof value !== "object") return false;
@@ -125,6 +138,38 @@ export async function restoreDesktopSession(): Promise<AuthSession | null> {
   if (!payload) return null;
   if (!isAuthSession(payload)) throw new Error("auth_response_invalid");
   return { ...payload, source: "server" };
+}
+
+export async function beginTelegramDeviceChallenge(): Promise<DeviceChallengeStart> {
+  if (!isNativeDesktop()) throw new Error("auth_challenge_unsupported");
+  const payload = await invoke<DeviceChallengeStart>("auth_begin_device_challenge");
+  if (!payload
+    || typeof payload.deepLink !== "string"
+    || !payload.deepLink.startsWith("https://t.me/BeterFyBot?start=auth_")
+    || typeof payload.expiresAt !== "number"
+    || typeof payload.pollAfterSeconds !== "number"
+    || payload.pollAfterSeconds < 1
+    || payload.pollAfterSeconds > 10) {
+    throw new Error("auth_response_invalid");
+  }
+  return payload;
+}
+
+export async function pollTelegramDeviceChallenge(): Promise<DeviceChallengePoll> {
+  if (!isNativeDesktop()) throw new Error("auth_challenge_unsupported");
+  const payload = await invoke<{ state: DeviceChallengePoll["state"]; profile?: unknown }>("auth_poll_device_challenge");
+  if (!payload || !["pending", "confirmed", "denied", "expired"].includes(payload.state)) {
+    throw new Error("auth_response_invalid");
+  }
+  if (payload.state === "confirmed") {
+    if (!isAuthSession(payload.profile)) throw new Error("auth_response_invalid");
+    return { state: "confirmed", profile: { ...payload.profile, source: "server" } };
+  }
+  return { state: payload.state };
+}
+
+export async function cancelTelegramDeviceChallenge(): Promise<void> {
+  if (isNativeDesktop()) await invoke("auth_cancel_device_challenge");
 }
 
 export async function verifyTelegramCode(code: string): Promise<AuthSession> {

@@ -12,8 +12,9 @@ pub mod steam_config;
 mod system_diagnostics;
 
 use auth_session::{
-    auth_fetch_avatar, auth_list_sessions, auth_logout, auth_restore_session, auth_revoke_device,
-    auth_verify_code, AuthState,
+    auth_begin_device_challenge, auth_cancel_device_challenge, auth_fetch_avatar,
+    auth_list_sessions, auth_logout, auth_poll_device_challenge, auth_restore_session,
+    auth_revoke_device, auth_verify_code, AuthState,
 };
 use build_engine::{
     create_build_plan, execute_build as execute_staged_build,
@@ -435,6 +436,7 @@ fn main() {
     tauri::Builder::default()
         .manage(AuthState::default())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             discover_game,
@@ -462,6 +464,9 @@ fn main() {
             export_preset,
             import_preset,
             auth_verify_code,
+            auth_begin_device_challenge,
+            auth_poll_device_challenge,
+            auth_cancel_device_challenge,
             auth_restore_session,
             auth_fetch_avatar,
             auth_list_sessions,

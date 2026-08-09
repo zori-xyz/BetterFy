@@ -1,5 +1,6 @@
 import {
   CODE_TTL_SECONDS,
+  DEVICE_CHALLENGE_TTL_SECONDS,
   DESKTOP_SESSION_TTL_SECONDS,
   REFRESH_FAMILY_TTL_SECONDS,
   SESSION_TTL_SECONDS,
@@ -9,7 +10,9 @@ import {
   generateCode,
   generateSessionToken,
   keyedHash,
+  normalizeChallengeToken,
   normalizeCode,
+  normalizeDeviceId,
 } from "./security.mjs";
 import { COPY } from "./copy.mjs";
 import {
@@ -30,6 +33,8 @@ const ISSUE_LIMIT = 3;
 const ISSUE_WINDOW_SECONDS = 10 * 60;
 const VERIFY_LIMIT = 10;
 const VERIFY_WINDOW_SECONDS = 10 * 60;
+const CHALLENGE_CREATE_LIMIT = 6;
+const CHALLENGE_POLL_SECONDS = 2;
 const MAX_BODY_BYTES = 8 * 1024;
 const AVATAR_REFRESH_SECONDS = 24 * 60 * 60;
 const AVATAR_RETRY_SECONDS = 5 * 60;
@@ -157,6 +162,21 @@ export function supportsRotatingDesktopCredentials(payload) {
 
 export function refreshFamilyCompromised(row) {
   return Number(row?.revoked_count ?? 0) > 0;
+}
+
+export function parseDeviceStartPayload(value) {
+  if (typeof value !== "string") return null;
+  const match = /^\/start(?:@[A-Za-z0-9_]+)?\s+auth_([A-Za-z0-9_-]{43})$/.exec(value.trim());
+  return normalizeChallengeToken(match?.[1]) ?? null;
+}
+
+export function deviceChallengeState(row, now) {
+  if (!row) return "missing";
+  if (Number(row.expires_at) <= now) return "expired";
+  if (row.status === "pending" || row.status === "approved" || row.status === "denied" || row.status === "redeemed") {
+    return row.status;
+  }
+  return "missing";
 }
 
 async function createSessionRecord(env, userId, now, clientKind, familyId = null, ttl = SESSION_TTL_SECONDS) {
@@ -643,6 +663,77 @@ async function sendWelcome(env, chatId, language) {
   });
 }
 
+function deviceDecisionKeyboard(language, token) {
+  const copy = COPY[language];
+  return {
+    inline_keyboard: [[
+      { text: copy.confirmDevice, callback_data: `device_yes_${token}` },
+      { text: copy.denyDevice, callback_data: `device_no_${token}` },
+    ]],
+  };
+}
+
+function primaryAuthDb(env) {
+  // Device approval is a security-sensitive, cross-request state machine. A
+  // challenge can be created by the desktop and read by the bot immediately,
+  // so every decision must start from the latest primary D1 version. The
+  // fallback keeps local test doubles and older Wrangler runtimes usable.
+  return typeof env.AUTH_DB.withSession === "function"
+    ? env.AUTH_DB.withSession("first-primary")
+    : env.AUTH_DB;
+}
+
+async function sendDeviceChallenge(env, message, language, token, now) {
+  const challengeHash = await keyedHash(`device-challenge:${token}`, env.AUTH_CODE_PEPPER);
+  const challenge = await primaryAuthDb(env).prepare(
+    "SELECT status, expires_at FROM auth_device_challenges WHERE challenge_hash = ?",
+  ).bind(challengeHash).first();
+  if (deviceChallengeState(challenge, now) !== "pending") {
+    return telegram(env, "sendMessage", { chat_id: message.chat.id, text: COPY[language].deviceExpired });
+  }
+  await upsertUser(env, message.from, language, now);
+  return telegram(env, "sendPhoto", {
+    chat_id: message.chat.id,
+    photo: cardUrl(env, "message-master.png"),
+    caption: COPY[language].deviceRequest,
+    reply_markup: deviceDecisionKeyboard(language, token),
+    protect_content: true,
+  });
+}
+
+async function decideDeviceChallenge(env, callback, language, token, approved, now) {
+  const chatId = callback.message.chat.id;
+  const userId = await upsertUser(env, callback.from, language, now);
+  const challengeHash = await keyedHash(`device-challenge:${token}`, env.AUTH_CODE_PEPPER);
+  const nextStatus = approved ? "approved" : "denied";
+  const result = await primaryAuthDb(env).prepare(
+    `UPDATE auth_device_challenges
+     SET status = ?, user_id = ?, decided_at = ?
+     WHERE challenge_hash = ? AND status = 'pending' AND expires_at > ?`,
+  ).bind(nextStatus, userId, now, challengeHash, now).run();
+  if (Number(result.meta?.changes ?? 0) !== 1) {
+    return telegram(env, "sendMessage", { chat_id: chatId, text: COPY[language].deviceExpired });
+  }
+  try {
+    await telegram(env, "editMessageReplyMarkup", {
+      chat_id: chatId,
+      message_id: callback.message.message_id,
+      reply_markup: { inline_keyboard: [] },
+    });
+  } catch {
+    // The decision is already committed; stale Telegram chrome is non-fatal.
+  }
+  if (!approved) {
+    return telegram(env, "sendMessage", { chat_id: chatId, text: COPY[language].deviceDenied });
+  }
+  return telegram(env, "sendPhoto", {
+    chat_id: chatId,
+    photo: cardUrl(env, language === "ru" ? "approved-ru.png" : "approved-en.png"),
+    caption: COPY[language].deviceApproved,
+    protect_content: true,
+  });
+}
+
 async function issueCode(env, chatId, from, language, now) {
   const userId = await upsertUser(env, from, language, now);
   const recent = await env.AUTH_DB.prepare(
@@ -894,6 +985,8 @@ async function handleMessage(env, message, now) {
   }
   if (message.successful_payment) return handleSuccessfulPayment(env, message, language, now);
   if (message.refunded_payment) return handleRefundedPayment(env, message, language, now);
+  const challengeToken = parseDeviceStartPayload(message.text);
+  if (challengeToken) return sendDeviceChallenge(env, message, language, challengeToken, now);
   const command = String(message.text ?? "").trim().split(/\s+/)[0].split("@")[0].toLowerCase();
   if (command === "/code") return issueCode(env, message.chat.id, message.from, language, now);
   if (command === "/subscribe") return sendPlans(env, message.chat.id, language);
@@ -919,6 +1012,17 @@ async function handleCallback(env, callback, now) {
   await telegram(env, "answerCallbackQuery", { callback_query_id: callback.id });
   const chatId = callback.message.chat.id;
   let language = await getLanguage(env, callback.from);
+  const deviceDecision = /^(device_yes|device_no)_([A-Za-z0-9_-]{43})$/.exec(String(callback.data ?? ""));
+  if (deviceDecision) {
+    return decideDeviceChallenge(
+      env,
+      callback,
+      language,
+      deviceDecision[2],
+      deviceDecision[1] === "device_yes",
+      now,
+    );
+  }
   if (callback.data === "issue_code") return issueCode(env, chatId, callback.from, language, now);
   if (callback.data === "plans") return sendPlans(env, chatId, language);
   if (typeof callback.data === "string" && callback.data.startsWith("buy_")) {
@@ -950,10 +1054,10 @@ async function handleWebhook(request, env) {
   return json({ ok: true });
 }
 
-async function consumeRateLimit(env, request, now) {
+async function consumeRequestLimit(env, request, now, namespace, limit, windowSeconds) {
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
-  const bucket = await keyedHash(`verify:${ip}`, env.AUTH_CODE_PEPPER);
-  const resetBefore = now - VERIFY_WINDOW_SECONDS;
+  const bucket = await keyedHash(`${namespace}:${ip}`, env.AUTH_CODE_PEPPER);
+  const resetBefore = now - windowSeconds;
   const row = await env.AUTH_DB.prepare(
     `INSERT INTO auth_rate_limits (bucket_hash, window_started_at, request_count)
      VALUES (?, ?, 1)
@@ -962,7 +1066,107 @@ async function consumeRateLimit(env, request, now) {
        window_started_at = CASE WHEN window_started_at < ? THEN ? ELSE window_started_at END
      RETURNING request_count`,
   ).bind(bucket, now, resetBefore, resetBefore, now).first();
-  return Number(row?.request_count ?? VERIFY_LIMIT + 1) <= VERIFY_LIMIT;
+  return Number(row?.request_count ?? limit + 1) <= limit;
+}
+
+async function consumeRateLimit(env, request, now) {
+  return consumeRequestLimit(env, request, now, "verify", VERIFY_LIMIT, VERIFY_WINDOW_SECONDS);
+}
+
+async function createDeviceChallenge(request, env, origin) {
+  const headers = corsHeaders(origin);
+  const now = Math.floor(Date.now() / 1000);
+  let payload;
+  try {
+    payload = await readJson(request);
+  } catch {
+    return json({ error: "invalid_request" }, 400, headers);
+  }
+  const requestedDeviceId = payload?.deviceId === null ? null : normalizeDeviceId(payload?.deviceId);
+  if ((payload?.deviceId !== null && !requestedDeviceId) || !supportsRotatingDesktopCredentials(payload)) {
+    return json({ error: "invalid_request" }, 400, headers);
+  }
+  const deviceId = requestedDeviceId ?? generateSessionToken();
+  if (!(await consumeRequestLimit(
+    env,
+    request,
+    now,
+    "device-challenge-create",
+    CHALLENGE_CREATE_LIMIT,
+    VERIFY_WINDOW_SECONDS,
+  ))) {
+    return json({ error: "rate_limited" }, 429, { ...headers, "retry-after": "600" });
+  }
+  const token = generateSessionToken();
+  const challengeHash = await keyedHash(`device-challenge:${token}`, env.AUTH_CODE_PEPPER);
+  const deviceHash = await keyedHash(`device:${deviceId}`, env.AUTH_CODE_PEPPER);
+  const expiresAt = now + DEVICE_CHALLENGE_TTL_SECONDS;
+  await env.AUTH_DB.prepare(
+    `INSERT INTO auth_device_challenges
+      (challenge_hash, device_hash, status, created_at, expires_at)
+     VALUES (?, ?, 'pending', ?, ?)`,
+  ).bind(challengeHash, deviceHash, now, expiresAt).run();
+  const botUsername = /^[A-Za-z0-9_]{5,32}$/.test(String(env.BOT_USERNAME ?? ""))
+    ? String(env.BOT_USERNAME)
+    : "BeterFyBot";
+  return json({
+    challengeToken: token,
+    deviceId,
+    deepLink: `https://t.me/${botUsername}?start=auth_${token}`,
+    expiresAt,
+    pollAfterSeconds: CHALLENGE_POLL_SECONDS,
+  }, 201, headers);
+}
+
+async function pollDeviceChallenge(request, env, origin) {
+  const headers = corsHeaders(origin);
+  const now = Math.floor(Date.now() / 1000);
+  let payload;
+  try {
+    payload = await readJson(request);
+  } catch {
+    return json({ error: "invalid_request" }, 400, headers);
+  }
+  const token = normalizeChallengeToken(payload?.challengeToken);
+  const deviceId = normalizeDeviceId(payload?.deviceId);
+  if (!token || !deviceId) return json({ error: "invalid_request" }, 400, headers);
+  const challengeHash = await keyedHash(`device-challenge:${token}`, env.AUTH_CODE_PEPPER);
+  const deviceHash = await keyedHash(`device:${deviceId}`, env.AUTH_CODE_PEPPER);
+  const challengeDb = primaryAuthDb(env);
+  const challenge = await challengeDb.prepare(
+    `SELECT status, user_id, expires_at
+     FROM auth_device_challenges
+     WHERE challenge_hash = ? AND device_hash = ?`,
+  ).bind(challengeHash, deviceHash).first();
+  const state = deviceChallengeState(challenge, now);
+  if (state === "missing") return json({ error: "challenge_not_found" }, 404, headers);
+  if (state === "pending") return json({ state: "pending", expiresAt: challenge.expires_at }, 202, headers);
+  if (state === "denied") return json({ state: "denied" }, 403, headers);
+  if (state === "expired") return json({ state: "expired" }, 410, headers);
+  if (state === "redeemed") return json({ error: "challenge_redeemed" }, 409, headers);
+  if (!challenge.user_id) return json({ error: "challenge_invalid" }, 409, headers);
+
+  const redeemed = await challengeDb.prepare(
+    `UPDATE auth_device_challenges SET status = 'redeemed', redeemed_at = ?
+     WHERE challenge_hash = ? AND device_hash = ? AND status = 'approved' AND expires_at > ?`,
+  ).bind(now, challengeHash, deviceHash, now).run();
+  if (Number(redeemed.meta?.changes ?? 0) !== 1) {
+    return json({ error: "challenge_redeemed" }, 409, headers);
+  }
+  // Redemption is committed before credentials are issued. If issuance fails,
+  // the challenge stays closed and the user starts a fresh one; replay can
+  // never mint a second credential family.
+  const user = await env.AUTH_DB.prepare(
+    "SELECT user_id, telegram_user_id, display_name, username, language, avatar_file_id FROM betterfy_users WHERE user_id = ?",
+  ).bind(challenge.user_id).first();
+  if (!user) return json({ error: "profile_missing" }, 500, headers);
+  const session = await issueDesktopCredentials(env, user.user_id, now);
+  const entitlement = await subscriptionRecord(env, user.user_id);
+  const plan = planBySku(entitlement?.sku);
+  return json(authPayload(user, entitlement, plan, session, {
+    refreshToken: session.refreshToken,
+    refreshExpiresAt: now + REFRESH_FAMILY_TTL_SECONDS,
+  }), 200, headers);
 }
 
 async function verifyCode(request, env, origin) {
@@ -1050,6 +1254,16 @@ export async function route(request, env) {
     if (origin === false) return json({ error: "origin_not_allowed" }, 403);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
     if (request.method === "POST") return verifyCode(request, env, origin);
+  }
+  if (url.pathname === "/v1/auth/device/challenges" || url.pathname === "/v1/auth/device/challenges/poll") {
+    const origin = allowedOrigin(request, env);
+    if (origin === false) return json({ error: "origin_not_allowed" }, 403);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    if (request.method === "POST" && url.pathname.endsWith("/poll")) {
+      return pollDeviceChallenge(request, env, origin);
+    }
+    if (request.method === "POST") return createDeviceChallenge(request, env, origin);
+    return json({ error: "method_not_allowed" }, 405, corsHeaders(origin));
   }
   if (url.pathname === "/v1/auth/refresh") {
     const origin = allowedOrigin(request, env);

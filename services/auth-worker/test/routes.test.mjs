@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   detectImageContentType,
+  deviceChallengeState,
   normalizeClientKind,
+  parseDeviceStartPayload,
   refreshFamilyCompromised,
   refreshCredentialState,
   route,
@@ -46,6 +48,25 @@ test("rotation is negotiated explicitly so older desktop builds keep working", (
   assert.equal(supportsRotatingDesktopCredentials({ clientKind: "desktop" }), false);
   assert.equal(supportsRotatingDesktopCredentials({ clientKind: "web", credentialMode: "rotating-v1" }), false);
   assert.equal(supportsRotatingDesktopCredentials({ clientKind: "desktop", credentialMode: "rotating-v1" }), true);
+});
+
+test("device deep links accept only an exact opaque challenge", () => {
+  const token = "a".repeat(43);
+  assert.equal(parseDeviceStartPayload(`/start auth_${token}`), token);
+  assert.equal(parseDeviceStartPayload(`/start@BeterFyBot auth_${token}`), token);
+  assert.equal(parseDeviceStartPayload(`/start auth_${"a".repeat(42)}`), null);
+  assert.equal(parseDeviceStartPayload(`/start auth_${token} trailing`), null);
+  assert.equal(parseDeviceStartPayload("/start"), null);
+});
+
+test("device challenges fail closed across terminal and expired states", () => {
+  assert.equal(deviceChallengeState(null, 100), "missing");
+  assert.equal(deviceChallengeState({ status: "pending", expires_at: 101 }, 100), "pending");
+  assert.equal(deviceChallengeState({ status: "approved", expires_at: 101 }, 100), "approved");
+  assert.equal(deviceChallengeState({ status: "denied", expires_at: 101 }, 100), "denied");
+  assert.equal(deviceChallengeState({ status: "redeemed", expires_at: 101 }, 100), "redeemed");
+  assert.equal(deviceChallengeState({ status: "approved", expires_at: 100 }, 100), "expired");
+  assert.equal(deviceChallengeState({ status: "unknown", expires_at: 101 }, 100), "missing");
 });
 
 test("refresh credentials fail closed on expiry, revocation, and replay", () => {
@@ -100,6 +121,22 @@ test("verification denies unlisted browser origins", async () => {
   }), env);
   assert.equal(response.status, 403);
   assert.equal(response.headers.get("access-control-allow-origin"), null);
+});
+
+test("device challenge endpoints reject malformed bindings before database access", async () => {
+  const create = await route(new Request("https://auth.example/v1/auth/device/challenges", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ deviceId: "bad", clientKind: "desktop", credentialMode: "rotating-v1" }),
+  }), env);
+  assert.equal(create.status, 400);
+
+  const poll = await route(new Request("https://auth.example/v1/auth/device/challenges/poll", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ deviceId: "0".repeat(43), challengeToken: "bad" }),
+  }), env);
+  assert.equal(poll.status, 400);
 });
 
 test("refresh denies malformed tokens before database access", async () => {

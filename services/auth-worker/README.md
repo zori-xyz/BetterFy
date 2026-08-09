@@ -11,6 +11,11 @@ with a fixed thirty-day family lifetime. Only keyed token hashes are stored in
 D1. Replay revokes the credential family and its access sessions; the native app
 stores the refresh credential in Credential Manager or Keychain.
 
+The primary desktop route is challenge-bound Telegram confirmation. Rust keeps
+the stable device identifier, the bot requires an explicit approve or deny
+action, and the approved challenge can be redeemed once. The six-digit code
+remains available as a cross-device fallback.
+
 The Worker offers 3-day and 15-day Stars passes plus recurring 30-day access.
 Wallet Pay is intentionally not exposed inside the bot for this digital access;
 see `../../docs/PAYMENTS_ARCHITECTURE.md`.
@@ -49,8 +54,12 @@ The public bot cards are served from `/bot` on the BetterFy GitHub Pages site.
 
 ## Client routes
 
+- `POST /v1/auth/device/challenges` creates a ten-minute device-bound challenge
+  for the native rotating-credential client and returns an allowlisted bot link.
+- `POST /v1/auth/device/challenges/poll` returns pending/denied/expired states or
+  redeems one approved challenge for desktop credentials exactly once.
 - `POST /v1/auth/telegram/code` consumes a six-digit code and returns an opaque
-  twelve-hour session token once.
+  web session or explicitly negotiated rotating desktop credentials once.
 - `GET /v1/session/profile` returns the Telegram-backed BetterFy profile,
   current access period, and avatar availability. Missing avatars are retried
   without blocking sign-in.

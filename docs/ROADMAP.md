@@ -17,6 +17,8 @@ Completed:
 - Steam profile selection and verified launch-option activation;
 - privacy-safe Windows readiness diagnostics for discovery, runtime, profiles,
   and staging recovery;
+- deployed Telegram identity with challenge-bound native approval, rotating
+  desktop credentials, avatar proxying, and per-device revocation;
 
 ## Active milestone: trusted content intake
 
@@ -70,8 +72,8 @@ resumed or recovered without relying on interface state.
 
 ### Production services
 
-- extend the deployed Telegram profile boundary with refresh-token rotation,
-  named devices, and per-device revocation as defined in
+- finish secure browser cookies, account deletion/retention, and native Windows
+  vault/Telegram interaction evidence defined in
   `IDENTITY_AND_WEB_ARCHITECTURE.md`;
 - catalog delivery with authenticated manifests;
 - release signing, public updater endpoints, and rollback policy;

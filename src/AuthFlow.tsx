@@ -14,10 +14,19 @@ import {
 import BetterFyWordmark from "./BetterFyWordmark";
 import AccentTitle from "./AccentTitle";
 import witchDoctorAuth from "./assets/witch-doctor-auth.png";
-import { verifyTelegramCode, type AuthSession } from "./auth";
+import {
+  authMode,
+  beginTelegramDeviceChallenge,
+  cancelTelegramDeviceChallenge,
+  pollTelegramDeviceChallenge,
+  supportsDeviceChallenge,
+  verifyTelegramCode,
+  type AuthSession,
+} from "./auth";
 import { useLocale, type Language } from "./i18n";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
-type Stage = "login" | "code" | "checking" | "confirmed";
+type Stage = "login" | "awaiting" | "code" | "checking" | "confirmed";
 
 const copy = {
   ru: {
@@ -43,11 +52,20 @@ const copy = {
     title: "Войди через Telegram",
     intro: "Это единственный способ входа. BetterFy получает только данные, необходимые для профиля, и не видит твои переписки.",
     bot: "Открыть BetterFy Bot",
-    botNote: "Получить одноразовый код в Telegram",
+    botNote: "Подтверди вход в Telegram — код вводить не нужно",
     web: "Продолжить через веб-сайт",
     webNote: "Тот же Telegram-вход откроется в браузере",
     haveCode: "У меня уже есть код",
-    privacy: "Код действует 10 минут и привязан к этому устройству.",
+    privacy: "Запрос действует 10 минут и погашается только на этом устройстве.",
+    awaitingStep: "TELEGRAM / CONFIRM",
+    awaiting: "Подтверди вход в Telegram",
+    awaitingText: "Мы уже открыли @BeterFyBot. Проверь запрос и нажми «Подтвердить вход» — BetterFy продолжит сам.",
+    awaitingStatus: "Ждём твоего решения в боте",
+    openAgain: "Открыть Telegram ещё раз",
+    cancelRequest: "Отменить запрос",
+    challengeDenied: "Запрос отклонён. Можно начать новый или войти по коду.",
+    challengeExpired: "Запрос истёк. Открой бота ещё раз или используй шестизначный код.",
+    challengeFailed: "Не удалось создать запрос. Проверь соединение или войди по коду.",
     codeStep: "TELEGRAM / CODE",
     codeTitle: "Введи код из бота",
     codeText: "Шесть цифр из сообщения @BeterFyBot.",
@@ -55,10 +73,12 @@ const copy = {
     back: "Назад",
     confirm: "Подтвердить",
     resend: "Запросить новый код",
-    demo: "Демонстрационный интерфейс: сейчас подойдёт любой шестизначный код, кроме 000000.",
+    demo: "Демо-режим: подойдёт любой шестизначный код, кроме 000000.",
+    codeHint: "Код действует 10 минут и срабатывает один раз.",
     wrong: "Код недействителен или уже использован.",
     checking: "Проверяем код",
-    checkingText: "В рабочей версии проверка будет выполняться BetterFy backend.",
+    checkingText: "BetterFy сверяет одноразовый код и готовит защищённую сессию этого устройства.",
+    verifiedStep: "Telegram подтвердил запрос",
     confirmed: "Код подтверждён",
     confirmedText: "Доступ BetterFy открыт. Переходим к подключению Dota 2.",
   },
@@ -85,11 +105,20 @@ const copy = {
     title: "Sign in with Telegram",
     intro: "This is the only sign-in method. BetterFy only receives profile essentials and cannot access your chats.",
     bot: "Open BetterFy Bot",
-    botNote: "Get a one-time code in Telegram",
+    botNote: "Approve in Telegram — no code entry needed",
     web: "Continue on the website",
     webNote: "The same Telegram flow opens in your browser",
     haveCode: "I already have a code",
-    privacy: "The code lasts 10 minutes and is bound to this device.",
+    privacy: "The request lasts 10 minutes and can only be redeemed by this device.",
+    awaitingStep: "TELEGRAM / CONFIRM",
+    awaiting: "Approve the sign-in in Telegram",
+    awaitingText: "We opened @BeterFyBot. Review the request and tap “Approve sign-in” — BetterFy will continue automatically.",
+    awaitingStatus: "Waiting for your decision in the bot",
+    openAgain: "Open Telegram again",
+    cancelRequest: "Cancel request",
+    challengeDenied: "The request was denied. Start a new one or use a code.",
+    challengeExpired: "The request expired. Open the bot again or use a six-digit code.",
+    challengeFailed: "The request could not be created. Check your connection or use a code.",
     codeStep: "TELEGRAM / CODE",
     codeTitle: "Enter the bot code",
     codeText: "Six digits from the @BeterFyBot message.",
@@ -97,10 +126,12 @@ const copy = {
     back: "Back",
     confirm: "Confirm",
     resend: "Request a new code",
-    demo: "Interface demo: any six-digit code except 000000 works for now.",
+    demo: "Demo mode: any six-digit code except 000000 works.",
+    codeHint: "The code lasts 10 minutes and works once.",
     wrong: "The code is invalid or has already been used.",
     checking: "Checking your code",
-    checkingText: "The production build will verify it through the BetterFy backend.",
+    checkingText: "BetterFy verifies the one-time code and prepares this device session.",
+    verifiedStep: "Telegram approved the request",
     confirmed: "Code confirmed",
     confirmedText: "BetterFy access is ready. Moving on to connect Dota 2.",
   },
@@ -112,6 +143,11 @@ export default function AuthFlow({ onComplete }: { onComplete: (session: AuthSes
   const [stage, setStage] = useState<Stage>("login");
   const [code, setCode] = useState("");
   const [error, setError] = useState(false);
+  const [startingChallenge, setStartingChallenge] = useState(false);
+  const [challengeLink, setChallengeLink] = useState<string | null>(null);
+  const [challengePollMs, setChallengePollMs] = useState(2000);
+  const [challengeExpiresAt, setChallengeExpiresAt] = useState(0);
+  const [challengeMessage, setChallengeMessage] = useState<string | null>(null);
   const [sceneIndex, setSceneIndex] = useState(0);
   const scene = t.sceneSlides[sceneIndex % t.sceneSlides.length];
 
@@ -124,10 +160,77 @@ export default function AuthFlow({ onComplete }: { onComplete: (session: AuthSes
   }, [t.sceneSlides.length]);
 
   const openCode = () => {
+    void cancelTelegramDeviceChallenge();
     setError(false);
     setCode("");
     setStage("code");
   };
+
+  const startTelegram = async () => {
+    setChallengeMessage(null);
+    if (!supportsDeviceChallenge()) {
+      window.open("https://t.me/BeterFyBot", "_blank", "noopener,noreferrer");
+      openCode();
+      return;
+    }
+    setStartingChallenge(true);
+    try {
+      const challenge = await beginTelegramDeviceChallenge();
+      setChallengeLink(challenge.deepLink);
+      setChallengePollMs(challenge.pollAfterSeconds * 1000);
+      setChallengeExpiresAt(challenge.expiresAt);
+      await openUrl(challenge.deepLink);
+      setStage("awaiting");
+    } catch {
+      void cancelTelegramDeviceChallenge();
+      setChallengeMessage(t.challengeFailed);
+    } finally {
+      setStartingChallenge(false);
+    }
+  };
+
+  const reopenTelegram = async () => {
+    if (!challengeLink) return;
+    if (supportsDeviceChallenge()) await openUrl(challengeLink);
+    else window.open(challengeLink, "_blank", "noopener,noreferrer");
+  };
+
+  useEffect(() => {
+    if (stage !== "awaiting") return undefined;
+    let cancelled = false;
+    let timer = 0;
+    const poll = async () => {
+      if (cancelled) return;
+      if (Math.floor(Date.now() / 1000) >= challengeExpiresAt) {
+        setChallengeMessage(t.challengeExpired);
+        setStage("login");
+        return;
+      }
+      try {
+        const result = await pollTelegramDeviceChallenge();
+        if (cancelled) return;
+        if (result.state === "confirmed" && result.profile) {
+          setStage("confirmed");
+          await new Promise((resolve) => window.setTimeout(resolve, 1000));
+          onComplete(result.profile);
+          return;
+        }
+        if (result.state === "denied" || result.state === "expired") {
+          setChallengeMessage(result.state === "denied" ? t.challengeDenied : t.challengeExpired);
+          setStage("login");
+          return;
+        }
+      } catch {
+        // A temporary network failure does not destroy the local challenge.
+      }
+      timer = window.setTimeout(poll, challengePollMs);
+    };
+    timer = window.setTimeout(poll, challengePollMs);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [challengeExpiresAt, challengePollMs, onComplete, stage, t.challengeDenied, t.challengeExpired]);
 
   const verify = async (event: FormEvent) => {
     event.preventDefault();
@@ -183,24 +286,24 @@ export default function AuthFlow({ onComplete }: { onComplete: (session: AuthSes
             <h1 className="accent-title"><AccentTitle text={t.title} /></h1>
             <p>{t.intro}</p>
 
+            {challengeMessage && <div className="auth-inline-error" role="alert"><LockKeyhole /><span>{challengeMessage}</span></div>}
+
             <div className="telegram-actions">
-              <a
+              <button
+                type="button"
                 className="telegram-primary"
-                href="https://t.me/BeterFyBot"
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => window.setTimeout(openCode, 0)}
+                onClick={startTelegram}
+                disabled={startingChallenge}
               >
-                <span><MessageCircle /></span>
+                <span>{startingChallenge ? <LoaderCircle className="spin" /> : <MessageCircle />}</span>
                 <span><strong>{t.bot}</strong><small>{t.botNote}</small></span>
                 <ArrowRight />
-              </a>
+              </button>
               <a
                 className="telegram-web"
-                href="https://t.me/BeterFyBot"
+                href="https://zori-xyz.github.io/BetterFy/"
                 target="_blank"
                 rel="noreferrer"
-                onClick={() => window.setTimeout(openCode, 0)}
               >
                 <span><Globe2 /></span>
                 <span><strong>{t.web}</strong><small>{t.webNote}</small></span>
@@ -210,6 +313,23 @@ export default function AuthFlow({ onComplete }: { onComplete: (session: AuthSes
 
             <div className="privacy-note"><ShieldCheck /><span>{t.privacy}</span></div>
             <button className="have-code-button" onClick={openCode}>{t.haveCode}<ArrowRight /></button>
+          </div>
+        )}
+
+        {stage === "awaiting" && (
+          <div className="auth-view awaiting-view view-enter" role="status" aria-live="polite">
+            <div className="telegram-wait-mark"><MessageCircle /><i /></div>
+            <span className="section-label">{t.awaitingStep}</span>
+            <h1 className="accent-title"><AccentTitle text={t.awaiting} /></h1>
+            <p>{t.awaitingText}</p>
+            <div className="challenge-wait-status"><LoaderCircle className="spin" /><span>{t.awaitingStatus}</span></div>
+            <div className="challenge-actions">
+              {challengeLink && <button className="challenge-reopen" type="button" onClick={reopenTelegram}><MessageCircle />{t.openAgain}<ExternalLink /></button>}
+              <button type="button" onClick={() => {
+                void cancelTelegramDeviceChallenge();
+                setStage("login");
+              }}><ArrowLeft />{t.cancelRequest}</button>
+            </div>
           </div>
         )}
 
@@ -246,7 +366,7 @@ export default function AuthFlow({ onComplete }: { onComplete: (session: AuthSes
 
             <div id="code-feedback" className={`code-feedback ${error ? "error" : ""}`} role={error ? "alert" : "note"}>
               {error ? <LockKeyhole /> : <ShieldCheck />}
-              <span>{error ? t.wrong : t.demo}</span>
+              <span>{error ? t.wrong : authMode === "demo" ? t.demo : t.codeHint}</span>
             </div>
 
             <button className="confirm-code" disabled={code.length !== 6}>
@@ -267,7 +387,7 @@ export default function AuthFlow({ onComplete }: { onComplete: (session: AuthSes
             <h1 className="accent-title"><AccentTitle text={t.checking} /></h1>
             <p>{t.checkingText}</p>
             <div className="verify-progress"><i /></div>
-            <div className="verify-step"><Check />Telegram challenge received</div>
+            <div className="verify-step"><Check />{t.verifiedStep}</div>
           </div>
         )}
 

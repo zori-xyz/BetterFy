@@ -35,13 +35,14 @@ bundled in the desktop application, written to logs, or included in diagnostics.
 
 ## Device-code flow
 
-1. The desktop asks the API for a random device challenge and receives a short
-   challenge ID, expiry, polling interval, and bot deep link.
+1. Rust asks the API for a random device challenge and receives an opaque
+   challenge token, expiry, polling interval, and allowlisted bot deep link.
 2. The user opens `@BeterFyBot`. The bot shows the device and application context
    and requires an explicit confirmation.
-3. The server stores only a keyed hash of any human-entered code. Codes are
-   single-use, expire after ten minutes, have strict attempt and issue limits, and
-   are bound to the challenge and device public identifier.
+3. The server stores only keyed hashes of the challenge token and persistent
+   device public identifier. Challenges are single-use, expire after ten minutes,
+   and have strict creation limits. The device identifier stays in Rust and the
+   operating-system vault; React receives only the deep link and public timing.
 4. The desktop polls at the server-provided interval. `pending`, `approved`,
    `denied`, `expired`, and `rate_limited` remain distinct states.
 5. Approval can be redeemed exactly once for a short-lived access token and a
@@ -135,6 +136,10 @@ and returns neither token to React. Every successful refresh revokes the prior
 access session. Reuse, expiry, or revocation of a refresh credential invalidates
 the full family and all related access sessions.
 
-Challenge-bound deep links, secure browser cookies, account deletion/retention,
-and end-to-end Windows vault testing remain required before the identity layer
-is declared production-complete.
+Challenge-bound deep links are now implemented as the primary native sign-in:
+the bot requires an explicit approve/deny callback, polling distinguishes
+pending, denied, expired, and redeemed states, and redemption can issue only one
+rotating desktop credential family. The six-digit code remains the cross-device
+fallback. Secure browser cookies, account deletion/retention, and end-to-end
+Windows vault and Telegram interaction testing remain required before the
+identity layer is declared production-complete.

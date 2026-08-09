@@ -8,6 +8,7 @@ use std::time::Duration;
 const AUTH_ORIGIN: &str = "https://betterfy-auth.zori-xyz.workers.dev";
 const CREDENTIAL_SERVICE: &str = "app.betterfy.desktop";
 const CREDENTIAL_ACCOUNT: &str = "telegram-refresh";
+const DEVICE_ACCOUNT: &str = "device-public-id";
 const MAX_AVATAR_BYTES: usize = 5 * 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -39,8 +40,42 @@ struct ActiveSession {
     access_token: String,
 }
 
+#[derive(Clone)]
+struct PendingChallenge {
+    challenge_token: String,
+    device_id: String,
+}
+
 #[derive(Default)]
-pub struct AuthState(Mutex<Option<ActiveSession>>);
+pub struct AuthState {
+    session: Mutex<Option<ActiveSession>>,
+    pending_challenge: Mutex<Option<PendingChallenge>>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DeviceChallengeResponse {
+    challenge_token: String,
+    device_id: String,
+    deep_link: String,
+    expires_at: i64,
+    poll_after_seconds: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceChallengeStart {
+    deep_link: String,
+    expires_at: i64,
+    poll_after_seconds: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceChallengePoll {
+    state: &'static str,
+    profile: Option<AuthProfile>,
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -75,13 +110,12 @@ fn client() -> Result<Client, String> {
         .map_err(|_| "auth_client_unavailable".to_string())
 }
 
-fn credential_entry() -> Result<Entry, String> {
-    Entry::new(CREDENTIAL_SERVICE, CREDENTIAL_ACCOUNT)
-        .map_err(|_| "auth_vault_unavailable".to_string())
+fn credential_entry(account: &str) -> Result<Entry, String> {
+    Entry::new(CREDENTIAL_SERVICE, account).map_err(|_| "auth_vault_unavailable".to_string())
 }
 
 fn read_refresh_credential() -> Result<Option<String>, String> {
-    match credential_entry()?.get_password() {
+    match credential_entry(CREDENTIAL_ACCOUNT)?.get_password() {
         Ok(value)
             if value.len() == 43
                 && value
@@ -104,16 +138,45 @@ fn store_refresh_credential(value: &str) -> Result<(), String> {
     {
         return Err("auth_response_invalid".to_string());
     }
-    credential_entry()?
+    credential_entry(CREDENTIAL_ACCOUNT)?
         .set_password(value)
         .map_err(|_| "auth_vault_unavailable".to_string())
 }
 
 fn delete_refresh_credential() -> Result<(), String> {
-    match credential_entry()?.delete_credential() {
+    match credential_entry(CREDENTIAL_ACCOUNT)?.delete_credential() {
         Ok(()) | Err(KeyringError::NoEntry) => Ok(()),
         Err(_) => Err("auth_vault_unavailable".to_string()),
     }
+}
+
+fn read_device_id() -> Result<Option<String>, String> {
+    match credential_entry(DEVICE_ACCOUNT)?.get_password() {
+        Ok(value)
+            if value.len() == 43
+                && value
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') =>
+        {
+            Ok(Some(value))
+        }
+        Ok(_) => Err("auth_device_invalid".to_string()),
+        Err(KeyringError::NoEntry) => Ok(None),
+        Err(_) => Err("auth_vault_unavailable".to_string()),
+    }
+}
+
+fn store_device_id(value: &str) -> Result<(), String> {
+    if value.len() != 43
+        || !value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err("auth_response_invalid".to_string());
+    }
+    credential_entry(DEVICE_ACCOUNT)?
+        .set_password(value)
+        .map_err(|_| "auth_vault_unavailable".to_string())
 }
 
 fn validate_credential_response(response: &CredentialResponse) -> Result<(), String> {
@@ -135,7 +198,7 @@ fn commit_credentials(
     store_refresh_credential(&response.refresh_token)?;
     let profile = response.profile.clone();
     *state
-        .0
+        .session
         .lock()
         .map_err(|_| "auth_state_unavailable".to_string())? = Some(ActiveSession {
         profile: response.profile,
@@ -156,7 +219,7 @@ fn refresh_from_vault(state: &AuthState) -> Result<Option<AuthProfile>, String> 
     if response.status().as_u16() == 401 {
         let _ = delete_refresh_credential();
         *state
-            .0
+            .session
             .lock()
             .map_err(|_| "auth_state_unavailable".to_string())? = None;
         return Ok(None);
@@ -172,7 +235,7 @@ fn refresh_from_vault(state: &AuthState) -> Result<Option<AuthProfile>, String> 
 
 fn access_token(state: &AuthState) -> Result<String, String> {
     state
-        .0
+        .session
         .lock()
         .map_err(|_| "auth_state_unavailable".to_string())?
         .as_ref()
@@ -230,11 +293,145 @@ pub fn auth_verify_code(
 }
 
 #[tauri::command]
+pub fn auth_begin_device_challenge(
+    state: tauri::State<'_, AuthState>,
+) -> Result<DeviceChallengeStart, String> {
+    let existing_device_id = read_device_id()?;
+    let response = client()?
+        .post(format!("{AUTH_ORIGIN}/v1/auth/device/challenges"))
+        .json(&serde_json::json!({
+            "deviceId": existing_device_id.as_deref(),
+            "clientKind": "desktop",
+            "credentialMode": "rotating-v1"
+        }))
+        .send()
+        .map_err(|_| "auth_service_unavailable".to_string())?;
+    if response.status().as_u16() == 429 {
+        return Err("auth_rate_limited".to_string());
+    }
+    if !response.status().is_success() {
+        return Err("auth_service_unavailable".to_string());
+    }
+    let challenge = response
+        .json::<DeviceChallengeResponse>()
+        .map_err(|_| "auth_response_invalid".to_string())?;
+    if challenge.challenge_token.len() != 43
+        || challenge.device_id.len() != 43
+        || challenge.poll_after_seconds < 1
+        || challenge.poll_after_seconds > 10
+        || challenge.expires_at <= 0
+        || !challenge
+            .challenge_token
+            .chars()
+            .chain(challenge.device_id.chars())
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err("auth_response_invalid".to_string());
+    }
+    if let Some(existing) = existing_device_id {
+        if existing != challenge.device_id {
+            return Err("auth_response_invalid".to_string());
+        }
+    } else {
+        store_device_id(&challenge.device_id)?;
+    }
+    let expected_link = format!(
+        "https://t.me/BeterFyBot?start=auth_{}",
+        challenge.challenge_token
+    );
+    if challenge.deep_link != expected_link {
+        return Err("auth_response_invalid".to_string());
+    }
+    *state
+        .pending_challenge
+        .lock()
+        .map_err(|_| "auth_state_unavailable".to_string())? = Some(PendingChallenge {
+        challenge_token: challenge.challenge_token,
+        device_id: challenge.device_id,
+    });
+    Ok(DeviceChallengeStart {
+        deep_link: challenge.deep_link,
+        expires_at: challenge.expires_at,
+        poll_after_seconds: challenge.poll_after_seconds,
+    })
+}
+
+#[tauri::command]
+pub fn auth_poll_device_challenge(
+    state: tauri::State<'_, AuthState>,
+) -> Result<DeviceChallengePoll, String> {
+    let pending = state
+        .pending_challenge
+        .lock()
+        .map_err(|_| "auth_state_unavailable".to_string())?
+        .clone()
+        .ok_or_else(|| "auth_challenge_unavailable".to_string())?;
+    let response = client()?
+        .post(format!("{AUTH_ORIGIN}/v1/auth/device/challenges/poll"))
+        .json(&serde_json::json!({
+            "challengeToken": pending.challenge_token,
+            "deviceId": pending.device_id
+        }))
+        .send()
+        .map_err(|_| "auth_service_unavailable".to_string())?;
+    match response.status().as_u16() {
+        200 => {
+            let credentials = response
+                .json::<CredentialResponse>()
+                .map_err(|_| "auth_response_invalid".to_string())?;
+            let profile = commit_credentials(&state, credentials)?;
+            *state
+                .pending_challenge
+                .lock()
+                .map_err(|_| "auth_state_unavailable".to_string())? = None;
+            Ok(DeviceChallengePoll {
+                state: "confirmed",
+                profile: Some(profile),
+            })
+        }
+        202 => Ok(DeviceChallengePoll {
+            state: "pending",
+            profile: None,
+        }),
+        403 => {
+            *state
+                .pending_challenge
+                .lock()
+                .map_err(|_| "auth_state_unavailable".to_string())? = None;
+            Ok(DeviceChallengePoll {
+                state: "denied",
+                profile: None,
+            })
+        }
+        404 | 409 | 410 => {
+            *state
+                .pending_challenge
+                .lock()
+                .map_err(|_| "auth_state_unavailable".to_string())? = None;
+            Ok(DeviceChallengePoll {
+                state: "expired",
+                profile: None,
+            })
+        }
+        _ => Err("auth_service_unavailable".to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn auth_cancel_device_challenge(state: tauri::State<'_, AuthState>) -> Result<(), String> {
+    *state
+        .pending_challenge
+        .lock()
+        .map_err(|_| "auth_state_unavailable".to_string())? = None;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn auth_restore_session(
     state: tauri::State<'_, AuthState>,
 ) -> Result<Option<AuthProfile>, String> {
     if let Some(session) = state
-        .0
+        .session
         .lock()
         .map_err(|_| "auth_state_unavailable".to_string())?
         .clone()
@@ -321,7 +518,7 @@ pub fn auth_revoke_device(
 #[tauri::command]
 pub fn auth_logout(state: tauri::State<'_, AuthState>) -> Result<(), String> {
     let token = state
-        .0
+        .session
         .lock()
         .map_err(|_| "auth_state_unavailable".to_string())?
         .as_ref()
@@ -334,7 +531,11 @@ pub fn auth_logout(state: tauri::State<'_, AuthState>) -> Result<(), String> {
     }
     delete_refresh_credential()?;
     *state
-        .0
+        .session
+        .lock()
+        .map_err(|_| "auth_state_unavailable".to_string())? = None;
+    *state
+        .pending_challenge
         .lock()
         .map_err(|_| "auth_state_unavailable".to_string())? = None;
     Ok(())
@@ -360,5 +561,18 @@ mod tests {
         let serialized = serde_json::to_string(&profile).expect("profile json");
         assert!(!serialized.contains("token"));
         assert!(!serialized.contains("refresh"));
+    }
+
+    #[test]
+    fn public_challenge_contract_hides_the_device_binding() {
+        let challenge = DeviceChallengeStart {
+            deep_link: "https://t.me/BeterFyBot?start=auth_opaque".into(),
+            expires_at: 123,
+            poll_after_seconds: 2,
+        };
+        let serialized = serde_json::to_string(&challenge).expect("challenge json");
+        assert!(!serialized.contains("deviceId"));
+        assert!(!serialized.contains("challengeToken"));
+        assert!(!serialized.contains("refreshToken"));
     }
 }
