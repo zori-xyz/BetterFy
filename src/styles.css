@@ -2142,7 +2142,7 @@ button:disabled { cursor: not-allowed; }
 .profile-facts div { min-height: 62px; padding: 0 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
 .profile-facts div:last-child { border: 0; }
 .profile-facts dt { color: #706b77; font-size: 8px; }
-.profile-facts dd { margin: 0; font-size: 9px; font-weight: 700; }
+.profile-facts dd { max-width: 62%; margin: 0; color: var(--text); font-size: 9px; font-weight: 700; line-height: 1.45; text-align: right; overflow-wrap: anywhere; }
 .profile-community {
   min-height: 78px;
   margin-top: 14px;

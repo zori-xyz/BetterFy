@@ -70,8 +70,9 @@ resumed or recovered without relying on interface state.
 
 ### Production services
 
-- implement the profile, Telegram authentication, and website sequence defined
-  in `IDENTITY_AND_WEB_ARCHITECTURE.md`;
+- extend the deployed Telegram profile boundary with refresh-token rotation,
+  named devices, and per-device revocation as defined in
+  `IDENTITY_AND_WEB_ARCHITECTURE.md`;
 - catalog delivery with authenticated manifests;
 - release signing, public updater endpoints, and rollback policy;
 - privacy and retention documentation for every remote service.

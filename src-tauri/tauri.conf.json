@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: https://raw.githubusercontent.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://betterfy-auth.zori-xyz.workers.dev; script-src 'self'"
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: blob: https://raw.githubusercontent.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://betterfy-auth.zori-xyz.workers.dev; script-src 'self'"
     }
   },
   "bundle": {

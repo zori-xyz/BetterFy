@@ -241,6 +241,11 @@ main { display: block; }
 .account-modal > p { color: var(--muted); font-size: 15px; line-height: 1.65; }
 .pending-note { display: flex; gap: 13px; padding: 17px; margin: 26px 0; border: 1px solid var(--line); border-radius: 14px; color: #b5b0bc; background: rgba(255,255,255,.025); font-size: 12px; line-height: 1.55; }
 .pending-note svg { flex: 0 0 auto; width: 18px; color: #bd6bed; }
+.account-access { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 13px; padding: 17px; margin: 26px 0; border: 1px solid rgba(168,240,75,.18); border-radius: 14px; background: linear-gradient(135deg, rgba(168,240,75,.055), rgba(168,77,255,.04)); }
+.account-access > svg { width: 19px; color: var(--ready); }
+.account-access strong, .account-access small { display: block; }
+.account-access strong { color: var(--text); font-size: 13px; line-height: 1.4; }
+.account-access small { margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.4; }
 .account-modal .telegram-action { width: 100%; }
 .modal-signout { width: 100%; cursor: pointer; color: var(--text); }
 .auth-code-form { display: grid; gap: 12px; margin-top: 18px; }

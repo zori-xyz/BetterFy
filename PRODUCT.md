@@ -12,7 +12,7 @@ BetterFy is for Dota 2 players who want a customized game but do not want to sea
 
 ## Product Purpose
 
-BetterFy is a desktop mod and skin manager for Dota 2. A user selects mods and skins, points BetterFy to the game, and launches. BetterFy is responsible for preparing a compatible profile, protecting original files, applying the selection, and starting the game.
+BetterFy is a desktop mod and skin manager for Dota 2. A user selects mods and skins, points BetterFy to the game, and confirms a reviewed build. BetterFy is responsible for preparing a compatible profile, protecting original files, applying the selection, and restarting Steam after a verified activation. The player starts Dota 2.
 
 ## Positioning
 
@@ -23,7 +23,7 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - Windows is the primary release platform.
 - Development and interface testing also happen on macOS.
 - The app is built with Tauri, React, and TypeScript.
-- Early Access authentication is presented through a BetterFy Telegram bot, with email access for invited testers.
+- Early Access authentication uses one-time codes from the BetterFy Telegram bot.
 - BetterFy has a curated catalog and allows users to import personal skins.
 - The skin library includes a BetterFy-curated view and a web catalog based on the team's Dota2PornFxWeb project.
 
@@ -32,7 +32,7 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - Preserve the Home, Mods, Skin Library, Settings, and Profile workflows.
 - Preserve Russian and English localization.
 - Mod selection must communicate added, removed, conflicting, building, ready, and error states unambiguously.
-- The current engine and authentication are prototypes; the interface must not imply that demo data is verified production behavior.
+- Production Dota deployment remains disabled; the interface must not imply that fixture or browser-preview behavior is verified game-file behavior.
 - Original game files must be described as protected only where the prototype already presents that intended capability.
 - Avoid dependencies on Dota-owned artwork for core product identity. Dota-inspired assets should be transformed into a distinct BetterFy production language.
 - The repository is intended to be open source.
@@ -61,10 +61,15 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - A real local config manager backed by validated, atomic app-data storage,
   plus three built-in BetterFy Workshop presets resolved against the same
   Minify catalog IDs as the selection UI.
-- Telegram code verification is isolated behind `src/auth.ts`; without a
-  configured backend it remains explicitly simulated.
+- Telegram code verification uses the deployed BetterFy auth Worker. Twelve-hour
+  opaque sessions expose a minimal profile and server-proxied Telegram avatar;
+  the desktop session remains memory-only.
+- Telegram Stars provides 3-day and 15-day passes plus recurring 30-day access.
+  Refresh-token rotation and per-device session management remain future work.
 - Team web catalog: `https://h6rd.github.io/Dota2PornFxWeb/`.
-- No production authentication, subscription, compatibility benchmark, or community activity data is available yet. Future surfaces must not fabricate these claims.
+- No production catalog delivery, Dota deployment, compatibility benchmark, or
+  community activity data is available yet. Future surfaces must not fabricate
+  these claims.
 
 ## Product Principles
 

@@ -49,7 +49,9 @@ The public bot cards are served from `/bot` on the BetterFy GitHub Pages site.
 
 - `POST /v1/auth/telegram/code` consumes a six-digit code and returns an opaque
   twelve-hour session token once.
-- `GET /v1/session/profile` returns the Telegram-backed BetterFy profile.
+- `GET /v1/session/profile` returns the Telegram-backed BetterFy profile,
+  current access period, and avatar availability. Missing avatars are retried
+  without blocking sign-in.
 - `GET /v1/session/avatar` proxies the current Telegram avatar without exposing
   the bot token or Telegram file URL to a client.
 - `POST /v1/session/logout` revokes the presented session.

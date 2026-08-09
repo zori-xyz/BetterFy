@@ -30,6 +30,7 @@ const VERIFY_LIMIT = 10;
 const VERIFY_WINDOW_SECONDS = 10 * 60;
 const MAX_BODY_BYTES = 8 * 1024;
 const AVATAR_REFRESH_SECONDS = 24 * 60 * 60;
+const AVATAR_RETRY_SECONDS = 5 * 60;
 
 function matchesConfiguredSecret(value, expected) {
   return typeof expected === "string" && expected.length >= 32 && constantTimeEqual(value, expected);
@@ -90,21 +91,36 @@ async function telegram(env, method, payload) {
   return result.result;
 }
 
-async function refreshAvatar(env, from, now) {
+export function selectTelegramAvatarFileId(profilePhotos) {
+  const sizes = Array.isArray(profilePhotos?.photos?.[0]) ? profilePhotos.photos[0] : [];
+  const candidates = sizes.filter((photo) => typeof photo?.file_id === "string" && photo.file_id.length > 0);
+  if (candidates.length === 0) return null;
+  return candidates.reduce((largest, candidate) => {
+    const largestScore = Number(largest.file_size ?? 0) || (Number(largest.width ?? 0) * Number(largest.height ?? 0));
+    const candidateScore = Number(candidate.file_size ?? 0) || (Number(candidate.width ?? 0) * Number(candidate.height ?? 0));
+    return candidateScore >= largestScore ? candidate : largest;
+  }).file_id;
+}
+
+async function refreshAvatar(env, telegramUserId, now, force = false) {
   const existing = await env.AUTH_DB.prepare(
-    "SELECT avatar_checked_at FROM betterfy_users WHERE telegram_user_id = ?",
-  ).bind(String(from.id)).first();
-  if (Number(existing?.avatar_checked_at ?? 0) > now - AVATAR_REFRESH_SECONDS) return;
+    "SELECT avatar_file_id, avatar_checked_at FROM betterfy_users WHERE telegram_user_id = ?",
+  ).bind(String(telegramUserId)).first();
+  const refreshAfter = existing?.avatar_file_id ? AVATAR_REFRESH_SECONDS : AVATAR_RETRY_SECONDS;
+  if (!force && Number(existing?.avatar_checked_at ?? 0) > now - refreshAfter) {
+    return existing?.avatar_file_id ?? null;
+  }
   try {
-    const photos = await telegram(env, "getUserProfilePhotos", { user_id: from.id, limit: 1 });
-    const sizes = Array.isArray(photos?.photos?.[0]) ? photos.photos[0] : [];
-    const fileId = sizes.at(-1)?.file_id;
+    const photos = await telegram(env, "getUserProfilePhotos", { user_id: telegramUserId, limit: 1 });
+    const fileId = selectTelegramAvatarFileId(photos);
     await env.AUTH_DB.prepare(
       "UPDATE betterfy_users SET avatar_file_id = ?, avatar_checked_at = ? WHERE telegram_user_id = ?",
-    ).bind(typeof fileId === "string" ? fileId : null, now, String(from.id)).run();
+    ).bind(fileId, now, String(telegramUserId)).run();
+    return fileId;
   } catch {
     // Avatar is optional. Authentication and payments must keep working when
     // Telegram profile photos are private or temporarily unavailable.
+    return existing?.avatar_file_id ?? null;
   }
 }
 
@@ -131,7 +147,7 @@ async function authenticatedUser(request, env, now) {
   const hash = await keyedHash(`session:${token}`, env.AUTH_CODE_PEPPER);
   const user = await env.AUTH_DB.prepare(
     `SELECT u.user_id, u.telegram_user_id, u.display_name, u.username, u.language,
-            u.avatar_file_id, s.expires_at
+            u.avatar_file_id, u.avatar_checked_at, s.expires_at
      FROM auth_sessions s
      JOIN betterfy_users u ON u.user_id = s.user_id
      WHERE s.session_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ?`,
@@ -145,10 +161,23 @@ async function authenticatedUser(request, env, now) {
 
 async function profileAvatar(request, env, origin) {
   const headers = corsHeaders(origin);
-  const user = await authenticatedUser(request, env, Math.floor(Date.now() / 1000));
+  const now = Math.floor(Date.now() / 1000);
+  const user = await authenticatedUser(request, env, now);
   if (!user) return json({ error: "unauthorized" }, 401, headers);
-  if (!user.avatar_file_id) return json({ error: "avatar_missing" }, 404, headers);
-  const file = await telegram(env, "getFile", { file_id: user.avatar_file_id });
+  let fileId = user.avatar_file_id ?? await refreshAvatar(env, user.telegram_user_id, now);
+  if (!fileId) return json({ error: "avatar_missing" }, 404, headers);
+  let file;
+  try {
+    file = await telegram(env, "getFile", { file_id: fileId });
+  } catch {
+    fileId = await refreshAvatar(env, user.telegram_user_id, now, true);
+    if (!fileId) return json({ error: "avatar_unavailable" }, 404, headers);
+    try {
+      file = await telegram(env, "getFile", { file_id: fileId });
+    } catch {
+      return json({ error: "avatar_unavailable" }, 404, headers);
+    }
+  }
   const path = file?.file_path;
   if (typeof path !== "string" || path.length > 240 || path.includes("..") || !/^[A-Za-z0-9_./-]+$/.test(path)) {
     return json({ error: "avatar_unavailable" }, 404, headers);
@@ -177,15 +206,18 @@ async function sessionProfile(request, env, origin) {
   const now = Math.floor(Date.now() / 1000);
   const user = await authenticatedUser(request, env, now);
   if (!user) return json({ error: "unauthorized" }, 401, headers);
-  const entitlement = await env.AUTH_DB.prepare(
-    "SELECT active_until FROM entitlements WHERE user_id = ? AND entitlement_key = ?",
-  ).bind(user.user_id, PREMIUM_ENTITLEMENT).first();
+  const avatarFileId = await refreshAvatar(env, user.telegram_user_id, now);
+  const entitlement = await subscriptionRecord(env, user.user_id);
+  const plan = planBySku(entitlement?.sku);
   return json({
     userId: user.user_id,
     displayName: user.display_name,
     username: user.username ?? undefined,
     accessTier: isEntitlementActive(entitlement, now) ? "premium" : "early-access",
-    avatarAvailable: Boolean(user.avatar_file_id),
+    avatarAvailable: Boolean(avatarFileId),
+    accessExpiresAt: isEntitlementActive(entitlement, now) ? entitlement.active_until : undefined,
+    accessPlan: isEntitlementActive(entitlement, now) ? plan?.id : undefined,
+    accessRecurring: isEntitlementActive(entitlement, now) ? Boolean(plan?.recurring && entitlement.canceled_at == null) : false,
     sessionExpiresAt: user.expires_at,
   }, 200, headers);
 }
@@ -337,7 +369,7 @@ async function upsertUser(env, from, language, now) {
        language = excluded.language,
        updated_at = excluded.updated_at`,
   ).bind(userId, String(from.id), displayName, from.username ?? null, language, now, now).run();
-  await refreshAvatar(env, from, now);
+  await refreshAvatar(env, from.id, now);
   return userId;
 }
 
@@ -707,9 +739,8 @@ async function verifyCode(request, env, origin) {
     "SELECT user_id, telegram_user_id, display_name, username, language, avatar_file_id FROM betterfy_users WHERE user_id = ?",
   ).bind(consumed.user_id).first();
   if (!user) return json({ error: "profile_missing" }, 500, headers);
-  const entitlement = await env.AUTH_DB.prepare(
-    "SELECT active_until FROM entitlements WHERE user_id = ? AND entitlement_key = ?",
-  ).bind(user.user_id, PREMIUM_ENTITLEMENT).first();
+  const entitlement = await subscriptionRecord(env, user.user_id);
+  const plan = planBySku(entitlement?.sku);
 
   const approvedCard = user.language === "ru" ? "approved-ru.png" : "approved-en.png";
   const copy = COPY[user.language === "ru" ? "ru" : "en"];
@@ -732,6 +763,9 @@ async function verifyCode(request, env, origin) {
     accessTier: isEntitlementActive(entitlement, now) ? "premium" : "early-access",
     sessionToken,
     avatarAvailable: Boolean(user.avatar_file_id),
+    accessExpiresAt: isEntitlementActive(entitlement, now) ? entitlement.active_until : undefined,
+    accessPlan: isEntitlementActive(entitlement, now) ? plan?.id : undefined,
+    accessRecurring: isEntitlementActive(entitlement, now) ? Boolean(plan?.recurring && entitlement.canceled_at == null) : false,
   }, 200, headers);
 }
 

@@ -28,6 +28,9 @@ type WebSession = {
   displayName: string;
   username?: string;
   accessTier: string;
+  accessExpiresAt?: number;
+  accessPlan?: string;
+  accessRecurring?: boolean;
   avatarAvailable: boolean;
 };
 
@@ -127,6 +130,10 @@ const copy = {
     verifying: "Проверяем код…",
     invalidCode: "Код не подошёл или уже истёк. Получи новый в боте.",
     signedIn: "Telegram подключён",
+    accessEarly: "Ранний доступ",
+    accessPremium: "BetterFy Premium",
+    accessUntil: "до",
+    accessRecurring: "продлевается каждые 30 дней",
     signOut: "Выйти",
     downloadLocked: "Войди через Telegram, чтобы скачать сборку.",
     downloadError: "Сборка пока недоступна. Попробуй ещё раз позже.",
@@ -206,6 +213,10 @@ const copy = {
     verifying: "Checking the code…",
     invalidCode: "That code has expired or was already used. Request another one in the bot.",
     signedIn: "Telegram connected",
+    accessEarly: "Early Access",
+    accessPremium: "BetterFy Premium",
+    accessUntil: "until",
+    accessRecurring: "renews every 30 days",
     signOut: "Sign out",
     downloadLocked: "Sign in with Telegram to download the build.",
     downloadError: "The build is unavailable right now. Try again later.",
@@ -297,6 +308,17 @@ function Site() {
   const t = copy[language];
   const release = useLatestRelease(language);
   const authUrl = allowlistedExternalUrl(import.meta.env.VITE_BETTERFY_AUTH_URL?.trim() || DEFAULT_AUTH_URL, "auth")!;
+  const accessLabel = useMemo(() => {
+    if (!authSession || authSession.accessTier !== "premium") return t.accessEarly;
+    const expiry = authSession.accessExpiresAt
+      ? new Intl.DateTimeFormat(language === "ru" ? "ru-RU" : "en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        }).format(new Date(authSession.accessExpiresAt * 1000))
+      : null;
+    return [t.accessPremium, expiry ? `${t.accessUntil} ${expiry}` : null].filter(Boolean).join(" · ");
+  }, [authSession, language, t.accessEarly, t.accessPremium, t.accessUntil]);
 
   useEffect(() => {
     if (!sessionToken) {
@@ -658,7 +680,10 @@ function Site() {
               <>
                 <h2 id="account-title">{authSession.displayName}</h2>
                 <p>{authSession.username ? `@${authSession.username}` : t.signedIn}</p>
-                <div className="pending-note"><ShieldCheck /><span>{t.signedIn} · {authSession.accessTier}</span></div>
+                <div className="account-access">
+                  <ShieldCheck />
+                  <span><strong>{accessLabel}</strong>{authSession.accessRecurring && <small>{t.accessRecurring}</small>}</span>
+                </div>
                 <button className="secondary-action modal-signout" type="button" onClick={signOut}>{t.signOut}</button>
               </>
             ) : (

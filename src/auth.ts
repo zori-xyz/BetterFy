@@ -3,6 +3,9 @@ export type AuthSession = {
   displayName: string;
   username?: string;
   accessTier: string;
+  accessExpiresAt?: number;
+  accessPlan?: string;
+  accessRecurring?: boolean;
   sessionToken?: string;
   avatarAvailable?: boolean;
   source: "demo" | "server";
@@ -19,6 +22,9 @@ const isAuthSession = (value: unknown): value is Omit<AuthSession, "source"> => 
     && typeof record.displayName === "string"
     && (record.username === undefined || typeof record.username === "string")
     && typeof record.accessTier === "string"
+    && (record.accessExpiresAt === undefined || typeof record.accessExpiresAt === "number")
+    && (record.accessPlan === undefined || typeof record.accessPlan === "string")
+    && (record.accessRecurring === undefined || typeof record.accessRecurring === "boolean")
     && (record.sessionToken === undefined || typeof record.sessionToken === "string")
     && (record.avatarAvailable === undefined || typeof record.avatarAvailable === "boolean")
   );

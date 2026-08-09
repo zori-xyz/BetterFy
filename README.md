@@ -59,7 +59,7 @@ enabled in small, recoverable slices.
 | Steam profile activation | Implemented | A confirmed profile can be backed up, updated atomically, verified, rolled back, and followed by a Steam-only restart. |
 | Catalog and wardrobe | Product preview | Navigation, filtering, provenance fields, and local selection work; content download is not enabled. |
 | Presets | Implemented locally | Configurations are validated and stored atomically; JSON import and export are available. |
-| Authentication | Preview boundary | Telegram verification has a backend boundary and an explicit demo fallback. Production auth is not live. |
+| Authentication | Deployed Early Access boundary | Telegram one-time codes issue revocable twelve-hour sessions. The Worker serves a minimal profile, access state, and a protected avatar proxy to the website and desktop client. Device sessions and refresh-token rotation are not implemented. |
 | Dota file deployment | Not enabled | BetterFy does not write a production VPK or replace Dota 2 files yet. |
 | Public updates | Prepared, not released | Signed updater infrastructure exists; public releases require signing secrets and release approval. |
 

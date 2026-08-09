@@ -1,11 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { route } from "../src/index.mjs";
+import { route, selectTelegramAvatarFileId } from "../src/index.mjs";
 
 const env = {
   ALLOWED_ORIGINS: "https://zori-xyz.github.io,http://localhost:1420",
   TELEGRAM_WEBHOOK_SECRET: "webhook-secret",
 };
+
+test("avatar selection prefers the largest valid Telegram photo", () => {
+  assert.equal(selectTelegramAvatarFileId({
+    photos: [[
+      { file_id: "small", width: 160, height: 160, file_size: 1_000 },
+      { file_id: "large", width: 640, height: 640, file_size: 8_000 },
+      { file_id: "medium", width: 320, height: 320, file_size: 4_000 },
+    ]],
+  }), "large");
+  assert.equal(selectTelegramAvatarFileId({ photos: [] }), null);
+  assert.equal(selectTelegramAvatarFileId(null), null);
+});
 
 test("health endpoint exposes no deployment details", async () => {
   const response = await route(new Request("https://auth.example/health"), env);

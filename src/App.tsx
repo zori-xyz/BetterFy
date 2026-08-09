@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import {
   ArchiveRestore,
@@ -300,8 +300,13 @@ const copy = {
         content_store_invalid: "Целостность хранилища контента нарушена",
       },
       profile: "Профиль",
-      profileText: "Демонстрационный локальный профиль раннего доступа.",
-      signedIn: "Вход через Telegram",
+      profileText: "Аккаунт BetterFy, доступ и связь с Telegram.",
+      signedIn: "Telegram",
+      access: "Доступ",
+      earlyAccess: "Ранний доступ",
+      premiumAccess: "BetterFy Premium",
+      activeUntil: "до",
+      recurring: "продлевается каждые 30 дней",
       plan: "Founding Tester",
       community: "Комьюнити и поддержка",
       communityText: "Новости, ранние сборки и связь с командой.",
@@ -517,8 +522,13 @@ const copy = {
         content_store_invalid: "Content-store integrity is invalid",
       },
       profile: "Profile",
-      profileText: "A local Early Access demonstration profile.",
-      signedIn: "Signed in with Telegram",
+      profileText: "Your BetterFy account, access, and Telegram connection.",
+      signedIn: "Telegram",
+      access: "Access",
+      earlyAccess: "Early Access",
+      premiumAccess: "BetterFy Premium",
+      activeUntil: "until",
+      recurring: "renews every 30 days",
       plan: "Founding Tester",
       community: "Community and support",
       communityText: "News, early builds, and direct contact with the team.",
@@ -652,6 +662,18 @@ function Workspace({
   const [selectedModIds, setSelectedModIds] = useState<string[]>(() =>
     getStoredStringArray("betterfy:selected-mods"));
   const [telegramAvatarUrl, setTelegramAvatarUrl] = useState<string | null>(null);
+
+  const accessSummary = useMemo(() => {
+    if (!session || session.accessTier !== "premium") return t.panel.earlyAccess;
+    const expiry = session.accessExpiresAt
+      ? new Intl.DateTimeFormat(language === "ru" ? "ru-RU" : "en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        }).format(new Date(session.accessExpiresAt * 1000))
+      : null;
+    return [t.panel.premiumAccess, expiry ? `${t.panel.activeUntil} ${expiry}` : null].filter(Boolean).join(" · ");
+  }, [language, session, t.panel.activeUntil, t.panel.earlyAccess, t.panel.premiumAccess]);
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -1054,8 +1076,9 @@ function Workspace({
                   <i><Check /></i>
                 </div>
                 <dl className="profile-facts">
-                  <div><dt>{t.panel.signedIn}</dt><dd>@BeterFyBot</dd></div>
-                  <div><dt>Access</dt><dd>{session?.accessTier ?? t.panel.plan}</dd></div>
+                  <div><dt>{t.panel.signedIn}</dt><dd>{session?.username ? `@${session.username}` : t.panel.signedIn}</dd></div>
+                  <div><dt>{t.panel.access}</dt><dd>{accessSummary}</dd></div>
+                  {session?.accessRecurring && <div><dt>{t.panel.premiumAccess}</dt><dd>{t.panel.recurring}</dd></div>}
                 </dl>
                 <section className="profile-community">
                   <MessageCircle />
