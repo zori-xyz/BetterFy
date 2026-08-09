@@ -1,5 +1,7 @@
 import {
   CODE_TTL_SECONDS,
+  DESKTOP_SESSION_TTL_SECONDS,
+  REFRESH_FAMILY_TTL_SECONDS,
   SESSION_TTL_SECONDS,
   chooseLanguage,
   constantTimeEqual,
@@ -140,16 +142,75 @@ export function normalizeClientKind(value) {
   return value === "web" || value === "desktop" ? value : "unknown";
 }
 
-async function issueSession(env, userId, now, clientKind) {
+export function refreshCredentialState(credential, now) {
+  if (!credential) return "unknown";
+  if (credential.used_at != null) return "replayed";
+  if (credential.revoked_at != null) return "revoked";
+  if (Number(credential.expires_at) <= now) return "expired";
+  return "active";
+}
+
+export function supportsRotatingDesktopCredentials(payload) {
+  return normalizeClientKind(payload?.clientKind) === "desktop"
+    && payload?.credentialMode === "rotating-v1";
+}
+
+export function refreshFamilyCompromised(row) {
+  return Number(row?.revoked_count ?? 0) > 0;
+}
+
+async function createSessionRecord(env, userId, now, clientKind, familyId = null, ttl = SESSION_TTL_SECONDS) {
   const token = generateSessionToken();
   const sessionId = crypto.randomUUID();
   const hash = await keyedHash(`session:${token}`, env.AUTH_CODE_PEPPER);
-  await env.AUTH_DB.prepare(
+  const statement = env.AUTH_DB.prepare(
     `INSERT INTO auth_sessions
-      (session_hash, user_id, created_at, expires_at, last_used_at, session_id, client_kind)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  ).bind(hash, userId, now, now + SESSION_TTL_SECONDS, now, sessionId, normalizeClientKind(clientKind)).run();
-  return { token, sessionId };
+      (session_hash, user_id, created_at, expires_at, last_used_at, session_id, client_kind, family_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(hash, userId, now, now + ttl, now, sessionId, normalizeClientKind(clientKind), familyId);
+  return { token, sessionId, hash, statement };
+}
+
+async function issueSession(env, userId, now, clientKind) {
+  const session = await createSessionRecord(env, userId, now, clientKind);
+  await session.statement.run();
+  return session;
+}
+
+async function issueDesktopCredentials(env, userId, now) {
+  const familyId = crypto.randomUUID();
+  const familyExpiresAt = now + REFRESH_FAMILY_TTL_SECONDS;
+  const refreshToken = generateSessionToken();
+  const refreshHash = await keyedHash(`refresh:${refreshToken}`, env.AUTH_CODE_PEPPER);
+  const session = await createSessionRecord(
+    env,
+    userId,
+    now,
+    "desktop",
+    familyId,
+    DESKTOP_SESSION_TTL_SECONDS,
+  );
+  await env.AUTH_DB.batch([
+    env.AUTH_DB.prepare(
+      `INSERT INTO auth_refresh_tokens
+        (token_hash, family_id, user_id, generation, created_at, expires_at)
+       VALUES (?, ?, ?, 0, ?, ?)`,
+    ).bind(refreshHash, familyId, userId, now, familyExpiresAt),
+    session.statement,
+  ]);
+  return { ...session, refreshToken };
+}
+
+async function revokeCredentialFamily(env, familyId, now) {
+  if (!familyId) return;
+  await env.AUTH_DB.batch([
+    env.AUTH_DB.prepare(
+      "UPDATE auth_refresh_tokens SET revoked_at = COALESCE(revoked_at, ?) WHERE family_id = ?",
+    ).bind(now, familyId),
+    env.AUTH_DB.prepare(
+      "UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE family_id = ?",
+    ).bind(now, familyId),
+  ]);
 }
 
 function bearerToken(request) {
@@ -246,6 +307,13 @@ async function revokeSession(request, env, origin) {
   const token = bearerToken(request);
   if (!token) return json({ error: "unauthorized" }, 401, headers);
   const hash = await keyedHash(`session:${token}`, env.AUTH_CODE_PEPPER);
+  const session = await env.AUTH_DB.prepare(
+    "SELECT family_id FROM auth_sessions WHERE session_hash = ?",
+  ).bind(hash).first();
+  if (session?.family_id) {
+    await revokeCredentialFamily(env, session.family_id, Math.floor(Date.now() / 1000));
+    return json({ ok: true }, 200, headers);
+  }
   const result = await env.AUTH_DB.prepare(
     "UPDATE auth_sessions SET revoked_at = ? WHERE session_hash = ? AND revoked_at IS NULL",
   ).bind(Math.floor(Date.now() / 1000), hash).run();
@@ -291,6 +359,14 @@ async function revokeDeviceSession(request, env, origin) {
   if (!/^(?:[0-9a-f]{32}|[0-9a-f-]{36})$/i.test(sessionId)) {
     return json({ error: "invalid_session" }, 400, headers);
   }
+  const owned = await env.AUTH_DB.prepare(
+    "SELECT family_id FROM auth_sessions WHERE session_id = ? AND user_id = ? AND revoked_at IS NULL",
+  ).bind(sessionId, user.user_id).first();
+  if (!owned) return json({ ok: false, current: false }, 200, headers);
+  if (owned.family_id) {
+    await revokeCredentialFamily(env, owned.family_id, now);
+    return json({ ok: true, current: sessionId === user.session_id }, 200, headers);
+  }
   const result = await env.AUTH_DB.prepare(
     `UPDATE auth_sessions SET revoked_at = ?
      WHERE session_id = ? AND user_id = ? AND revoked_at IS NULL`,
@@ -299,6 +375,114 @@ async function revokeDeviceSession(request, env, origin) {
     ok: Number(result.meta?.changes ?? 0) === 1,
     current: sessionId === user.session_id,
   }, 200, headers);
+}
+
+function authPayload(user, entitlement, plan, session, extra = {}) {
+  const now = Math.floor(Date.now() / 1000);
+  const active = isEntitlementActive(entitlement, now);
+  return {
+    userId: user.user_id,
+    displayName: user.display_name,
+    username: user.username ?? undefined,
+    accessTier: active ? "premium" : "early-access",
+    sessionToken: session.token,
+    sessionId: session.sessionId,
+    avatarAvailable: Boolean(user.avatar_file_id),
+    accessExpiresAt: active ? entitlement.active_until : undefined,
+    accessPlan: active ? plan?.id : undefined,
+    accessRecurring: active ? Boolean(plan?.recurring && entitlement.canceled_at == null) : false,
+    ...extra,
+  };
+}
+
+async function refreshDesktopSession(request, env, origin) {
+  const headers = corsHeaders(origin);
+  const now = Math.floor(Date.now() / 1000);
+  let payload;
+  try {
+    payload = await readJson(request);
+  } catch {
+    return json({ error: "invalid_request" }, 400, headers);
+  }
+  const refreshToken = typeof payload?.refreshToken === "string" ? payload.refreshToken : "";
+  if (!/^[A-Za-z0-9_-]{43}$/.test(refreshToken)) {
+    return json({ error: "refresh_rejected" }, 401, headers);
+  }
+  const tokenHash = await keyedHash(`refresh:${refreshToken}`, env.AUTH_CODE_PEPPER);
+  const credential = await env.AUTH_DB.prepare(
+    `SELECT r.family_id, r.user_id, r.generation, r.expires_at, r.used_at, r.revoked_at,
+            u.telegram_user_id, u.display_name, u.username, u.language, u.avatar_file_id
+     FROM auth_refresh_tokens r
+     JOIN betterfy_users u ON u.user_id = r.user_id
+     WHERE r.token_hash = ?`,
+  ).bind(tokenHash).first();
+  const credentialState = refreshCredentialState(credential, now);
+  if (credentialState === "unknown") return json({ error: "refresh_rejected" }, 401, headers);
+  if (credentialState !== "active") {
+    await revokeCredentialFamily(env, credential.family_id, now);
+    return json({ error: "refresh_rejected" }, 401, headers);
+  }
+
+  const nextRefreshToken = generateSessionToken();
+  const nextRefreshHash = await keyedHash(`refresh:${nextRefreshToken}`, env.AUTH_CODE_PEPPER);
+  const consumed = await env.AUTH_DB.prepare(
+    `UPDATE auth_refresh_tokens SET used_at = ?, replaced_by_hash = ?
+     WHERE token_hash = ? AND used_at IS NULL AND revoked_at IS NULL AND expires_at > ?`,
+  ).bind(now, nextRefreshHash, tokenHash, now).run();
+  if (Number(consumed.meta?.changes ?? 0) !== 1) {
+    await revokeCredentialFamily(env, credential.family_id, now);
+    return json({ error: "refresh_rejected" }, 401, headers);
+  }
+
+  const session = await createSessionRecord(
+    env,
+    credential.user_id,
+    now,
+    "desktop",
+    credential.family_id,
+    DESKTOP_SESSION_TTL_SECONDS,
+  );
+  try {
+    await env.AUTH_DB.batch([
+      env.AUTH_DB.prepare(
+        `INSERT INTO auth_refresh_tokens
+          (token_hash, family_id, user_id, generation, created_at, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).bind(
+        nextRefreshHash,
+        credential.family_id,
+        credential.user_id,
+        Number(credential.generation) + 1,
+        now,
+        credential.expires_at,
+      ),
+      env.AUTH_DB.prepare(
+        "UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE family_id = ?",
+      ).bind(now, credential.family_id),
+      session.statement,
+    ]);
+  } catch (error) {
+    await revokeCredentialFamily(env, credential.family_id, now);
+    throw error;
+  }
+  // A concurrent replay may revoke the family immediately before or after the
+  // replacement batch. Checking after publication closes both interleavings:
+  // the replay either already marked an older row or will revoke this row too.
+  const familyState = await env.AUTH_DB.prepare(
+    `SELECT COUNT(*) AS revoked_count
+     FROM auth_refresh_tokens
+     WHERE family_id = ? AND revoked_at IS NOT NULL`,
+  ).bind(credential.family_id).first();
+  if (refreshFamilyCompromised(familyState)) {
+    await revokeCredentialFamily(env, credential.family_id, now);
+    return json({ error: "refresh_rejected" }, 401, headers);
+  }
+  const entitlement = await subscriptionRecord(env, credential.user_id);
+  const plan = planBySku(entitlement?.sku);
+  return json(authPayload(credential, entitlement, plan, session, {
+    refreshToken: nextRefreshToken,
+    refreshExpiresAt: credential.expires_at,
+  }), 200, headers);
 }
 
 function allowedReleaseUrl(value) {
@@ -812,7 +996,11 @@ async function verifyCode(request, env, origin) {
 
   const approvedCard = user.language === "ru" ? "approved-ru.png" : "approved-en.png";
   const copy = COPY[user.language === "ru" ? "ru" : "en"];
-  const session = await issueSession(env, user.user_id, now, payload?.clientKind);
+  const clientKind = normalizeClientKind(payload?.clientKind);
+  const rotatingDesktop = supportsRotatingDesktopCredentials(payload);
+  const session = rotatingDesktop
+    ? await issueDesktopCredentials(env, user.user_id, now)
+    : await issueSession(env, user.user_id, now, clientKind);
   try {
     await telegram(env, "sendPhoto", {
       chat_id: user.telegram_user_id,
@@ -824,18 +1012,10 @@ async function verifyCode(request, env, origin) {
     // Approval is already committed. Telegram delivery is best effort only.
   }
 
-  return json({
-    userId: user.user_id,
-    displayName: user.display_name,
-    username: user.username ?? undefined,
-    accessTier: isEntitlementActive(entitlement, now) ? "premium" : "early-access",
-    sessionToken: session.token,
-    sessionId: session.sessionId,
-    avatarAvailable: Boolean(user.avatar_file_id),
-    accessExpiresAt: isEntitlementActive(entitlement, now) ? entitlement.active_until : undefined,
-    accessPlan: isEntitlementActive(entitlement, now) ? plan?.id : undefined,
-    accessRecurring: isEntitlementActive(entitlement, now) ? Boolean(plan?.recurring && entitlement.canceled_at == null) : false,
-  }, 200, headers);
+  return json(authPayload(user, entitlement, plan, session, rotatingDesktop ? {
+    refreshToken: session.refreshToken,
+    refreshExpiresAt: now + REFRESH_FAMILY_TTL_SECONDS,
+  } : {}), 200, headers);
 }
 
 export async function route(request, env) {
@@ -870,6 +1050,12 @@ export async function route(request, env) {
     if (origin === false) return json({ error: "origin_not_allowed" }, 403);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
     if (request.method === "POST") return verifyCode(request, env, origin);
+  }
+  if (url.pathname === "/v1/auth/refresh") {
+    const origin = allowedOrigin(request, env);
+    if (origin === false) return json({ error: "origin_not_allowed" }, 403);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    if (request.method === "POST") return refreshDesktopSession(request, env, origin);
   }
   return json({ error: "not_found" }, 404);
 }

@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  DESKTOP_SESSION_TTL_SECONDS,
+  REFRESH_FAMILY_TTL_SECONDS,
   chooseLanguage,
   constantTimeEqual,
   formatCode,
@@ -10,6 +12,11 @@ import {
   keyedHash,
   normalizeCode,
 } from "../src/security.mjs";
+
+test("desktop access is short-lived while refresh families remain bounded", () => {
+  assert.equal(DESKTOP_SESSION_TTL_SECONDS, 15 * 60);
+  assert.equal(REFRESH_FAMILY_TTL_SECONDS, 30 * 24 * 60 * 60);
+});
 
 test("normalizes only six digit codes", () => {
   assert.equal(normalizeCode("123 456"), "123456");

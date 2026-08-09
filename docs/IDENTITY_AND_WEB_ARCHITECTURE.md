@@ -127,6 +127,14 @@ current desktop UI:
   gate rather than access control over the public repository.
 
 This is deliberately not presented as complete account infrastructure.
-Challenge-bound deep links, refresh-token rotation, device management, secure
-browser cookies, and OS credential-vault storage remain required before the
-identity layer is declared production-complete.
+Desktop manual-code exchange now issues a fifteen-minute access session and a
+single-use refresh credential with a fixed thirty-day family lifetime. Rust
+stores the refresh credential in Windows Credential Manager or macOS Keychain,
+keeps the access token in process memory, proxies authenticated profile calls,
+and returns neither token to React. Every successful refresh revokes the prior
+access session. Reuse, expiry, or revocation of a refresh credential invalidates
+the full family and all related access sessions.
+
+Challenge-bound deep links, secure browser cookies, account deletion/retention,
+and end-to-end Windows vault testing remain required before the identity layer
+is declared production-complete.

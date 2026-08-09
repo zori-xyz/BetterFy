@@ -1,6 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { detectImageContentType, normalizeClientKind, route, selectTelegramAvatarFileId } from "../src/index.mjs";
+import {
+  detectImageContentType,
+  normalizeClientKind,
+  refreshFamilyCompromised,
+  refreshCredentialState,
+  route,
+  selectTelegramAvatarFileId,
+  supportsRotatingDesktopCredentials,
+} from "../src/index.mjs";
 
 const env = {
   ALLOWED_ORIGINS: "https://zori-xyz.github.io,http://localhost:1420",
@@ -32,6 +40,26 @@ test("session clients are reduced to supported privacy-safe labels", () => {
   assert.equal(normalizeClientKind("web"), "web");
   assert.equal(normalizeClientKind("desktop"), "desktop");
   assert.equal(normalizeClientKind("Windows 11 · Chrome 139"), "unknown");
+});
+
+test("rotation is negotiated explicitly so older desktop builds keep working", () => {
+  assert.equal(supportsRotatingDesktopCredentials({ clientKind: "desktop" }), false);
+  assert.equal(supportsRotatingDesktopCredentials({ clientKind: "web", credentialMode: "rotating-v1" }), false);
+  assert.equal(supportsRotatingDesktopCredentials({ clientKind: "desktop", credentialMode: "rotating-v1" }), true);
+});
+
+test("refresh credentials fail closed on expiry, revocation, and replay", () => {
+  assert.equal(refreshCredentialState(null, 100), "unknown");
+  assert.equal(refreshCredentialState({ expires_at: 101, used_at: null, revoked_at: null }, 100), "active");
+  assert.equal(refreshCredentialState({ expires_at: 100, used_at: null, revoked_at: null }, 100), "expired");
+  assert.equal(refreshCredentialState({ expires_at: 200, used_at: 99, revoked_at: null }, 100), "replayed");
+  assert.equal(refreshCredentialState({ expires_at: 200, used_at: null, revoked_at: 99 }, 100), "revoked");
+});
+
+test("a replacement is rejected if any concurrent request revoked its family", () => {
+  assert.equal(refreshFamilyCompromised({ revoked_count: 0 }), false);
+  assert.equal(refreshFamilyCompromised({ revoked_count: 1 }), true);
+  assert.equal(refreshFamilyCompromised({ revoked_count: "2" }), true);
 });
 
 test("health endpoint exposes no deployment details", async () => {
@@ -72,6 +100,16 @@ test("verification denies unlisted browser origins", async () => {
   }), env);
   assert.equal(response.status, 403);
   assert.equal(response.headers.get("access-control-allow-origin"), null);
+});
+
+test("refresh denies malformed tokens before database access", async () => {
+  const response = await route(new Request("https://auth.example/v1/auth/refresh", {
+    method: "POST",
+    headers: { Origin: "https://zori-xyz.github.io", "content-type": "application/json" },
+    body: JSON.stringify({ refreshToken: "not-a-token" }),
+  }), env);
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "refresh_rejected" });
 });
 
 test("preflight echoes only an allowed origin", async () => {

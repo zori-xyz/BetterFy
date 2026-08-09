@@ -2,6 +2,8 @@ const encoder = new TextEncoder();
 
 export const CODE_TTL_SECONDS = 10 * 60;
 export const SESSION_TTL_SECONDS = 12 * 60 * 60;
+export const DESKTOP_SESSION_TTL_SECONDS = 15 * 60;
+export const REFRESH_FAMILY_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 export function normalizeCode(value) {
   if (typeof value !== "string") return null;

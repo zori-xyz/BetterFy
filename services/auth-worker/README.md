@@ -5,9 +5,11 @@ It receives Telegram webhooks, issues ten-minute one-time codes, stores only
 keyed hashes, and exposes the code verification endpoint already used by the
 desktop client.
 
-It issues twelve-hour opaque sessions for the current web and desktop clients.
-Only a keyed session hash is stored in D1. Refresh-token rotation, per-device
-revocation, and OS credential-vault storage remain the next identity milestone.
+It issues twelve-hour opaque sessions for the website. Desktop exchanges a code
+for a fifteen-minute access session and a single-use rotating refresh credential
+with a fixed thirty-day family lifetime. Only keyed token hashes are stored in
+D1. Replay revokes the credential family and its access sessions; the native app
+stores the refresh credential in Credential Manager or Keychain.
 
 The Worker offers 3-day and 15-day Stars passes plus recurring 30-day access.
 Wallet Pay is intentionally not exposed inside the bot for this digital access;

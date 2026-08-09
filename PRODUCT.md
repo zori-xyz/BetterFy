@@ -61,11 +61,12 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - A real local config manager backed by validated, atomic app-data storage,
   plus three built-in BetterFy Workshop presets resolved against the same
   Minify catalog IDs as the selection UI.
-- Telegram code verification uses the deployed BetterFy auth Worker. Twelve-hour
-  opaque sessions expose a minimal profile and server-proxied Telegram avatar;
-  the desktop session remains memory-only.
+- Telegram code verification uses the deployed BetterFy auth Worker. Web keeps
+  its opaque session in `sessionStorage`. Desktop uses a fifteen-minute access
+  session in Rust and a one-use rotating refresh credential in the operating
+  system vault; neither token crosses the Tauri IPC boundary.
 - Telegram Stars provides 3-day and 15-day passes plus recurring 30-day access.
-  Refresh-token rotation and per-device session management remain future work.
+  Privacy-safe per-device session listing and revocation are implemented.
 - Team web catalog: `https://h6rd.github.io/Dota2PornFxWeb/`.
 - No production catalog delivery, Dota deployment, compatibility benchmark, or
   community activity data is available yet. Future surfaces must not fabricate

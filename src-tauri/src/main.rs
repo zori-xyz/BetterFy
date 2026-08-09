@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod archive_inspector;
+mod auth_session;
 mod build_engine;
 mod content_store;
 mod presets;
@@ -10,6 +11,10 @@ mod steam_accounts;
 pub mod steam_config;
 mod system_diagnostics;
 
+use auth_session::{
+    auth_fetch_avatar, auth_list_sessions, auth_logout, auth_restore_session, auth_revoke_device,
+    auth_verify_code, AuthState,
+};
 use build_engine::{
     create_build_plan, execute_build as execute_staged_build,
     list_operations as list_staged_operations, operation_diagnostic_counts, rollback_operation,
@@ -428,6 +433,7 @@ async fn start_steam_after_profile(
 
 fn main() {
     tauri::Builder::default()
+        .manage(AuthState::default())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
@@ -454,7 +460,13 @@ fn main() {
             save_preset,
             delete_preset,
             export_preset,
-            import_preset
+            import_preset,
+            auth_verify_code,
+            auth_restore_session,
+            auth_fetch_avatar,
+            auth_list_sessions,
+            auth_revoke_device,
+            auth_logout
         ])
         .run(tauri::generate_context!())
         .expect("error while running BetterFy");

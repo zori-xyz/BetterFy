@@ -23,6 +23,7 @@ export type DeviceSession = {
 
 const authEndpoint = import.meta.env.VITE_BETTERFY_AUTH_URL as string | undefined;
 const wait = (duration: number) => new Promise((resolve) => window.setTimeout(resolve, duration));
+const isNativeDesktop = () => "__TAURI_INTERNALS__" in window;
 
 const isAuthSession = (value: unknown): value is Omit<AuthSession, "source"> => {
   if (!value || typeof value !== "object") return false;
@@ -51,6 +52,10 @@ function authenticatedEndpoint(path: string, session: AuthSession) {
 }
 
 export async function fetchTelegramAvatar(session: AuthSession): Promise<Blob | null> {
+  if (isNativeDesktop()) {
+    const payload = await invoke<{ contentType: string; bytes: number[] } | null>("auth_fetch_avatar");
+    return payload ? new Blob([new Uint8Array(payload.bytes)], { type: payload.contentType }) : null;
+  }
   if (session.source !== "server" || !session.avatarAvailable || !session.sessionToken) return null;
   const response = await fetch(authenticatedEndpoint("/v1/session/avatar", session), {
     headers: { Authorization: `Bearer ${session.sessionToken}` },
@@ -64,6 +69,10 @@ export async function fetchTelegramAvatar(session: AuthSession): Promise<Blob | 
 }
 
 export async function revokeAuthSession(session: AuthSession | null): Promise<void> {
+  if (isNativeDesktop()) {
+    await invoke("auth_logout");
+    return;
+  }
   if (!session || session.source !== "server" || !session.sessionToken) return;
   await fetch(authenticatedEndpoint("/v1/session/logout", session), {
     method: "POST",
@@ -73,6 +82,7 @@ export async function revokeAuthSession(session: AuthSession | null): Promise<vo
 }
 
 export async function fetchDeviceSessions(session: AuthSession): Promise<DeviceSession[]> {
+  if (isNativeDesktop()) return invoke<DeviceSession[]>("auth_list_sessions");
   if (session.source !== "server" || !session.sessionToken) return [];
   const response = await fetch(authenticatedEndpoint("/v1/session/devices", session), {
     headers: { Authorization: `Bearer ${session.sessionToken}` },
@@ -93,6 +103,7 @@ export async function fetchDeviceSessions(session: AuthSession): Promise<DeviceS
 }
 
 export async function revokeDeviceSession(session: AuthSession, sessionId: string): Promise<boolean> {
+  if (isNativeDesktop()) return invoke<boolean>("auth_revoke_device", { sessionId });
   if (session.source !== "server" || !session.sessionToken) return false;
   if (!/^(?:[0-9a-f]{32}|[0-9a-f-]{36})$/i.test(sessionId)) throw new Error("auth_session_invalid");
   const response = await fetch(authenticatedEndpoint("/v1/session/devices/revoke", session), {
@@ -108,8 +119,22 @@ export async function revokeDeviceSession(session: AuthSession, sessionId: strin
 
 export const authMode: "demo" | "server" = authEndpoint ? "server" : "demo";
 
+export async function restoreDesktopSession(): Promise<AuthSession | null> {
+  if (!isNativeDesktop()) return null;
+  const payload = await invoke<Omit<AuthSession, "source"> | null>("auth_restore_session");
+  if (!payload) return null;
+  if (!isAuthSession(payload)) throw new Error("auth_response_invalid");
+  return { ...payload, source: "server" };
+}
+
 export async function verifyTelegramCode(code: string): Promise<AuthSession> {
   if (!/^\d{6}$/.test(code)) throw new Error("auth_code_invalid");
+
+  if (isNativeDesktop()) {
+    const payload = await invoke<Omit<AuthSession, "source">>("auth_verify_code", { code });
+    if (!isAuthSession(payload)) throw new Error("auth_response_invalid");
+    return { ...payload, source: "server" };
+  }
 
   if (!authEndpoint) {
     await wait(1100);
@@ -134,7 +159,7 @@ export async function verifyTelegramCode(code: string): Promise<AuthSession> {
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ code, clientKind: "desktop" }),
+      body: JSON.stringify({ code, clientKind: "web" }),
       credentials: "omit",
       signal: controller.signal,
     });
@@ -146,3 +171,4 @@ export async function verifyTelegramCode(code: string): Promise<AuthSession> {
     window.clearTimeout(timeout);
   }
 }
+import { invoke } from "@tauri-apps/api/core";

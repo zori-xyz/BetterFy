@@ -53,6 +53,7 @@ import wukongBuild from "./assets/wukong-build.png";
 import {
   fetchDeviceSessions,
   fetchTelegramAvatar,
+  restoreDesktopSession,
   revokeAuthSession,
   revokeDeviceSession,
   type AuthSession,
@@ -585,8 +586,24 @@ export default function App() {
 
   useEffect(() => {
     if (stage !== "loading") return;
-    const timer = window.setTimeout(() => transitionUI(() => setStage("auth")), 2350);
-    return () => window.clearTimeout(timer);
+    let active = true;
+    const restore = async () => {
+      const [restored] = await Promise.all([
+        restoreDesktopSession().catch(() => null),
+        new Promise((resolve) => window.setTimeout(resolve, 2350)),
+      ]);
+      if (!active) return;
+      if (!restored) {
+        transitionUI(() => setStage("auth"));
+        return;
+      }
+      const stored = readStoredInstallation();
+      setSession(restored);
+      setInstallation(stored);
+      transitionUI(() => setStage(stored ? "workspace" : "setup"));
+    };
+    void restore();
+    return () => { active = false; };
   }, [stage]);
 
   const completeAuth = (nextSession: AuthSession) => {
@@ -1170,7 +1187,7 @@ function Workspace({
                     <ExternalLink />
                   </a>
                 </section>
-                <button className="panel-signout" onClick={() => { void revokeAuthSession(session); onSignOut(); }}><LogOut />{t.panel.signout}</button>
+                <button className="panel-signout" onClick={() => { void revokeAuthSession(session).then(onSignOut).catch(() => setDeviceSessionsError(true)); }}><LogOut />{t.panel.signout}</button>
               </div>
             )}
           </aside>
