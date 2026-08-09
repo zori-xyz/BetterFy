@@ -18,7 +18,8 @@ Completed:
 - privacy-safe Windows readiness diagnostics for discovery, runtime, profiles,
   and staging recovery;
 - deployed Telegram identity with challenge-bound native approval, rotating
-  desktop credentials, avatar proxying, and per-device revocation;
+  desktop credentials, primary-consistent one-time redemption, avatar proxying,
+  and per-device revocation;
 
 ## Active milestone: trusted content intake
 
@@ -73,7 +74,7 @@ resumed or recovered without relying on interface state.
 ### Production services
 
 - finish secure browser cookies, account deletion/retention, and native Windows
-  vault/Telegram interaction evidence defined in
+  vault/Telegram approve-deny-expiry interaction evidence defined in
   `IDENTITY_AND_WEB_ARCHITECTURE.md`;
 - catalog delivery with authenticated manifests;
 - release signing, public updater endpoints, and rollback policy;

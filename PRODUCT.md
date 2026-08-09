@@ -4,7 +4,9 @@
 
 ## Platform
 
-web
+Windows-first desktop application with a companion public website and Telegram
+bot. macOS is a development and synthetic-test environment, not the release
+target.
 
 ## Users
 
@@ -23,7 +25,10 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - Windows is the primary release platform.
 - Development and interface testing also happen on macOS.
 - The app is built with Tauri, React, and TypeScript.
-- Early Access authentication uses one-time codes from the BetterFy Telegram bot.
+- Early Access desktop authentication opens `@BeterFyBot` with a device-bound,
+  ten-minute challenge and requires an explicit approve or deny action. A
+  six-digit one-time code remains the cross-device fallback and the current
+  website sign-in method.
 - BetterFy has a curated catalog and allows users to import personal skins.
 - The skin library includes a BetterFy-curated view and a web catalog based on the team's Dota2PornFxWeb project.
 
@@ -61,10 +66,13 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - A real local config manager backed by validated, atomic app-data storage,
   plus three built-in BetterFy Workshop presets resolved against the same
   Minify catalog IDs as the selection UI.
-- Telegram code verification uses the deployed BetterFy auth Worker. Web keeps
-  its opaque session in `sessionStorage`. Desktop uses a fifteen-minute access
-  session in Rust and a one-use rotating refresh credential in the operating
-  system vault; neither token crosses the Tauri IPC boundary.
+- The deployed BetterFy auth Worker supports challenge-bound Telegram approval,
+  a six-digit fallback, avatar proxying, entitlement facts, and privacy-safe
+  session revocation. Web keeps its twelve-hour opaque session in
+  `sessionStorage`. Desktop keeps a fifteen-minute access session in Rust and a
+  single-use rotating refresh credential plus stable public device ID in
+  Windows Credential Manager or macOS Keychain; no desktop credential crosses
+  the Tauri IPC boundary.
 - Telegram Stars provides 3-day and 15-day passes plus recurring 30-day access.
   Privacy-safe per-device session listing and revocation are implemented.
 - Team web catalog: `https://h6rd.github.io/Dota2PornFxWeb/`.

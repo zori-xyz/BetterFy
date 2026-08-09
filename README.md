@@ -59,7 +59,7 @@ enabled in small, recoverable slices.
 | Steam profile activation | Implemented | A confirmed profile can be backed up, updated atomically, verified, rolled back, and followed by a Steam-only restart. |
 | Catalog and wardrobe | Product preview | Navigation, filtering, provenance fields, and local selection work; content download is not enabled. |
 | Presets | Implemented locally | Configurations are validated and stored atomically; JSON import and export are available. |
-| Authentication | Deployed Early Access boundary | Telegram one-time codes issue revocable twelve-hour sessions. The Worker serves a minimal profile, access state, a protected avatar proxy, and privacy-safe active-session controls to the website and desktop client. Refresh-token rotation and credential-vault persistence are not implemented. |
+| Authentication | Deployed Early Access boundary | Native desktop sign-in uses a ten-minute device-bound Telegram approve/deny challenge. A six-digit code remains the website and cross-device fallback. Web receives a revocable twelve-hour session; Rust keeps a fifteen-minute access token in memory and rotates a single-use refresh credential stored in Credential Manager or Keychain. Profile, avatar, entitlement, session listing, and revocation are implemented. Secure browser cookies, account deletion/retention, and a complete human-driven Windows auth pass remain release gates. |
 | Dota file deployment | Not enabled | BetterFy does not write a production VPK or replace Dota 2 files yet. |
 | Public updates | Prepared, not released | Signed updater infrastructure exists; public releases require signing secrets and release approval. |
 
@@ -96,12 +96,13 @@ npm run site:build
 ```
 
 It is deployed through GitHub Pages at
-`https://zori-xyz.github.io/BetterFy/`. Telegram confirmation uses the protected
-auth Worker; the static site receives only an opaque session and never receives
-the bot secret.
+`https://zori-xyz.github.io/BetterFy/`. The static site exchanges a six-digit
+Telegram fallback code for an opaque browser session, keeps it in
+`sessionStorage`, and never receives the bot secret. Native desktop uses the
+device-bound approve/deny flow instead.
 
-The deployable Telegram code service lives in `services/auth-worker`. Its local
-tests do not require a bot token:
+The deployable identity, bot, and entitlement service lives in
+`services/auth-worker`. Its local tests do not require a bot token:
 
 ```bash
 npm run bot:test
@@ -206,6 +207,7 @@ are in [CONTRIBUTING.md](CONTRIBUTING.md) and
 - [Trusted content intake](docs/CONTENT_INTAKE_SECURITY.md)
 - [Minify patching audit](docs/MINIFY_PATCHING_AUDIT.md)
 - [Payments and entitlements](docs/PAYMENTS_ARCHITECTURE.md)
+- [Identity and web architecture](docs/IDENTITY_AND_WEB_ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 

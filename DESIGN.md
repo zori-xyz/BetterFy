@@ -157,8 +157,10 @@ design-system decision.
 ## Composition rules
 
 - Auth is a calm two-part composition: identity/atmosphere and one compact
-  access task. Telegram code is primary; do not show email unless the product
-  decision enables it.
+  access task. Native desktop opens a device-bound Telegram confirmation as the
+  primary action; the six-digit code is a visible fallback. The static website
+  currently uses the code flow. Do not show email unless the product decision
+  enables it.
 - Dota connection uses the BetterFy text wordmark without the three-capsule
   mark. Its verification graphic is directional and linear; circular scanner
   diagrams and orbit controls are prohibited.

@@ -23,8 +23,17 @@ disagreement as a bug and verify the behavior before changing either side.
   into the upstream patching workflow and the constraints BetterFy must retain.
 - [Trusted content intake](CONTENT_INTAKE_SECURITY.md) — manifest, artifact,
   immutable-store, and recovery boundaries before downloads or extraction.
-- [Identity and web architecture](IDENTITY_AND_WEB_ARCHITECTURE.md) — profiles,
-  Telegram device verification, session ownership, and the public-site boundary.
+## Services and accounts
+
+- [Identity and web architecture](IDENTITY_AND_WEB_ARCHITECTURE.md) — native
+  Telegram approve/deny, browser fallback codes, rotating desktop credentials,
+  avatars, and session revocation.
+- [Payments and entitlements](PAYMENTS_ARCHITECTURE.md) — Stars plans, payment
+  state, refunds, recurring access, and the disabled Wallet boundary.
+- [Auth Worker guide](../services/auth-worker/README.md) — local setup, D1
+  migrations, deployment, webhook configuration, and client routes.
+- [Website guide](../website/README.md) — static-site development, deployment,
+  account behavior, and remaining browser-session work.
 
 The interface may demonstrate a future operation only when it labels that
 boundary clearly. A screen is not evidence that the corresponding privileged
@@ -62,4 +71,5 @@ Use these labels consistently in code review and documentation:
 | **Fixture** | The real transaction model runs only on repository-owned test data. |
 | **Preview** | The interface exists, but the production backend is deliberately unavailable. |
 | **Prepared** | Infrastructure exists but cannot be used publicly until a release gate is satisfied. |
+| **Deployed boundary** | The service is live for Early Access, while named production/release gates remain open. |
 | **Planned** | Design or research only; no working product claim. |

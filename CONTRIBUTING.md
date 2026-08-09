@@ -61,6 +61,20 @@ cargo test --locked --manifest-path src-tauri/Cargo.toml
 Tests should cover cancellation, partial failure, stale inputs, verification
 failure, rollback, and unrelated external edits where applicable.
 
+## Identity and service changes
+
+Keep bot tokens, webhook secrets, signing keys, refresh credentials, challenge
+tokens, and personal Telegram data outside commits, screenshots, fixtures, and
+logs. React may receive a public profile and display state; native refresh
+credentials and stable device identity stay behind Rust, while bot secrets stay
+in the Worker environment.
+
+Run `npm run bot:test` for Worker contracts. Auth changes also require malformed
+input, expiry, denial, replay, revocation, and one-time redemption coverage plus
+a production-safe smoke test that prints no credential values. A green macOS
+test does not replace a human-driven Windows Credential Manager and Telegram
+pass.
+
 ## Pull requests
 
 A reviewable pull request includes:
@@ -75,4 +89,3 @@ A reviewable pull request includes:
 
 Keep unrelated refactors out of the change. Never include secrets, local user
 data, generated installers, or assistant attribution in commits.
-

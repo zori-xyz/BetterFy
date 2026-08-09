@@ -1,30 +1,37 @@
 # BetterFy auth worker
 
-This Cloudflare Worker is the first deployable authentication boundary for BetterFy.
-It receives Telegram webhooks, issues ten-minute one-time codes, stores only
-keyed hashes, and exposes the code verification endpoint already used by the
-desktop client.
+This Cloudflare Worker is BetterFy's deployed identity, Telegram bot, session,
+avatar, entitlement, and release-metadata boundary. Native desktop sign-in uses
+a ten-minute device challenge with an explicit Telegram approve or deny action.
+The Worker stores keyed challenge, device, code, access-token, and refresh-token
+hashes rather than the corresponding bearer values.
 
-It issues twelve-hour opaque sessions for the website. Desktop exchanges a code
-for a fifteen-minute access session and a single-use rotating refresh credential
-with a fixed thirty-day family lifetime. Only keyed token hashes are stored in
-D1. Replay revokes the credential family and its access sessions; the native app
-stores the refresh credential in Credential Manager or Keychain.
+It issues twelve-hour opaque sessions for the website. Desktop challenge
+redemption or fallback-code exchange returns a fifteen-minute access session and
+a single-use rotating refresh credential with a fixed thirty-day family
+lifetime. Replay revokes the credential family and its access sessions; the
+native app stores the refresh credential and stable public device ID in
+Credential Manager or Keychain.
 
 The primary desktop route is challenge-bound Telegram confirmation. Rust keeps
 the stable device identifier, the bot requires an explicit approve or deny
 action, and the approved challenge can be redeemed once. The six-digit code
 remains available as a cross-device fallback.
 
+Challenge creation, Telegram lookup, approval, denial, and redemption use the
+latest D1 primary state for the security-sensitive transition. This avoids
+accepting replica lag as part of the authentication contract.
+
 The Worker offers 3-day and 15-day Stars passes plus recurring 30-day access.
 Wallet Pay is intentionally not exposed inside the bot for this digital access;
 see `../../docs/PAYMENTS_ARCHITECTURE.md`.
 
-## Before setup
+## Secret rotation before public release
 
-The bot token previously pasted into a chat must be revoked in BotFather with
-`/revoke`. Never reuse it. Create a fresh token and place it only in Cloudflare
-secrets or a local ignored `.dev.vars` file.
+Any bot token ever pasted into a chat, screenshot, terminal recording, or issue
+must be revoked in BotFather with `/revoke` before public release. The
+replacement belongs only in Cloudflare secrets or a local ignored `.dev.vars`
+file; it must never enter this repository or a client bundle.
 
 ## Local setup
 

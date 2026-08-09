@@ -28,11 +28,17 @@ the action falls back to the official Releases page.
 
 ## Telegram account boundary
 
-The static site never validates Telegram identity and contains no bot secret.
-Until the auth service exists, the account action opens `@BeterFyBot` and
-explicitly remains in Early Access state.
+The static site contains no bot secret and never validates Telegram identity by
+itself. It opens `@BeterFyBot`, exchanges the user's six-digit fallback code with
+the deployed auth Worker, and receives a revocable twelve-hour opaque web
+session. The session is kept in `sessionStorage`, so closing the tab clears the
+local copy. The site can show the Telegram-backed profile and proxied avatar,
+list privacy-safe web/desktop sessions, revoke an owned session, and require a
+valid session before enabling its download action.
 
-Once the auth service is deployed, set `VITE_BETTERFY_AUTH_URL` to its HTTPS web
-login entry point during the site build. Telegram verification, browser session
-cookies, CSRF protection, token rotation, and account storage remain server-side
-as defined in `docs/IDENTITY_AND_WEB_ARCHITECTURE.md`.
+`VITE_BETTERFY_AUTH_URL` must be an allowlisted HTTPS Worker origin. The public
+GitHub repository and its release artifacts remain directly accessible, so the
+website download control is an account UX gate rather than access control over
+GitHub. HTTP-only browser cookies, CSRF protection, account deletion, and a
+retention policy remain release work as defined in
+`../docs/IDENTITY_AND_WEB_ARCHITECTURE.md`.

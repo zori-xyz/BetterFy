@@ -5,17 +5,19 @@ goal is one BetterFy profile across desktop and web, confirmed through
 `@BeterFyBot`, without placing bot secrets, long-lived tokens, or privileged
 engine operations in React or the public website.
 
-## Product sequence
+## Delivery sequence
 
 1. Define the account, device, entitlement, and public-profile contracts.
-2. Build the authentication service and database migrations behind a local test
-   environment.
-3. Connect `@BeterFyBot` to that service and implement single-use device codes.
-4. Store the desktop session in the operating-system credential vault and expose
-   only a neutral signed-in profile to React.
-5. Add profile editing and sync with explicit offline/conflict states.
-6. Publish the public website for product information, downloads, documentation,
-   release checksums, privacy terms, and the same account boundary.
+2. Deploy the Worker, D1 migrations, Telegram webhook, six-digit fallback, and
+   revocable browser sessions.
+3. Add challenge-bound native Telegram approve/deny, one-time redemption, and
+   rotating desktop credentials stored behind Rust.
+4. Publish the public website with code sign-in, profile/avatar display,
+   privacy-safe session controls, and an authenticated download action.
+5. Add secure browser cookies, account deletion/retention, profile editing, and
+   explicit sync conflict states.
+6. Complete human-driven Windows evidence for vault persistence, Telegram
+   approve/deny, restart, expiry, revocation, and refresh replay.
 
 The site and bot do not unlock Dota writes. Engine deployment keeps its own
 confirmation, backup, journal, and recovery gates.
@@ -43,10 +45,12 @@ bundled in the desktop application, written to logs, or included in diagnostics.
    device public identifier. Challenges are single-use, expire after ten minutes,
    and have strict creation limits. The device identifier stays in Rust and the
    operating-system vault; React receives only the deep link and public timing.
-4. The desktop polls at the server-provided interval. `pending`, `approved`,
-   `denied`, `expired`, and `rate_limited` remain distinct states.
+4. The desktop polls at the server-provided interval. React receives distinct
+   `pending`, `confirmed`, `denied`, and `expired` states; challenge creation
+   reports rate limiting separately.
 5. Approval can be redeemed exactly once for a short-lived access token and a
-   rotating refresh token. Replay invalidates the token family and records a
+   rotating refresh token. Replaying the challenge cannot mint a second family.
+   Replaying a used refresh credential invalidates its family and records a
    privacy-minimal security event.
 6. Rust stores the refresh token in Windows Credential Manager (and Keychain for
    macOS development). React receives neither token.
@@ -56,29 +60,33 @@ the primary path. Telegram identity is never treated as proof of a Steam account
 
 ## Profile contract
 
-The first profile version contains:
+The implemented public auth profile contains:
 
 - opaque BetterFy user ID;
-- display name and optional approved avatar;
-- interface language and theme preference;
-- created/updated version for optimistic concurrency;
-- device list with user-revocable sessions;
-- subscription/entitlement facts returned by the server;
-- saved preset references by immutable content identity, never arbitrary paths.
+- Telegram display name and optional username;
+- an avatar-availability flag plus authenticated image proxy;
+- `early-access` or `premium` access state;
+- active plan, expiry, and recurring state when applicable;
+- opaque current-session ID and privacy-safe revocable session summaries.
 
-Profile writes use an idempotency key and expected version. A stale write returns
-`profile_conflict`; the client never silently overwrites a newer server record.
-Offline edits remain local until the user chooses which version wins.
+Theme, profile editing, saved-preset synchronization, optimistic versioning,
+offline conflict resolution, and arbitrary remote profile fields are not part
+of the current server contract. When added, writes must use an idempotency key
+and expected version; the client must never silently overwrite a newer record.
 
 ## Public website boundary
 
-The first site ships as a separate deployable application with:
+The implemented static site is a separate deployable application with:
 
 - landing and product explanation in Russian and English;
-- verified Windows download and release checksum/signature links;
-- changelog, status, documentation, privacy, and terms;
-- Telegram sign-in and a minimal profile/device-session page;
-- no catalog install button until signed catalog delivery exists.
+- a GitHub release resolver constrained to this repository;
+- six-digit Telegram fallback sign-in;
+- a minimal profile/avatar and device-session page;
+- an account-gated download control with an explicit public-GitHub boundary;
+- no desktop engine commands or catalog installation capability.
+
+Release checksums/signatures, full changelog/status documentation, privacy and
+terms pages, and secure cookie sessions remain required before public launch.
 
 The desktop API origin and website origin are separate allowlisted clients.
 The current static GitHub Pages slice keeps its opaque twelve-hour bearer token
@@ -89,19 +97,24 @@ deny-by-default. Security
 headers, rate limits, structured redacted logs, database backups, and token-key
 rotation are release requirements rather than later cleanup.
 
-## Acceptance evidence
+## Evidence and remaining gates
 
-- unit tests for code expiry, single use, denial, replay, throttling, and token rotation;
-- integration tests with a fake Telegram update and disposable database;
-- desktop tests proving secrets never cross IPC or diagnostics;
-- profile conflict/offline/revocation tests;
-- website accessibility, RU/EN, theme, CSP, and download-integrity checks;
-- a documented account deletion and retention path before public launch.
+Automated evidence currently covers code normalization and freshness, challenge
+parsing and terminal states, malformed route denial, webhook secret checks,
+origin allowlisting, refresh expiry/replay/revocation, avatar byte validation,
+privacy-safe client labels, Rust credential DTO boundaries, frontend builds,
+and native Windows compilation. A production-safe smoke test verifies challenge
+creation and immediate pending polling without printing credentials.
 
-## Implemented first slice
+Still required: disposable-D1 end-to-end webhook tests, a human-driven Windows
+approve/deny/expiry/vault/restart pass, browser accessibility and CSP evidence,
+profile conflict tests once editable profiles exist, payment sandbox evidence,
+and a documented account deletion and retention path.
 
-`services/auth-worker` now provides the narrow manual-code slice used by the
-current desktop UI:
+## Implemented identity boundary
+
+`services/auth-worker`, the public website, and the native Rust bridge now
+provide the following Early Access boundary:
 
 - Telegram webhook requests require Telegram's secret header before their body
   is parsed;
@@ -116,7 +129,7 @@ current desktop UI:
 - 3-day and 15-day one-time Stars passes plus recurring 30-day access share the
   same pre-checkout validation, idempotent payment event, refund, cancellation,
   and Premium-entitlement boundary;
-- a twelve-hour opaque session joins the website and current desktop flow;
+- a twelve-hour opaque session authenticates the current website flow;
   profile photos are referenced by Telegram `file_id` and proxied server-side,
   so the bot token never appears in client code or image URLs;
 - active twelve-hour sessions now carry opaque public IDs and privacy-safe
@@ -128,8 +141,9 @@ current desktop UI:
   gate rather than access control over the public repository.
 
 This is deliberately not presented as complete account infrastructure.
-Desktop manual-code exchange now issues a fifteen-minute access session and a
-single-use refresh credential with a fixed thirty-day family lifetime. Rust
+Desktop challenge redemption and manual-code fallback issue a fifteen-minute
+access session and a single-use refresh credential with a fixed thirty-day
+family lifetime. Rust
 stores the refresh credential in Windows Credential Manager or macOS Keychain,
 keeps the access token in process memory, proxies authenticated profile calls,
 and returns neither token to React. Every successful refresh revokes the prior
@@ -139,7 +153,9 @@ the full family and all related access sessions.
 Challenge-bound deep links are now implemented as the primary native sign-in:
 the bot requires an explicit approve/deny callback, polling distinguishes
 pending, denied, expired, and redeemed states, and redemption can issue only one
-rotating desktop credential family. The six-digit code remains the cross-device
-fallback. Secure browser cookies, account deletion/retention, and end-to-end
-Windows vault and Telegram interaction testing remain required before the
-identity layer is declared production-complete.
+rotating desktop credential family. Security-sensitive challenge reads begin on
+the latest D1 primary state rather than depending on replica timing. The
+six-digit code remains the website and cross-device fallback. Secure browser
+cookies, account deletion/retention, and end-to-end Windows vault and Telegram
+interaction testing remain required before the identity layer is declared
+production-complete.

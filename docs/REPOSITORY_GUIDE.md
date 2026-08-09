@@ -55,11 +55,14 @@ add generated signatures, assistant credits, or promotional filler.
 | `src-tauri/src/` | privileged filesystem, process, Steam, Dota, preset, and transaction logic |
 | `src-tauri/fixtures/` | safe inputs for deterministic engine and recovery tests |
 | `scripts/` | local and CI verification, Windows packaging helpers, and audits |
+| `services/auth-worker/` | Telegram webhook, identity, sessions, avatars, entitlements, D1 migrations, and Worker tests |
+| `website/` | public static site and its unprivileged browser account surface |
 | `docs/` | product, engine, build, release, and contribution contracts |
 | `.github/workflows/` | native Windows validation and signed release publication |
 
-Changes to Rust commands, release workflows, updater settings, or recovery
-contracts require maintainer review.
+Changes to Rust commands, auth/session contracts, D1 migrations, payment state,
+release workflows, updater settings, or recovery contracts require maintainer
+review.
 
 ## Recommended GitHub settings
 
@@ -85,4 +88,3 @@ Never commit:
 - `target`, `node_modules`, local app-data journals, or generated installers;
 - third-party art without recorded provenance and redistribution permission;
 - logs containing usernames, machine paths, Telegram identities, or access data.
-
