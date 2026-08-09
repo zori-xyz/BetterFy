@@ -10,7 +10,6 @@ import {
   Globe2,
   Menu,
   PackageCheck,
-  RotateCcw,
   ShieldCheck,
   Sparkles,
   X,
@@ -26,7 +25,7 @@ type ReleaseState =
 
 const RELEASES_URL = "https://github.com/zori-xyz/BetterFy/releases/latest";
 const REPOSITORY_URL = "https://github.com/zori-xyz/BetterFy";
-const BOT_URL = "https://t.me/BetterFyBot?start=web_login";
+const BOT_URL = "https://t.me/BeterFyBot?start=web_login";
 
 function allowlistedExternalUrl(value: string | undefined, kind: "auth" | "release") {
   if (!value) return undefined;
@@ -86,8 +85,17 @@ const copy = {
     integrity: "Версия и файлы берутся только из официального репозитория BetterFy.",
     communityEyebrow: "BETTERFY / COMMUNITY",
     communityTitle: "Строим BetterFy вместе.",
-    communityBody: "Ранние сборки, обратная связь и доступ к будущему аккаунту живут рядом с @BetterFyBot.",
-    openBot: "Открыть @BetterFyBot",
+    statusEyebrow: "BETTERFY / СЕЙЧАС",
+    statusTitle: "Честный статус, без тумана.",
+    statusBody: "Мы открываем возможности поэтапно: только после проверки их полного сценария на Windows.",
+    statusItems: [
+      ["01", "Уже в сборке", "Поиск Dota и чтение состояния"],
+      ["02", "Проверяется", "План, архивы и безопасный staging"],
+      ["03", "Следом", "Telegram-профиль и production-патчинг"],
+    ],
+    statusNote: "Запись в файлы игры остаётся закрытой до доказанного восстановления.",
+    communityBody: "Ранние сборки, обратная связь и доступ к будущему аккаунту живут рядом с @BeterFyBot.",
+    openBot: "Открыть @BeterFyBot",
     github: "Открыть GitHub",
     faqTitle: "Коротко о важном.",
     faq: [
@@ -99,11 +107,12 @@ const copy = {
     modalEyebrow: "ACCOUNT / EARLY ACCESS",
     modalTitle: "Один профиль для сайта и приложения.",
     modalBody: "Telegram-вход подключится к этому экрану после запуска защищённого auth-сервиса и настройки разрешённого домена в BotFather.",
-    modalPending: "Сейчас @BetterFyBot остаётся каналом раннего доступа. Сайт не имитирует успешный вход и не хранит Telegram-данные локально.",
+    modalPending: "Сейчас @BeterFyBot остаётся каналом раннего доступа. Сайт не имитирует успешный вход и не хранит Telegram-данные локально.",
     authCta: "Продолжить в Telegram",
     authReady: "Перейти к защищённому входу",
     close: "Закрыть",
     footer: "Открытый проект для тех, кто хочет собрать свою Dota спокойно.",
+    footerMeta: "EARLY ACCESS · OPEN DEVELOPMENT",
   },
   en: {
     nav: ["Features", "How it works", "Download"],
@@ -147,8 +156,17 @@ const copy = {
     integrity: "Versions and files come only from the official BetterFy repository.",
     communityEyebrow: "BETTERFY / COMMUNITY",
     communityTitle: "Build BetterFy with us.",
-    communityBody: "Early builds, feedback, and future account access meet at @BetterFyBot.",
-    openBot: "Open @BetterFyBot",
+    statusEyebrow: "BETTERFY / NOW",
+    statusTitle: "A clear status. No fog.",
+    statusBody: "Capabilities open in stages, only after their complete Windows journey is verified.",
+    statusItems: [
+      ["01", "In the build", "Dota discovery and read-only state"],
+      ["02", "Under verification", "Plans, archives, and safe staging"],
+      ["03", "Up next", "Telegram profile and production patching"],
+    ],
+    statusNote: "Game-file writes remain locked until recovery is proven.",
+    communityBody: "Early builds, feedback, and future account access meet at @BeterFyBot.",
+    openBot: "Open @BeterFyBot",
     github: "Open GitHub",
     faqTitle: "The important bits.",
     faq: [
@@ -160,11 +178,12 @@ const copy = {
     modalEyebrow: "ACCOUNT / EARLY ACCESS",
     modalTitle: "One profile across web and desktop.",
     modalBody: "Telegram sign-in will connect here once the protected auth service is live and the website domain is allowlisted in BotFather.",
-    modalPending: "For now, @BetterFyBot remains the Early Access channel. This site does not simulate a successful login or store Telegram data locally.",
+    modalPending: "For now, @BeterFyBot remains the Early Access channel. This site does not simulate a successful login or store Telegram data locally.",
     authCta: "Continue in Telegram",
     authReady: "Continue to secure sign-in",
     close: "Close",
     footer: "An open project for players who want to compose their Dota calmly.",
+    footerMeta: "EARLY ACCESS · OPEN DEVELOPMENT",
   },
 } as const;
 
@@ -236,6 +255,7 @@ function Site() {
   const [language, setLanguage] = useState<Language>(readStoredLanguage);
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [headerCompact, setHeaderCompact] = useState(false);
   const accountTrigger = useRef<HTMLButtonElement>(null);
   const t = copy[language];
   const release = useLatestRelease(language);
@@ -245,6 +265,34 @@ function Site() {
     document.documentElement.lang = language;
     storeLanguage(language);
   }, [language]);
+
+  useEffect(() => {
+    const updateHeader = () => setHeaderCompact(window.scrollY > 28);
+    updateHeader();
+    window.addEventListener("scroll", updateHeader, { passive: true });
+    return () => window.removeEventListener("scroll", updateHeader);
+  }, []);
+
+  useEffect(() => {
+    const targets = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
+    if (!("IntersectionObserver" in window) || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      targets.forEach((target) => target.classList.add("is-visible"));
+      return;
+    }
+    document.documentElement.classList.add("site-motion-ready");
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("is-visible");
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -7%" });
+    targets.forEach((target) => observer.observe(target));
+    return () => {
+      observer.disconnect();
+      document.documentElement.classList.remove("site-motion-ready");
+    };
+  }, []);
 
   useEffect(() => {
     if (!accountOpen) return;
@@ -270,7 +318,7 @@ function Site() {
   return (
     <div className="site-shell">
       <a className="skip-link" href="#main">{t.skip}</a>
-      <header className="site-header">
+      <header className={headerCompact ? "site-header is-compact" : "site-header"}>
         <a className="brand-link" href="#top" aria-label="BetterFy home">
           <BetterFyWordmark compact />
         </a>
@@ -297,7 +345,7 @@ function Site() {
 
       <main id="main">
         <section className="hero" id="top">
-          <div className="hero-copy">
+          <div className="hero-copy" data-reveal>
             <span className="eyebrow"><Sparkles />{t.eyebrow}</span>
             <h1><span>{t.heroLine1}</span><strong>{t.heroLine2}</strong></h1>
             <p>{t.heroBody}</p>
@@ -307,7 +355,7 @@ function Site() {
             </div>
           </div>
 
-          <div className="hero-system" aria-label={t.current}>
+          <div className="hero-system" aria-label={t.current} data-reveal>
             <div className="system-aura" />
             <div className="system-topline"><span>{t.current}</span><strong><Check />{t.currentState}</strong></div>
             <div className="system-core">
@@ -326,14 +374,14 @@ function Site() {
         </section>
 
         <section className="journey" id="journey">
-          <div className="section-intro">
+          <div className="section-intro" data-reveal>
             <span className="eyebrow">{t.chapter}</span>
             <h2>{t.sectionTitle}</h2>
             <p>{t.sectionBody}</p>
           </div>
           <div className="journey-list">
             {t.steps.map(([number, title, body]) => (
-              <article key={number}>
+              <article key={number} data-reveal>
                 <span>{number}</span>
                 <h3>{title}</h3>
                 <p>{body}</p>
@@ -343,18 +391,18 @@ function Site() {
         </section>
 
         <section className="engine" id="features">
-          <div className="engine-visual" aria-hidden="true">
+          <div className="engine-visual" aria-hidden="true" data-reveal>
             <div className="engine-rail rail-one"><i /><i /><i /></div>
             <div className="engine-rail rail-two"><i /><i /><i /></div>
             <div className="engine-node"><ShieldCheck /></div>
           </div>
-          <div className="engine-copy">
+          <div className="engine-copy" data-reveal>
             <span className="eyebrow">{t.engineEyebrow}</span>
             <h2>{t.engineTitle}</h2>
             <p>{t.engineBody}</p>
             <ul>{t.enginePoints.map((point) => <li key={point}><Check />{point}</li>)}</ul>
           </div>
-          <aside className="proof-card">
+          <aside className="proof-card" data-reveal>
             <span>{t.proofLabel}</span>
             <strong>{t.proofTitle}</strong>
             <p>{t.proofBody}</p>
@@ -362,13 +410,31 @@ function Site() {
           </aside>
         </section>
 
+        <section className="status-section" aria-labelledby="status-title">
+          <div className="status-intro" data-reveal>
+            <span className="eyebrow"><Zap />{t.statusEyebrow}</span>
+            <h2 id="status-title">{t.statusTitle}</h2>
+            <p>{t.statusBody}</p>
+          </div>
+          <div className="status-track" data-reveal>
+            {t.statusItems.map(([number, title, body], index) => (
+              <article key={number} className={index === 0 ? "is-current" : ""}>
+                <span>{number}</span>
+                <div><strong>{title}</strong><p>{body}</p></div>
+                <i aria-hidden="true" />
+              </article>
+            ))}
+            <div className="status-note"><ShieldCheck />{t.statusNote}</div>
+          </div>
+        </section>
+
         <section className="download-section" id="download">
-          <div className="download-copy">
+          <div className="download-copy" data-reveal>
             <span className="eyebrow">{t.releaseEyebrow}</span>
             <h2>{t.releaseTitle}</h2>
             <p>{t.releaseBody}</p>
           </div>
-          <div className="release-card">
+          <div className="release-card" data-reveal>
             <div className="release-icon"><Download /></div>
             <div className="release-details">
               <span>{releaseLabel}</span>
@@ -382,7 +448,7 @@ function Site() {
           </div>
         </section>
 
-        <section className="community">
+        <section className="community" data-reveal>
           <div>
             <span className="eyebrow">{t.communityEyebrow}</span>
             <h2>{t.communityTitle}</h2>
@@ -394,7 +460,7 @@ function Site() {
           </div>
         </section>
 
-        <section className="faq">
+        <section className="faq" data-reveal>
           <h2>{t.faqTitle}</h2>
           <div>
             {t.faq.map(([question, answer]) => (
@@ -407,10 +473,17 @@ function Site() {
         </section>
       </main>
 
-      <footer>
-        <BetterFyWordmark compact />
+      <footer className="site-footer">
+        <div className="footer-brand">
+          <BetterFyWordmark compact />
+          <span>{t.footerMeta}</span>
+        </div>
         <p>{t.footer}</p>
-        <div><a href={REPOSITORY_URL} target="_blank" rel="noreferrer">GitHub</a><a href={`${REPOSITORY_URL}/blob/main/docs/README.md`} target="_blank" rel="noreferrer">Docs</a><a href={BOT_URL} target="_blank" rel="noreferrer">Telegram</a></div>
+        <nav className="footer-links" aria-label="Footer">
+          <a href={REPOSITORY_URL} target="_blank" rel="noreferrer">GitHub</a>
+          <a href={`${REPOSITORY_URL}/blob/main/docs/README.md`} target="_blank" rel="noreferrer">Docs</a>
+          <a href={BOT_URL} target="_blank" rel="noreferrer">@BeterFyBot</a>
+        </nav>
       </footer>
 
       {accountOpen && (

@@ -37,7 +37,7 @@ await page.getByRole("button", { name: "EN" }).click();
 const language = await page.evaluate(() => document.documentElement.lang);
 const homeTitle = await page.getByRole("heading", { level: 1 }).innerText();
 const primaryLabel = await page.getByRole("button", { name: /Open build/ }).innerText();
-const communityHref = await page.getByRole("link", { name: /Open @BetterFyBot/ }).first().getAttribute("href");
+const communityHref = await page.getByRole("link", { name: /Open @BeterFyBot/ }).first().getAttribute("href");
 await page.getByRole("button", { name: /^Build$/ }).click();
 const buildRoute = await page.getByRole("heading", { name: /Compose your own Dota/ }).count();
 await page.getByRole("button", { name: /Inspect fixture plan/ }).click();

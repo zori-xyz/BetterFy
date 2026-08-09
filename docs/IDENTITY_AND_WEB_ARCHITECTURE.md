@@ -2,7 +2,7 @@
 
 This document fixes the next product boundary after trusted content intake. The
 goal is one BetterFy profile across desktop and web, confirmed through
-`@BetterFyBot`, without placing bot secrets, long-lived tokens, or privileged
+`@BeterFyBot`, without placing bot secrets, long-lived tokens, or privileged
 engine operations in React or the public website.
 
 ## Product sequence
@@ -10,7 +10,7 @@ engine operations in React or the public website.
 1. Define the account, device, entitlement, and public-profile contracts.
 2. Build the authentication service and database migrations behind a local test
    environment.
-3. Connect `@BetterFyBot` to that service and implement single-use device codes.
+3. Connect `@BeterFyBot` to that service and implement single-use device codes.
 4. Store the desktop session in the operating-system credential vault and expose
    only a neutral signed-in profile to React.
 5. Add profile editing and sync with explicit offline/conflict states.
@@ -37,7 +37,7 @@ bundled in the desktop application, written to logs, or included in diagnostics.
 
 1. The desktop asks the API for a random device challenge and receives a short
    challenge ID, expiry, polling interval, and bot deep link.
-2. The user opens `@BetterFyBot`. The bot shows the device and application context
+2. The user opens `@BeterFyBot`. The bot shows the device and application context
    and requires an explicit confirmation.
 3. The server stores only a keyed hash of any human-entered code. Codes are
    single-use, expire after ten minutes, have strict attempt and issue limits, and

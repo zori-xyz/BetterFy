@@ -41,6 +41,19 @@ try {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     if (overflow > 1) throw new Error(`${testCase.language} ${testCase.width}px overflows horizontally by ${overflow}px`);
 
+    const footerWordmark = page.locator(".site-footer .wordmark");
+    await footerWordmark.scrollIntoViewIfNeeded();
+    const wordmarkGeometry = await footerWordmark.evaluate((node) => {
+      const better = node.querySelector(".wordmark-better")?.getBoundingClientRect();
+      const fy = node.querySelector(".wordmark-fy")?.getBoundingClientRect();
+      return better && fy ? { gap: fy.left - better.right, width: node.getBoundingClientRect().width } : null;
+    });
+    if (!wordmarkGeometry || wordmarkGeometry.gap > 12 || wordmarkGeometry.width > 180) {
+      throw new Error(`${testCase.language} ${testCase.width}px footer wordmark geometry is invalid: ${JSON.stringify(wordmarkGeometry)}`);
+    }
+    const botHref = await page.getByRole("link", { name: "@BeterFyBot", exact: true }).getAttribute("href");
+    if (!botHref?.startsWith("https://t.me/BeterFyBot")) throw new Error(`Unexpected Telegram link: ${botHref}`);
+
     await page.getByRole("button", { name: testCase.language === "ru" ? "Войти" : "Sign in" }).click();
     const dialog = page.getByRole("dialog");
     if (!(await dialog.isVisible())) throw new Error(`${testCase.language} ${testCase.width}px account dialog did not open`);

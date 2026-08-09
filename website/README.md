@@ -29,7 +29,7 @@ the action falls back to the official Releases page.
 ## Telegram account boundary
 
 The static site never validates Telegram identity and contains no bot secret.
-Until the auth service exists, the account action opens `@BetterFyBot` and
+Until the auth service exists, the account action opens `@BeterFyBot` and
 explicitly remains in Early Access state.
 
 Once the auth service is deployed, set `VITE_BETTERFY_AUTH_URL` to its HTTPS web

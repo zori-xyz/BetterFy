@@ -53,7 +53,7 @@ const copy = {
     error: "Путь не подтверждён",
     errorText: "Нужна папка «dota 2 beta» с игровыми файлами. Проверь путь и попробуй снова.",
     community: "Нужна помощь с установкой?",
-    communityAction: "Написать в @BetterFyBot",
+    communityAction: "Написать в @BeterFyBot",
     demoBadge: "PROTOTYPE",
     previewAction: "Продолжить в preview-режиме",
     artLabel: "DOTA COMPANIONS / CONNECTION",
@@ -89,7 +89,7 @@ const copy = {
     error: "Path not verified",
     errorText: "Choose a “dota 2 beta” folder containing the game files, then try again.",
     community: "Need help with setup?",
-    communityAction: "Message @BetterFyBot",
+    communityAction: "Message @BeterFyBot",
     demoBadge: "PROTOTYPE",
     previewAction: "Continue in preview mode",
     artLabel: "DOTA COMPANIONS / CONNECTION",
@@ -188,7 +188,7 @@ export default function OnboardingFlow({
         <div className="setup-community">
           <MessageCircle />
           <span>{t.community}</span>
-          <a href="https://t.me/BetterFyBot" target="_blank" rel="noreferrer">
+          <a href="https://t.me/BeterFyBot" target="_blank" rel="noreferrer">
             {t.communityAction}<ExternalLink />
           </a>
         </div>

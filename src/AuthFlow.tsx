@@ -50,7 +50,7 @@ const copy = {
     privacy: "Код действует 10 минут и привязан к этому устройству.",
     codeStep: "TELEGRAM / CODE",
     codeTitle: "Введи код из бота",
-    codeText: "Шесть цифр из сообщения @BetterFyBot.",
+    codeText: "Шесть цифр из сообщения @BeterFyBot.",
     codeLabel: "Одноразовый код",
     back: "Назад",
     confirm: "Подтвердить",
@@ -92,7 +92,7 @@ const copy = {
     privacy: "The code lasts 10 minutes and is bound to this device.",
     codeStep: "TELEGRAM / CODE",
     codeTitle: "Enter the bot code",
-    codeText: "Six digits from the @BetterFyBot message.",
+    codeText: "Six digits from the @BeterFyBot message.",
     codeLabel: "One-time code",
     back: "Back",
     confirm: "Confirm",
@@ -186,7 +186,7 @@ export default function AuthFlow({ onComplete }: { onComplete: (session: AuthSes
             <div className="telegram-actions">
               <a
                 className="telegram-primary"
-                href="https://t.me/BetterFyBot"
+                href="https://t.me/BeterFyBot"
                 target="_blank"
                 rel="noreferrer"
                 onClick={() => window.setTimeout(openCode, 0)}
@@ -197,7 +197,7 @@ export default function AuthFlow({ onComplete }: { onComplete: (session: AuthSes
               </a>
               <a
                 className="telegram-web"
-                href="https://t.me/BetterFyBot"
+                href="https://t.me/BeterFyBot"
                 target="_blank"
                 rel="noreferrer"
                 onClick={() => window.setTimeout(openCode, 0)}

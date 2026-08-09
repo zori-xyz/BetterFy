@@ -200,7 +200,7 @@ are in [CONTRIBUTING.md](CONTRIBUTING.md) and
 ## Community
 
 Early Access news, setup help, and product feedback are handled through
-[@BetterFyBot](https://t.me/BeterFyBot).
+[@BeterFyBot](https://t.me/BeterFyBot).
 
 ## Legal status
 

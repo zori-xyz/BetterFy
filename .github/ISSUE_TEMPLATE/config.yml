@@ -1,6 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: BetterFy setup and Early Access help
-    url: https://t.me/BetterFyBot
+    url: https://t.me/BeterFyBot
     about: Use the bot for installation help and account access. Do not send secrets or private logs.
-

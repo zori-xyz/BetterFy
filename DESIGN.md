@@ -173,7 +173,7 @@ design-system decision.
 - Community promotion always follows the screen's primary product action and
   never competes with game connection, build review, recovery, or Play.
 - Link only to verified BetterFy destinations. The current canonical contact is
-  `https://t.me/BetterFyBot`.
+  `https://t.me/BeterFyBot`.
 - Never fabricate member counts, activity, ratings, testimonials, drops, or
   release cadence. Empty and upcoming community surfaces must say so directly.
 - Community content must retain author, source, permission, and verification

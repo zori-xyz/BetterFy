@@ -227,7 +227,7 @@ const copy = {
       label: "BETTERFY COMMUNITY",
       title: "Делаем BetterFy вместе",
       text: "Новости раннего доступа, обратная связь и помощь с установкой — напрямую через нашего бота.",
-      action: "Открыть @BetterFyBot",
+      action: "Открыть @BeterFyBot",
       note: "Без выдуманных рейтингов — только живой канал команды и игроков.",
       libraryTitle: "Community builds",
       libraryText: "Здесь появятся проверенные авторские подборки сообщества. Источник и автор будут указаны у каждой сборки.",
@@ -305,7 +305,7 @@ const copy = {
       plan: "Founding Tester",
       community: "Комьюнити и поддержка",
       communityText: "Новости, ранние сборки и связь с командой.",
-      openBot: "Открыть @BetterFyBot",
+      openBot: "Открыть @BeterFyBot",
       signout: "Выйти из профиля",
     },
   },
@@ -444,7 +444,7 @@ const copy = {
       label: "BETTERFY COMMUNITY",
       title: "Build BetterFy with us",
       text: "Early Access news, feedback, and setup help — directly through our bot.",
-      action: "Open @BetterFyBot",
+      action: "Open @BeterFyBot",
       note: "No fabricated ratings — just a direct channel between the team and players.",
       libraryTitle: "Community builds",
       libraryText: "Verified community collections will appear here. Every build will retain its source and author.",
@@ -522,7 +522,7 @@ const copy = {
       plan: "Founding Tester",
       community: "Community and support",
       communityText: "News, early builds, and direct contact with the team.",
-      openBot: "Open @BetterFyBot",
+      openBot: "Open @BeterFyBot",
       signout: "Sign out",
     },
   },
@@ -1023,18 +1023,18 @@ function Workspace({
                   <span className="profile-brand-avatar" aria-label="BetterFy"><BetterFyMark /></span>
                   <div>
                     <h3>{session?.displayName ?? "BetterFy Tester"}</h3>
-                    <p>{session?.username ? `@${session.username}` : "@BetterFyBot"}</p>
+                    <p>{session?.username ? `@${session.username}` : "@BeterFyBot"}</p>
                   </div>
                   <i><Check /></i>
                 </div>
                 <dl className="profile-facts">
-                  <div><dt>{t.panel.signedIn}</dt><dd>@BetterFyBot</dd></div>
+                  <div><dt>{t.panel.signedIn}</dt><dd>@BeterFyBot</dd></div>
                   <div><dt>Access</dt><dd>{session?.accessTier ?? t.panel.plan}</dd></div>
                 </dl>
                 <section className="profile-community">
                   <MessageCircle />
                   <div><strong>{t.panel.community}</strong><small>{t.panel.communityText}</small></div>
-                  <a href="https://t.me/BetterFyBot" target="_blank" rel="noreferrer" aria-label={t.panel.openBot}>
+                  <a href="https://t.me/BeterFyBot" target="_blank" rel="noreferrer" aria-label={t.panel.openBot}>
                     <ExternalLink />
                   </a>
                 </section>
@@ -1667,7 +1667,7 @@ function CommunityCard({ t }: { t: typeof copy.ru.community }) {
         <p>{t.text}</p>
         <small>{t.note}</small>
       </div>
-      <a href="https://t.me/BetterFyBot" target="_blank" rel="noreferrer">
+      <a href="https://t.me/BeterFyBot" target="_blank" rel="noreferrer">
         <MessageCircle />{t.action}<ExternalLink />
       </a>
     </aside>
