@@ -66,6 +66,25 @@ This document is the durable visual authority for BetterFy. Read
   generic SaaS card grids, neon outlines on every element, and decorative
   background circles copied from the references.
 
+## Product voice
+
+- Write like the people building BetterFy, not like a SaaS landing-page
+  generator. The voice is direct, informed, slightly sharp, and grounded in
+  Dota, builds, files, conflicts, installation, and recovery.
+- A headline must name a player action or a verifiable product fact. A body
+  paragraph must explain what BetterFy does, what it does not do yet, or what
+  happens after the user acts.
+- Prefer concrete nouns and verbs: select, check, replace, install, restore,
+  file, package, build, Dota, Windows. Delete copy that remains valid after
+  replacing BetterFy with an unrelated product name.
+- Do not use synthetic contrast slogans or vague atmosphere as product copy:
+  no "noise versus clarity", "calm workspace", "no fog", "seamless journey",
+  "built together", "next level", or similar AI/SaaS filler in either Russian
+  or English.
+- Keep labels short. Put implementation detail in supporting text, and never
+  make unsupported safety, release, authentication, or patching claims for the
+  sake of a stronger sentence.
+
 ## Motion grammar
 
 - Motion expresses causality and route continuity, never decoration.

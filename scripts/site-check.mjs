@@ -8,6 +8,14 @@ const cases = [
   { language: "ru", width: 390, height: 844 },
   { language: "en", width: 390, height: 844 },
 ];
+const forbiddenCopy = [
+  /без технического шума/i,
+  /без тумана/i,
+  /спокойное пространство/i,
+  /technical noise/i,
+  /no fog/i,
+  /calm workspace/i,
+];
 
 async function assertStorageDeniedFallback() {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
@@ -38,6 +46,9 @@ try {
     });
     await page.addInitScript((language) => localStorage.setItem("betterfy-site-language", language), testCase.language);
     await page.goto(origin, { waitUntil: "networkidle" });
+    const visibleCopy = await page.locator("body").innerText();
+    const forbiddenMatch = forbiddenCopy.find((pattern) => pattern.test(visibleCopy));
+    if (forbiddenMatch) throw new Error(`${testCase.language} contains forbidden generic copy: ${forbiddenMatch}`);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     if (overflow > 1) throw new Error(`${testCase.language} ${testCase.width}px overflows horizontally by ${overflow}px`);
 
