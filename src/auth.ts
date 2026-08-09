@@ -6,9 +6,19 @@ export type AuthSession = {
   accessExpiresAt?: number;
   accessPlan?: string;
   accessRecurring?: boolean;
+  sessionId?: string;
   sessionToken?: string;
   avatarAvailable?: boolean;
   source: "demo" | "server";
+};
+
+export type DeviceSession = {
+  sessionId: string;
+  clientKind: "web" | "desktop" | "unknown";
+  createdAt: number;
+  lastUsedAt: number;
+  expiresAt: number;
+  current: boolean;
 };
 
 const authEndpoint = import.meta.env.VITE_BETTERFY_AUTH_URL as string | undefined;
@@ -25,6 +35,7 @@ const isAuthSession = (value: unknown): value is Omit<AuthSession, "source"> => 
     && (record.accessExpiresAt === undefined || typeof record.accessExpiresAt === "number")
     && (record.accessPlan === undefined || typeof record.accessPlan === "string")
     && (record.accessRecurring === undefined || typeof record.accessRecurring === "boolean")
+    && (record.sessionId === undefined || typeof record.sessionId === "string")
     && (record.sessionToken === undefined || typeof record.sessionToken === "string")
     && (record.avatarAvailable === undefined || typeof record.avatarAvailable === "boolean")
   );
@@ -61,6 +72,40 @@ export async function revokeAuthSession(session: AuthSession | null): Promise<vo
   }).catch(() => undefined);
 }
 
+export async function fetchDeviceSessions(session: AuthSession): Promise<DeviceSession[]> {
+  if (session.source !== "server" || !session.sessionToken) return [];
+  const response = await fetch(authenticatedEndpoint("/v1/session/devices", session), {
+    headers: { Authorization: `Bearer ${session.sessionToken}` },
+    credentials: "omit",
+  });
+  if (!response.ok) throw new Error("auth_sessions_unavailable");
+  const payload: unknown = await response.json();
+  if (!payload || typeof payload !== "object" || !Array.isArray((payload as { sessions?: unknown }).sessions)) {
+    throw new Error("auth_sessions_invalid");
+  }
+  return (payload as { sessions: DeviceSession[] }).sessions.filter((device) => (
+    device
+    && typeof device.sessionId === "string"
+    && ["web", "desktop", "unknown"].includes(device.clientKind)
+    && typeof device.expiresAt === "number"
+    && typeof device.current === "boolean"
+  ));
+}
+
+export async function revokeDeviceSession(session: AuthSession, sessionId: string): Promise<boolean> {
+  if (session.source !== "server" || !session.sessionToken) return false;
+  if (!/^(?:[0-9a-f]{32}|[0-9a-f-]{36})$/i.test(sessionId)) throw new Error("auth_session_invalid");
+  const response = await fetch(authenticatedEndpoint("/v1/session/devices/revoke", session), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session.sessionToken}`, "content-type": "application/json" },
+    body: JSON.stringify({ sessionId }),
+    credentials: "omit",
+  });
+  if (!response.ok) throw new Error("auth_session_revoke_failed");
+  const payload = await response.json() as { ok?: boolean };
+  return payload.ok === true;
+}
+
 export const authMode: "demo" | "server" = authEndpoint ? "server" : "demo";
 
 export async function verifyTelegramCode(code: string): Promise<AuthSession> {
@@ -89,7 +134,7 @@ export async function verifyTelegramCode(code: string): Promise<AuthSession> {
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, clientKind: "desktop" }),
       credentials: "omit",
       signal: controller.signal,
     });

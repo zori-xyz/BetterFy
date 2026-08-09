@@ -230,7 +230,7 @@ main { display: block; }
 .footer-links a:hover::after { right: 0; }
 
 .modal-backdrop { position: fixed; z-index: 60; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(2,2,5,.76); animation: fadeIn 220ms ease both; }
-.account-modal { position: relative; width: min(100%, 570px); padding: 44px; border: 1px solid rgba(216,117,255,.25); border-radius: 27px; background: linear-gradient(145deg, #15101e, #0b0a10); box-shadow: 0 40px 120px rgba(0,0,0,.6); animation: modalIn 320ms var(--ease-out) both; }
+.account-modal { position: relative; width: min(100%, 570px); max-height: min(860px, calc(100vh - 40px)); padding: 44px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid rgba(216,117,255,.25); border-radius: 27px; background: linear-gradient(145deg, #15101e, #0b0a10); box-shadow: 0 40px 120px rgba(0,0,0,.6); animation: modalIn 320ms var(--ease-out) both; }
 .modal-close { position: absolute; top: 18px; right: 18px; width: 40px; height: 40px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.03); cursor: pointer; }
 .modal-close svg { width: 17px; }
 .modal-icon { width: 62px; height: 62px; margin-bottom: 30px; display: grid; place-items: center; border-radius: 18px; background: rgba(168,77,255,.13); color: #d37bff; }
@@ -246,6 +246,19 @@ main { display: block; }
 .account-access strong, .account-access small { display: block; }
 .account-access strong { color: var(--text); font-size: 13px; line-height: 1.4; }
 .account-access small { margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.4; }
+.account-sessions { margin: -8px 0 24px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.018); }
+.account-sessions summary { min-height: 52px; padding: 0 15px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; list-style: none; color: var(--muted); font-size: 11px; font-weight: 700; }
+.account-sessions summary::-webkit-details-marker { display: none; }
+.account-sessions summary span { color: #c873f5; font: 500 9px/1 "JetBrains Mono", monospace; letter-spacing: .12em; }
+.account-sessions > div { border-top: 1px solid var(--line); }
+.account-sessions article { min-height: 62px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); }
+.account-sessions article:last-of-type { border-bottom: 0; }
+.account-sessions article strong, .account-sessions article small { display: block; }
+.account-sessions article strong { font-size: 11px; }
+.account-sessions article small { margin-top: 5px; color: var(--quiet); font-size: 9px; }
+.account-sessions article button { min-height: 34px; padding: 0 11px; border: 1px solid rgba(255,110,112,.18); border-radius: 9px; background: rgba(255,110,112,.045); color: #e58a8c; cursor: pointer; font-size: 9px; font-weight: 700; }
+.account-sessions article button:disabled { cursor: wait; opacity: .48; }
+.account-sessions > div > p { padding: 12px 14px; margin: 0; color: #ff8f9a; font-size: 10px; line-height: 1.5; }
 .account-modal .telegram-action { width: 100%; }
 .modal-signout { width: 100%; cursor: pointer; color: var(--text); }
 .auth-code-form { display: grid; gap: 12px; margin-top: 18px; }

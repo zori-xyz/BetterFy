@@ -55,6 +55,10 @@ The public bot cards are served from `/bot` on the BetterFy GitHub Pages site.
 - `GET /v1/session/avatar` proxies the current Telegram avatar without exposing
   the bot token or Telegram file URL to a client.
 - `POST /v1/session/logout` revokes the presented session.
+- `GET /v1/session/devices` lists active sessions using only neutral client
+  labels; it never stores or returns IP addresses, user agents, or device names.
+- `POST /v1/session/devices/revoke` revokes one session owned by the signed-in
+  BetterFy profile.
 - `GET /v1/releases/latest` resolves the latest allowlisted Windows asset for an
   authenticated client. GitHub releases remain public; this route gates the
   BetterFy website flow, not direct GitHub access.

@@ -118,6 +118,10 @@ current desktop UI:
 - a twelve-hour opaque session joins the website and current desktop flow;
   profile photos are referenced by Telegram `file_id` and proxied server-side,
   so the bot token never appears in client code or image URLs;
+- active twelve-hour sessions now carry opaque public IDs and privacy-safe
+  `web`, `desktop`, or `unknown` labels. The website and desktop profile can
+  list and revoke sessions owned by the current BetterFy user without storing
+  IP addresses, user agents, or operating-system device names;
 - the website download control requires a valid BetterFy session. The Windows
   artifact itself remains public on GitHub Releases, so this is an account UX
   gate rather than access control over the public repository.

@@ -102,6 +102,18 @@ export function selectTelegramAvatarFileId(profilePhotos) {
   }).file_id;
 }
 
+export function detectImageContentType(bytes) {
+  const value = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes ?? 0);
+  if (value.length >= 3 && value[0] === 0xff && value[1] === 0xd8 && value[2] === 0xff) return "image/jpeg";
+  if (value.length >= 8
+    && value[0] === 0x89 && value[1] === 0x50 && value[2] === 0x4e && value[3] === 0x47
+    && value[4] === 0x0d && value[5] === 0x0a && value[6] === 0x1a && value[7] === 0x0a) return "image/png";
+  if (value.length >= 12
+    && String.fromCharCode(...value.slice(0, 4)) === "RIFF"
+    && String.fromCharCode(...value.slice(8, 12)) === "WEBP") return "image/webp";
+  return null;
+}
+
 async function refreshAvatar(env, telegramUserId, now, force = false) {
   const existing = await env.AUTH_DB.prepare(
     "SELECT avatar_file_id, avatar_checked_at FROM betterfy_users WHERE telegram_user_id = ?",
@@ -124,15 +136,20 @@ async function refreshAvatar(env, telegramUserId, now, force = false) {
   }
 }
 
-async function issueSession(env, userId, now) {
+export function normalizeClientKind(value) {
+  return value === "web" || value === "desktop" ? value : "unknown";
+}
+
+async function issueSession(env, userId, now, clientKind) {
   const token = generateSessionToken();
+  const sessionId = crypto.randomUUID();
   const hash = await keyedHash(`session:${token}`, env.AUTH_CODE_PEPPER);
   await env.AUTH_DB.prepare(
     `INSERT INTO auth_sessions
-      (session_hash, user_id, created_at, expires_at, last_used_at)
-     VALUES (?, ?, ?, ?, ?)`,
-  ).bind(hash, userId, now, now + SESSION_TTL_SECONDS, now).run();
-  return token;
+      (session_hash, user_id, created_at, expires_at, last_used_at, session_id, client_kind)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(hash, userId, now, now + SESSION_TTL_SECONDS, now, sessionId, normalizeClientKind(clientKind)).run();
+  return { token, sessionId };
 }
 
 function bearerToken(request) {
@@ -147,7 +164,8 @@ async function authenticatedUser(request, env, now) {
   const hash = await keyedHash(`session:${token}`, env.AUTH_CODE_PEPPER);
   const user = await env.AUTH_DB.prepare(
     `SELECT u.user_id, u.telegram_user_id, u.display_name, u.username, u.language,
-            u.avatar_file_id, u.avatar_checked_at, s.expires_at
+            u.avatar_file_id, u.avatar_checked_at, s.expires_at,
+            s.session_id, s.client_kind, s.created_at, s.last_used_at
      FROM auth_sessions s
      JOIN betterfy_users u ON u.user_id = s.user_id
      WHERE s.session_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ?`,
@@ -186,10 +204,10 @@ async function profileAvatar(request, env, origin) {
   if (!response.ok || !response.body) return json({ error: "avatar_unavailable" }, 404, headers);
   const declaredSize = Number(response.headers.get("content-length") ?? 0);
   if (declaredSize > 5 * 1024 * 1024) return json({ error: "avatar_too_large" }, 413, headers);
-  const contentType = response.headers.get("content-type") ?? "image/jpeg";
-  if (!contentType.startsWith("image/")) return json({ error: "avatar_unavailable" }, 404, headers);
   const bytes = await response.arrayBuffer();
   if (bytes.byteLength > 5 * 1024 * 1024) return json({ error: "avatar_too_large" }, 413, headers);
+  const contentType = detectImageContentType(bytes);
+  if (!contentType) return json({ error: "avatar_unavailable" }, 404, headers);
   return new Response(bytes, {
     headers: {
       ...headers,
@@ -219,6 +237,7 @@ async function sessionProfile(request, env, origin) {
     accessPlan: isEntitlementActive(entitlement, now) ? plan?.id : undefined,
     accessRecurring: isEntitlementActive(entitlement, now) ? Boolean(plan?.recurring && entitlement.canceled_at == null) : false,
     sessionExpiresAt: user.expires_at,
+    sessionId: user.session_id ?? undefined,
   }, 200, headers);
 }
 
@@ -231,6 +250,55 @@ async function revokeSession(request, env, origin) {
     "UPDATE auth_sessions SET revoked_at = ? WHERE session_hash = ? AND revoked_at IS NULL",
   ).bind(Math.floor(Date.now() / 1000), hash).run();
   return json({ ok: Number(result.meta?.changes ?? 0) === 1 }, 200, headers);
+}
+
+async function listDeviceSessions(request, env, origin) {
+  const headers = corsHeaders(origin);
+  const now = Math.floor(Date.now() / 1000);
+  const user = await authenticatedUser(request, env, now);
+  if (!user) return json({ error: "unauthorized" }, 401, headers);
+  const result = await env.AUTH_DB.prepare(
+    `SELECT session_id, client_kind, created_at, last_used_at, expires_at
+     FROM auth_sessions
+     WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ? AND session_id IS NOT NULL
+     ORDER BY last_used_at DESC
+     LIMIT 20`,
+  ).bind(user.user_id, now).all();
+  return json({
+    sessions: (result.results ?? []).map((session) => ({
+      sessionId: session.session_id,
+      clientKind: normalizeClientKind(session.client_kind),
+      createdAt: session.created_at,
+      lastUsedAt: session.last_used_at,
+      expiresAt: session.expires_at,
+      current: session.session_id === user.session_id,
+    })),
+  }, 200, headers);
+}
+
+async function revokeDeviceSession(request, env, origin) {
+  const headers = corsHeaders(origin);
+  const now = Math.floor(Date.now() / 1000);
+  const user = await authenticatedUser(request, env, now);
+  if (!user) return json({ error: "unauthorized" }, 401, headers);
+  let payload;
+  try {
+    payload = await readJson(request);
+  } catch {
+    return json({ error: "invalid_request" }, 400, headers);
+  }
+  const sessionId = typeof payload?.sessionId === "string" ? payload.sessionId : "";
+  if (!/^(?:[0-9a-f]{32}|[0-9a-f-]{36})$/i.test(sessionId)) {
+    return json({ error: "invalid_session" }, 400, headers);
+  }
+  const result = await env.AUTH_DB.prepare(
+    `UPDATE auth_sessions SET revoked_at = ?
+     WHERE session_id = ? AND user_id = ? AND revoked_at IS NULL`,
+  ).bind(now, sessionId, user.user_id).run();
+  return json({
+    ok: Number(result.meta?.changes ?? 0) === 1,
+    current: sessionId === user.session_id,
+  }, 200, headers);
 }
 
 function allowedReleaseUrl(value) {
@@ -744,7 +812,7 @@ async function verifyCode(request, env, origin) {
 
   const approvedCard = user.language === "ru" ? "approved-ru.png" : "approved-en.png";
   const copy = COPY[user.language === "ru" ? "ru" : "en"];
-  const sessionToken = await issueSession(env, user.user_id, now);
+  const session = await issueSession(env, user.user_id, now, payload?.clientKind);
   try {
     await telegram(env, "sendPhoto", {
       chat_id: user.telegram_user_id,
@@ -761,7 +829,8 @@ async function verifyCode(request, env, origin) {
     displayName: user.display_name,
     username: user.username ?? undefined,
     accessTier: isEntitlementActive(entitlement, now) ? "premium" : "early-access",
-    sessionToken,
+    sessionToken: session.token,
+    sessionId: session.sessionId,
     avatarAvailable: Boolean(user.avatar_file_id),
     accessExpiresAt: isEntitlementActive(entitlement, now) ? entitlement.active_until : undefined,
     accessPlan: isEntitlementActive(entitlement, now) ? plan?.id : undefined,
@@ -790,6 +859,8 @@ export async function route(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
     if (request.method === "GET" && url.pathname === "/v1/session/profile") return sessionProfile(request, env, origin);
     if (request.method === "GET" && url.pathname === "/v1/session/avatar") return profileAvatar(request, env, origin);
+    if (request.method === "GET" && url.pathname === "/v1/session/devices") return listDeviceSessions(request, env, origin);
+    if (request.method === "POST" && url.pathname === "/v1/session/devices/revoke") return revokeDeviceSession(request, env, origin);
     if (request.method === "POST" && url.pathname === "/v1/session/logout") return revokeSession(request, env, origin);
     if (request.method === "GET" && url.pathname === "/v1/releases/latest") return latestRelease(request, env, origin);
     return json({ error: "method_not_allowed" }, 405, corsHeaders(origin));

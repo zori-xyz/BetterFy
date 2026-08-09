@@ -50,7 +50,14 @@ import courierSuccess from "./assets/courier-success.png";
 import enigmaProgress from "./assets/enigma-progress.webp";
 import pudgeRecovery from "./assets/pudge-recovery.png";
 import wukongBuild from "./assets/wukong-build.png";
-import { fetchTelegramAvatar, revokeAuthSession, type AuthSession } from "./auth";
+import {
+  fetchDeviceSessions,
+  fetchTelegramAvatar,
+  revokeAuthSession,
+  revokeDeviceSession,
+  type AuthSession,
+  type DeviceSession,
+} from "./auth";
 import {
   EngineFault,
   engineBridge,
@@ -307,6 +314,14 @@ const copy = {
       premiumAccess: "BetterFy Premium",
       activeUntil: "до",
       recurring: "продлевается каждые 30 дней",
+      sessions: "Активные входы",
+      currentSession: "Это приложение",
+      webSession: "Браузер",
+      desktopSession: "Приложение Windows",
+      unknownSession: "Ранее созданный вход",
+      sessionUntil: "до",
+      revokeSession: "Завершить",
+      sessionsUnavailable: "Не удалось обновить список входов.",
       plan: "Founding Tester",
       community: "Комьюнити и поддержка",
       communityText: "Новости, ранние сборки и связь с командой.",
@@ -529,6 +544,14 @@ const copy = {
       premiumAccess: "BetterFy Premium",
       activeUntil: "until",
       recurring: "renews every 30 days",
+      sessions: "Active sessions",
+      currentSession: "This app",
+      webSession: "Browser",
+      desktopSession: "Windows app",
+      unknownSession: "Earlier session",
+      sessionUntil: "until",
+      revokeSession: "End",
+      sessionsUnavailable: "The session list could not be refreshed.",
       plan: "Founding Tester",
       community: "Community and support",
       communityText: "News, early builds, and direct contact with the team.",
@@ -662,6 +685,9 @@ function Workspace({
   const [selectedModIds, setSelectedModIds] = useState<string[]>(() =>
     getStoredStringArray("betterfy:selected-mods"));
   const [telegramAvatarUrl, setTelegramAvatarUrl] = useState<string | null>(null);
+  const [deviceSessions, setDeviceSessions] = useState<DeviceSession[]>([]);
+  const [deviceSessionsError, setDeviceSessionsError] = useState(false);
+  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
 
   const accessSummary = useMemo(() => {
     if (!session || session.accessTier !== "premium") return t.panel.earlyAccess;
@@ -694,6 +720,35 @@ function Workspace({
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [session]);
+
+  useEffect(() => {
+    if (panel !== "profile" || !session) return undefined;
+    let active = true;
+    setDeviceSessionsError(false);
+    fetchDeviceSessions(session)
+      .then((devices) => { if (active) setDeviceSessions(devices); })
+      .catch(() => { if (active) setDeviceSessionsError(true); });
+    return () => { active = false; };
+  }, [panel, session]);
+
+  const endDeviceSession = async (device: DeviceSession) => {
+    if (!session || revokingSessionId) return;
+    setRevokingSessionId(device.sessionId);
+    setDeviceSessionsError(false);
+    try {
+      const revoked = await revokeDeviceSession(session, device.sessionId);
+      if (!revoked) throw new Error("session_revoke_failed");
+      if (device.current) {
+        onSignOut();
+        return;
+      }
+      setDeviceSessions((current) => current.filter((item) => item.sessionId !== device.sessionId));
+    } catch {
+      setDeviceSessionsError(true);
+    } finally {
+      setRevokingSessionId(null);
+    }
+  };
 
   const clearPanelCloseTimer = () => {
     if (panelCloseTimer.current === null) return;
@@ -1080,6 +1135,34 @@ function Workspace({
                   <div><dt>{t.panel.access}</dt><dd>{accessSummary}</dd></div>
                   {session?.accessRecurring && <div><dt>{t.panel.premiumAccess}</dt><dd>{t.panel.recurring}</dd></div>}
                 </dl>
+                <details className="profile-sessions">
+                  <summary>{t.panel.sessions}<span>{String(deviceSessions.length).padStart(2, "0")}</span></summary>
+                  <div>
+                    {deviceSessions.map((device) => {
+                      const label = device.current
+                        ? t.panel.currentSession
+                        : device.clientKind === "desktop"
+                          ? t.panel.desktopSession
+                          : device.clientKind === "web"
+                            ? t.panel.webSession
+                            : t.panel.unknownSession;
+                      const expiry = new Intl.DateTimeFormat(language === "ru" ? "ru-RU" : "en-GB", {
+                        day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+                      }).format(new Date(device.expiresAt * 1000));
+                      return (
+                        <article key={device.sessionId}>
+                          <span><strong>{label}</strong><small>{t.panel.sessionUntil} {expiry}</small></span>
+                          {!device.current && (
+                            <button disabled={revokingSessionId === device.sessionId} onClick={() => void endDeviceSession(device)}>
+                              {t.panel.revokeSession}
+                            </button>
+                          )}
+                        </article>
+                      );
+                    })}
+                    {deviceSessionsError && <p>{t.panel.sessionsUnavailable}</p>}
+                  </div>
+                </details>
                 <section className="profile-community">
                   <MessageCircle />
                   <div><strong>{t.panel.community}</strong><small>{t.panel.communityText}</small></div>

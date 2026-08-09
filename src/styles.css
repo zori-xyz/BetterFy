@@ -2143,6 +2143,19 @@ button:disabled { cursor: not-allowed; }
 .profile-facts div:last-child { border: 0; }
 .profile-facts dt { color: #706b77; font-size: 8px; }
 .profile-facts dd { max-width: 62%; margin: 0; color: var(--text); font-size: 9px; font-weight: 700; line-height: 1.45; text-align: right; overflow-wrap: anywhere; }
+.profile-sessions { margin-top: 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.016); }
+.profile-sessions summary { min-height: 48px; padding: 0 14px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; list-style: none; color: #77727f; font-size: 8px; font-weight: 700; }
+.profile-sessions summary::-webkit-details-marker { display: none; }
+.profile-sessions summary span { color: #bd6bed; font: 500 8px/1 "JetBrains Mono", monospace; letter-spacing: .12em; }
+.profile-sessions > div { border-top: 1px solid var(--line); }
+.profile-sessions article { min-height: 56px; padding: 9px 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); }
+.profile-sessions article:last-of-type { border-bottom: 0; }
+.profile-sessions article strong, .profile-sessions article small { display: block; }
+.profile-sessions article strong { font-size: 9px; }
+.profile-sessions article small { margin-top: 5px; color: #696572; font-size: 7px; }
+.profile-sessions article button { min-height: 31px; padding: 0 10px; border: 1px solid rgba(255,110,112,.18); border-radius: 8px; background: rgba(255,110,112,.045); color: #d98385; cursor: pointer; font-size: 7px; font-weight: 700; }
+.profile-sessions article button:disabled { cursor: wait; opacity: .48; }
+.profile-sessions > div > p { padding: 11px 13px; margin: 0; color: #de8184; font-size: 8px; line-height: 1.45; }
 .profile-community {
   min-height: 78px;
   margin-top: 14px;

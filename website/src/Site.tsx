@@ -31,10 +31,18 @@ type WebSession = {
   accessExpiresAt?: number;
   accessPlan?: string;
   accessRecurring?: boolean;
+  sessionId?: string;
   avatarAvailable: boolean;
 };
 
 type AuthStage = "idle" | "checking" | "code" | "verifying" | "ready";
+type DeviceSession = {
+  sessionId: string;
+  clientKind: "web" | "desktop" | "unknown";
+  lastUsedAt: number;
+  expiresAt: number;
+  current: boolean;
+};
 
 const RELEASES_URL = "https://github.com/zori-xyz/BetterFy/releases/latest";
 const REPOSITORY_URL = "https://github.com/zori-xyz/BetterFy";
@@ -134,6 +142,14 @@ const copy = {
     accessPremium: "BetterFy Premium",
     accessUntil: "до",
     accessRecurring: "продлевается каждые 30 дней",
+    sessions: "Активные входы",
+    currentSession: "Этот браузер",
+    webSession: "Браузер",
+    desktopSession: "Приложение Windows",
+    unknownSession: "Ранее созданный вход",
+    sessionUntil: "до",
+    revokeSession: "Завершить",
+    sessionsUnavailable: "Не удалось обновить список входов.",
     signOut: "Выйти",
     downloadLocked: "Войди через Telegram, чтобы скачать сборку.",
     downloadError: "Сборка пока недоступна. Попробуй ещё раз позже.",
@@ -217,6 +233,14 @@ const copy = {
     accessPremium: "BetterFy Premium",
     accessUntil: "until",
     accessRecurring: "renews every 30 days",
+    sessions: "Active sessions",
+    currentSession: "This browser",
+    webSession: "Browser",
+    desktopSession: "Windows app",
+    unknownSession: "Earlier session",
+    sessionUntil: "until",
+    revokeSession: "End session",
+    sessionsUnavailable: "The session list could not be refreshed.",
     signOut: "Sign out",
     downloadLocked: "Sign in with Telegram to download the build.",
     downloadError: "The build is unavailable right now. Try again later.",
@@ -304,6 +328,9 @@ function Site() {
   const [authError, setAuthError] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState("");
+  const [deviceSessions, setDeviceSessions] = useState<DeviceSession[]>([]);
+  const [deviceSessionsError, setDeviceSessionsError] = useState(false);
+  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
   const accountTrigger = useRef<HTMLButtonElement>(null);
   const t = copy[language];
   const release = useLatestRelease(language);
@@ -374,6 +401,51 @@ function Site() {
     };
   }, [authSession?.avatarAvailable, authUrl, sessionToken]);
 
+  useEffect(() => {
+    if (!accountOpen || !sessionToken || !authSession) return undefined;
+    const controller = new AbortController();
+    setDeviceSessionsError(false);
+    fetch(new URL("/v1/session/devices", authUrl), {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+      credentials: "omit",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("sessions_unavailable");
+        return response.json() as Promise<{ sessions?: DeviceSession[] }>;
+      })
+      .then((payload) => setDeviceSessions(Array.isArray(payload.sessions) ? payload.sessions : []))
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setDeviceSessionsError(true);
+      });
+    return () => controller.abort();
+  }, [accountOpen, authSession, authUrl, sessionToken]);
+
+  const revokeDevice = async (device: DeviceSession) => {
+    if (!sessionToken || revokingSessionId) return;
+    setRevokingSessionId(device.sessionId);
+    setDeviceSessionsError(false);
+    try {
+      const response = await fetch(new URL("/v1/session/devices/revoke", authUrl), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: device.sessionId }),
+        credentials: "omit",
+      });
+      if (!response.ok) throw new Error("session_revoke_failed");
+      if (device.current) {
+        signOut();
+        return;
+      }
+      setDeviceSessions((current) => current.filter((item) => item.sessionId !== device.sessionId));
+    } catch {
+      setDeviceSessionsError(true);
+    } finally {
+      setRevokingSessionId(null);
+    }
+  };
+
   const verifyCode = async () => {
     const code = authCode.replace(/\D/g, "");
     if (!/^\d{6}$/.test(code)) {
@@ -386,7 +458,7 @@ function Site() {
       const response = await fetch(new URL("/v1/auth/telegram/code", authUrl), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, clientKind: "web" }),
         credentials: "omit",
       });
       if (!response.ok) throw new Error("invalid_code");
@@ -684,6 +756,34 @@ function Site() {
                   <ShieldCheck />
                   <span><strong>{accessLabel}</strong>{authSession.accessRecurring && <small>{t.accessRecurring}</small>}</span>
                 </div>
+                <details className="account-sessions">
+                  <summary>{t.sessions}<span>{String(deviceSessions.length).padStart(2, "0")}</span></summary>
+                  <div>
+                    {deviceSessions.map((device) => {
+                      const label = device.current
+                        ? t.currentSession
+                        : device.clientKind === "desktop"
+                          ? t.desktopSession
+                          : device.clientKind === "web"
+                            ? t.webSession
+                            : t.unknownSession;
+                      const expiry = new Intl.DateTimeFormat(language === "ru" ? "ru-RU" : "en-GB", {
+                        day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+                      }).format(new Date(device.expiresAt * 1000));
+                      return (
+                        <article key={device.sessionId}>
+                          <span><strong>{label}</strong><small>{t.sessionUntil} {expiry}</small></span>
+                          {!device.current && (
+                            <button type="button" disabled={revokingSessionId === device.sessionId} onClick={() => void revokeDevice(device)}>
+                              {t.revokeSession}
+                            </button>
+                          )}
+                        </article>
+                      );
+                    })}
+                    {deviceSessionsError && <p>{t.sessionsUnavailable}</p>}
+                  </div>
+                </details>
                 <button className="secondary-action modal-signout" type="button" onClick={signOut}>{t.signOut}</button>
               </>
             ) : (
