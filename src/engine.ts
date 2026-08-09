@@ -163,6 +163,21 @@ export type SteamConfigReceipt = {
   rolledBack: boolean;
 };
 
+export type GameDeploymentReceipt = {
+  operationId: string;
+  beforeSha256: string | null;
+  installedSha256: string;
+  backupVerified: boolean;
+  committed: boolean;
+  rolledBack: boolean;
+};
+
+export type GameDeploymentRecovery = {
+  inspected: number;
+  rolledBack: number;
+  markedFailed: number;
+};
+
 export interface EngineBridge {
   intakeFixtureContent(packageIds: string[]): Promise<ContentReceipt[]>;
   beginContentDownload(packageId: string): Promise<ContentDownloadStatus>;
@@ -186,6 +201,9 @@ export interface EngineBridge {
   applySteamLaunchOptions(preview: SteamLaunchOptionPreview): Promise<SteamConfigReceipt>;
   rollbackSteamLaunchOptions(operationId: string): Promise<SteamConfigReceipt>;
   recoverSteamLaunchOptions(): Promise<SteamConfigReceipt[]>;
+  deployStagedVpk(gamePath: string, receipt: BuildReceipt): Promise<GameDeploymentReceipt>;
+  rollbackGameDeployment(gamePath: string, operationId: string): Promise<GameDeploymentReceipt>;
+  recoverGameDeployments(gamePath: string): Promise<GameDeploymentRecovery>;
   startSteamAfterProfile(
     profileToken: string,
     operationId: string | null,
@@ -405,6 +423,15 @@ export const mockEngine: EngineBridge = {
   },
   async recoverSteamLaunchOptions() {
     return [];
+  },
+  async deployStagedVpk() {
+    throw new EngineFault("desktop_runtime_required", "deploy_staged_vpk");
+  },
+  async rollbackGameDeployment() {
+    throw new EngineFault("desktop_runtime_required", "rollback_game_deployment");
+  },
+  async recoverGameDeployments() {
+    throw new EngineFault("desktop_runtime_required", "recover_game_deployments");
   },
   async startSteamAfterProfile() {
     throw new EngineFault("platform_not_supported", "start_steam_after_profile");
@@ -638,6 +665,44 @@ export const engineBridge: EngineBridge = {
       throw new EngineFault("invalid_response", "recover_steam_launch_options");
     }
     return result;
+  },
+  async deployStagedVpk(gamePath, receipt) {
+    if (!isTauriRuntime()) return mockEngine.deployStagedVpk(gamePath, receipt);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "deploy_staged_vpk",
+      invoke<GameDeploymentReceipt>("deploy_staged_vpk", {
+        request: {
+          gamePath,
+          stagedOperationId: receipt.operationId,
+          expectedPlanId: receipt.planId,
+          confirmed: true,
+        },
+      }),
+      90_000,
+    );
+  },
+  async rollbackGameDeployment(gamePath, operationId) {
+    if (!isTauriRuntime()) return mockEngine.rollbackGameDeployment(gamePath, operationId);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "rollback_game_deployment",
+      invoke<GameDeploymentReceipt>("rollback_game_deployment", {
+        request: { gamePath, operationId, confirmed: true },
+      }),
+      90_000,
+    );
+  },
+  async recoverGameDeployments(gamePath) {
+    if (!isTauriRuntime()) return mockEngine.recoverGameDeployments(gamePath);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "recover_game_deployments",
+      invoke<GameDeploymentRecovery>("recover_game_deployments", {
+        request: { gamePath, confirmed: true },
+      }),
+      90_000,
+    );
   },
   async startSteamAfterProfile(profileToken, operationId) {
     if (!isTauriRuntime()) {

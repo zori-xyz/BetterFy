@@ -60,7 +60,7 @@ enabled in small, recoverable slices.
 | Catalog and wardrobe | Product preview | Navigation, filtering, provenance fields, and local selection work; content download is not enabled. |
 | Presets | Implemented locally | Configurations are validated and stored atomically; JSON import and export are available. |
 | Authentication | Deployed Early Access boundary | Native desktop sign-in uses a ten-minute device-bound Telegram approve/deny challenge. A six-digit code remains the website and cross-device fallback. Web receives a revocable twelve-hour session; Rust keeps a fifteen-minute access token in memory and rotates a single-use refresh credential stored in Credential Manager or Keychain. Profile, avatar, entitlement, session listing, and revocation are implemented. Secure browser cookies, account deletion/retention, and a complete human-driven Windows auth pass remain release gates. |
-| Dota file deployment | Not enabled | BetterFy does not write a production VPK or replace Dota 2 files yet. |
+| Dota file deployment | Transaction foundation implemented | Rust builds and reopens a deterministic embedded VPK and has a fixed-slot backup, deploy, verify, recover, and rollback transaction covered by synthetic failure tests. No catalog package reaches it yet, so the production trigger remains closed pending Tree Mod intake and native Windows evidence. |
 | Public updates | Prepared, not released | Signed updater infrastructure exists; public releases require signing secrets and release approval. |
 
 No current build claims VAC safety, ban immunity, universal compatibility, or
@@ -176,8 +176,9 @@ The current engine follows these rules:
 - start Steam only, never Dota 2;
 - refuse rollback when an unrelated external edit would be overwritten.
 
-The production game-file pipeline must meet the same contract before Dota
-deployment is enabled. See [engine architecture](docs/ENGINE_ARCHITECTURE.md)
+The game-file transaction follows this contract in synthetic tests. It is not
+enabled for users until a provenance-accepted package reaches staging and the
+native Windows matrix passes. See [engine architecture](docs/ENGINE_ARCHITECTURE.md)
 and the [patching audit](docs/MINIFY_PATCHING_AUDIT.md).
 
 ## Branches and changes
@@ -206,6 +207,7 @@ are in [CONTRIBUTING.md](CONTRIBUTING.md) and
 - [Engine architecture](docs/ENGINE_ARCHITECTURE.md)
 - [Trusted content intake](docs/CONTENT_INTAKE_SECURITY.md)
 - [Minify patching audit](docs/MINIFY_PATCHING_AUDIT.md)
+- [Tree Mod pilot ledger](docs/TREE_MOD_PILOT.md)
 - [Payments and entitlements](docs/PAYMENTS_ARCHITECTURE.md)
 - [Identity and web architecture](docs/IDENTITY_AND_WEB_ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)

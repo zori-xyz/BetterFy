@@ -84,10 +84,24 @@ BetterFy must not force-terminate processes and must never launch Dota itself.
 - Restore staging and rerun diagnostics; no recoverable staging operation should
   remain.
 
-This flow writes only inside BetterFy application data. Production Dota file
-deployment is still disabled.
+This flow writes only inside BetterFy application data. The game-deployment
+transaction exists behind a strict verified-VPK boundary, but no current catalog
+package satisfies it. Do not report a real patch until the Tree Mod pilot is
+explicitly enabled in an internal build.
 
-## 7. Verify installation and updates
+## 7. Tree Mod pilot (only after an internal build marks it enabled)
+
+- Confirm `pak66_dir.vpk` is absent, or is identified by BetterFy as its own prior
+  install. A foreign file in that slot must block the operation.
+- Run with Dota open and confirm graceful shutdown is required before any write.
+- Patch Tree Mod, verify Steam restarts and Dota does not, then start Dota manually.
+- Confirm the default-terrain trees are replaced as described by the pilot.
+- Roll back and verify the exact previous target bytes return, or the initial
+  BetterFy target disappears.
+- Repeat with a failure-injection internal build on both sides of atomic publish.
+  Recovery must be deterministic and diagnostics must remain safe.
+
+## 8. Verify installation and updates
 
 - Install the same internal version over the existing installation and confirm
   that settings survive.

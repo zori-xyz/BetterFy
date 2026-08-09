@@ -37,7 +37,7 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - Preserve the Home, Mods, Skin Library, Settings, and Profile workflows.
 - Preserve Russian and English localization.
 - Mod selection must communicate added, removed, conflicting, building, ready, and error states unambiguously.
-- Production Dota deployment remains disabled; the interface must not imply that fixture or browser-preview behavior is verified game-file behavior.
+- Production Dota deployment remains unavailable to users until trusted Tree Mod intake and native Windows evidence pass; the interface must not imply that synthetic transaction tests are verified game-file behavior.
 - Original game files must be described as protected only where the prototype already presents that intended capability.
 - Avoid dependencies on Dota-owned artwork for core product identity. Dota-inspired assets should be transformed into a distinct BetterFy production language.
 - The repository is intended to be open source.
@@ -61,8 +61,9 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - Read-only Steam/Dota discovery and deterministic fixture BuildPlan commands
   in `src-tauri/src/main.rs`.
 - A versioned fixture-package contract, cancellable HTTPS fixture acquisition,
-  immutable SHA-256 content store, and ZIP metadata preflight. Production catalog
-  delivery, extraction, and Dota deployment remain disabled.
+  immutable SHA-256 content store, and ZIP metadata preflight. A deterministic
+  VPK builder plus an ownership-scoped deployment/recovery transaction pass
+  synthetic tests, but Tree Mod intake and live Windows deployment remain disabled.
 - A real local config manager backed by validated, atomic app-data storage,
   plus three built-in BetterFy Workshop presets resolved against the same
   Minify catalog IDs as the selection UI.
@@ -76,7 +77,7 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - Telegram Stars provides 3-day and 15-day passes plus recurring 30-day access.
   Privacy-safe per-device session listing and revocation are implemented.
 - Team web catalog: `https://h6rd.github.io/Dota2PornFxWeb/`.
-- No production catalog delivery, Dota deployment, compatibility benchmark, or
+- No production catalog delivery, live Dota deployment, compatibility benchmark, or
   community activity data is available yet. Future surfaces must not fabricate
   these claims.
 

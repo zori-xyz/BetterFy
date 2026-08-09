@@ -154,6 +154,11 @@ pub struct RollbackReceipt {
     removed_staging: bool,
 }
 
+pub(crate) struct VerifiedStagedVpk {
+    pub bytes: Vec<u8>,
+    pub sha256: String,
+}
+
 fn fixture_manifests() -> Result<Vec<FixtureManifest>, String> {
     [
         include_str!("../fixtures/mods/ambient-violet.json"),
@@ -613,6 +618,70 @@ fn validate_operation_id(operation_id: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub(crate) fn verified_staged_vpk(
+    app_data_root: &Path,
+    operation_id: &str,
+    expected_plan_id: &str,
+) -> Result<VerifiedStagedVpk, String> {
+    validate_operation_id(operation_id)?;
+    if expected_plan_id.len() != 71 || !expected_plan_id.starts_with("sha256:") {
+        return Err("build_plan_stale".to_string());
+    }
+    let (operations_root, journals_root) = prepare_owned_roots(app_data_root)?;
+    let journal = read_journal(&journals_root.join(format!("{operation_id}.json")))?;
+    if journal.operation_id != operation_id
+        || journal.plan_id != expected_plan_id
+        || journal.phase != OperationPhase::Ready
+        || journal.files.len() != 1
+    {
+        return Err("staged_vpk_not_ready".to_string());
+    }
+    let file = &journal.files[0];
+    if !file.staged
+        || file.destination != "pak66_dir.vpk"
+        || file.actual_sha256.as_deref() != Some(file.expected_sha256.as_str())
+    {
+        return Err("staged_vpk_not_ready".to_string());
+    }
+    let operation_root = operations_root.join(operation_id);
+    let staging_root = operation_root.join("staging");
+    for path in [&operation_root, &staging_root] {
+        reject_symlink(path)?;
+    }
+    let canonical_operations = operations_root
+        .canonicalize()
+        .map_err(|_| "staged_vpk_not_ready".to_string())?;
+    let canonical_staging = staging_root
+        .canonicalize()
+        .map_err(|_| "staged_vpk_not_ready".to_string())?;
+    if canonical_staging == canonical_operations
+        || !canonical_staging.starts_with(&canonical_operations)
+        || PathBuf::from(&journal.staged_root)
+            .canonicalize()
+            .map_err(|_| "staged_vpk_not_ready".to_string())?
+            != canonical_staging
+    {
+        return Err("staged_vpk_not_ready".to_string());
+    }
+    let target = canonical_staging.join("pak66_dir.vpk");
+    reject_symlink(&target)?;
+    let canonical_target = target
+        .canonicalize()
+        .map_err(|_| "staged_vpk_not_ready".to_string())?;
+    if !canonical_target.starts_with(&canonical_staging) || !canonical_target.is_file() {
+        return Err("staged_vpk_not_ready".to_string());
+    }
+    let bytes = fs::read(canonical_target).map_err(|_| "staged_vpk_not_ready".to_string())?;
+    if bytes.len() as u64 != file.size || sha256(&bytes) != file.expected_sha256 {
+        return Err("verification_failed".to_string());
+    }
+    crate::vpk::inspect(&bytes).map_err(|_| "staged_vpk_not_ready".to_string())?;
+    Ok(VerifiedStagedVpk {
+        bytes,
+        sha256: file.expected_sha256.clone(),
+    })
+}
+
 pub fn rollback_operation(
     app_data_root: &Path,
     operation_id: &str,
@@ -931,6 +1000,56 @@ mod tests {
         if root.exists() {
             fs::remove_dir_all(root).expect("cleanup");
         }
+    }
+
+    #[test]
+    fn deployment_boundary_accepts_only_a_verified_single_vpk_artifact() {
+        let root = temp_root("verified-vpk");
+        let (operations, journals) = prepare_owned_roots(&root).expect("roots");
+        let operation_id = "op-vpk-fixture-1";
+        let staging = operations.join(operation_id).join("staging");
+        fs::create_dir_all(&staging).expect("staging");
+        let bytes = crate::vpk::build(vec![crate::vpk::VpkInput {
+            path: "models/props_tree/tree_oak_01.vmdl_c",
+            bytes: b"compiled-tree",
+        }])
+        .expect("vpk");
+        let hash = sha256(&bytes);
+        fs::write(staging.join("pak66_dir.vpk"), &bytes).expect("artifact");
+        let timestamp = now_ms().expect("clock");
+        let plan_id = format!("sha256:{hash}");
+        atomic_write_json(
+            &journals.join(format!("{operation_id}.json")),
+            &BuildJournal {
+                schema_version: ENGINE_SCHEMA_VERSION,
+                operation_id: operation_id.to_string(),
+                plan_id: plan_id.clone(),
+                phase: OperationPhase::Ready,
+                created_at_ms: timestamp,
+                updated_at_ms: timestamp,
+                staged_root: staging.to_string_lossy().into_owned(),
+                files: vec![JournalFile {
+                    owner_id: "minify.tree-mod".to_string(),
+                    destination: "pak66_dir.vpk".to_string(),
+                    expected_sha256: hash.clone(),
+                    actual_sha256: Some(hash.clone()),
+                    size: bytes.len() as u64,
+                    staged: true,
+                }],
+                error_code: None,
+            },
+        )
+        .expect("journal");
+        let verified = verified_staged_vpk(&root, operation_id, &plan_id).expect("verified");
+        assert_eq!(verified.bytes, bytes);
+        fs::write(staging.join("pak66_dir.vpk"), b"tampered").expect("tamper");
+        assert_eq!(
+            verified_staged_vpk(&root, operation_id, &plan_id)
+                .err()
+                .as_deref(),
+            Some("verification_failed")
+        );
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[cfg(unix)]

@@ -4,12 +4,14 @@ mod archive_inspector;
 mod auth_session;
 mod build_engine;
 mod content_store;
+mod game_deployment;
 mod presets;
 mod remote_intake;
 mod runtime_control;
 mod steam_accounts;
 pub mod steam_config;
 mod system_diagnostics;
+mod vpk;
 
 use auth_session::{
     auth_begin_device_challenge, auth_cancel_device_challenge, auth_fetch_avatar,
@@ -23,6 +25,10 @@ use build_engine::{
     RollbackReceipt,
 };
 use content_store::{ContentIntakeRequest, ContentReceipt};
+use game_deployment::{
+    DeployStagedVpkRequest, DeploymentOperationRequest, DeploymentReceipt,
+    DeploymentRecoveryRequest, RecoveryReceipt,
+};
 use presets::{delete_preset, export_preset, import_preset, list_presets, save_preset};
 use remote_intake::ContentDownloadStatus;
 use runtime_control::{RuntimePrepareRequest, RuntimeState, SteamStartRequest};
@@ -234,7 +240,13 @@ fn collect_system_diagnostics(app: AppHandle, game_path: Option<String>) -> Syst
     let app_data = app.path().app_data_dir();
     let staging = app_data
         .as_deref()
-        .map(operation_diagnostic_counts)
+        .map(|root| {
+            let mut counts = operation_diagnostic_counts(root)?;
+            let deployments = game_deployment::diagnostic_counts(root)?;
+            counts.total = counts.total.saturating_add(deployments.total);
+            counts.recoverable = counts.recoverable.saturating_add(deployments.recoverable);
+            Ok(counts)
+        })
         .unwrap_or_else(|_| Err("diagnostics_unavailable".to_string()));
     let content = app_data
         .as_deref()
@@ -409,6 +421,80 @@ async fn recover_steam_launch_options(
 }
 
 #[tauri::command]
+async fn deploy_staged_vpk(
+    app: AppHandle,
+    request: DeployStagedVpkRequest,
+) -> Result<DeploymentReceipt, String> {
+    if !request.confirmed {
+        return Err("deployment_confirmation_required".to_string());
+    }
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "deployment_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        require_patch_ready_runtime()?;
+        let staged = build_engine::verified_staged_vpk(
+            &app_data,
+            &request.staged_operation_id,
+            &request.expected_plan_id,
+        )?;
+        game_deployment::deploy_verified_vpk(
+            &app_data,
+            Path::new(&request.game_path),
+            &staged.bytes,
+            &staged.sha256,
+        )
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+#[tauri::command]
+async fn rollback_game_deployment(
+    app: AppHandle,
+    request: DeploymentOperationRequest,
+) -> Result<DeploymentReceipt, String> {
+    if !request.confirmed {
+        return Err("deployment_confirmation_required".to_string());
+    }
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "rollback_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        require_patch_ready_runtime()?;
+        game_deployment::rollback(
+            &app_data,
+            Path::new(&request.game_path),
+            &request.operation_id,
+        )
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+#[tauri::command]
+async fn recover_game_deployments(
+    app: AppHandle,
+    request: DeploymentRecoveryRequest,
+) -> Result<RecoveryReceipt, String> {
+    if !request.confirmed {
+        return Err("deployment_confirmation_required".to_string());
+    }
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "rollback_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        require_patch_ready_runtime()?;
+        game_deployment::recover_pending(&app_data, Path::new(&request.game_path))
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+#[tauri::command]
 async fn start_steam_after_profile(
     app: AppHandle,
     request: StartSteamAfterProfileRequest,
@@ -457,6 +543,9 @@ fn main() {
             apply_steam_launch_options,
             rollback_steam_launch_options,
             recover_steam_launch_options,
+            deploy_staged_vpk,
+            rollback_game_deployment,
+            recover_game_deployments,
             start_steam_after_profile,
             list_presets,
             save_preset,

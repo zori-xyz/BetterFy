@@ -182,12 +182,13 @@ confirmation and the exact `planId` returned for the reviewed selection; a stale
 or substituted plan is rejected before an operation journal is created. Repeating
 rollback is safe. Tests inject failures after a staged write and before verification.
 
-This is not deployment: no command writes to Dota, creates a game backup, assembles
-a production VPK, or downloads catalog content. A separate confirmed activation
-step now stops Dota and Steam, commits BetterFy's owned launch option, verifies the
-committed profile against its journal, and starts Steam only. The game-directory
-write boundary stays closed. The researched production lifecycle is pinned in
-`docs/MINIFY_PATCHING_AUDIT.md`.
+This fixture flow is not deployment. A separate game-deployment boundary now
+exists, but it accepts only a `Ready` journal containing exactly one verified
+`pak66_dir.vpk`; the current CSS fixtures cannot satisfy that contract. The
+confirmed activation step stops Dota and Steam, commits BetterFy's owned launch
+option, verifies the profile against its journal, and starts Steam only. The
+user-facing game-directory write remains closed until the Tree Mod package and
+native Windows evidence exist.
 
 The runtime preflight is now implemented behind typed Tauri commands. Windows
 process enumeration uses Tool Help APIs and recognizes the Steam client, Web
@@ -225,7 +226,31 @@ confirmation, applies the selected preview, verifies either the matching committ
 journal or an already-managed profile, then resolves `steam.exe` from the registry
 and starts Steam. Dota is never launched. A changed transaction exposes its exact
 rollback path. This transaction currently owns only BetterFy's `-language dutch`
-argument and is not yet connected to production VPK deployment.
+argument.
+
+### Implemented game-deployment transaction foundation
+
+Rust now contains a clean-room deterministic VPK v1 writer and reader for bounded,
+embedded data entries. Paths are lowercase relative ASCII, traversal and case-fold
+collisions are rejected, CRC32 is recorded per entry, and the finished archive is
+opened and checked again. External archive parts are not accepted.
+
+`deploy_staged_vpk` cannot receive a source or destination from the interface. It
+resolves a confirmed BetterFy staging journal, requires its exact reviewed plan ID,
+requires one verified `pak66_dir.vpk`, rehashes and reopens it, then targets only
+`game/dota_dutch/pak66_dir.vpk`. The runtime must already prove Steam and Dota are
+closed. An existing target is replaceable only when BetterFy's ownership record
+matches its current hash; an unknown target is a hard conflict.
+
+The transaction writes and verifies a private backup, writes a same-directory
+temporary VPK, publishes with Windows write-through APIs, reopens and rehashes the
+installed bytes, and commits an ownership record plus journal. Rollback restores
+the exact prior bytes and prior ownership chain, or removes an initial install. It
+refuses to overwrite a post-install external edit. Recovery distinguishes an
+interruption before publish from one after publish and either marks the untouched
+operation failed or rolls the published bytes back. Synthetic tests inject both
+failures. The Tree Mod resource package and native Windows validation are still
+gates; therefore no current catalog selection can invoke a live deploy.
 
 Preset persistence is implemented as a separate BetterFy-owned boundary. The
 backend validates the schema and identifiers, rejects symlinks and oversized
@@ -238,8 +263,9 @@ workshop entries.
 `collect_system_diagnostics` gives the interface one factual preflight before a
 native test or future production transaction. Rust revalidates the stored Dota
 path, inspects the Windows process snapshot, aggregates neutral Steam-profile
-states, and counts recoverable BetterFy staging journals. The report contains
-stable codes, states, counts, application version, platform, and generation time.
+states, and counts recoverable BetterFy staging and game-deployment journals. The
+report contains stable codes, states, counts, application version, platform, and
+generation time.
 
 The report never contains filesystem paths, Steam IDs, account names, Telegram
 data, or authentication material. Diagnostics may prepare empty BetterFy-owned
@@ -280,7 +306,7 @@ operation ID and factual phases; URLs and paths stay inside Rust.
 A ZIP metadata preflight rejects traversal, links, ambiguous names, executable
 content, unsupported compression, and archive-bomb limits without extracting any
 entry. No ZIP package is enabled in the registry yet. Local imports, signatures,
-archive extraction, VPK construction, catalog wiring, and Dota deployment remain
+archive extraction, Tree Mod package wiring, and live Dota deployment remain
 disabled. The full threat model is documented in
 `docs/CONTENT_INTAKE_SECURITY.md`.
 

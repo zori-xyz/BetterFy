@@ -189,3 +189,22 @@ Production deployment remains disabled until all gates pass:
 5. A real Windows matrix covers default and secondary Steam libraries, paths with
    spaces/non-ASCII characters, RU/EN UI, Steam already closed, Dota running,
    shutdown timeout, Dota update, and insufficient disk space.
+
+Current evidence: gates 3 and 4 pass synthetic Rust tests. Gates 1, 2, and 5 still
+need the recorded native Windows pass; synthetic evidence is not treated as a
+successful Dota patch.
+
+## First production pilot: Tree Mod
+
+The first package is Minify `Tree Mod` at upstream commit
+`3a85572029f2c264e2a17cee1c9b54ce93e4fd93`. It is intentionally chosen because
+its `files/` directory contains 21 already compiled `.vmat_c`, `.vtex_c`, and
+`.vmdl_c` resources and uses no hook script, generic Python patch action, Panorama
+decompile, XML patch, or Workshop Tools invocation. Upstream describes the result
+as replacing trees with small round bushes and requires the default terrain.
+
+BetterFy will not copy the upstream patcher or silently vendor these game-derived
+resources. Before enabling the item, every resource needs a pinned path, byte size,
+SHA-256, source notice, and accepted distribution decision. Only those bytes may
+enter the deterministic VPK builder. The output is fixed to BetterFy's owned
+`game/dota_dutch/pak66_dir.vpk` slot.
