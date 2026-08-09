@@ -176,6 +176,22 @@ function formatDate(value: string, language: Language) {
   }).format(new Date(value));
 }
 
+function readStoredLanguage(): Language {
+  try {
+    return window.localStorage.getItem("betterfy-site-language") === "en" ? "en" : "ru";
+  } catch {
+    return "ru";
+  }
+}
+
+function storeLanguage(language: Language) {
+  try {
+    window.localStorage.setItem("betterfy-site-language", language);
+  } catch {
+    // Privacy modes may deny storage. Language remains valid for this page view.
+  }
+}
+
 function useLatestRelease(language: Language): ReleaseState {
   const [release, setRelease] = useState<ReleaseState>({ phase: "loading" });
 
@@ -217,9 +233,7 @@ function useLatestRelease(language: Language): ReleaseState {
 }
 
 function Site() {
-  const [language, setLanguage] = useState<Language>(() =>
-    window.localStorage.getItem("betterfy-site-language") === "en" ? "en" : "ru",
-  );
+  const [language, setLanguage] = useState<Language>(readStoredLanguage);
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const accountTrigger = useRef<HTMLButtonElement>(null);
@@ -229,7 +243,7 @@ function Site() {
 
   useEffect(() => {
     document.documentElement.lang = language;
-    window.localStorage.setItem("betterfy-site-language", language);
+    storeLanguage(language);
   }, [language]);
 
   useEffect(() => {

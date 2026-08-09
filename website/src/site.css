@@ -45,6 +45,14 @@
 html { scroll-behavior: smooth; background: var(--bg); }
 body { margin: 0; background: var(--bg); color: var(--text); min-width: 320px; }
 body.modal-open { overflow: hidden; }
+.site-failure { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 50% 35%, rgba(168,77,255,.16), transparent 35%), var(--bg); }
+.site-failure > div { width: min(100%, 560px); padding: 42px; border: 1px solid var(--line-high); border-radius: 24px; background: var(--surface); }
+.site-failure strong { color: var(--violet-hot); font-family: "Days One", sans-serif; }
+.site-failure h1 { margin: 22px 0 14px; font: 400 clamp(34px, 7vw, 54px)/1.04 "Days One", sans-serif; letter-spacing: -.06em; }
+.site-failure p { color: var(--muted); line-height: 1.6; }
+.site-failure button, .site-failure a { display: inline-flex; min-height: 48px; align-items: center; justify-content: center; margin: 18px 10px 0 0; padding: 0 18px; border: 0; border-radius: 12px; cursor: pointer; font-weight: 700; }
+.site-failure button { background: linear-gradient(115deg, #9c37e8, #ce57f4); color: white; }
+.site-failure a { border: 1px solid var(--line-high); }
 button, a { font: inherit; }
 a { color: inherit; text-decoration: none; }
 button { color: inherit; }

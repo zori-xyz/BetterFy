@@ -9,6 +9,21 @@ const cases = [
   { language: "en", width: 390, height: 844 },
 ];
 
+async function assertStorageDeniedFallback() {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get() { throw new DOMException("Storage denied", "SecurityError"); },
+    });
+  });
+  await page.goto(origin, { waitUntil: "networkidle" });
+  if (!(await page.locator("h1").first().isVisible())) {
+    throw new Error("Site did not render when localStorage was denied");
+  }
+  await page.close();
+}
+
 try {
   for (const testCase of cases) {
     const page = await browser.newPage({ viewport: { width: testCase.width, height: testCase.height } });
@@ -34,7 +49,8 @@ try {
     if (browserErrors.length > 0) throw new Error(`${testCase.language} ${testCase.width}px browser errors: ${browserErrors.join(" | ")}`);
     await page.close();
   }
-  console.log(`BetterFy website: ${cases.length} responsive and account-flow checks passed.`);
+  await assertStorageDeniedFallback();
+  console.log(`BetterFy website: ${cases.length} responsive checks and the storage-denied fallback passed.`);
 } finally {
   await browser.close();
 }
