@@ -1,834 +1,125 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ArrowDownToLine,
-  ArrowRight,
-  Check,
-  ChevronRight,
-  CircleUserRound,
-  Download,
-  Github,
-  Globe2,
-  Menu,
-  PackageCheck,
-  ShieldCheck,
-  Sparkles,
-  X,
-  Zap,
-} from "lucide-react";
-import BetterFyWordmark from "../../src/BetterFyWordmark";
+import { Fragment, useEffect, useMemo, useState, type PointerEvent } from "react";
+import { ArrowDownToLine, ArrowRight, Check, ChevronRight, CircleUserRound, Download, ExternalLink, FileCheck2, Gamepad2, KeyRound, Layers3, LogOut, Monitor, PackageCheck, RotateCcw, Search, Send, ShieldCheck, Sparkles, UserRound, X } from "lucide-react";
 
 type Language = "ru" | "en";
-type ReleaseState =
-  | { phase: "loading" }
-  | { phase: "ready"; version: string; date: string; url: string; direct: boolean }
-  | { phase: "fallback"; url: string };
-
-type WebSession = {
-  userId: string;
-  displayName: string;
-  username?: string;
-  accessTier: string;
-  accessExpiresAt?: number;
-  accessPlan?: string;
-  accessRecurring?: boolean;
-  sessionId?: string;
-  avatarAvailable: boolean;
-};
-
 type AuthStage = "idle" | "checking" | "code" | "verifying" | "ready";
-type DeviceSession = {
-  sessionId: string;
-  clientKind: "web" | "desktop" | "unknown";
-  lastUsedAt: number;
-  expiresAt: number;
-  current: boolean;
-};
+type WebSession = { userId:string; displayName:string; username?:string; accessTier:string; accessExpiresAt?:number; sessionId?:string; avatarAvailable:boolean };
+type DeviceSession = { sessionId:string; clientKind:"web"|"desktop"|"unknown"; lastUsedAt:number; expiresAt:number; current:boolean };
+type ReleaseMeta = { version:string; fileName:string; size:number; publishedAt:string };
 
-const RELEASES_URL = "https://github.com/zori-xyz/BetterFy/releases";
-const RELEASES_API = "https://api.github.com/repos/zori-xyz/BetterFy/releases";
-const INSTALLER_NAME = "BetterFy-Windows-x64-setup.exe";
-const REPOSITORY_URL = "https://github.com/zori-xyz/BetterFy";
-const BOT_URL = "https://t.me/BeterFyBot?start=web_login";
-const SESSION_STORAGE_KEY = "betterfy:web-session";
-const DEFAULT_AUTH_URL = "https://betterfy-auth.zori-xyz.workers.dev";
-
-function allowlistedExternalUrl(value: string | undefined, kind: "auth" | "release") {
-  if (!value) return undefined;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "https:") return undefined;
-    if (kind === "release") {
-      const expected = "/zori-xyz/BetterFy/releases/";
-      return url.hostname === "github.com" && url.pathname.startsWith(expected) ? url.toString() : undefined;
-    }
-    return url.toString();
-  } catch {
-    return undefined;
-  }
-}
+const repo = "https://github.com/zori-xyz/BetterFy";
+const bot = "https://t.me/BeterFyBot?start=web_login";
+const authUrl = import.meta.env.VITE_BETTERFY_AUTH_URL || "https://betterfy-auth.zori-xyz.workers.dev";
+const sessionKey = "betterfy:web-session";
+const asset = (name:string) => `${import.meta.env.BASE_URL}${name}`;
 
 const copy = {
   ru: {
-    nav: ["Возможности", "Как работает", "Скачать"],
-    skip: "Перейти к содержанию",
-    account: "Войти",
-    eyebrow: "DOTA 2 · MOD PLATFORM",
-    heroLine1: "Твоя Dota.",
-    heroLine2: "Только лучше.",
-    heroBody: "Моды, интерфейс, звуки и скины — в одной сборке. BetterFy покажет конфликты до того, как что-либо попадёт в Dota 2.",
-    download: "Скачать для Windows",
-    explore: "Как устроена сборка",
-    current: "Текущая сборка",
-    currentState: "Можно собирать",
-    content: "Выбор",
-    verify: "Проверка",
-    recovery: "Откат",
-    chapter: "КАК ЭТО РАБОТАЕТ",
-    sectionTitle: "Собери. Проверь. Примени.",
-    sectionBody: "Ты выбираешь контент. BetterFy сверяет файлы, зависимости и конфликты, а затем показывает точный план изменений.",
-    steps: [
-      ["01", "Собери набор", "Моды меняют работу игры. Гардероб — её внешний вид. Они лежат отдельно и не смешиваются в каталоге."],
-      ["02", "Сверь состав", "Перед установкой видны замены, зависимости и конфликты. Спорный файл нельзя протащить дальше случайно."],
-      ["03", "Подтверди план", "Движок получает только тот список изменений, который ты просмотрел и подтвердил."],
-      ["04", "Верни файлы", "Для каждой операции остаётся журнал. Если сборка не подошла, BetterFy знает, что нужно восстановить."],
-    ],
-    engineEyebrow: "ENGINE / CONTROLLED",
-    engineTitle: "Интерфейс не трогает Dota. Этим занимается Rust-движок.",
-    engineBody: "Он находит установку, проверяет скачанный пакет, готовит изменения в отдельной папке и записывает каждый шаг. React только показывает состояние и передаёт подтверждённые команды.",
-    enginePoints: ["Пакет проверяется до распаковки", "Операцию можно отменить", "Каждая запись попадает в журнал", "Непроверенный файл не устанавливается"],
-    proofLabel: "WINDOWS / BUILD",
-    proofTitle: "Приложение собирается на Windows.",
-    proofBody: "Rust и TypeScript проходят автоматические тесты, после чего GitHub Actions собирает NSIS-инсталлятор. Запись в Dota пока отключена.",
-    releaseEyebrow: "LATEST / WINDOWS",
-    releaseTitle: "Скачать Windows-сборку.",
-    releaseBody: "После входа кнопка скачивает последний Windows-инсталлятор из GitHub Releases. До настройки подписи это тестовая Early Access-сборка.",
-    checking: "Проверяем последний релиз…",
-    latest: "Последний релиз",
-    fallback: "Страница релизов",
-    releaseButton: "Скачать BetterFy",
-    requirements: "Windows 10/11 · x64 · Early Access",
-    integrity: "Early Access без подписи · источник: github.com/zori-xyz/BetterFy",
-    communityEyebrow: "BETTERFY / COMMUNITY",
-    communityTitle: "Поймал баг — пиши.",
-    statusEyebrow: "BETTERFY / СЕЙЧАС",
-    statusTitle: "Что работает прямо сейчас.",
-    statusBody: "Это ранняя сборка. Здесь разделено то, что уже работает, то, что проходит тесты, и то, что пока выключено.",
-    statusItems: [
-      ["01", "Работает", "Поиск Dota и чтение состояния"],
-      ["02", "На тестах", "План сборки, архивы и staging"],
-      ["03", "Подключено", "Telegram-вход и единый профиль"],
-    ],
-    statusNote: "BetterFy пока не изменяет игровые файлы. Сначала мы проверим полный цикл установки и восстановления на Windows.",
-    communityBody: "Ошибки, идеи и результаты Windows-тестов собираем через @BeterFyBot. Код и задачи открыты на GitHub.",
-    openBot: "Открыть @BeterFyBot",
-    github: "Открыть GitHub",
-    faqTitle: "Перед установкой.",
-    faq: [
-      ["BetterFy уже меняет файлы Dota 2?", "Нет. Сейчас приложение находит Dota, читает состояние и проверяет тестовые планы. Установка в игру включится после Windows-тестов восстановления."],
-      ["Как обновляется приложение?", "BetterFy проверяет новые выпуски на GitHub. Когда опубликован новый установщик, встроенный updater предложит скачать и установить его."],
-      ["Зачем нужен Telegram?", "Через Telegram будет подтверждаться вход и новое устройство. BetterFy не получает доступ к перепискам и не связывает Telegram со Steam автоматически."],
-      ["Что будет с исходными файлами?", "Движок уже ведёт журнал тестовых операций. Обещать восстановление реальных файлов мы будем только после полного Windows-теста: установка, ошибка, откат и повторная проверка."],
-    ],
-    modalEyebrow: "ACCOUNT / EARLY ACCESS",
-    modalTitle: "Войди через Telegram.",
-    modalBody: "Открой @BeterFyBot, получи одноразовый код и введи шесть цифр здесь.",
-    modalPending: "Код живёт 10 минут и срабатывает один раз. BetterFy не получает доступ к перепискам.",
-    authCta: "Получить код в @BeterFyBot",
-    codeLabel: "Одноразовый код",
-    codePlaceholder: "000000",
-    verifyCode: "Подтвердить вход",
-    verifying: "Проверяем код…",
-    invalidCode: "Код не подошёл или уже истёк. Получи новый в боте.",
-    signedIn: "Telegram подключён",
-    accessEarly: "Ранний доступ",
-    accessPremium: "BetterFy Premium",
-    accessUntil: "до",
-    accessRecurring: "продлевается каждые 30 дней",
-    sessions: "Активные входы",
-    currentSession: "Этот браузер",
-    webSession: "Браузер",
-    desktopSession: "Приложение Windows",
-    unknownSession: "Ранее созданный вход",
-    sessionUntil: "до",
-    revokeSession: "Завершить",
-    sessionsUnavailable: "Не удалось обновить список входов.",
-    signOut: "Выйти",
-    downloadLocked: "Войди через Telegram, чтобы скачать сборку.",
-    downloadError: "Сборка пока недоступна. Попробуй ещё раз позже.",
-    close: "Закрыть",
-    footer: "BetterFy разрабатывается открыто. Код, сборки и список задач лежат на GitHub.",
-    footerMeta: "EARLY ACCESS · OPEN DEVELOPMENT",
+    nav:["Возможности","Как работает","Скачать"], early:"РАННИЙ ДОСТУП", profile:"Профиль", light:"СВЕТЛАЯ", dark:"ТЁМНАЯ", open:"ОТКРЫТЬ",
+    hero:{tag:"DOTA 2 · ПЛАТФОРМА МОДОВ",a:"Твоя Dota.",b:"Только лучше.",body:"Выбирайте моды и оформление в одном приложении. BetterFy проверит сборку до установки и сохранит возможность отката.",cta:"Посмотреть приложение",download:"Скачать для Windows",trust:"Dota 2 определяется автоматически",open:"Открытый код · GPL-3.0",card:"ГЛАВНАЯ",cardText:"Активная сборка всегда перед глазами"},
+    rail:[["ВЫБОР","моды и оформление"],["ПРОВЕРКА","файлы и конфликты"],["СБОРКА","готовый набор"],["ЗАПУСК","игра или откат"]],
+    product:{tag:"ВНУТРИ ПРИЛОЖЕНИЯ",a:"Два каталога.",b:"Одна сборка.",body:"Minify отвечает за оптимизацию и игровые инструменты. Гардероб — за героев, HUD, эффекты и звук. Выбранное объединяется только на этапе сборки."},
+    minify:{tag:"MINIFY · ФУНКЦИОНАЛЬНЫЕ МОДЫ",a:"Убери лишнее.",b:"Оставь игру.",body:"У каждого мода есть сравнение до и после, описание и точный список ресурсов, которые он меняет.",items:["Поиск и семь категорий","Автор и источник на месте","Конфликт виден до установки"],link:"Посмотреть процесс"},
+    wardrobe:{tag:"ГАРДЕРОБ · ВИЗУАЛЬНЫЕ МОДЫ",a:"Настрой внешний",b:"вид игры.",body:"В каталоге 1 135 вариантов для героев, интерфейса, мира, эффектов и звука. Выбор остаётся на месте при переходе между категориями.",items:["Поиск по герою и категории","Превью выбранного варианта","Совместимость и автор"]},
+    journey:{tag:"КАК РАБОТАЕТ BETTERFY",a:"От выбора",b:"до запуска.",body:"Четыре коротких шага. На каждом видно, что происходит со сборкой и что делать дальше.",stage:"ЭТАП",next:"Следующий этап",restart:"Начать сначала"},
+    account:{tag:"ПРОФИЛЬ BETTERFY",player:"Игрок",offline:"Telegram не подключён",setup:"Настроить",browser:"Этот браузер",browserState:"Вход ещё не выполнен",current:"ТЕКУЩИЙ",app:"Приложение Windows",appState:"Ожидает подтверждения",notConnected:"НЕ ПОДКЛЮЧЕНО",section:"ПРОФИЛЬ И УСТРОЙСТВА",a:"Сборки рядом.",b:"Доступ под контролем.",body:"Профиль хранит ваши сборки и список подключённых устройств. Вход подтверждается одноразовым кодом через Telegram.",open:"Открыть профиль"},
+    download:{tag:"WINDOWS · РАННИЙ ДОСТУП",a:"Попробуй BetterFy",b:"на своей Dota.",body:"Тестовая версия доступна для Windows 10 и 11. Для загрузки понадобится профиль BetterFy.",cta:"Скачать BetterFy",versions:"Версии на GitHub",title:"Скачать BetterFy",checking:"Проверяем платформу и актуальную тестовую сборку.",system:"Windows 10/11 · x64",found:"Актуальная версия найдена",login:"Войдите через Telegram",continue:"Войти и продолжить",error:"Не удалось открыть сборку. Попробуйте ещё раз.",version:"ВЕРСИЯ",package:"ФАЙЛ",published:"ОБНОВЛЕНО",locating:"Ищем последнюю сборку…",unavailable:"Публичная сборка ещё не выпущена"},
+    auth:{tag:"ПРОФИЛЬ BETTERFY",title:"Вход в аккаунт",body:"Получите код в Telegram и введите его здесь. BetterFy не запрашивает доступ к перепискам.",access:"ДОСТУП",notConnected:"Не подключён",sessions:"СЕССИИ",none:"Нет активных",code:"КОД",minutes:"10 минут",get:"Получить код в Telegram",have:"У меня уже есть код",label:"Код подтверждения",enter:"Войти",oneTime:"Код одноразовый и действует 10 минут.",safe:"Всё под контролем.",safeText:"Новые устройства подтверждаются отдельно, а любую сессию можно завершить в профиле.",security:"Безопасность",source:"Исходный код",checking:"Проверяем…",invalid:"Код не подошёл или уже использован.",active:"Активные устройства",until:"до",revoke:"Завершить",signout:"Выйти",early:"Ранний доступ",premium:"Premium"},
+    footer:{tag:"Твоя Dota. Только лучше.",product:"ПРОДУКТ",project:"ПРОЕКТ",features:"Возможности",process:"Как работает",telegram:"Telegram",roadmap:"Планы",legal:"Независимый проект. Не связан с Valve Corporation."}
   },
   en: {
-    nav: ["Features", "How it works", "Download"],
-    skip: "Skip to content",
-    account: "Sign in",
-    eyebrow: "DOTA 2 · MOD PLATFORM",
-    heroLine1: "Your Dota.",
-    heroLine2: "Only better.",
-    heroBody: "Mods, interface, audio, and skins in one build. BetterFy shows conflicts before anything reaches Dota 2.",
-    download: "Download for Windows",
-    explore: "How builds work",
-    current: "Current build",
-    currentState: "Ready to assemble",
-    content: "Select",
-    verify: "Check",
-    recovery: "Rollback",
-    chapter: "HOW IT WORKS",
-    sectionTitle: "Assemble. Check. Apply.",
-    sectionBody: "You pick the content. BetterFy checks files, dependencies, and conflicts, then shows the exact change plan.",
-    steps: [
-      ["01", "Build a set", "Mods change how the game works. Wardrobe content changes how it looks. They stay separate in the catalog."],
-      ["02", "Check the files", "Replacements, dependencies, and conflicts appear before installation. A disputed file cannot slip through unnoticed."],
-      ["03", "Approve the plan", "The engine receives only the list of changes you reviewed and confirmed."],
-      ["04", "Restore files", "Every operation leaves a journal. If a build is wrong, BetterFy knows which files belong back in place."],
-    ],
-    engineEyebrow: "ENGINE / CONTROLLED",
-    engineTitle: "The interface never edits Dota. The Rust engine does.",
-    engineBody: "It finds the installation, validates downloaded packages, stages changes in a separate directory, and records every step. React only displays state and sends confirmed commands.",
-    enginePoints: ["Packages checked before extraction", "Operations can be cancelled", "Every write is journaled", "Unverified files are rejected"],
-    proofLabel: "WINDOWS / BUILD",
-    proofTitle: "The app builds on Windows.",
-    proofBody: "Rust and TypeScript pass automated tests before GitHub Actions produces the NSIS installer. Writes to Dota are still disabled.",
-    releaseEyebrow: "LATEST / WINDOWS",
-    releaseTitle: "Download the Windows build.",
-    releaseBody: "After sign-in, the button downloads the latest Windows installer from GitHub Releases. Until signing is configured, it is an Early Access test build.",
-    checking: "Checking the latest release…",
-    latest: "Latest release",
-    fallback: "Releases page",
-    releaseButton: "Download BetterFy",
-    requirements: "Windows 10/11 · x64 · Early Access",
-    integrity: "Unsigned Early Access · source: github.com/zori-xyz/BetterFy",
-    communityEyebrow: "BETTERFY / COMMUNITY",
-    communityTitle: "Found a bug? Tell us.",
-    statusEyebrow: "BETTERFY / NOW",
-    statusTitle: "What works today.",
-    statusBody: "This is an early build. Here is what already works, what is under test, and what is still switched off.",
-    statusItems: [
-      ["01", "Working", "Dota discovery and read-only state"],
-      ["02", "Under test", "Build plans, archives, and staging"],
-      ["03", "Connected", "Telegram sign-in and shared profile"],
-    ],
-    statusNote: "BetterFy does not modify game files yet. The complete install and recovery cycle must pass on Windows first.",
-    communityBody: "Send bugs, ideas, and Windows test results through @BeterFyBot. Code and issues are public on GitHub.",
-    openBot: "Open @BeterFyBot",
-    github: "Open GitHub",
-    faqTitle: "Before you install.",
-    faq: [
-      ["Does BetterFy modify Dota 2 files yet?", "No. The current app finds Dota, reads its state, and checks fixture plans. Installation unlocks after full recovery testing on Windows."],
-      ["How does the app update?", "BetterFy checks GitHub for new releases. When a new installer is published, the built-in updater offers to download and install it."],
-      ["Why Telegram?", "Telegram will confirm sign-in and new devices. BetterFy cannot read private chats and does not link Telegram to Steam automatically."],
-      ["What happens to the original files?", "The engine already journals fixture operations. We will only promise recovery for real game files after the entire Windows cycle passes: install, failure, rollback, and verification."],
-    ],
-    modalEyebrow: "ACCOUNT / EARLY ACCESS",
-    modalTitle: "Sign in with Telegram.",
-    modalBody: "Open @BeterFyBot, request a one-time code, and enter the six digits here.",
-    modalPending: "The code lasts 10 minutes and works once. BetterFy cannot read your chats.",
-    authCta: "Get a code from @BeterFyBot",
-    codeLabel: "One-time code",
-    codePlaceholder: "000000",
-    verifyCode: "Confirm sign-in",
-    verifying: "Checking the code…",
-    invalidCode: "That code has expired or was already used. Request another one in the bot.",
-    signedIn: "Telegram connected",
-    accessEarly: "Early Access",
-    accessPremium: "BetterFy Premium",
-    accessUntil: "until",
-    accessRecurring: "renews every 30 days",
-    sessions: "Active sessions",
-    currentSession: "This browser",
-    webSession: "Browser",
-    desktopSession: "Windows app",
-    unknownSession: "Earlier session",
-    sessionUntil: "until",
-    revokeSession: "End session",
-    sessionsUnavailable: "The session list could not be refreshed.",
-    signOut: "Sign out",
-    downloadLocked: "Sign in with Telegram to download the build.",
-    downloadError: "The build is unavailable right now. Try again later.",
-    close: "Close",
-    footer: "BetterFy is developed in public. Source, builds, and open tasks are on GitHub.",
-    footerMeta: "EARLY ACCESS · OPEN DEVELOPMENT",
-  },
+    nav:["Features","How it works","Download"], early:"EARLY ACCESS", profile:"Profile", light:"LIGHT", dark:"DARK", open:"OPEN",
+    hero:{tag:"DOTA 2 · MOD PLATFORM",a:"Your Dota.",b:"Only better.",body:"Choose mods and cosmetics in one app. BetterFy checks the build before installation and keeps a safe way back.",cta:"See the app",download:"Download for Windows",trust:"Dota 2 is detected automatically",open:"Open source · GPL-3.0",card:"HOME",cardText:"Your active build is always in view"},
+    rail:[["SELECT","mods and cosmetics"],["CHECK","files and conflicts"],["BUILD","a ready setup"],["PLAY","launch or restore"]],
+    product:{tag:"INSIDE THE APP",a:"Two catalogs.",b:"One build.",body:"Minify handles performance and game tools. Wardrobe covers heroes, HUDs, effects, and audio. They meet only when you build."},
+    minify:{tag:"MINIFY · FUNCTIONAL MODS",a:"Remove the noise.",b:"Keep the game.",body:"Every mod includes a before-and-after view, a clear description, and the exact resources it changes.",items:["Search and seven categories","Author and source stay visible","Conflicts appear before install"],link:"See the flow"},
+    wardrobe:{tag:"WARDROBE · VISUAL MODS",a:"Shape the look",b:"of your game.",body:"Browse 1,135 options for heroes, interface, world, effects, and audio. Your selection stays put while you move between categories.",items:["Search by hero and category","Preview the selected variant","Compatibility and author details"]},
+    journey:{tag:"HOW BETTERFY WORKS",a:"From selection",b:"to launch.",body:"Four short steps. At each one, you know what is happening and what comes next.",stage:"STEP",next:"Next step",restart:"Start again"},
+    account:{tag:"BETTERFY PROFILE",player:"Player",offline:"Telegram is not connected",setup:"Set up",browser:"This browser",browserState:"Not signed in yet",current:"CURRENT",app:"Windows app",appState:"Waiting for approval",notConnected:"NOT CONNECTED",section:"PROFILE AND DEVICES",a:"Builds stay close.",b:"Access stays yours.",body:"Your profile keeps builds and connected devices together. Sign-in is confirmed with a one-time Telegram code.",open:"Open profile"},
+    download:{tag:"WINDOWS · EARLY ACCESS",a:"Try BetterFy",b:"with your Dota.",body:"The test build is available for Windows 10 and 11. A BetterFy profile is required to download.",cta:"Download BetterFy",versions:"GitHub releases",title:"Download BetterFy",checking:"Checking your platform and the latest test build.",system:"Windows 10/11 · x64",found:"Latest build found",login:"Sign in with Telegram",continue:"Sign in and continue",error:"The build could not be opened. Please try again.",version:"VERSION",package:"FILE",published:"UPDATED",locating:"Looking for the latest build…",unavailable:"No public build has been released yet"},
+    auth:{tag:"BETTERFY PROFILE",title:"Sign in",body:"Get a code in Telegram and enter it here. BetterFy never asks for access to your chats.",access:"ACCESS",notConnected:"Not connected",sessions:"SESSIONS",none:"No active sessions",code:"CODE",minutes:"10 minutes",get:"Get a code in Telegram",have:"I already have a code",label:"Confirmation code",enter:"Sign in",oneTime:"The code is single-use and valid for 10 minutes.",safe:"You stay in control.",safeText:"New devices are approved separately, and any session can be ended from your profile.",security:"Security",source:"Source code",checking:"Checking…",invalid:"The code is invalid or has already been used.",active:"Active devices",until:"until",revoke:"End",signout:"Sign out",early:"Early access",premium:"Premium"},
+    footer:{tag:"Your Dota. Only better.",product:"PRODUCT",project:"PROJECT",features:"Features",process:"How it works",telegram:"Telegram",roadmap:"Roadmap",legal:"Independent project. Not affiliated with Valve Corporation."}
+  }
 } as const;
 
-function formatDate(value: string, language: Language) {
-  return new Intl.DateTimeFormat(language === "ru" ? "ru-RU" : "en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
+const journeyCopy = {
+  ru:[
+    {n:"01",title:"Выбрать",label:"12 модов",heading:"Собери свой набор.",text:"Minify и гардероб находятся в отдельных каталогах. У каждого мода есть превью, автор и список изменений.",points:["Фильтры по типу и герою","Превью до добавления","Выбор сохраняется сразу"],icon:Search},
+    {n:"02",title:"Проверить",label:"всё чисто",heading:"Узнай результат заранее.",text:"BetterFy покажет замены, зависимости и конфликты до того, как сборка коснётся файлов Dota 2.",points:["Проверка каждой замены","Конфликт виден рядом с модом","Понятный итог проверки"],icon:FileCheck2},
+    {n:"03",title:"Собрать",label:"готово",heading:"Подтверди и запускай.",text:"После проверки остаётся один понятный план. BetterFy применяет его по шагам и сохраняет журнал операции.",points:["Один итоговый план","Статус каждого шага","Сборка привязана к профилю"],icon:PackageCheck},
+    {n:"04",title:"Откатить",label:"безопасно",heading:"Верни всё как было.",text:"Если захочешь сменить набор или вернуть исходные файлы, BetterFy использует сохранённый журнал сборки.",points:["Проверка перед откатом","Чужие изменения не стираются","Повторная сборка без ручной чистки"],icon:RotateCcw}
+  ],
+  en:[
+    {n:"01",title:"Select",label:"12 mods",heading:"Choose your setup.",text:"Minify and Wardrobe live in separate catalogs. Every mod has a preview, author, and change list.",points:["Filters by type and hero","Preview before adding","Selection saves instantly"],icon:Search},
+    {n:"02",title:"Check",label:"all clear",heading:"Know the result first.",text:"BetterFy shows replacements, dependencies, and conflicts before the build touches Dota 2 files.",points:["Every replacement is checked","Conflicts sit beside the mod","A clear check summary"],icon:FileCheck2},
+    {n:"03",title:"Build",label:"ready",heading:"Confirm and launch.",text:"After the check, one clear plan remains. BetterFy applies it step by step and keeps an operation log.",points:["One final plan","Status for every step","Build linked to your profile"],icon:PackageCheck},
+    {n:"04",title:"Restore",label:"safe",heading:"Return to the original.",text:"When you change your setup or restore the game, BetterFy follows the saved build log.",points:["Check before restore","External changes stay safe","Rebuild without manual cleanup"],icon:RotateCcw}
+  ]
+} as const;
+
+const Wordmark=({compact=false}:{compact?:boolean})=><span className={`wordmark ${compact?"compact":""}`} aria-label="BetterFy"><span className="wordmark-better">Better</span><span className="wordmark-fy">Fy</span></span>;
+
+function tiltMove(event:PointerEvent<HTMLElement>){if(window.matchMedia("(prefers-reduced-motion: reduce)").matches||event.pointerType==="touch")return;const node=event.currentTarget,rect=node.getBoundingClientRect(),x=(event.clientX-rect.left)/rect.width,y=(event.clientY-rect.top)/rect.height;node.style.setProperty("--tilt-x",`${(.5-y)*8}deg`);node.style.setProperty("--tilt-y",`${(x-.5)*10}deg`);node.style.setProperty("--light-x",`${x*100}%`);node.style.setProperty("--light-y",`${y*100}%`)}
+function tiltReset(event:PointerEvent<HTMLElement>){event.currentTarget.style.setProperty("--tilt-x","0deg");event.currentTarget.style.setProperty("--tilt-y","0deg")}
+function safeReleaseUrl(value?:string){try{if(!value)return null;const url=new URL(value);return url.protocol==="https:"&&url.hostname==="github.com"&&url.pathname.startsWith("/zori-xyz/BetterFy/releases/")?url.toString():null}catch{return null}}
+
+function ProfilePanel({language,t,close,stage,session,token,code,setCode,error,verify,avatar,sessions,revoke,logout}:{language:Language;t:typeof copy.ru|typeof copy.en;close:()=>void;stage:AuthStage;session:WebSession|null;token:string|null;code:string;setCode:(v:string)=>void;error:string;verify:()=>void;avatar:string|null;sessions:DeviceSession[];revoke:(s:DeviceSession)=>void;logout:()=>void}){
+  const access=session?.accessTier==="premium"?t.auth.premium:t.auth.early;
+  return <div className="modal-backdrop" onMouseDown={close}><section className="profile-panel" role="dialog" aria-modal="true" aria-labelledby="profile-title" onMouseDown={e=>e.stopPropagation()}>
+    <button className="modal-close" onClick={close} aria-label="Close"><X size={17}/></button>
+    <div className="profile-head"><div className="profile-avatar">{avatar?<img src={avatar} alt=""/>:<UserRound size={34}/>}<span>BF</span></div><div><p className="micro">{t.auth.tag}</p><h2 id="profile-title">{session?session.displayName:t.auth.title}</h2><p>{session?(session.username?`@${session.username} · ${access}`:access):t.auth.body}</p></div></div>
+    {session?<>
+      <div className="profile-summary"><div><ShieldCheck size={18}/><span>{t.auth.access}</span><strong>{access}</strong></div><div><Monitor size={18}/><span>{t.auth.sessions}</span><strong>{sessions.length}</strong></div><div><KeyRound size={18}/><span>ID</span><strong>{session.userId.slice(0,8)}</strong></div></div>
+      <div className="device-list"><h3>{t.auth.active}</h3>{sessions.map(item=><article key={item.sessionId}><span className="device-icon">{item.clientKind==="desktop"?<Gamepad2 size={17}/>:<Monitor size={17}/>}</span><div><b>{item.clientKind==="desktop"?"BetterFy Windows":language==="ru"?"Веб-сайт BetterFy":"BetterFy website"}</b><small>{t.auth.until} {new Intl.DateTimeFormat(language==="ru"?"ru-RU":"en-GB",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(item.expiresAt*1000))}</small></div>{item.current?<em>{t.account.current}</em>:<button onClick={()=>revoke(item)}>{t.auth.revoke}</button>}</article>)}</div>
+      <button className="signout-button" onClick={logout}><LogOut size={15}/>{t.auth.signout}</button>
+    </>:<>
+      <div className="profile-summary"><div><ShieldCheck size={18}/><span>{t.auth.access}</span><strong>{t.auth.notConnected}</strong></div><div><Monitor size={18}/><span>{t.auth.sessions}</span><strong>{t.auth.none}</strong></div><div><KeyRound size={18}/><span>{t.auth.code}</span><strong>{t.auth.minutes}</strong></div></div>
+      <a className="action telegram" href={bot} target="_blank" rel="noreferrer" onClick={()=>setCode("")}><span className="action-icon"><Send size={17}/></span><b>{t.auth.get}</b><ExternalLink size={16}/></a>
+      {stage==="idle"&&<button className="have-code-button" type="button" onClick={()=>setCode("")}><KeyRound size={14}/>{t.auth.have}</button>}
+      {(stage==="code"||stage==="verifying")&&<form className="code-row otp-form" onSubmit={e=>{e.preventDefault();verify()}}><label htmlFor="access-code">{t.auth.label}</label><div className="code-entry"><div className="otp-control"><div className="otp-slots" aria-hidden="true">{Array.from({length:6},(_,index)=><span key={index} className={code.length===index?"current":""}>{code[index]||""}</span>)}</div><input className="otp-input" id="access-code" aria-label={t.auth.label} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,"").slice(0,6))} disabled={stage==="verifying"}/></div><button className="otp-submit" type="submit" disabled={stage==="verifying"||code.length!==6}>{stage==="verifying"?t.auth.checking:t.auth.enter}<ArrowRight size={15}/></button></div><small className={error?"is-error":""}>{error||t.auth.oneTime}</small></form>}
+      <div className="profile-note"><ShieldCheck size={16}/><p><b>{t.auth.safe}</b><span>{t.auth.safeText}</span></p></div>
+    </>}
+    <div className="profile-links"><a href={`${repo}/blob/main/docs/IDENTITY_AND_WEB_ARCHITECTURE.md`}>{t.auth.security}<ExternalLink size={12}/></a><a href={repo}>{t.auth.source}<ExternalLink size={12}/></a></div>
+  </section></div>
 }
 
-function readStoredLanguage(): Language {
-  try {
-    return window.localStorage.getItem("betterfy-site-language") === "en" ? "en" : "ru";
-  } catch {
-    return "ru";
-  }
+function DownloadPanel({language,t,close,session,release,releaseLoading,openProfile,download,error}:{language:Language;t:typeof copy.ru|typeof copy.en;close:()=>void;session:WebSession|null;release:ReleaseMeta|null;releaseLoading:boolean;openProfile:()=>void;download:()=>void;error:string}){
+  const date=release?new Intl.DateTimeFormat(language==="ru"?"ru-RU":"en-GB",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(release.publishedAt)):"—";
+  const size=release?`${(release.size/1048576).toFixed(1)} MB`:"—";
+  return <div className="modal-backdrop" onMouseDown={close}><section className="download-panel" role="dialog" aria-modal="true" aria-labelledby="download-title" onMouseDown={e=>e.stopPropagation()}><button className="modal-close" onClick={close} aria-label="Close"><X size={17}/></button><div className="download-mark"><Wordmark/></div><p className="micro">WINDOWS · EARLY ACCESS</p><h2 id="download-title">{t.download.title}</h2><p>{t.download.checking}</p><div className="download-checks"><span className="active"><i><Check size={14}/></i>{t.download.system}</span><span className={release?"active":""}><i>{release?<Check size={14}/>:"2"}</i>{releaseLoading?t.download.locating:release?t.download.found:t.download.unavailable}</span><span className={session?"active":""}><i>{session?<Check size={14}/>:"3"}</i>{session?session.displayName:t.download.login}</span></div>{release&&<div className="release-details"><span><small>{t.download.version}</small><b>{release.version}</b></span><span><small>{t.download.package}</small><b title={release.fileName}>{size}</b></span><span><small>{t.download.published}</small><b>{date}</b></span></div>}<button className="action primary wide" onClick={session?download:openProfile} disabled={releaseLoading||(!release&&Boolean(session))}><span className="action-icon">{session?<ArrowDownToLine size={17}/>:<CircleUserRound size={17}/>}</span><b>{session?t.download.cta:t.download.continue}</b><ArrowRight size={17}/></button>{error&&<p className="download-error" role="alert">{error}</p>}<a className="quiet-link" href={`${repo}/releases`}>{t.download.versions}<ExternalLink size={12}/></a></section></div>
 }
 
-function storeLanguage(language: Language) {
-  try {
-    window.localStorage.setItem("betterfy-site-language", language);
-  } catch {
-    // Privacy modes may deny storage. Language remains valid for this page view.
-  }
+export default function Site(){
+  const[language,setLanguage]=useState<Language>("ru"),[profile,setProfile]=useState(false),[download,setDownload]=useState(false),[active,setActive]=useState(0),[darkWardrobe,setDarkWardrobe]=useState(false);
+  const[authStage,setAuthStage]=useState<AuthStage>("checking"),[authSession,setAuthSession]=useState<WebSession|null>(null),[sessionToken,setSessionToken]=useState<string|null>(null),[authCode,setAuthCode]=useState(""),[authError,setAuthError]=useState(""),[avatarUrl,setAvatarUrl]=useState<string|null>(null),[deviceSessions,setDeviceSessions]=useState<DeviceSession[]>([]),[downloadError,setDownloadError]=useState(""),[releaseMeta,setReleaseMeta]=useState<ReleaseMeta|null>(null),[releaseLoading,setReleaseLoading]=useState(false);
+  const t=copy[language],steps=journeyCopy[language],step=useMemo(()=>steps[active],[steps,active]),StepIcon=step.icon;
+  const wardrobeImage=asset(language==="en"?(darkWardrobe?"poster-wardrobe-en-dark.webp":"poster-wardrobe-en-light.webp"):(darkWardrobe?"poster-wardrobe-ru-dark.webp":"poster-wardrobe.webp"));
+  const minifyImage=asset(language==="en"?"poster-minify-en.webp":"poster-minify.webp");
+  const homeImage=asset(language==="en"?"app-home-dark-en.webp":"app-home-original.webp");
+
+  useEffect(()=>{try{const saved=localStorage.getItem("betterfy-site-language");if(saved==="en")setLanguage("en");const stored=sessionStorage.getItem(sessionKey);if(stored)setSessionToken(stored);else setAuthStage("idle")}catch{setAuthStage("idle")}},[]);
+  useEffect(()=>{document.documentElement.lang=language;try{localStorage.setItem("betterfy-site-language",language)}catch{}},[language]);
+  useEffect(()=>{document.body.style.overflow=(profile||download)?"hidden":"";return()=>{document.body.style.overflow=""}},[profile,download]);
+  useEffect(()=>{if(!profile&&!download)return;const onKey=(event:KeyboardEvent)=>{if(event.key==="Escape"){setProfile(false);setDownload(false)}};window.addEventListener("keydown",onKey);return()=>window.removeEventListener("keydown",onKey)},[profile,download]);
+  useEffect(()=>{const nodes=Array.from(document.querySelectorAll<HTMLElement>(".reveal"));if(matchMedia("(prefers-reduced-motion: reduce)").matches){nodes.forEach(n=>n.classList.add("is-visible"));return}const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add("is-visible");observer.unobserve(entry.target)}}),{threshold:.12,rootMargin:"0px 0px -7%"});nodes.forEach(node=>observer.observe(node));return()=>observer.disconnect()},[]);
+  useEffect(()=>{if(!sessionToken){setAuthSession(null);setAuthStage("idle");return}const controller=new AbortController();setAuthStage("checking");fetch(new URL("/v1/session/profile",authUrl),{headers:{Authorization:`Bearer ${sessionToken}`},credentials:"omit",signal:controller.signal}).then(r=>{if(!r.ok)throw new Error();return r.json() as Promise<WebSession>}).then(data=>{setAuthSession(data);setAuthStage("ready")}).catch(e=>{if(e instanceof DOMException&&e.name==="AbortError")return;try{sessionStorage.removeItem(sessionKey)}catch{}setSessionToken(null);setAuthStage("idle")});return()=>controller.abort()},[sessionToken]);
+  useEffect(()=>{if(!sessionToken||!authSession?.avatarAvailable){setAvatarUrl(null);return}const controller=new AbortController();let objectUrl:string|null=null;fetch(new URL("/v1/session/avatar",authUrl),{headers:{Authorization:`Bearer ${sessionToken}`},credentials:"omit",signal:controller.signal}).then(r=>r.ok?r.blob():Promise.reject()).then(blob=>{objectUrl=URL.createObjectURL(blob);setAvatarUrl(objectUrl)}).catch(()=>setAvatarUrl(null));return()=>{controller.abort();if(objectUrl)URL.revokeObjectURL(objectUrl)}},[sessionToken,authSession?.avatarAvailable]);
+  useEffect(()=>{if(!profile||!sessionToken||!authSession)return;const controller=new AbortController();fetch(new URL("/v1/session/devices",authUrl),{headers:{Authorization:`Bearer ${sessionToken}`},credentials:"omit",signal:controller.signal}).then(r=>r.ok?r.json():Promise.reject()).then((data:{sessions?:DeviceSession[]})=>setDeviceSessions(Array.isArray(data.sessions)?data.sessions:[])).catch(()=>setDeviceSessions([]));return()=>controller.abort()},[profile,sessionToken,authSession]);
+  useEffect(()=>{if(!download||releaseMeta)return;const controller=new AbortController();setReleaseLoading(true);fetch("https://api.github.com/repos/zori-xyz/BetterFy/releases/latest",{headers:{Accept:"application/vnd.github+json"},signal:controller.signal}).then(r=>r.ok?r.json():Promise.reject()).then((data:{tag_name?:string;published_at?:string;assets?:Array<{name?:string;size?:number}>})=>{const asset=data.assets?.find(item=>/\.(exe|msi)$/i.test(item.name||""))||data.assets?.[0];if(!data.tag_name||!data.published_at||!asset?.name||!asset.size)throw new Error();setReleaseMeta({version:data.tag_name,fileName:asset.name,size:asset.size,publishedAt:data.published_at})}).catch(e=>{if(!(e instanceof DOMException&&e.name==="AbortError"))setReleaseMeta(null)}).finally(()=>setReleaseLoading(false));return()=>controller.abort()},[download,releaseMeta]);
+
+  const verifyCode=async()=>{if(!/^\d{6}$/.test(authCode)){setAuthError(t.auth.invalid);return}setAuthStage("verifying");setAuthError("");try{const response=await fetch(new URL("/v1/auth/telegram/code",authUrl),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({code:authCode,clientKind:"web"}),credentials:"omit"});if(!response.ok)throw new Error();const data=await response.json() as WebSession&{sessionToken?:string};if(!data.sessionToken||!data.displayName)throw new Error();sessionStorage.setItem(sessionKey,data.sessionToken);setSessionToken(data.sessionToken);setAuthSession(data);setAuthStage("ready");setAuthCode("")}catch{setAuthStage("code");setAuthError(t.auth.invalid)}};
+  const revoke=async(item:DeviceSession)=>{if(!sessionToken)return;try{const response=await fetch(new URL("/v1/session/devices/revoke",authUrl),{method:"POST",headers:{Authorization:`Bearer ${sessionToken}`,"content-type":"application/json"},body:JSON.stringify({sessionId:item.sessionId}),credentials:"omit"});if(!response.ok)throw new Error();if(item.current){logout();return}setDeviceSessions(v=>v.filter(x=>x.sessionId!==item.sessionId))}catch{}};
+  const logout=()=>{const token=sessionToken;try{sessionStorage.removeItem(sessionKey)}catch{}setSessionToken(null);setAuthSession(null);setAvatarUrl(null);setDeviceSessions([]);setAuthStage("idle");if(token)fetch(new URL("/v1/session/logout",authUrl),{method:"POST",headers:{Authorization:`Bearer ${token}`},credentials:"omit"}).catch(()=>undefined)};
+  const downloadBuild=async()=>{setDownloadError("");if(!sessionToken||!authSession){setDownload(false);setProfile(true);return}try{const response=await fetch(new URL("/v1/releases/latest",authUrl),{headers:{Authorization:`Bearer ${sessionToken}`},credentials:"omit"});if(!response.ok)throw new Error();const data=await response.json() as{downloadUrl?:string};const url=safeReleaseUrl(data.downloadUrl);if(!url)throw new Error();window.location.assign(url)}catch{setDownloadError(t.download.error)}};
+
+  return <><header className="site-header"><a href="#top"><Wordmark compact/></a><nav aria-label="Navigation"><a href="#product">{t.nav[0]}</a><a href="#journey">{t.nav[1]}</a><a href="#download">{t.nav[2]}</a></nav><div className="header-actions"><div className="language-switch" aria-label="Language"><button className={language==="ru"?"active":""} onClick={()=>setLanguage("ru")}>RU</button><button className={language==="en"?"active":""} onClick={()=>setLanguage("en")}>EN</button></div><span className="live"><i/>{t.early}</span><button className="profile-button" onClick={()=>setProfile(true)}>{avatarUrl?<img src={avatarUrl} alt=""/>:<CircleUserRound size={16}/>} {authSession?.displayName||t.profile}</button></div></header>
+  <main id="top"><section className="hero shell"><div className="hero-copy"><p className="eyebrow"><Sparkles size={13}/>{t.hero.tag}</p><h1>{t.hero.a}<br/><strong>{t.hero.b}</strong></h1><p className="lead">{t.hero.body}</p><div className="hero-actions"><button className="action primary" onClick={()=>document.querySelector("#product")?.scrollIntoView({behavior:"smooth"})}><span className="action-icon"><Layers3 size={18}/></span><b>{t.hero.cta}</b><ArrowRight size={18}/></button><button className="text-action" onClick={()=>setDownload(true)}>{t.hero.download}<Download size={15}/></button></div><div className="trust-row"><span><i className="ready-dot"/>{t.hero.trust}</span><span>{t.hero.open}</span></div></div><figure className="hero-poster tilt-card app-screen" onPointerMove={tiltMove} onPointerLeave={tiltReset}><div className="poster-glow"/><img src={homeImage} alt="BetterFy home"/><figcaption><span>{t.hero.card}</span><b>{t.hero.cardText}</b></figcaption></figure></section>
+  <section className="state-rail shell reveal" aria-label="Build flow">{t.rail.map((item,i)=><Fragment key={item[0]}><div><span>{String(i+1).padStart(2,"0")}</span><b>{item[0]}</b><small>{item[1]}</small></div>{i<3&&<i/>}</Fragment>)}</section>
+  <section className="product shell" id="product"><div className="section-intro reveal"><p className="eyebrow"><span>01</span>{t.product.tag}</p><h2>{t.product.a}<br/><strong>{t.product.b}</strong></h2><p>{t.product.body}</p></div><article className="feature dark-feature reveal"><div className="feature-copy"><p className="micro">{t.minify.tag}</p><h3>{t.minify.a}<br/>{t.minify.b}</h3><p>{t.minify.body}</p><ul>{t.minify.items.map(x=><li key={x}><Check size={14}/>{x}</li>)}</ul><a href="#journey">{t.minify.link}<ChevronRight size={14}/></a></div><button className="poster-button tilt-card" onPointerMove={tiltMove} onPointerLeave={tiltReset} onClick={()=>window.open(minifyImage,"_blank")} aria-label="Minify"><img key={minifyImage} src={minifyImage} alt="Minify"/><span>{t.open}<ExternalLink size={12}/></span></button></article>
+  <article className={`feature light-feature reveal is-visible ${darkWardrobe?"is-dark-preview":""}`}><button className="poster-button tilt-card wardrobe-screen" onPointerMove={tiltMove} onPointerLeave={tiltReset} onClick={()=>window.open(wardrobeImage,"_blank")} aria-label="Wardrobe"><img key={wardrobeImage} src={wardrobeImage} alt="BetterFy Wardrobe"/><span>{t.open}<ExternalLink size={12}/></span></button><div className="feature-copy"><div className="theme-switch" role="group" aria-label="Theme"><button type="button" aria-pressed={!darkWardrobe} className={!darkWardrobe?"active":""} onClick={()=>setDarkWardrobe(false)}>{t.light}</button><button type="button" aria-pressed={darkWardrobe} className={darkWardrobe?"active":""} onClick={()=>setDarkWardrobe(true)}>{t.dark}</button></div><p className="micro">{t.wardrobe.tag}</p><h3>{t.wardrobe.a}<br/>{t.wardrobe.b}</h3><p>{t.wardrobe.body}</p><ul>{t.wardrobe.items.map(x=><li key={x}><Check size={14}/>{x}</li>)}</ul></div></article></section>
+  <section className="journey" id="journey"><div className="shell"><div className="journey-intro reveal"><p className="eyebrow"><span>02</span>{t.journey.tag}</p><h2>{t.journey.a}<br/><strong>{t.journey.b}</strong></h2><p>{t.journey.body}</p></div><div className="journey-board reveal"><div className="journey-tabs" role="tablist">{steps.map((item,i)=>{const Icon=item.icon;return <button key={item.n} role="tab" aria-selected={active===i} onClick={()=>setActive(i)}><span className="journey-number">{item.n}</span><i><Icon size={18}/></i><b>{item.title}</b><small>{item.label}</small></button>})}</div><div className="journey-detail" key={`${language}-${step.n}`}><div className="stage-visual"><div className="stage-logo"><Wordmark compact/></div><StepIcon size={54}/><span>{step.n} / 04</span></div><div className="stage-copy"><p className="micro">{t.journey.stage} {step.n}</p><h3>{step.heading}</h3><p>{step.text}</p><ul>{step.points.map(x=><li key={x}><Check size={14}/>{x}</li>)}</ul><button onClick={()=>setActive(active===3?0:active+1)}>{active===3?t.journey.restart:t.journey.next}<ArrowRight size={16}/></button></div></div><div className="journey-progress"><i style={{width:`${25*(active+1)}%`}}/></div></div></div></section>
+  <section className="account shell reveal"><div className="account-visual"><div className="account-card"><div className="account-avatar">{avatarUrl?<img src={avatarUrl} alt=""/>:<UserRound size={27}/>}</div><div><p className="micro">{t.account.tag}</p><h3>{authSession?.displayName||t.account.player}</h3><span>{authSession?(authSession.username?`@${authSession.username}`:t.auth.early):t.account.offline}</span></div><button onClick={()=>setProfile(true)}>{t.account.setup}<ArrowRight size={14}/></button></div><div className="session-row"><Monitor size={17}/><div><b>{t.account.browser}</b><span>{authSession?t.auth.safe:t.account.browserState}</span></div><em>{t.account.current}</em></div><div className="session-row"><Gamepad2 size={17}/><div><b>{t.account.app}</b><span>{t.account.appState}</span></div><em>{t.account.notConnected}</em></div></div><div className="account-copy"><p className="eyebrow"><span>03</span>{t.account.section}</p><h2>{t.account.a}<br/><strong>{t.account.b}</strong></h2><p>{t.account.body}</p><button className="action secondary" onClick={()=>setProfile(true)}><span className="action-icon"><CircleUserRound size={18}/></span><b>{t.account.open}</b><ArrowRight size={18}/></button></div></section>
+  <section className="download-section" id="download"><div className="download-aura"/><div className="shell download-inner reveal"><div><p className="eyebrow"><span>04</span>{t.download.tag}</p><h2>{t.download.a}<br/><strong>{t.download.b}</strong></h2><p>{t.download.body}</p></div><div className="download-cta"><button className="action primary huge" onClick={()=>setDownload(true)}><span className="action-icon"><ArrowDownToLine size={19}/></span><b>{t.download.cta}</b><ArrowRight size={19}/></button><span>{t.download.system} · Early Access</span><a href={`${repo}/releases`}>{t.download.versions}<ExternalLink size={12}/></a></div></div></section>
+  <footer className="site-footer shell"><div><Wordmark/><p>{t.footer.tag}</p></div><div><b>{t.footer.product}</b><a href="#product">{t.footer.features}</a><a href="#journey">{t.footer.process}</a><button onClick={()=>setProfile(true)}>{t.profile}</button></div><div><b>{t.footer.project}</b><a href={repo}>GitHub<ExternalLink size={11}/></a><a href={bot}>{t.footer.telegram}<ExternalLink size={11}/></a><a href={`${repo}/blob/main/docs/ROADMAP.md`}>{t.footer.roadmap}<ExternalLink size={11}/></a></div><span>{t.footer.legal}</span></footer></main>
+  {profile&&<ProfilePanel language={language} t={t} close={()=>setProfile(false)} stage={authStage} session={authSession} token={sessionToken} code={authCode} setCode={v=>{setAuthCode(v);setAuthError("");setAuthStage("code")}} error={authError} verify={verifyCode} avatar={avatarUrl} sessions={deviceSessions} revoke={revoke} logout={logout}/>} {download&&<DownloadPanel language={language} t={t} close={()=>setDownload(false)} session={authSession} release={releaseMeta} releaseLoading={releaseLoading} openProfile={()=>{setDownload(false);setProfile(true)}} download={downloadBuild} error={downloadError}/>}</>;
 }
-
-function useLatestRelease(language: Language): ReleaseState {
-  const [release, setRelease] = useState<ReleaseState>({ phase: "loading" });
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch(`${RELEASES_API}?per_page=20`, {
-      headers: { Accept: "application/vnd.github+json" },
-      signal: controller.signal,
-    })
-      .then((response) => {
-        if (!response.ok) throw new Error("release_unavailable");
-        return response.json() as Promise<Array<{
-          tag_name?: string;
-          name?: string;
-          published_at?: string;
-          html_url?: string;
-          draft?: boolean;
-          prerelease?: boolean;
-          assets?: Array<{ name?: string; browser_download_url?: string }>;
-        }>>;
-      })
-      .then((releases) => {
-        const candidates = releases.filter((item) => !item.draft);
-        const data = candidates.find((item) => !item.prerelease && item.assets?.some((asset) => asset.name === INSTALLER_NAME))
-          ?? candidates.find((item) => item.prerelease && item.assets?.some((asset) => asset.name === INSTALLER_NAME));
-        if (!data) throw new Error("installer_unavailable");
-        const installer = data.assets?.find((asset) => asset.name === INSTALLER_NAME);
-        const installerUrl = allowlistedExternalUrl(installer?.browser_download_url, "release");
-        const releasePage = allowlistedExternalUrl(data.html_url, "release");
-        setRelease({
-          phase: "ready",
-          version: data.name ?? data.tag_name ?? "BetterFy",
-          date: data.published_at ? formatDate(data.published_at, language) : "GitHub Releases",
-          url: installerUrl ?? releasePage ?? RELEASES_URL,
-          direct: Boolean(installerUrl),
-        });
-      })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        setRelease({ phase: "fallback", url: RELEASES_URL });
-      });
-    return () => controller.abort();
-  }, [language]);
-
-  return release;
-}
-
-function Site() {
-  const [language, setLanguage] = useState<Language>(readStoredLanguage);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
-  const [headerCompact, setHeaderCompact] = useState(false);
-  const [authStage, setAuthStage] = useState<AuthStage>("checking");
-  const [authSession, setAuthSession] = useState<WebSession | null>(null);
-  const [sessionToken, setSessionToken] = useState<string | null>(() => {
-    try { return window.sessionStorage.getItem(SESSION_STORAGE_KEY); } catch { return null; }
-  });
-  const [authCode, setAuthCode] = useState("");
-  const [authError, setAuthError] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [downloadError, setDownloadError] = useState("");
-  const [deviceSessions, setDeviceSessions] = useState<DeviceSession[]>([]);
-  const [deviceSessionsError, setDeviceSessionsError] = useState(false);
-  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
-  const accountTrigger = useRef<HTMLButtonElement>(null);
-  const t = copy[language];
-  const release = useLatestRelease(language);
-  const authUrl = allowlistedExternalUrl(import.meta.env.VITE_BETTERFY_AUTH_URL?.trim() || DEFAULT_AUTH_URL, "auth")!;
-  const accessLabel = useMemo(() => {
-    if (!authSession || authSession.accessTier !== "premium") return t.accessEarly;
-    const expiry = authSession.accessExpiresAt
-      ? new Intl.DateTimeFormat(language === "ru" ? "ru-RU" : "en-GB", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        }).format(new Date(authSession.accessExpiresAt * 1000))
-      : null;
-    return [t.accessPremium, expiry ? `${t.accessUntil} ${expiry}` : null].filter(Boolean).join(" · ");
-  }, [authSession, language, t.accessEarly, t.accessPremium, t.accessUntil]);
-
-  useEffect(() => {
-    if (!sessionToken) {
-      setAuthStage("idle");
-      setAuthSession(null);
-      return;
-    }
-    const controller = new AbortController();
-    setAuthStage("checking");
-    fetch(new URL("/v1/session/profile", authUrl), {
-      headers: { Authorization: `Bearer ${sessionToken}` },
-      credentials: "omit",
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("session_invalid");
-        return response.json() as Promise<WebSession>;
-      })
-      .then((profile) => {
-        setAuthSession(profile);
-        setAuthStage("ready");
-      })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        try { window.sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch { /* no-op */ }
-        setSessionToken(null);
-        setAuthStage("idle");
-      });
-    return () => controller.abort();
-  }, [authUrl, sessionToken]);
-
-  useEffect(() => {
-    if (!sessionToken || !authSession?.avatarAvailable) {
-      setAvatarUrl(null);
-      return;
-    }
-    const controller = new AbortController();
-    let objectUrl: string | null = null;
-    fetch(new URL("/v1/session/avatar", authUrl), {
-      headers: { Authorization: `Bearer ${sessionToken}` },
-      credentials: "omit",
-      signal: controller.signal,
-    })
-      .then((response) => response.ok ? response.blob() : Promise.reject(new Error("avatar_unavailable")))
-      .then((blob) => {
-        objectUrl = URL.createObjectURL(blob);
-        setAvatarUrl(objectUrl);
-      })
-      .catch(() => setAvatarUrl(null));
-    return () => {
-      controller.abort();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [authSession?.avatarAvailable, authUrl, sessionToken]);
-
-  useEffect(() => {
-    if (!accountOpen || !sessionToken || !authSession) return undefined;
-    const controller = new AbortController();
-    setDeviceSessionsError(false);
-    fetch(new URL("/v1/session/devices", authUrl), {
-      headers: { Authorization: `Bearer ${sessionToken}` },
-      credentials: "omit",
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("sessions_unavailable");
-        return response.json() as Promise<{ sessions?: DeviceSession[] }>;
-      })
-      .then((payload) => setDeviceSessions(Array.isArray(payload.sessions) ? payload.sessions : []))
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        setDeviceSessionsError(true);
-      });
-    return () => controller.abort();
-  }, [accountOpen, authSession, authUrl, sessionToken]);
-
-  const revokeDevice = async (device: DeviceSession) => {
-    if (!sessionToken || revokingSessionId) return;
-    setRevokingSessionId(device.sessionId);
-    setDeviceSessionsError(false);
-    try {
-      const response = await fetch(new URL("/v1/session/devices/revoke", authUrl), {
-        method: "POST",
-        headers: { Authorization: `Bearer ${sessionToken}`, "content-type": "application/json" },
-        body: JSON.stringify({ sessionId: device.sessionId }),
-        credentials: "omit",
-      });
-      if (!response.ok) throw new Error("session_revoke_failed");
-      if (device.current) {
-        signOut();
-        return;
-      }
-      setDeviceSessions((current) => current.filter((item) => item.sessionId !== device.sessionId));
-    } catch {
-      setDeviceSessionsError(true);
-    } finally {
-      setRevokingSessionId(null);
-    }
-  };
-
-  const verifyCode = async () => {
-    const code = authCode.replace(/\D/g, "");
-    if (!/^\d{6}$/.test(code)) {
-      setAuthError(t.invalidCode);
-      return;
-    }
-    setAuthStage("verifying");
-    setAuthError("");
-    try {
-      const response = await fetch(new URL("/v1/auth/telegram/code", authUrl), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code, clientKind: "web" }),
-        credentials: "omit",
-      });
-      if (!response.ok) throw new Error("invalid_code");
-      const payload = await response.json() as WebSession & { sessionToken?: string };
-      if (!payload.sessionToken || !payload.displayName) throw new Error("invalid_response");
-      window.sessionStorage.setItem(SESSION_STORAGE_KEY, payload.sessionToken);
-      setAuthSession(payload);
-      setSessionToken(payload.sessionToken);
-      setAuthStage("ready");
-      setAuthCode("");
-    } catch {
-      setAuthStage("code");
-      setAuthError(t.invalidCode);
-    }
-  };
-
-  const signOut = async () => {
-    const token = sessionToken;
-    try { window.sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch { /* no-op */ }
-    setSessionToken(null);
-    setAuthSession(null);
-    setAvatarUrl(null);
-    setAuthStage("idle");
-    if (token) {
-      fetch(new URL("/v1/session/logout", authUrl), {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: "omit",
-      }).catch(() => undefined);
-    }
-  };
-
-  const downloadBuild = async () => {
-    setDownloadError("");
-    if (!sessionToken || !authSession) {
-      setAccountOpen(true);
-      setAuthStage("idle");
-      return;
-    }
-    try {
-      const response = await fetch(new URL("/v1/releases/latest", authUrl), {
-        headers: { Authorization: `Bearer ${sessionToken}` },
-        credentials: "omit",
-      });
-      if (!response.ok) throw new Error("release_unavailable");
-      const payload = await response.json() as { downloadUrl?: string };
-      const url = allowlistedExternalUrl(payload.downloadUrl, "release");
-      if (!url) throw new Error("release_invalid");
-      window.location.assign(url);
-    } catch {
-      setDownloadError(t.downloadError);
-    }
-  };
-
-  useEffect(() => {
-    document.documentElement.lang = language;
-    storeLanguage(language);
-  }, [language]);
-
-  useEffect(() => {
-    const updateHeader = () => setHeaderCompact(window.scrollY > 28);
-    updateHeader();
-    window.addEventListener("scroll", updateHeader, { passive: true });
-    return () => window.removeEventListener("scroll", updateHeader);
-  }, []);
-
-  useEffect(() => {
-    const targets = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
-    if (!("IntersectionObserver" in window) || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      targets.forEach((target) => target.classList.add("is-visible"));
-      return;
-    }
-    document.documentElement.classList.add("site-motion-ready");
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        entry.target.classList.add("is-visible");
-        observer.unobserve(entry.target);
-      });
-    }, { threshold: 0.12, rootMargin: "0px 0px -7%" });
-    targets.forEach((target) => observer.observe(target));
-    return () => {
-      observer.disconnect();
-      document.documentElement.classList.remove("site-motion-ready");
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!accountOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setAccountOpen(false);
-    };
-    document.body.classList.add("modal-open");
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.classList.remove("modal-open");
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [accountOpen]);
-
-  const releaseLabel = useMemo(() => {
-    if (release.phase === "loading") return t.checking;
-    if (release.phase === "fallback") return t.fallback;
-    return `${t.latest} · ${release.version}`;
-  }, [release, t]);
-
-  return (
-    <div className="site-shell">
-      <a className="skip-link" href="#main">{t.skip}</a>
-      <header className={headerCompact ? "site-header is-compact" : "site-header"}>
-        <a className="brand-link" href="#top" aria-label="BetterFy home">
-          <BetterFyWordmark compact />
-        </a>
-        <nav className={menuOpen ? "site-nav is-open" : "site-nav"} aria-label="Primary navigation">
-          <a href="#features" onClick={() => setMenuOpen(false)}>{t.nav[0]}</a>
-          <a href="#journey" onClick={() => setMenuOpen(false)}>{t.nav[1]}</a>
-          <a href="#download" onClick={() => setMenuOpen(false)}>{t.nav[2]}</a>
-          <div className="nav-language" aria-label="Language">
-            <button className={language === "ru" ? "is-active" : ""} onClick={() => { setLanguage("ru"); setMenuOpen(false); }}>RU</button>
-            <button className={language === "en" ? "is-active" : ""} onClick={() => { setLanguage("en"); setMenuOpen(false); }}>EN</button>
-          </div>
-        </nav>
-        <div className="header-actions">
-          <div className="language-switch" aria-label="Language">
-            <button className={language === "ru" ? "is-active" : ""} onClick={() => setLanguage("ru")}>RU</button>
-            <button className={language === "en" ? "is-active" : ""} onClick={() => setLanguage("en")}>EN</button>
-          </div>
-          <button ref={accountTrigger} className="account-button" onClick={() => setAccountOpen(true)}>
-            {avatarUrl ? <img src={avatarUrl} alt="" /> : <CircleUserRound />}
-            {authSession?.displayName ?? t.account}
-          </button>
-          <button className="menu-button" aria-label="Menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)}>
-            {menuOpen ? <X /> : <Menu />}
-          </button>
-        </div>
-      </header>
-
-      <main id="main">
-        <section className="hero" id="top">
-          <div className="hero-copy" data-reveal>
-            <span className="eyebrow"><Sparkles />{t.eyebrow}</span>
-            <h1><span>{t.heroLine1}</span><strong>{t.heroLine2}</strong></h1>
-            <p>{t.heroBody}</p>
-            <div className="hero-actions">
-              <button className="primary-action" type="button" onClick={downloadBuild}><ArrowDownToLine />{t.download}<ArrowRight /></button>
-              <a className="text-action" href="#journey">{t.explore}<ChevronRight /></a>
-            </div>
-          </div>
-
-          <div className="hero-system" aria-label={t.current} data-reveal>
-            <div className="system-aura" />
-            <div className="system-topline"><span>{t.current}</span><strong><Check />{t.currentState}</strong></div>
-            <div className="system-core">
-              <div className="core-mark"><span /><span /><span /></div>
-              <div className="core-orbit orbit-one" />
-              <div className="core-orbit orbit-two" />
-            </div>
-            <div className="system-path">
-              <div><span>01</span><strong>{t.content}</strong></div>
-              <i />
-              <div><span>02</span><strong>{t.verify}</strong></div>
-              <i />
-              <div><span>03</span><strong>{t.recovery}</strong></div>
-            </div>
-          </div>
-        </section>
-
-        <section className="journey" id="journey">
-          <div className="section-intro" data-reveal>
-            <span className="eyebrow">{t.chapter}</span>
-            <h2>{t.sectionTitle}</h2>
-            <p>{t.sectionBody}</p>
-          </div>
-          <div className="journey-list">
-            {t.steps.map(([number, title, body]) => (
-              <article key={number} data-reveal>
-                <span>{number}</span>
-                <h3>{title}</h3>
-                <p>{body}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="engine" id="features">
-          <div className="engine-visual" aria-hidden="true" data-reveal>
-            <div className="engine-rail rail-one"><i /><i /><i /></div>
-            <div className="engine-rail rail-two"><i /><i /><i /></div>
-            <div className="engine-node"><ShieldCheck /></div>
-          </div>
-          <div className="engine-copy" data-reveal>
-            <span className="eyebrow">{t.engineEyebrow}</span>
-            <h2>{t.engineTitle}</h2>
-            <p>{t.engineBody}</p>
-            <ul>{t.enginePoints.map((point) => <li key={point}><Check />{point}</li>)}</ul>
-          </div>
-          <aside className="proof-card" data-reveal>
-            <span>{t.proofLabel}</span>
-            <strong>{t.proofTitle}</strong>
-            <p>{t.proofBody}</p>
-            <a href={`${REPOSITORY_URL}/actions`} target="_blank" rel="noreferrer">GitHub Actions <ArrowRight /></a>
-          </aside>
-        </section>
-
-        <section className="status-section" aria-labelledby="status-title">
-          <div className="status-intro" data-reveal>
-            <span className="eyebrow"><Zap />{t.statusEyebrow}</span>
-            <h2 id="status-title">{t.statusTitle}</h2>
-            <p>{t.statusBody}</p>
-          </div>
-          <div className="status-track" data-reveal>
-            {t.statusItems.map(([number, title, body], index) => (
-              <article key={number} className={index === 0 ? "is-current" : ""}>
-                <span>{number}</span>
-                <div><strong>{title}</strong><p>{body}</p></div>
-                <i aria-hidden="true" />
-              </article>
-            ))}
-            <div className="status-note"><ShieldCheck />{t.statusNote}</div>
-          </div>
-        </section>
-
-        <section className="download-section" id="download">
-          <div className="download-copy" data-reveal>
-            <span className="eyebrow">{t.releaseEyebrow}</span>
-            <h2>{t.releaseTitle}</h2>
-            <p>{t.releaseBody}</p>
-          </div>
-          <div className="release-card" data-reveal>
-            <div className="release-icon"><Download /></div>
-            <div className="release-details">
-              <span>{releaseLabel}</span>
-              <strong>{t.requirements}</strong>
-              <small>{release.phase === "ready" ? release.date : t.integrity}</small>
-            </div>
-            <button type="button" onClick={downloadBuild} className={release.phase === "loading" ? "is-loading" : ""}>
-              {t.releaseButton}<ArrowRight />
-            </button>
-            <p><PackageCheck />{authSession ? t.integrity : t.downloadLocked}</p>
-            {downloadError && <p className="release-error">{downloadError}</p>}
-          </div>
-        </section>
-
-        <section className="community" data-reveal>
-          <div>
-            <span className="eyebrow">{t.communityEyebrow}</span>
-            <h2>{t.communityTitle}</h2>
-            <p>{t.communityBody}</p>
-          </div>
-          <div className="community-actions">
-            <a className="telegram-action" href={BOT_URL} target="_blank" rel="noreferrer"><Globe2 />{t.openBot}<ArrowRight /></a>
-            <a className="secondary-action" href={REPOSITORY_URL} target="_blank" rel="noreferrer"><Github />{t.github}</a>
-          </div>
-        </section>
-
-        <section className="faq" data-reveal>
-          <h2>{t.faqTitle}</h2>
-          <div>
-            {t.faq.map(([question, answer]) => (
-              <details key={question}>
-                <summary>{question}<span>+</span></summary>
-                <p>{answer}</p>
-              </details>
-            ))}
-          </div>
-        </section>
-      </main>
-
-      <footer className="site-footer">
-        <div className="footer-brand">
-          <BetterFyWordmark compact />
-          <span>{t.footerMeta}</span>
-        </div>
-        <p>{t.footer}</p>
-        <nav className="footer-links" aria-label="Footer">
-          <a href={REPOSITORY_URL} target="_blank" rel="noreferrer">GitHub</a>
-          <a href={`${REPOSITORY_URL}/blob/main/docs/README.md`} target="_blank" rel="noreferrer">Docs</a>
-          <a href={BOT_URL} target="_blank" rel="noreferrer">@BeterFyBot</a>
-        </nav>
-      </footer>
-
-      {accountOpen && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setAccountOpen(false); }}>
-          <section className="account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title">
-            <button className="modal-close" autoFocus onClick={() => { setAccountOpen(false); accountTrigger.current?.focus(); }} aria-label={t.close}><X /></button>
-            <div className={avatarUrl ? "modal-icon has-avatar" : "modal-icon"}>
-              {avatarUrl ? <img src={avatarUrl} alt="" /> : <CircleUserRound />}
-            </div>
-            <span className="eyebrow">{t.modalEyebrow}</span>
-            {authSession ? (
-              <>
-                <h2 id="account-title">{authSession.displayName}</h2>
-                <p>{authSession.username ? `@${authSession.username}` : t.signedIn}</p>
-                <div className="account-access">
-                  <ShieldCheck />
-                  <span><strong>{accessLabel}</strong>{authSession.accessRecurring && <small>{t.accessRecurring}</small>}</span>
-                </div>
-                <details className="account-sessions">
-                  <summary>{t.sessions}<span>{String(deviceSessions.length).padStart(2, "0")}</span></summary>
-                  <div>
-                    {deviceSessions.map((device) => {
-                      const label = device.current
-                        ? t.currentSession
-                        : device.clientKind === "desktop"
-                          ? t.desktopSession
-                          : device.clientKind === "web"
-                            ? t.webSession
-                            : t.unknownSession;
-                      const expiry = new Intl.DateTimeFormat(language === "ru" ? "ru-RU" : "en-GB", {
-                        day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
-                      }).format(new Date(device.expiresAt * 1000));
-                      return (
-                        <article key={device.sessionId}>
-                          <span><strong>{label}</strong><small>{t.sessionUntil} {expiry}</small></span>
-                          {!device.current && (
-                            <button type="button" disabled={revokingSessionId === device.sessionId} onClick={() => void revokeDevice(device)}>
-                              {t.revokeSession}
-                            </button>
-                          )}
-                        </article>
-                      );
-                    })}
-                    {deviceSessionsError && <p>{t.sessionsUnavailable}</p>}
-                  </div>
-                </details>
-                <button className="secondary-action modal-signout" type="button" onClick={signOut}>{t.signOut}</button>
-              </>
-            ) : (
-              <>
-                <h2 id="account-title">{t.modalTitle}</h2>
-                <p>{t.modalBody}</p>
-                <div className="pending-note"><ShieldCheck /><span>{t.modalPending}</span></div>
-                <a className="telegram-action" href={BOT_URL} target="_blank" rel="noreferrer" onClick={() => setAuthStage("code")}>
-                  <Globe2 />{t.authCta}<ArrowRight />
-                </a>
-                {(authStage === "code" || authStage === "verifying") && (
-                  <form className="auth-code-form" onSubmit={(event) => { event.preventDefault(); void verifyCode(); }}>
-                    <label htmlFor="telegram-code">{t.codeLabel}</label>
-                    <input
-                      id="telegram-code"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      value={authCode}
-                      placeholder={t.codePlaceholder}
-                      onChange={(event) => { setAuthCode(event.target.value.replace(/\D/g, "").slice(0, 6)); setAuthError(""); }}
-                      disabled={authStage === "verifying"}
-                    />
-                    <button type="submit" className="primary-action" disabled={authStage === "verifying" || authCode.length !== 6}>
-                      {authStage === "verifying" ? t.verifying : t.verifyCode}<ArrowRight />
-                    </button>
-                    {authError && <p role="alert">{authError}</p>}
-                  </form>
-                )}
-              </>
-            )}
-          </section>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default Site;
