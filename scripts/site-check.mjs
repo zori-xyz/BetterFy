@@ -65,9 +65,13 @@ try {
     const botHref = await page.getByRole("link", { name: "@BeterFyBot", exact: true }).getAttribute("href");
     if (!botHref?.startsWith("https://t.me/BeterFyBot")) throw new Error(`Unexpected Telegram link: ${botHref}`);
 
-    await page.getByRole("button", { name: testCase.language === "ru" ? "Войти" : "Sign in" }).click();
+    await page.getByRole("button", { name: testCase.language === "ru" ? "Профиль" : "Profile" }).click();
     const dialog = page.getByRole("dialog");
     if (!(await dialog.isVisible())) throw new Error(`${testCase.language} ${testCase.width}px account dialog did not open`);
+    await dialog.getByRole("button", { name: testCase.language === "ru" ? "У меня уже есть код" : "I already have a code" }).click();
+    if (!(await dialog.getByLabel(testCase.language === "ru" ? "Код подтверждения" : "Confirmation code").isVisible())) {
+      throw new Error(`${testCase.language} ${testCase.width}px one-time code entry did not open`);
+    }
     await page.keyboard.press("Escape");
     if (await dialog.isVisible()) throw new Error(`${testCase.language} ${testCase.width}px account dialog did not close`);
     if (browserErrors.length > 0) throw new Error(`${testCase.language} ${testCase.width}px browser errors: ${browserErrors.join(" | ")}`);
