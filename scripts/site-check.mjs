@@ -7,6 +7,7 @@ const cases = [
   { language: "en", width: 1180, height: 820 },
   { language: "ru", width: 390, height: 844 },
   { language: "en", width: 390, height: 844 },
+  { language: "ru", width: 320, height: 568 },
 ];
 const forbiddenCopy = [
   /без технического шума/i,
@@ -30,6 +31,23 @@ async function assertStorageDeniedFallback() {
     throw new Error("Site did not render when localStorage was denied");
   }
   await page.close();
+}
+
+async function assertReducedMotionAndObserverFallback() {
+  const reducedPage = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
+  await reducedPage.goto(origin, { waitUntil: "networkidle" });
+  const hiddenRevealCount = await reducedPage.locator(".reveal").evaluateAll((nodes) => nodes.filter((node) => {
+    const style = getComputedStyle(node);
+    return style.opacity === "0" || style.visibility === "hidden";
+  }).length);
+  if (hiddenRevealCount > 0) throw new Error(`Reduced motion left ${hiddenRevealCount} reveal surfaces hidden`);
+  await reducedPage.close();
+
+  const fallbackPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await fallbackPage.addInitScript(() => { Object.defineProperty(window, "IntersectionObserver", { configurable: true, value: undefined }); });
+  await fallbackPage.goto(origin, { waitUntil: "networkidle" });
+  if (await fallbackPage.locator(".reveal:not(.is-visible)").count()) throw new Error("IntersectionObserver fallback left reveal surfaces hidden");
+  await fallbackPage.close();
 }
 
 try {
@@ -62,23 +80,35 @@ try {
     if (!wordmarkGeometry || wordmarkGeometry.gap > 12 || wordmarkGeometry.width > 180) {
       throw new Error(`${testCase.language} ${testCase.width}px footer wordmark geometry is invalid: ${JSON.stringify(wordmarkGeometry)}`);
     }
-    const botHref = await page.getByRole("link", { name: "@BeterFyBot", exact: true }).getAttribute("href");
+    const botHref = await page.locator('.site-footer a[href^="https://t.me/BeterFyBot"]').getAttribute("href");
     if (!botHref?.startsWith("https://t.me/BeterFyBot")) throw new Error(`Unexpected Telegram link: ${botHref}`);
 
-    await page.getByRole("button", { name: testCase.language === "ru" ? "Профиль" : "Profile" }).click();
+    const journeyTabs = page.getByRole("tab");
+    await journeyTabs.first().focus();
+    await page.keyboard.press("ArrowRight");
+    if (await journeyTabs.nth(1).getAttribute("aria-selected") !== "true") throw new Error(`${testCase.language} ${testCase.width}px journey tabs do not support arrow keys`);
+
+    const profileTrigger = page.getByRole("button", { name: testCase.language === "ru" ? "Профиль" : "Profile" }).first();
+    await profileTrigger.click();
     const dialog = page.getByRole("dialog");
     if (!(await dialog.isVisible())) throw new Error(`${testCase.language} ${testCase.width}px account dialog did not open`);
+    if (!(await page.locator("main").evaluate((node) => node.inert))) throw new Error(`${testCase.language} ${testCase.width}px dialog background is not inert`);
+    await dialog.locator(".modal-close:focus").waitFor();
+    await page.keyboard.press("Shift+Tab");
+    if (!(await dialog.locator(":focus").count())) throw new Error(`${testCase.language} ${testCase.width}px focus escaped the dialog`);
     await dialog.getByRole("button", { name: testCase.language === "ru" ? "У меня уже есть код" : "I already have a code" }).click();
     if (!(await dialog.getByLabel(testCase.language === "ru" ? "Код подтверждения" : "Confirmation code").isVisible())) {
       throw new Error(`${testCase.language} ${testCase.width}px one-time code entry did not open`);
     }
     await page.keyboard.press("Escape");
     if (await dialog.isVisible()) throw new Error(`${testCase.language} ${testCase.width}px account dialog did not close`);
+    await profileTrigger.locator(":scope:focus").waitFor();
     if (browserErrors.length > 0) throw new Error(`${testCase.language} ${testCase.width}px browser errors: ${browserErrors.join(" | ")}`);
     await page.close();
   }
   await assertStorageDeniedFallback();
-  console.log(`BetterFy website: ${cases.length} responsive checks and the storage-denied fallback passed.`);
+  await assertReducedMotionAndObserverFallback();
+  console.log(`BetterFy website: ${cases.length} responsive checks, modal focus, journey keyboard controls, reduced motion, and fallbacks passed.`);
 } finally {
   await browser.close();
 }
