@@ -41,6 +41,8 @@ async function assertReducedMotionAndObserverFallback() {
     return style.opacity === "0" || style.visibility === "hidden";
   }).length);
   if (hiddenRevealCount > 0) throw new Error(`Reduced motion left ${hiddenRevealCount} reveal surfaces hidden`);
+  const transitionAnimation = await reducedPage.locator(".catalog-transition img").evaluate((node) => getComputedStyle(node).animationName);
+  if (transitionAnimation !== "none") throw new Error(`Reduced motion left catalog animation enabled: ${transitionAnimation}`);
   await reducedPage.close();
 
   const fallbackPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
@@ -64,6 +66,16 @@ try {
     });
     await page.addInitScript((language) => localStorage.setItem("betterfy-site-language", language), testCase.language);
     await page.goto(origin, { waitUntil: "networkidle" });
+    const brokenImages = await page.locator("img").evaluateAll((images) => images
+      .filter((image) => image.loading !== "lazy" && (!image.complete || image.naturalWidth === 0))
+      .map((image) => image.getAttribute("src")));
+    if (brokenImages.length) throw new Error(`${testCase.language} ${testCase.width}px has broken images: ${brokenImages.join(", ")}`);
+    const transition = page.locator(".catalog-transition");
+    if (await transition.count() !== 1) throw new Error(`${testCase.language} ${testCase.width}px catalog transition is missing`);
+    const transitionGeometry = await transition.evaluate((node) => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height }));
+    if (transitionGeometry.width < 280 || transitionGeometry.height < 220) throw new Error(`${testCase.language} ${testCase.width}px transition is too small: ${JSON.stringify(transitionGeometry)}`);
+    const eagerBelowFoldImages = await page.locator('.product img:not([loading="lazy"]):not([fetchpriority="high"])').count();
+    if (eagerBelowFoldImages) throw new Error(`${testCase.language} ${testCase.width}px has ${eagerBelowFoldImages} eager product images`);
     const visibleCopy = await page.locator("body").innerText();
     const forbiddenMatch = forbiddenCopy.find((pattern) => pattern.test(visibleCopy));
     if (forbiddenMatch) throw new Error(`${testCase.language} contains forbidden generic copy: ${forbiddenMatch}`);
@@ -72,6 +84,14 @@ try {
 
     const footerWordmark = page.locator(".site-footer .wordmark");
     await footerWordmark.scrollIntoViewIfNeeded();
+    for (const image of await page.locator("img").all()) {
+      await image.scrollIntoViewIfNeeded();
+      await image.evaluate((node) => node.decode?.().catch(() => {}));
+    }
+    const unloadedImages = await page.locator("img").evaluateAll((images) => images
+      .filter((image) => !image.complete || image.naturalWidth === 0)
+      .map((image) => image.getAttribute("src")));
+    if (unloadedImages.length) throw new Error(`${testCase.language} ${testCase.width}px has unloaded images: ${unloadedImages.join(", ")}`);
     const wordmarkGeometry = await footerWordmark.evaluate((node) => {
       const better = node.querySelector(".wordmark-better")?.getBoundingClientRect();
       const fy = node.querySelector(".wordmark-fy")?.getBoundingClientRect();
@@ -87,6 +107,7 @@ try {
     await journeyTabs.first().focus();
     await page.keyboard.press("ArrowRight");
     if (await journeyTabs.nth(1).getAttribute("aria-selected") !== "true") throw new Error(`${testCase.language} ${testCase.width}px journey tabs do not support arrow keys`);
+    if (await journeyTabs.first().getAttribute("data-complete") !== "true") throw new Error(`${testCase.language} ${testCase.width}px journey completion state is missing`);
 
     const profileTrigger = page.getByRole("button", { name: testCase.language === "ru" ? "Профиль" : "Profile" }).first();
     await profileTrigger.click();

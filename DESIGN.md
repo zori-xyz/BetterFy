@@ -217,6 +217,7 @@ design-system decision.
 | `website/public/bot/message-master.png` | Telegram bot welcome card | Founder-owned and founder-approved master; composition must remain unchanged |
 | `website/public/bot/code-ru.png` / `code-en.png` | One-time-code message cards | Approved variants of the founder master; only the central headline changes |
 | `website/public/bot/approved-ru.png` / `approved-en.png` | Successful sign-in message cards | Approved variants of the founder master; only the central headline changes |
+| `website/public/betterfy-catalog-transition.jpg` | Website bridge from Minify optimization into the visual Wardrobe catalog | Newly authored original BetterFy artwork; release-ready pending founder visual approval; no third-party characters, marks, or UI |
 | `src-tauri/icons/icon.svg` | Temporary application-icon master | Black BetterFy wordmark placeholder; replace with the final brand icon before release |
 | `src-tauri/windows/installer/sidebar.bmp` | NSIS welcome/finish brand panel | Newly authored BetterFy-only wordmark/signature art; release-ready |
 | `src-tauri/windows/installer/header.bmp` | NSIS install/uninstall page banner | Newly authored BetterFy-only installer art; release-ready |
