@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   Check,
   ExternalLink,
   ImageOff,
-  Layers3,
   PackageOpen,
   Plus,
   Search,
@@ -13,6 +12,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Wrench,
+  X,
 } from "lucide-react";
 import type { Language } from "./i18n";
 import AccentTitle from "./AccentTitle";
@@ -28,9 +28,9 @@ import MinifyModsRoute from "./MinifyModsRoute";
 
 const copy = {
   ru: {
-    eyebrow: "ГАРДЕРОБ / DOTA2PORNFX",
-    title: "Визуальная коллекция для твоей Dota",
-    text: "Скины, HUD, эффекты, звук и оформление из Dota2PornFxWeb. Этот раздел отделён от функциональных модов Minify.",
+    eyebrow: "ГАРДЕРОБ",
+    title: "Собери внешний вид Dota",
+    text: "Герои, предметы, эффекты, HUD и звук. Здесь нет оптимизации и игровых утилит.",
     search: "Найти мод, автора или категорию",
     source: "Источник",
     author: "Автор",
@@ -45,7 +45,7 @@ const copy = {
     remove: "Убрать из сборки",
     selected: "В сборке",
     build: "ТВОЯ СБОРКА",
-    buildEmpty: "Выбери первый мод — он появится здесь и сохранится между разделами.",
+    buildEmpty: "Выбери первый мод. Он появится здесь и сохранится между разделами.",
     buildHint: "Патчинг пока не выполняется",
     results: "модов",
     showMore: "Показать ещё",
@@ -62,9 +62,9 @@ const copy = {
     details: "Открыть детали",
   },
   en: {
-    eyebrow: "WARDROBE / DOTA2PORNFX",
-    title: "A visual collection for your Dota",
-    text: "Skins, HUDs, effects, audio, and presentation from Dota2PornFxWeb. This section is separate from functional Minify mods.",
+    eyebrow: "WARDROBE",
+    title: "Build your Dota look",
+    text: "Heroes, items, effects, HUDs, and audio. Performance mods and game utilities stay out of this space.",
     search: "Find a mod, author, or category",
     source: "Source",
     author: "Author",
@@ -95,6 +95,21 @@ const copy = {
     reset: "Reset filters",
     details: "Open details",
   },
+};
+
+const wardrobeSearchAliases: Record<string, Record<Language, string[]>> = {
+  backgrounds: { ru: ["фон", "фоны", "задник"], en: ["background", "backgrounds", "backdrop"] },
+  creeps: { ru: ["крип", "крипы", "существа"], en: ["creep", "creeps", "units"] },
+  "creep-deny": { ru: ["добивание", "денай"], en: ["deny", "creep deny"] },
+  towers: { ru: ["башня", "башни", "вышки"], en: ["tower", "towers"] },
+  wards: { ru: ["вард", "варды", "тотем"], en: ["ward", "wards", "totem"] },
+  couriers: { ru: ["курьер", "курьеры"], en: ["courier", "couriers"] },
+  heroes: { ru: ["герой", "герои", "персонаж"], en: ["hero", "heroes", "character"] },
+  "hero-items": { ru: ["предмет", "предметы", "шмотка", "скин"], en: ["item", "items", "skin"] },
+  hud: { ru: ["интерфейс", "худ", "панель"], en: ["interface", "hud"] },
+  sounds: { ru: ["звук", "звуки", "озвучка"], en: ["sound", "sounds", "audio"] },
+  music: { ru: ["музыка", "саундтрек"], en: ["music", "soundtrack"] },
+  effects: { ru: ["эффект", "эффекты", "анимация"], en: ["effect", "effects", "animation"] },
 };
 
 function CatalogPreview({
@@ -147,8 +162,14 @@ function WardrobeCatalogRoute({
   const [selectedOnly, setSelectedOnly] = useState(false);
   const [sort, setSort] = useState<"recent" | "name">("recent");
   const [limit, setLimit] = useState(12);
-  const [activeId, setActiveId] = useState(wardrobeCatalogItems[0]?.id ?? "");
+  const [activeId, setActiveId] = useState(
+    wardrobeCatalogItems.find((mod) => mod.metadata.name === "Queen of Pain Rose")?.id
+      ?? wardrobeCatalogItems[0]?.id
+      ?? "",
+  );
   const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set());
+  const [detailOpen, setDetailOpen] = useState(false);
+  const featureRef = useRef<HTMLElement>(null);
 
   const groupItems = useMemo(
     () => wardrobeCatalogItems.filter((mod) => group === "all" || mod.metadata.group === group),
@@ -190,6 +211,7 @@ function WardrobeCatalogRoute({
         mod.provenance.author,
         mod.metadata.categoryLabel[language],
         mod.metadata.category,
+        ...(wardrobeSearchAliases[mod.metadata.category]?.[language] ?? []),
       ]
         .filter(Boolean)
         .some((value) => value!.toLocaleLowerCase(language).includes(normalized));
@@ -198,6 +220,20 @@ function WardrobeCatalogRoute({
       : (b.verification.updatedAt ?? 0) - (a.verification.updatedAt ?? 0));
   }, [category, group, groupItems, language, query, selectedIds, selectedOnly, sort]);
 
+  const updateQuery = (value: string) => {
+    setQuery(value);
+    if (value.trim()) {
+      const normalized = value.trim().toLocaleLowerCase(language);
+      const matchedCategory = Object.keys(wardrobeCategoryLabels).find((key) => {
+        const label = wardrobeCategoryLabels[key]?.[language].toLocaleLowerCase(language);
+        const aliases = wardrobeSearchAliases[key]?.[language] ?? [];
+        return label === normalized || aliases.some((alias) => alias === normalized);
+      });
+      setGroup("all");
+      setCategory(matchedCategory ?? "all");
+    }
+  };
+
   useEffect(() => {
     if (!filtered.some((mod) => mod.id === activeId)) setActiveId(filtered[0]?.id ?? "");
   }, [activeId, filtered]);
@@ -205,16 +241,27 @@ function WardrobeCatalogRoute({
   useEffect(() => setLimit(12), [category, group, query, selectedOnly, sort]);
 
   const active = filtered.find((mod) => mod.id === activeId) ?? filtered[0] ?? null;
-  const selectedMods = selectedIds
-    .map((id) => wardrobeCatalogItems.find((mod) => mod.id === id))
-    .filter((mod): mod is BetterFyCatalogMod => Boolean(mod));
-
   const markFailed = (id: string) =>
     setFailedImages((current) => {
       const next = new Set(current);
       next.add(id);
       return next;
     });
+
+  const openMod = (id: string) => {
+    setActiveId(id);
+    setDetailOpen(true);
+    window.requestAnimationFrame(() => featureRef.current?.focus());
+  };
+
+  useEffect(() => {
+    if (!detailOpen) return undefined;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDetailOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [detailOpen]);
 
   return (
     <div className="mod-catalog-route">
@@ -224,22 +271,16 @@ function WardrobeCatalogRoute({
           <h1 className="accent-title"><AccentTitle text={t.title} /></h1>
           <p>{t.text}</p>
         </div>
-        <aside className={`catalog-build-summary ${selectedMods.length ? "has-items" : ""}`}>
-          <span>{t.build}</span>
-          <strong>{String(selectedMods.length).padStart(2, "0")}</strong>
-          <p>{selectedMods.length ? selectedMods.slice(-2).map((mod) => mod.metadata.name).join(" · ") : t.buildEmpty}</p>
-          <small><Layers3 />{t.buildHint}</small>
-        </aside>
       </header>
 
       <div className="catalog-controls">
         <label>
           <Search />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} />
+          <input value={query} onChange={(event) => updateQuery(event.target.value)} placeholder={t.search} />
           {query && <button onClick={() => setQuery("")} aria-label={language === "ru" ? "Очистить поиск" : "Clear search"}>×</button>}
         </label>
         <div className="catalog-groups" role="tablist" aria-label={language === "ru" ? "Категории модов" : "Mod categories"}>
-          {(Object.keys(modGroupLabels) as ModCatalogGroup[]).map((key) => (
+          {(Object.keys(modGroupLabels) as ModCatalogGroup[]).filter((key) => key === "all" || groupCounts[key] > 0).map((key) => (
             <button
               role="tab"
               aria-selected={group === key}
@@ -281,7 +322,18 @@ function WardrobeCatalogRoute({
 
       {active ? (
         <>
-          <section className="catalog-feature" key={active.id}>
+          {detailOpen && <div className="catalog-detail-layer" onMouseDown={() => setDetailOpen(false)}>
+          <section
+            ref={featureRef}
+            className="catalog-feature catalog-detail-dialog"
+            key={active.id}
+            role="dialog"
+            aria-modal="true"
+            aria-label={active.metadata.name}
+            tabIndex={-1}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button className="catalog-detail-close" aria-label={language === "ru" ? "Закрыть подробности" : "Close details"} onClick={() => setDetailOpen(false)}><X /></button>
             <div className="catalog-feature-visual">
               <CatalogPreview
                 mod={active}
@@ -322,18 +374,19 @@ function WardrobeCatalogRoute({
               </div>
             </div>
           </section>
+          </div>}
 
           <section className="catalog-results">
             <header>
               <div><strong>{filtered.length}</strong><span>{t.results}</span></div>
-              <small>{t.originNote}</small>
+              <small>{language === "ru" ? "Нажми карточку для подробностей или добавь мод сразу" : "Open a card for details or add the mod immediately"}</small>
             </header>
             <div className="catalog-grid">
               {filtered.slice(0, limit).map((mod) => {
                 const selected = selectedIds.includes(mod.id);
                 return (
                   <article className={`${mod.id === active.id ? "active" : ""} ${selected ? "selected" : ""}`} key={mod.id}>
-                    <button className="catalog-card-preview" onClick={() => setActiveId(mod.id)}>
+                    <button className="catalog-card-preview" onClick={() => openMod(mod.id)}>
                       <CatalogPreview
                         mod={mod}
                         language={language}
@@ -342,13 +395,14 @@ function WardrobeCatalogRoute({
                       />
                       <span>{mod.metadata.categoryLabel[language]}</span>
                     </button>
-                    <button className="catalog-card-copy" aria-label={`${t.details}: ${mod.metadata.name}`} onClick={() => setActiveId(mod.id)}>
+                    <button className="catalog-card-copy" aria-label={`${t.details}: ${mod.metadata.name}`} onClick={() => openMod(mod.id)}>
                       <strong>{mod.metadata.name}</strong>
                       <p>{mod.presentation.description[language]}</p>
                       <small>
                         <span>{mod.provenance.author ?? mod.provenance.sourceName}</span>
                         <b>{mod.metadata.styleCount > 1 ? `${mod.metadata.styleCount} ${t.styles}` : mod.artifact.fileKind}</b>
                       </small>
+                      <span className="catalog-card-open">{t.details}<ArrowRight /></span>
                     </button>
                     <button
                       className="catalog-card-toggle"
@@ -384,58 +438,106 @@ function WardrobeCatalogRoute({
 
 export default function ModCatalogRoute({
   language,
-  selectedIds,
-  onToggle,
-  onNavigationCompactChange,
+  selectedWardrobeIds,
+  selectedGameIds,
+  onToggleWardrobe,
+  onToggleGame,
 }: {
   language: Language;
-  selectedIds: string[];
-  onToggle: (id: string) => void;
-  onNavigationCompactChange?: (compact: boolean) => void;
+  selectedWardrobeIds: string[];
+  selectedGameIds: string[];
+  onToggleWardrobe: (id: string) => void;
+  onToggleGame: (id: string) => void;
 }) {
   const [section, setSection] = useState<"mods" | "wardrobe">("mods");
-  const [scrolled, setScrolled] = useState(false);
-  const frameRequest = useRef<number | null>(null);
-  const compactRef = useRef(false);
+  const hubRef = useRef<HTMLDivElement>(null);
+  const scrollPositions = useRef({ mods: 0, wardrobe: 0 });
   const labels = language === "ru"
-    ? { mods: "Моды", modsHint: `${minifyMods.length} · игра и оптимизация`, wardrobe: "Гардероб", wardrobeHint: `${wardrobeCatalogItems.length} · скины и оформление` }
-    : { mods: "Mods", modsHint: `${minifyMods.length} · game and performance`, wardrobe: "Wardrobe", wardrobeHint: `${wardrobeCatalogItems.length} · skins and presentation` };
-
-  useEffect(() => () => {
-    if (frameRequest.current !== null) window.cancelAnimationFrame(frameRequest.current);
-    document.documentElement.style.removeProperty("--catalog-scroll-progress");
-    onNavigationCompactChange?.(false);
-  }, [onNavigationCompactChange]);
-
-  const handleScroll = (event: UIEvent<HTMLDivElement>) => {
-    const scrollTop = event.currentTarget.scrollTop;
-    if (frameRequest.current !== null) window.cancelAnimationFrame(frameRequest.current);
-    frameRequest.current = window.requestAnimationFrame(() => {
-      const progress = Math.min(1, Math.max(0, scrollTop / 180));
-      const nextCompact = compactRef.current ? scrollTop > 92 : scrollTop >= 174;
-      document.documentElement.style.setProperty("--catalog-scroll-progress", progress.toFixed(3));
-      setScrolled(scrollTop > 28);
-      if (nextCompact !== compactRef.current) {
-        compactRef.current = nextCompact;
-        onNavigationCompactChange?.(nextCompact);
+    ? {
+        eyebrow: "BETTERFY / LOADOUT STUDIO",
+        title: "Собери свою Dota",
+        text: "Сначала выбери, что меняется. Затем открой мод в сцене, добавь его и проверь общую сборку.",
+        steps: ["Выбери раздел", "Открой мод", "Добавь", "Проверь сборку"],
+        mods: "Игра",
+        modsKind: "ПРОИЗВОДИТЕЛЬНОСТЬ И УТИЛИТЫ",
+        modsHint: `FPS, карта, HUD и звук · ${minifyMods.length}`,
+        wardrobe: "Гардероб",
+        wardrobeKind: "ВНЕШНИЙ ВИД",
+        wardrobeHint: `Герои, предметы и эффекты · ${wardrobeCatalogItems.length}`,
+        open: "Открыто",
       }
+    : {
+        eyebrow: "BETTERFY / LOADOUT STUDIO",
+        title: "Build your Dota",
+        text: "Choose what changes, open a mod in the scene, add it, then review the complete build.",
+        steps: ["Choose a space", "Open a mod", "Add it", "Review build"],
+        mods: "Game",
+        modsKind: "PERFORMANCE AND UTILITIES",
+        modsHint: `FPS, map, HUD, and audio · ${minifyMods.length}`,
+        wardrobe: "Wardrobe",
+        wardrobeKind: "APPEARANCE",
+        wardrobeHint: `Heroes, items, and effects · ${wardrobeCatalogItems.length}`,
+        open: "Open",
+      };
+
+  const switchSection = (next: "mods" | "wardrobe") => {
+    if (next === section) return;
+    const hub = hubRef.current;
+    if (hub) scrollPositions.current[section] = hub.scrollTop;
+    setSection(next);
+    window.requestAnimationFrame(() => {
+      if (hubRef.current) hubRef.current.scrollTop = scrollPositions.current[next];
     });
   };
 
   return (
-    <div className={`catalog-hub ${scrolled ? "is-scrolled" : ""}`} onScroll={handleScroll}>
-      <nav className="catalog-section-switch" aria-label={language === "ru" ? "Раздел каталога" : "Catalog section"}>
-        <button className={section === "mods" ? "active" : ""} aria-current={section === "mods" ? "page" : undefined} onClick={() => setSection("mods")}>
-          <Wrench /><span><strong>{labels.mods}</strong><small>{labels.modsHint}</small></span>
+    <div ref={hubRef} className="catalog-hub">
+      <nav className="catalog-section-switch" data-section={section} aria-label={language === "ru" ? "Раздел каталога" : "Catalog section"}>
+        <div className="catalog-domain-question">
+          <span>{labels.eyebrow}</span>
+          <strong>{labels.title}</strong>
+          <p>{labels.text}</p>
+        </div>
+        <div className="catalog-route-map" aria-label={language === "ru" ? "Порядок работы" : "Catalog path"}>
+          {labels.steps.map((step, index) => <span className={index === 0 ? "active" : ""} key={step}><b>0{index + 1}</b>{step}</span>)}
+        </div>
+        <div className="catalog-mode-picker">
+        <button
+          className={section === "mods" ? "active" : ""}
+          data-domain="game"
+          aria-current={section === "mods" ? "page" : undefined}
+          onClick={() => switchSection("mods")}
+        >
+          <span className="catalog-domain-icon"><Wrench /></span>
+          <span className="catalog-domain-copy">
+            <small>{labels.modsKind}</small>
+            <strong>{labels.mods}</strong>
+            <em>{labels.modsHint}</em>
+          </span>
+          <span className="catalog-domain-state">{section === "mods" ? <><Check />{labels.open}</> : <ArrowRight />}</span>
         </button>
-        <i aria-hidden="true">/</i>
-        <button className={section === "wardrobe" ? "active" : ""} aria-current={section === "wardrobe" ? "page" : undefined} onClick={() => setSection("wardrobe")}>
-          <Shirt /><span><strong>{labels.wardrobe}</strong><small>{labels.wardrobeHint}</small></span>
+        <button
+          className={section === "wardrobe" ? "active" : ""}
+          data-domain="wardrobe"
+          aria-current={section === "wardrobe" ? "page" : undefined}
+          onClick={() => switchSection("wardrobe")}
+        >
+          <span className="catalog-domain-icon"><Shirt /></span>
+          <span className="catalog-domain-copy">
+            <small>{labels.wardrobeKind}</small>
+            <strong>{labels.wardrobe}</strong>
+            <em>{labels.wardrobeHint}</em>
+          </span>
+          <span className="catalog-domain-state">{section === "wardrobe" ? <><Check />{labels.open}</> : <ArrowRight />}</span>
         </button>
+        </div>
       </nav>
-      {section === "mods"
-        ? <MinifyModsRoute language={language} />
-        : <WardrobeCatalogRoute language={language} selectedIds={selectedIds} onToggle={onToggle} />}
+      <div hidden={section !== "mods"}>
+        <MinifyModsRoute language={language} selectedIds={selectedGameIds} onToggle={onToggleGame} />
+      </div>
+      <div hidden={section !== "wardrobe"}>
+        <WardrobeCatalogRoute language={language} selectedIds={selectedWardrobeIds} onToggle={onToggleWardrobe} />
+      </div>
     </div>
   );
 }

@@ -203,6 +203,57 @@ impl DownloadTransport for PinnedHttpsTransport {
     }
 }
 
+fn fetch_verified_binary_with<T: DownloadTransport>(
+    transport: &T,
+    spec: &RemotePackageSpec,
+    cancelled: &AtomicBool,
+) -> Result<Vec<u8>, String> {
+    if spec.size == 0 || spec.size > MAX_ARTIFACT_BYTES {
+        return Err("download_size_mismatch".to_string());
+    }
+    let mut bytes = Vec::with_capacity(spec.size as usize);
+    transport.fetch(spec, cancelled, &mut |chunk| {
+        if bytes.len().saturating_add(chunk.len()) > spec.size as usize {
+            return Err("download_size_mismatch".to_string());
+        }
+        bytes.extend_from_slice(chunk);
+        Ok(())
+    })?;
+    if cancelled.load(Ordering::Relaxed) {
+        return Err("download_cancelled".to_string());
+    }
+    if bytes.len() as u64 != spec.size || format!("{:x}", Sha256::digest(&bytes)) != spec.sha256 {
+        return Err("download_hash_mismatch".to_string());
+    }
+    Ok(bytes)
+}
+
+/// Used only with Rust-owned Tree Mod URLs and hashes. No caller-supplied URL
+/// crosses the Tauri bridge.
+pub(crate) fn fetch_pinned_tree_resource(
+    resource: &crate::tree_pilot::Resource,
+    cancelled: &AtomicBool,
+) -> Result<Vec<u8>, String> {
+    if !crate::tree_pilot::RESOURCES.iter().any(|expected| {
+        expected.path == resource.path
+            && expected.bytes == resource.bytes
+            && expected.sha256 == resource.sha256
+    }) {
+        return Err("download_contract_invalid".to_string());
+    }
+    let spec = RemotePackageSpec {
+        package_id: crate::tree_pilot::PACKAGE_ID.to_string(),
+        version: crate::tree_pilot::SOURCE_COMMIT.to_string(),
+        format: "raw".to_string(),
+        file_name: "compiled-resource".to_string(),
+        download_url: crate::tree_pilot::pinned_url(resource),
+        media_type: "application/octet-stream".to_string(),
+        size: resource.bytes as u64,
+        sha256: resource.sha256.to_string(),
+    };
+    fetch_verified_binary_with(&PinnedHttpsTransport, &spec, cancelled)
+}
+
 fn operation_id() -> Result<String, String> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -468,6 +519,52 @@ mod tests {
             }),
             cancelled: AtomicBool::new(false),
         }
+    }
+
+    #[test]
+    fn pinned_binary_fetch_never_accepts_short_large_or_substituted_bytes() {
+        let mut spec = content_store::remote_package_spec("fixture.ambient-violet").unwrap();
+        let payload = b"binary-tree";
+        spec.size = payload.len() as u64;
+        spec.sha256 = format!("{:x}", Sha256::digest(payload));
+        let cancelled = AtomicBool::new(false);
+        let good = FixtureTransport {
+            chunks: vec![payload[..4].to_vec(), payload[4..].to_vec()],
+            cancel_after_first: false,
+        };
+        assert_eq!(
+            fetch_verified_binary_with(&good, &spec, &cancelled).unwrap(),
+            payload
+        );
+        for chunks in [vec![b"short".to_vec()], vec![b"wrong-tree!".to_vec()]] {
+            let bad = FixtureTransport {
+                chunks,
+                cancel_after_first: false,
+            };
+            assert!(fetch_verified_binary_with(&bad, &spec, &cancelled).is_err());
+        }
+        let cancelled_midstream = FixtureTransport {
+            chunks: vec![payload[..4].to_vec(), payload[4..].to_vec()],
+            cancel_after_first: true,
+        };
+        assert_eq!(
+            fetch_verified_binary_with(&cancelled_midstream, &spec, &AtomicBool::new(false))
+                .err()
+                .as_deref(),
+            Some("download_cancelled")
+        );
+    }
+
+    #[test]
+    fn tree_download_rejects_a_substituted_compiled_contract_before_network() {
+        let mut forged = crate::tree_pilot::RESOURCES[0];
+        forged.bytes += 1;
+        assert_eq!(
+            fetch_pinned_tree_resource(&forged, &AtomicBool::new(false))
+                .err()
+                .as_deref(),
+            Some("download_contract_invalid")
+        );
     }
 
     #[test]

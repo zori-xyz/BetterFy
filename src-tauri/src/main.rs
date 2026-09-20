@@ -11,12 +11,15 @@ mod runtime_control;
 mod steam_accounts;
 pub mod steam_config;
 mod system_diagnostics;
+mod tree_pilot;
 mod vpk;
 
 use auth_session::{
-    auth_begin_device_challenge, auth_cancel_device_challenge, auth_fetch_avatar,
-    auth_list_sessions, auth_logout, auth_poll_device_challenge, auth_restore_session,
-    auth_revoke_device, auth_verify_code, AuthState,
+    auth_begin_device_challenge, auth_begin_email, auth_cancel_device_challenge,
+    auth_email_identity, auth_fetch_avatar, auth_id_login, auth_id_register_start,
+    auth_id_register_verify, auth_link_email_start, auth_link_email_verify, auth_list_sessions,
+    auth_logout, auth_poll_device_challenge, auth_restore_session, auth_revoke_device,
+    auth_verify_code, auth_verify_email, AuthState,
 };
 use build_engine::{
     create_build_plan, execute_build as execute_staged_build,
@@ -347,13 +350,21 @@ fn rollback_engine_operation(
 }
 
 #[tauri::command]
-fn list_steam_profiles() -> Result<Vec<SteamProfileSummary>, String> {
-    steam_accounts::list_platform_profiles()
+async fn list_steam_profiles() -> Result<Vec<SteamProfileSummary>, String> {
+    tauri::async_runtime::spawn_blocking(steam_accounts::list_platform_profiles)
+        .await
+        .map_err(|_| "runtime_worker_failed".to_string())?
 }
 
 #[tauri::command]
-fn preview_steam_launch_options(profile_token: String) -> Result<SteamLaunchOptionPreview, String> {
-    steam_accounts::preview_platform_profile(&profile_token)
+async fn preview_steam_launch_options(
+    profile_token: String,
+) -> Result<SteamLaunchOptionPreview, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        steam_accounts::preview_platform_profile(&profile_token)
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
 }
 
 fn require_patch_ready_runtime() -> Result<(), String> {
@@ -425,6 +436,9 @@ async fn deploy_staged_vpk(
     app: AppHandle,
     request: DeployStagedVpkRequest,
 ) -> Result<DeploymentReceipt, String> {
+    if !cfg!(debug_assertions) {
+        return Err("deployment_not_enabled".to_string());
+    }
     if !request.confirmed {
         return Err("deployment_confirmation_required".to_string());
     }
@@ -553,6 +567,14 @@ fn main() {
             export_preset,
             import_preset,
             auth_verify_code,
+            auth_begin_email,
+            auth_verify_email,
+            auth_id_login,
+            auth_id_register_start,
+            auth_id_register_verify,
+            auth_link_email_start,
+            auth_link_email_verify,
+            auth_email_identity,
             auth_begin_device_challenge,
             auth_poll_device_challenge,
             auth_cancel_device_challenge,

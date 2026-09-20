@@ -453,6 +453,43 @@ mod tests {
     }
 
     #[test]
+    fn steam_start_wait_rejects_a_client_while_dota_is_still_running() {
+        let result = wait_for_steam_started(
+            || {
+                Ok(RuntimeState {
+                    platform_supported: true,
+                    steam_running: true,
+                    dota_running: true,
+                    patch_ready: false,
+                })
+            },
+            1,
+            Duration::ZERO,
+        );
+        assert_eq!(result.err().as_deref(), Some("steam_start_timeout"));
+    }
+
+    #[test]
+    fn native_poll_windows_include_the_initial_inspection() {
+        let mut calls = 0;
+        let result = wait_for_patch_ready(
+            || {
+                calls += 1;
+                Ok(RuntimeState {
+                    platform_supported: true,
+                    steam_running: true,
+                    dota_running: false,
+                    patch_ready: false,
+                })
+            },
+            2,
+            Duration::ZERO,
+        );
+        assert_eq!(result.err().as_deref(), Some("shutdown_timeout"));
+        assert_eq!(calls, 3);
+    }
+
+    #[test]
     fn steam_start_requires_explicit_confirmation() {
         let result = start_steam(SteamStartRequest { confirmed: false });
         assert_eq!(

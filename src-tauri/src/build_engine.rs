@@ -464,7 +464,7 @@ fn read_journal(path: &Path) -> Result<BuildJournal, String> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum FailurePoint {
+pub(crate) enum FailurePoint {
     None,
     AfterFirstWrite,
     BeforeVerification,
@@ -475,6 +475,121 @@ pub fn execute_build(
     request: ExecuteBuildRequest,
 ) -> Result<BuildReceipt, String> {
     execute_build_with_failure(app_data_root, request, FailurePoint::None)
+}
+
+/// Only a VPK constructed from the pinned Tree Mod resource contract can enter
+/// this staging path; the frontend cannot create the verified input type.
+pub(crate) fn stage_verified_vpk(
+    app_data_root: &Path,
+    verified: &crate::tree_pilot::VerifiedTreeVpk,
+    expected_plan_id: &str,
+    confirmed: bool,
+) -> Result<BuildReceipt, String> {
+    stage_verified_vpk_with_failure(
+        app_data_root,
+        verified,
+        expected_plan_id,
+        confirmed,
+        FailurePoint::None,
+    )
+}
+
+pub(crate) fn stage_verified_vpk_with_failure(
+    app_data_root: &Path,
+    verified: &crate::tree_pilot::VerifiedTreeVpk,
+    expected_plan_id: &str,
+    confirmed: bool,
+    failure: FailurePoint,
+) -> Result<BuildReceipt, String> {
+    let vpk_bytes = verified.bytes();
+    if !confirmed {
+        return Err("build_confirmation_required".to_string());
+    }
+    let actual_plan_id = format!("sha256:{}", sha256(vpk_bytes));
+    if expected_plan_id != actual_plan_id {
+        return Err("build_plan_stale".to_string());
+    }
+    crate::vpk::inspect(vpk_bytes).map_err(|_| "verification_failed".to_string())?;
+    if vpk_bytes.len() as u64 > MAX_STAGED_BYTES {
+        return Err("build_too_large".to_string());
+    }
+    let (operations_root, journals_root) = prepare_owned_roots(app_data_root)?;
+    let operation_id = new_operation_id()?;
+    let operation_root = operations_root.join(&operation_id);
+    fs::create_dir(&operation_root).map_err(|_| "build_failed".to_string())?;
+    reject_symlink(&operation_root)?;
+    let staging_root = operation_root.join("staging");
+    fs::create_dir(&staging_root).map_err(|_| "build_failed".to_string())?;
+    reject_symlink(&staging_root)?;
+    let journal_path = journals_root.join(format!("{operation_id}.json"));
+    let timestamp = now_ms()?;
+    let file_hash = sha256(vpk_bytes);
+    let mut journal = BuildJournal {
+        schema_version: ENGINE_SCHEMA_VERSION,
+        operation_id: operation_id.clone(),
+        plan_id: actual_plan_id.clone(),
+        phase: OperationPhase::Staging,
+        created_at_ms: timestamp,
+        updated_at_ms: timestamp,
+        staged_root: staging_root.to_string_lossy().into_owned(),
+        files: vec![JournalFile {
+            owner_id: crate::tree_pilot::PACKAGE_ID.to_string(),
+            destination: crate::tree_pilot::TARGET_FILE.to_string(),
+            expected_sha256: file_hash.clone(),
+            actual_sha256: None,
+            size: vpk_bytes.len() as u64,
+            staged: false,
+        }],
+        error_code: None,
+    };
+    atomic_write_json(&journal_path, &journal)?;
+    let result = (|| {
+        let target = staging_root.join(crate::tree_pilot::TARGET_FILE);
+        let mut file = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&target)
+            .map_err(|_| "build_failed".to_string())?;
+        file.write_all(vpk_bytes)
+            .and_then(|_| file.sync_all())
+            .map_err(|_| "build_failed".to_string())?;
+        journal.files[0].staged = true;
+        if failure == FailurePoint::AfterFirstWrite {
+            return Err("injected_failure".to_string());
+        }
+        journal.phase = OperationPhase::Verifying;
+        journal.updated_at_ms = now_ms()?;
+        atomic_write_json(&journal_path, &journal)?;
+        if failure == FailurePoint::BeforeVerification {
+            return Err("injected_failure".to_string());
+        }
+        let reopened = fs::read(&target).map_err(|_| "verification_failed".to_string())?;
+        if reopened.len() != vpk_bytes.len() || sha256(&reopened) != file_hash {
+            return Err("verification_failed".to_string());
+        }
+        crate::vpk::inspect(&reopened).map_err(|_| "verification_failed".to_string())?;
+        journal.files[0].actual_sha256 = Some(file_hash);
+        journal.phase = OperationPhase::Ready;
+        journal.updated_at_ms = now_ms()?;
+        atomic_write_json(&journal_path, &journal)?;
+        Ok(())
+    })();
+    if let Err(code) = result {
+        journal.phase = OperationPhase::Failed;
+        journal.error_code = Some(code.clone());
+        journal.updated_at_ms = now_ms().unwrap_or(journal.updated_at_ms);
+        let _ = atomic_write_json(&journal_path, &journal);
+        return Err(code);
+    }
+    Ok(BuildReceipt {
+        operation_id,
+        plan_id: actual_plan_id,
+        phase: OperationPhase::Ready,
+        staged_root: staging_root.to_string_lossy().into_owned(),
+        staged_files: 1,
+        staged_bytes: vpk_bytes.len() as u64,
+        checksums_verified: true,
+    })
 }
 
 fn execute_build_with_failure(
@@ -637,6 +752,9 @@ pub(crate) fn verified_staged_vpk(
         return Err("staged_vpk_not_ready".to_string());
     }
     let file = &journal.files[0];
+    if file.owner_id == crate::tree_pilot::PACKAGE_ID && !cfg!(debug_assertions) {
+        return Err("tree_pilot_disabled".to_string());
+    }
     if !file.staged
         || file.destination != "pak66_dir.vpk"
         || file.actual_sha256.as_deref() != Some(file.expected_sha256.as_str())

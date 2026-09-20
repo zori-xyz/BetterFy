@@ -93,10 +93,6 @@ fn write_cstring(output: &mut Vec<u8>, value: &str) {
     output.push(0);
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "enabled with the pinned Tree Mod package intake")
-)]
 pub fn build(inputs: Vec<VpkInput<'_>>) -> Result<Vec<u8>, String> {
     if inputs.is_empty() || inputs.len() > MAX_VPK_ENTRIES {
         return Err("vpk_payload_invalid".to_string());

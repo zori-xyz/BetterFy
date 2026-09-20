@@ -212,6 +212,10 @@ export interface EngineBridge {
 
 const wait = (duration: number) => new Promise((resolve) => window.setTimeout(resolve, duration));
 const engineTimeoutMs = 15_000;
+// Rust may poll the native Steam process state for up to 30 seconds. Keep the
+// IPC guard comfortably above that boundary so a successful native start can
+// never be reported as a frontend timeout at the same instant.
+const steamLifecycleTimeoutMs = 45_000;
 
 export class EngineFault extends Error {
   constructor(
@@ -718,7 +722,7 @@ export const engineBridge: EngineBridge = {
           confirmed: true,
         },
       }),
-      30_000,
+      steamLifecycleTimeoutMs,
     );
   },
 };

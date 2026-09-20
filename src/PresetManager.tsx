@@ -103,7 +103,7 @@ const workshopDescriptions: Record<string, Record<Language, string>> = {
     en: "Removes heavy, distracting world layers while preserving a readable game foundation.",
   },
   "betterfy.clean-interface": {
-    ru: "Спокойный интерфейс: меньше фонового шума, прозрачный HUD и компактная сетка героев.",
+    ru: "Чище поле боя: прозрачный HUD, компактная сетка героев и меньше фоновых эффектов.",
     en: "A calmer interface with less background noise, transparent HUD, and a compact hero grid.",
   },
   "betterfy.quiet-match": {
@@ -114,14 +114,17 @@ const workshopDescriptions: Record<string, Record<Language, string>> = {
 
 export default function PresetManager({
   language,
-  selectedIds,
+  selectedModIds,
+  selectedWardrobeIds,
   onApply,
 }: {
   language: Language;
-  selectedIds: string[];
-  onApply: (modIds: string[]) => void;
+  selectedModIds: string[];
+  selectedWardrobeIds: string[];
+  onApply: (modIds: string[], wardrobeIds: string[]) => void;
 }) {
   const t = copy[language];
+  const selectedCount = selectedModIds.length + selectedWardrobeIds.length;
   const [presets, setPresets] = useState<BetterFyPreset[]>([]);
   const [tab, setTab] = useState<ConfigTab>("local");
   const [name, setName] = useState("");
@@ -153,7 +156,7 @@ export default function PresetManager({
   );
 
   const saveCurrent = async () => {
-    if (!name.trim() || selectedIds.length === 0) return;
+    if (!name.trim() || selectedCount === 0) return;
     setSaving(true);
     setError("");
     try {
@@ -162,7 +165,8 @@ export default function PresetManager({
         description: language === "ru"
           ? "Локальный конфиг из текущего выбора BetterFy."
           : "Local config created from the current BetterFy selection.",
-        modIds: selectedIds,
+        modIds: selectedModIds,
+        wardrobeIds: selectedWardrobeIds,
       });
       setName("");
       setActiveId(preset.id);
@@ -233,7 +237,7 @@ export default function PresetManager({
         </div>
         <div className="config-selection-state">
           <Layers3 />
-          <span><small>{t.currentCount}</small><strong>{selectedIds.length} {t.items}</strong></span>
+          <span><small>{t.currentCount}</small><strong>{selectedCount} {t.items}</strong></span>
         </div>
       </header>
 
@@ -257,7 +261,7 @@ export default function PresetManager({
             <span>{t.newName}</span>
             <input value={name} maxLength={64} placeholder={t.namePlaceholder} onChange={(event) => setName(event.target.value)} />
           </label>
-          <button onClick={saveCurrent} disabled={saving || !name.trim() || selectedIds.length === 0} title={selectedIds.length ? t.saveCurrent : t.noSelection}>
+          <button onClick={saveCurrent} disabled={saving || !name.trim() || selectedCount === 0} title={selectedCount ? t.saveCurrent : t.noSelection}>
             {saving ? <LoaderCircle /> : <Plus />}<strong>{t.saveCurrent}</strong><ArrowRight />
           </button>
         </div>
@@ -291,7 +295,7 @@ export default function PresetManager({
                   <div><dt>{t.looks}</dt><dd>{preset.wardrobeIds.length}</dd></div>
                 </dl>
                 <div className="config-card-actions">
-                  <button className="config-apply" onClick={() => { onApply(preset.modIds); setActiveId(preset.id); }}>
+                  <button className="config-apply" onClick={() => { onApply(preset.modIds, preset.wardrobeIds); setActiveId(preset.id); }}>
                     {applied ? <Check /> : <Download />}{applied ? t.applied : t.apply}
                   </button>
                   <button onClick={() => void openExport(preset)}><Clipboard /><span>{t.share}</span></button>

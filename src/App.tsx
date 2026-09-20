@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState }
 import { flushSync } from "react-dom";
 import {
   ArchiveRestore,
+  ArrowLeft,
   ArrowRight,
   Bell,
   BookOpen,
@@ -11,10 +12,11 @@ import {
   CircleUserRound,
   ClipboardCheck,
   Copy,
+  Crown,
+  ChevronRight,
   ExternalLink,
   FolderOpen,
   Gamepad2,
-  Heart,
   Home,
   Languages,
   Layers3,
@@ -23,14 +25,18 @@ import {
   LogOut,
   MessageCircle,
   Monitor,
+  Link2,
   PackageOpen,
   Play,
+  Plus,
   Power,
   RotateCcw,
   Save,
   Search,
+  Send,
   Settings,
   ShieldCheck,
+  Shirt,
   SlidersHorizontal,
   Sparkles,
   Stethoscope,
@@ -38,18 +44,29 @@ import {
   Moon,
   TriangleAlert,
   Users,
+  Wrench,
   X,
 } from "lucide-react";
 import AuthFlow from "./AuthFlow";
 import AppUpdater from "./AppUpdater";
 import AccentTitle from "./AccentTitle";
-import BetterFyMark from "./BetterFyMark";
 import BetterFyWordmark from "./BetterFyWordmark";
-import baneHome from "./assets/bane-home.png";
-import courierSuccess from "./assets/courier-success.png";
-import enigmaProgress from "./assets/enigma-progress.webp";
-import pudgeRecovery from "./assets/pudge-recovery.png";
-import wukongBuild from "./assets/wukong-build.png";
+import bigBrainEmoticon from "./assets/dota-emoticons/big-brain.gif";
+import bigBrainEmoticonStill from "./assets/dota-emoticons/big-brain.png";
+import creepDanceEmoticon from "./assets/dota-emoticons/creepdance.gif";
+import creepDanceEmoticonStill from "./assets/dota-emoticons/creepdance.png";
+import kittyJugEmoticon from "./assets/dota-emoticons/kitty-jug.gif";
+import kittyJugEmoticonStill from "./assets/dota-emoticons/kitty-jug.png";
+import marciOmnomEmoticon from "./assets/dota-emoticons/marci-omnom.gif";
+import marciOmnomEmoticonStill from "./assets/dota-emoticons/marci-omnom.png";
+import poghanimEmoticon from "./assets/dota-emoticons/poghanim.gif";
+import poghanimEmoticonStill from "./assets/dota-emoticons/poghanim.png";
+import puckChampEmoticon from "./assets/dota-emoticons/puckchamp.gif";
+import puckChampEmoticonStill from "./assets/dota-emoticons/puckchamp.png";
+import swaghanimEmoticon from "./assets/dota-emoticons/swaghanim.gif";
+import swaghanimEmoticonStill from "./assets/dota-emoticons/swaghanim.png";
+import betterfyAccessRibbonScene from "./assets/scenes/betterfy-access-ribbon-v1.jpg";
+import betterfyWorkbenchScene from "./assets/scenes/betterfy-workbench-v1.jpg";
 import {
   fetchDeviceSessions,
   fetchTelegramAvatar,
@@ -71,6 +88,8 @@ import {
   type SystemDiagnosticReport,
 } from "./engine";
 import { useLocale, type Language } from "./i18n";
+import type { MinifyCatalogItem } from "./minifyCatalog";
+import type { BetterFyCatalogMod } from "./modCatalog";
 import OnboardingFlow from "./OnboardingFlow";
 import PresetManager from "./PresetManager";
 import { getStorageItem, getStoredStringArray, setStorageItem } from "./storage";
@@ -83,6 +102,39 @@ type ThemeMode = "dark" | "light";
 
 const installationStorageKey = "betterfy:game-installation";
 const ModCatalogRoute = lazy(() => import("./ModCatalogRoute"));
+const homeShowcaseIds = new Set([
+  "heroes-juggernaut-arcana-purple",
+  "creeps-crownfall-radiant-creeps",
+  "heroes-maid-marci",
+  "couriers-onibi",
+  "heroes-io-purple",
+  "heroes-dawnbreaker-death-knight",
+  "heroes-rubick-plagueroad-apothacary",
+  "heroes-primal-beast-prehistoric-predator",
+  "item-effects-darkness-radiance",
+  "heroes-shadow-fiend-white",
+  "heroes-queen-of-pain-rose",
+  "heroes-anti-mage-shadow-slayer",
+  "heroes-ghost-void-spirit",
+  "heroes-winter-ember-spirit",
+  "heroes-lina-crystal-empress",
+  "heroes-arc-warden-black-hole",
+  "heroes-nightmare-chaos-knight",
+  "heroes-bloody-enigma",
+  "heroes-ice-phoenix",
+  "heroes-morphling-darktrench-purple",
+  "heroes-earthshaker-red-arcana",
+  "terrains-ti6-immortal-gardens",
+]);
+const communityMoods = [
+  { key: "brain", src: bigBrainEmoticon, still: bigBrainEmoticonStill },
+  { key: "puck", src: puckChampEmoticon, still: puckChampEmoticonStill },
+  { key: "creep", src: creepDanceEmoticon, still: creepDanceEmoticonStill },
+  { key: "pog", src: poghanimEmoticon, still: poghanimEmoticonStill },
+  { key: "swag", src: swaghanimEmoticon, still: swaghanimEmoticonStill },
+  { key: "marci", src: marciOmnomEmoticon, still: marciOmnomEmoticonStill },
+  { key: "kitty", src: kittyJugEmoticon, still: kittyJugEmoticonStill },
+] as const;
 
 type ViewTransitionDocument = Document & {
   startViewTransition?: (update: () => void) => { finished: Promise<void> };
@@ -105,6 +157,8 @@ const copy = {
       label: "BETTERFY / DESKTOP",
       title: "Готовим твою Dota",
       subtitle: "Запускаем оболочку. К файлам Dota 2 обратимся только после твоего разрешения.",
+      panelTitle: "Запускаем BetterFy",
+      panelText: "Восстанавливаем локальную сессию и готовим интерфейс.",
       steps: ["Интерфейс", "Локальный профиль", "Каталог"],
       footnote: "Запуск без доступа к файлам Dota 2",
     },
@@ -117,59 +171,94 @@ const copy = {
       profile: "Профиль",
     },
     home: {
-      eyebrow: "ПРОСТРАНСТВО ГОТОВО",
-      title: "Твоя Dota.\nТолько лучше.",
-      subtitle: "Игра подключена. Следующий шаг — собрать первый набор модов и образов.",
-      action: "Открыть сборку",
-      actionHint: "Текущий профиль сохранён локально",
-      artLabel: "BANE / HOME",
-      artTitle: "Bane",
-      artHint: "Тёмный якорь пространства BetterFy",
+      eyebrow: "ТВОЯ DOTA. ТВОИ МОДЫ.",
+      titleEmpty: "Выбери моды\nдля своей Dota",
+      titleActive: "Продолжи свой\nнабор модов",
+      subtitle: "Листай моды и скины, добавляй понравившиеся и проверяй их одной сборкой.",
+      demoSubtitle: "Смотри моды и облики, собирай набор. В этом предварительном просмотре файлы Dota 2 не меняются.",
+      actionEmpty: "Выбрать моды",
+      actionActive: "Выбрать ещё",
+      editSelection: "Проверить сборку",
+      actionHint: "Выбор хранится только на этом устройстве",
+      artTitle: "Стол текущей сборки BetterFy",
+      showcaseLabel: "Выбранный мод и соседние варианты",
+      selectedLabel: "В СБОРКЕ",
+      selectedUnit: "элементов",
+      sceneEmpty: "Добавь первый мод, и он появится здесь",
+      sceneActive: "Можно открыть план и проверить совместимость",
+      emptyTitle: "Здесь появится твой набор",
+      carouselHint: "Открыть весь каталог модов и скинов",
       buildEyebrow: "АКТИВНАЯ СБОРКА",
       buildTitle: "Первая сборка ждёт контент",
-      buildText: "Выбранные моды появятся здесь, когда мы откроем каталог отдельным этапом.",
+      buildActiveTitle: "Выбор готов к проверке",
+      buildText: "Открой каталог и добавь первый мод или образ — выбор сразу появится в сборке.",
+      buildActiveText: "Открой план: BetterFy покажет зависимости и конфликты до любых изменений.",
       browse: "Открыть каталог",
       empty: "Пока пусто",
       state: "DOTA 2",
       connected: "Подключена",
-      demoConnected: "Демо-путь",
-      build: "СБОРКА",
-      buildValue: "Не создана",
-      access: "ДОСТУП",
+      connectedNote: "Путь к игре подтверждён",
+      demoConnected: "Preview без доступа",
+      demoConnectedNote: "Файлы игры не читаются",
+      build: "ТВОЙ НАБОР",
+      buildValue: "Пока пусто",
+      buildNote: "Выбор сохранён локально",
+      access: "АККАУНТ",
       accessValue: "Telegram",
+      accessPreview: "Без входа",
+      accessNote: "Можно смотреть всё приложение",
       preview: "Prototype shell · игровые файлы не изменяются",
     },
     catalog: {
       prototype: "Каталог · выбор сохраняется локально, загрузка и патчинг пока не выполняются",
     },
     build: {
-      eyebrow: "BUILD / 01",
-      title: "Собери свою версию Dota",
-      text: "Проверяем состав, зависимости и конфликты до любых изменений в игре.",
-      emptyTitle: "Тестовая сборка готова к проверке",
-      emptyText: "Два локальных fixture-мода позволяют пройти весь сценарий без записи в папку Dota 2.",
+      eyebrow: "ТВОЯ СБОРКА",
+      title: "Твой набор модов",
+      titleEmpty: "Начни с первого мода",
+      text: "Выбранные моды сохранены на этом устройстве. Ниже показана отдельная демонстрация проверки на тестовых вариантах; твой набор пока не устанавливается.",
+      textEmpty: "Открой каталог, выбери моды и вернись сюда: BetterFy соберёт их в один понятный план.",
+      selection: "ТВОЯ СБОРКА",
+      selectionEmpty: "Здесь появится твой loadout",
+      gameDomain: "ИГРА",
+      wardrobeDomain: "ГАРДЕРОБ",
+      gameEmpty: "Добавить игровой мод",
+      wardrobeEmpty: "Добавить облик",
+      gameNote: "Функциональные изменения. В preview они не передаются движку.",
+      wardrobeNote: "Внешний вид и эффекты. Источник каждого элемента сохраняется.",
+      removeItem: "Убрать из сборки",
+      selectionReady: "Состав сохранён",
+      selectedPrefix: "Выбрано",
+      selectionHint: "Выбранные моды пока не передаются в движок и не изменяют Dota 2.",
+      addContent: "Изменить состав",
+      chooseContent: "Выбрать моды",
+      moreItems: "ещё",
+      flow: ["Выбери", "Проверь", "Подтверди", "Готово"],
+      demoLabel: "БЕЗОПАСНАЯ ДЕМОНСТРАЦИЯ",
+      emptyTitle: "Посмотреть проверку в действии",
+      emptyText: "Два тестовых варианта покажут, как BetterFy находит конфликт и просит выбрать один. Файлы Dota 2 не затрагиваются.",
       plan: "ПЛАН СБОРКИ",
       items: "Контент",
       dependencies: "Зависимости",
       conflicts: "Конфликты",
       unavailable: "Ожидает каталога",
       back: "Вернуться на главную",
-      inspect: "Проверить тестовый план",
-      planning: "Строим dry-run план…",
-      conflictTitle: "Найден конфликт fixture-модов",
-      conflictText: "Два тестовых мода меняют один ресурс. Engine остановил план до выбора победителя — игровые файлы не затронуты.",
-      conflict: "ТРЕБУЕТ РЕШЕНИЯ",
+      inspect: "Посмотреть, как работает проверка",
+      planning: "Готовим тестовый план…",
+      conflictTitle: "Один ресурс — два варианта",
+      conflictText: "Violet и Clean меняют одно и то же. Оставь один вариант — BetterFy не продолжит без твоего выбора.",
+      conflict: "НУЖЕН ТВОЙ ВЫБОР",
       inspectAgain: "Перестроить план",
-      keepViolet: "Оставить Violet",
-      keepClean: "Оставить Clean",
+      keepViolet: "Выбрать Violet",
+      keepClean: "Выбрать Clean",
       variantViolet: "Ambient Violet",
       variantClean: "Ambient Clean",
       replaceHint: "Будет выбран только один вариант ресурса",
-      readyLabel: "DRY RUN / READY",
+      readyLabel: "ТЕСТОВЫЙ ПЛАН / ГОТОВО",
       readyTitle: "Решения приняты",
       readyText: "План согласован. Дальше BetterFy покажет полный цикл подготовки в безопасном preview-режиме.",
       start: "Запустить preview-сборку",
-      recoveryPreview: "Проверить сценарий Recovery",
+      recoveryPreview: "Посмотреть сценарий восстановления",
       progressEyebrow: "BUILD / IN PROGRESS",
       progressTitle: "Сборка обретает форму",
       progressText: "Показываем будущий engine-процесс. Сейчас работает только интерфейсная симуляция без записи файлов.",
@@ -177,8 +266,8 @@ const copy = {
       progressNote: "Игровая папка не изменяется",
       interrupt: "Смоделировать ошибку",
       successEyebrow: "BUILD / READY",
-      successTitle: "Можно отправляться в игру",
-      successText: "Preview-сборка прошла проверку. В production BetterFy запустит только Steam — Dota 2 ты откроешь сам.",
+      successTitle: "Preview завершён",
+      successText: "Синтетическая сборка прошла локальную проверку. Файлы Dota 2 не изменялись; реальная активация остаётся закрыта до Windows-проверки.",
       play: "Открыть Steam",
       playUnavailable: "Steam запустится автоматически после безопасного патчинга",
       activationTitle: "Активировать Steam-профиль",
@@ -199,15 +288,29 @@ const copy = {
       activationComplete: "Steam запущен. Теперь открой Dota 2 самостоятельно.",
       activationRetry: "Повторить активацию",
       activationError: "Активация остановлена безопасно. Проверь Steam-профиль и повтори.",
+      activationErrors: {
+        shutdown_timeout: "Dota 2 или Steam не закрылись за отведённое время. Закрой их вручную и повтори.",
+        dota_close_unavailable: "BetterFy не смог запросить закрытие Dota 2. Сохрани игру, закрой её вручную и повтори.",
+        steam_not_found: "Не удалось найти проверенный steam.exe. Проверь установку Steam.",
+        steam_shutdown_failed: "Steam не принял команду завершения. Закрой клиент вручную и повтори.",
+        steam_start_failed: "Профиль применён, но Steam не удалось запустить. Открой Steam вручную или восстанови настройку.",
+        steam_start_timeout: "Steam не появился за отведённое время. Проверь его вручную перед повтором.",
+        runtime_busy: "Dota 2 или Steam всё ещё запущены. Изменение профиля заблокировано.",
+        steam_config_plan_stale: "Steam-профиль изменился после проверки. Обнови план и подтверди его снова.",
+        steam_recovery_required: "Найдена незавершённая операция. Сначала запусти Recovery.",
+        steam_config_rollback_conflict: "Steam-профиль изменён после активации. BetterFy не будет перезаписывать эти изменения.",
+        fallback: "Настройка не применена. Повтори проверку или открой Recovery, если изменение уже было записано.",
+      },
       activationRecovery: "Откатить настройку BetterFy",
       configTitle: "Сохрани эту конфигурацию",
       configText: "Вернись к ней позже или передай пресет другому игроку через менеджер конфигов.",
       openConfigs: "Открыть менеджер конфигов",
       selectedContent: "Выбрано в каталоге",
       resolvedState: "План разрешён",
+      operation: "Операция",
       finishPreview: "Завершить preview",
       recoveryEyebrow: "RECOVERY / RESTORE",
-      recoveryTitle: "Вернём всё в спокойное состояние",
+      recoveryTitle: "Очистим временную сборку",
       recoveryText: "Этот экран показывает будущий путь восстановления. В прототипе очищается только временное состояние интерфейса.",
       activationRecoveryText: "BetterFy закроет Steam, сверит журнал и восстановит точные байты launch options из проверенного backup. Steam после отката нужно открыть вручную.",
       restore: "Восстановить staging",
@@ -223,7 +326,7 @@ const copy = {
     library: {
       eyebrow: "LIBRARY / LOCAL",
       title: "Твоя библиотека",
-      text: "Конфиги, локальные импорты и проверенные подборки живут в одном месте.",
+      text: "Здесь можно сохранить конфиг. Импорт модов и история установленных сборок ещё готовятся.",
       imports: "Локальные импорты",
       importsText: "Добавление личных файлов появится вместе с безопасной проверкой архивов.",
       saved: "Сохранённые сборки",
@@ -232,12 +335,12 @@ const copy = {
       prototype: "Конфиги сохраняются локально · импорт мод-архивов пока отключён",
     },
     community: {
-      label: "BETTERFY COMMUNITY",
-      title: "Делаем BetterFy вместе",
-      text: "Новости раннего доступа, обратная связь и помощь с установкой — напрямую через нашего бота.",
+      label: "BETTERFY / COMMUNITY",
+      title: "Строй BetterFy вместе с нами",
+      text: "Предлагай моды, сообщай о багах и получай помощь напрямую от команды.",
       action: "Открыть @BeterFyBot",
-      note: "Без выдуманных рейтингов — только живой канал команды и игроков.",
-      libraryTitle: "Community builds",
+      note: "Один канал для идей, поддержки и ранних сборок.",
+      libraryTitle: "Сборки сообщества",
       libraryText: "Здесь появятся проверенные авторские подборки сообщества. Источник и автор будут указаны у каждой сборки.",
       soon: "ГОТОВИМ",
     },
@@ -309,6 +412,14 @@ const copy = {
       },
       profile: "Профиль",
       profileText: "Аккаунт BetterFy, доступ и связь с Telegram.",
+      connected: "Подключен",
+      synced: "Аккаунт синхронизирован с Telegram.",
+      previewProfile: "Предварительный просмотр без входа в Telegram.",
+      notConnected: "Без входа",
+      accessCardText: "Твой текущий уровень доступа BetterFy.",
+      telegramText: "Связь с аккаунтом и уведомления",
+      accessText: "Текущий план",
+      sessionsText: "Устройства с доступом",
       signedIn: "Telegram",
       access: "Доступ",
       earlyAccess: "Ранний доступ",
@@ -335,6 +446,8 @@ const copy = {
       label: "BETTERFY / DESKTOP",
       title: "Preparing your Dota",
       subtitle: "Starting the shell. Dota 2 files stay untouched until you allow access.",
+      panelTitle: "Starting BetterFy",
+      panelText: "Restoring the local session and preparing the interface.",
       steps: ["Interface", "Local profile", "Catalog"],
       footnote: "Starting without Dota 2 file access",
     },
@@ -347,51 +460,86 @@ const copy = {
       profile: "Profile",
     },
     home: {
-      eyebrow: "SPACE READY",
-      title: "Your Dota.\nOnly better.",
-      subtitle: "The game is connected. Next, compose your first set of mods and cosmetics.",
-      action: "Open build",
-      actionHint: "Your current profile is stored locally",
-      artLabel: "BANE / HOME",
-      artTitle: "Bane",
-      artHint: "A dark anchor for the BetterFy space",
+      eyebrow: "YOUR DOTA. YOUR MODS.",
+      titleEmpty: "Choose mods for\nyour Dota",
+      titleActive: "Keep shaping\nyour loadout",
+      subtitle: "Browse mods and skins, add what you like, and review everything as one build.",
+      demoSubtitle: "Browse mods and skins. Preview mode keeps Dota 2 files unchanged.",
+      actionEmpty: "Choose mods",
+      actionActive: "Choose more",
+      editSelection: "Review build",
+      actionHint: "Your selection stays on this device",
+      artTitle: "BetterFy current build table",
+      showcaseLabel: "Featured mod and nearby picks",
+      selectedLabel: "IN THIS BUILD",
+      selectedUnit: "items",
+      sceneEmpty: "Pick a first mod and it will appear here",
+      sceneActive: "Open the plan to review compatibility",
+      emptyTitle: "Your loadout will take shape here",
+      carouselHint: "Open the complete mods and skins catalog",
       buildEyebrow: "ACTIVE BUILD",
       buildTitle: "Your first build needs content",
-      buildText: "Selected mods will appear here when the catalog opens as a separate stage.",
+      buildActiveTitle: "Your selection is ready to check",
+      buildText: "Open the catalog and add a first mod or cosmetic — it will appear in the build immediately.",
+      buildActiveText: "Open the plan to review dependencies and conflicts before any change.",
       browse: "Open catalog",
       empty: "Nothing selected",
       state: "DOTA 2",
       connected: "Connected",
-      demoConnected: "Demo path",
-      build: "BUILD",
-      buildValue: "Not created",
-      access: "ACCESS",
+      connectedNote: "Game path is verified",
+      demoConnected: "Preview only",
+      demoConnectedNote: "Game files are not read",
+      build: "YOUR LOADOUT",
+      buildValue: "Nothing selected",
+      buildNote: "Selection is stored locally",
+      access: "ACCOUNT",
       accessValue: "Telegram",
+      accessPreview: "No sign-in",
+      accessNote: "The complete interface is available",
       preview: "Prototype shell · no game files are changed",
     },
     catalog: {
       prototype: "Catalog · selection is stored locally; download and patching are not active yet",
     },
     build: {
-      eyebrow: "BUILD / 01",
-      title: "Compose your own Dota",
-      text: "Review content, dependencies, and conflicts before anything reaches the game.",
-      emptyTitle: "The fixture build is ready to inspect",
-      emptyText: "Two local fixture mods let you test the complete flow without writing to Dota 2.",
+      eyebrow: "YOUR LOADOUT",
+      title: "Your mod selection",
+      titleEmpty: "Start with your first mod",
+      text: "Your selection is saved on this device. The check below is a separate demonstration with test variants; your selection is not installed yet.",
+      textEmpty: "Open the catalog, choose some mods, and return here. BetterFy will turn them into one clear plan.",
+      selection: "YOUR LOADOUT",
+      selectionEmpty: "Your loadout will appear here",
+      gameDomain: "GAME",
+      wardrobeDomain: "WARDROBE",
+      gameEmpty: "Add a game mod",
+      wardrobeEmpty: "Add a cosmetic",
+      gameNote: "Functional changes. Preview does not send them to the engine.",
+      wardrobeNote: "Appearance and effects. Every item keeps its source.",
+      removeItem: "Remove from build",
+      selectionReady: "Selection saved",
+      selectedPrefix: "Selected",
+      selectionHint: "Selected mods are not sent to the engine yet and do not change Dota 2.",
+      addContent: "Edit selection",
+      chooseContent: "Choose mods",
+      moreItems: "more",
+      flow: ["Choose", "Check", "Confirm", "Ready"],
+      demoLabel: "SAFE DEMONSTRATION",
+      emptyTitle: "See the check in action",
+      emptyText: "Two test variants show how BetterFy finds a conflict and asks you to keep one. Dota 2 files stay untouched.",
       plan: "BUILD PLAN",
       items: "Content",
       dependencies: "Dependencies",
       conflicts: "Conflicts",
       unavailable: "Waiting for catalog",
       back: "Return Home",
-      inspect: "Inspect fixture plan",
+      inspect: "See how checking works",
       planning: "Building dry-run plan…",
-      conflictTitle: "Fixture conflict detected",
-      conflictText: "Two fixture mods target the same resource. The engine stopped before execution — no game files were touched.",
-      conflict: "NEEDS A DECISION",
+      conflictTitle: "One resource, two variants",
+      conflictText: "Violet and Clean change the same thing. Keep one variant — BetterFy will not continue without your choice.",
+      conflict: "YOUR CHOICE IS NEEDED",
       inspectAgain: "Rebuild plan",
-      keepViolet: "Keep Violet",
-      keepClean: "Keep Clean",
+      keepViolet: "Choose Violet",
+      keepClean: "Choose Clean",
       variantViolet: "Ambient Violet",
       variantClean: "Ambient Clean",
       replaceHint: "Only one resource variant will remain",
@@ -407,8 +555,8 @@ const copy = {
       progressNote: "The game directory remains untouched",
       interrupt: "Simulate an error",
       successEyebrow: "BUILD / READY",
-      successTitle: "Ready for the match",
-      successText: "The preview build passed verification. Production will start Steam only — you launch Dota 2 yourself.",
+      successTitle: "Preview complete",
+      successText: "The synthetic build passed its local checks. No Dota 2 files changed; real activation stays closed until Windows verification.",
       play: "Open Steam",
       playUnavailable: "Steam will start automatically after a safe patch",
       activationTitle: "Activate a Steam profile",
@@ -429,15 +577,29 @@ const copy = {
       activationComplete: "Steam is running. Launch Dota 2 yourself when ready.",
       activationRetry: "Retry activation",
       activationError: "Activation stopped safely. Check the Steam profile and try again.",
+      activationErrors: {
+        shutdown_timeout: "Dota 2 or Steam did not close in time. Close them manually and try again.",
+        dota_close_unavailable: "BetterFy could not request Dota 2 to close. Save your game, close it manually, and try again.",
+        steam_not_found: "A verified steam.exe could not be found. Check the Steam installation.",
+        steam_shutdown_failed: "Steam did not accept the shutdown request. Close it manually and try again.",
+        steam_start_failed: "The profile was applied, but Steam could not start. Open Steam manually or restore the setting.",
+        steam_start_timeout: "Steam did not appear in time. Check it manually before retrying.",
+        runtime_busy: "Dota 2 or Steam is still running. The profile change remains blocked.",
+        steam_config_plan_stale: "The Steam profile changed after review. Refresh and confirm a new plan.",
+        steam_recovery_required: "An unfinished operation was found. Run Recovery first.",
+        steam_config_rollback_conflict: "The Steam profile changed after activation. BetterFy will not overwrite those changes.",
+        fallback: "The setting was not applied. Retry the check, or open Recovery if a change was already written.",
+      },
       activationRecovery: "Roll back the BetterFy setting",
       configTitle: "Save this configuration",
       configText: "Return to it later or share the preset through the config manager.",
       openConfigs: "Open config manager",
       selectedContent: "Selected in Discover",
       resolvedState: "Plan resolved",
+      operation: "Operation",
       finishPreview: "Finish preview",
       recoveryEyebrow: "RECOVERY / RESTORE",
-      recoveryTitle: "Return to a calm state",
+      recoveryTitle: "Clear the temporary build",
       recoveryText: "This demonstrates the future recovery path. The prototype only clears temporary interface state.",
       activationRecoveryText: "BetterFy will close Steam, verify the journal, and restore the exact launch-option bytes from the checked backup. Start Steam manually after rollback.",
       restore: "Restore staging",
@@ -453,7 +615,7 @@ const copy = {
     library: {
       eyebrow: "LIBRARY / LOCAL",
       title: "Your library",
-      text: "Configs, local imports, and curated compositions live in one place.",
+      text: "Save a config here. Mod imports and installed build history are still in development.",
       imports: "Local imports",
       importsText: "Personal files arrive with safe archive validation.",
       saved: "Saved builds",
@@ -462,11 +624,11 @@ const copy = {
       prototype: "Configs are stored locally · mod archive import is still disabled",
     },
     community: {
-      label: "BETTERFY COMMUNITY",
+      label: "BETTERFY / COMMUNITY",
       title: "Build BetterFy with us",
-      text: "Early Access news, feedback, and setup help — directly through our bot.",
+      text: "Suggest mods, report bugs, and get direct help from the team.",
       action: "Open @BeterFyBot",
-      note: "No fabricated ratings — just a direct channel between the team and players.",
+      note: "One channel for ideas, support, and early builds.",
       libraryTitle: "Community builds",
       libraryText: "Verified community collections will appear here. Every build will retain its source and author.",
       soon: "IN PROGRESS",
@@ -539,6 +701,14 @@ const copy = {
       },
       profile: "Profile",
       profileText: "Your BetterFy account, access, and Telegram connection.",
+      connected: "Connected",
+      synced: "Account synchronized with Telegram.",
+      previewProfile: "Interface preview without Telegram sign-in.",
+      notConnected: "Not signed in",
+      accessCardText: "Your current BetterFy access level.",
+      telegramText: "Account connection and notifications",
+      accessText: "Current plan",
+      sessionsText: "Devices with access",
       signedIn: "Telegram",
       access: "Access",
       earlyAccess: "Early Access",
@@ -613,6 +783,24 @@ export default function App() {
     transitionUI(() => setStage(stored ? "workspace" : "setup"));
   };
 
+  const enterPreview = () => {
+    setSession({
+      userId: "betterfy-preview",
+      displayName: "Preview",
+      accessTier: "preview",
+      source: "demo",
+    });
+    setInstallation({
+      path: "Preview / Dota 2",
+      executablePath: "Preview only",
+      steamLibrary: "BetterFy interface preview",
+      client: "Prototype preview",
+      source: "demo",
+      verified: false,
+    });
+    transitionUI(() => setStage("workspace"));
+  };
+
   const completeSetup = (game: GameInstallation) => {
     setInstallation(game);
     setStorageItem(installationStorageKey, JSON.stringify(game));
@@ -621,7 +809,7 @@ export default function App() {
 
   let content;
   if (stage === "loading") content = <LoadingScreen />;
-  else if (stage === "auth") content = <AuthFlow onComplete={completeAuth} />;
+  else if (stage === "auth") content = <AuthFlow onComplete={completeAuth} onPreview={enterPreview} />;
   else if (stage === "setup" || !installation) content = <OnboardingFlow onComplete={completeSetup} />;
   else {
     content = (
@@ -647,24 +835,31 @@ function LoadingScreen() {
 
   return (
     <main className="launch-screen" aria-label={t.title}>
+      <img className="launch-background" src={betterfyAccessRibbonScene} alt="" aria-hidden="true" />
       <div className="launch-atmosphere" aria-hidden="true" />
-      <div className="launch-topline"><span>{t.label}</span><span>LOCAL / START</span></div>
+      <header className="launch-topline">
+        <BetterFyWordmark />
+        <span>{t.label}</span>
+      </header>
       <div className="launch-content">
-        <BetterFyWordmark animated hero />
-        <p>{t.label}</p>
-        <div className="launch-sequence" role="status" aria-live="polite">
-          <div className="launch-sequence-track" aria-hidden="true">
-            <i />
-            <b />
-            <b />
-            <b />
-          </div>
-          <ol>
-            {t.steps.map((step: string, index: number) => (
-              <li key={step}><strong>{String(index + 1).padStart(2, "0")}</strong><span>{step}</span></li>
-            ))}
-          </ol>
+        <div className="launch-copy">
+          <span>{t.label}</span>
+          <h1 className="accent-title"><AccentTitle text={t.title} /></h1>
+          <p>{t.subtitle}</p>
         </div>
+        <section className="launch-panel" role="status" aria-live="polite">
+          <div className="launch-panel-head">
+            <span><LoaderCircle /></span>
+            <div><strong>{t.panelTitle}</strong><small>{t.panelText}</small></div>
+          </div>
+          <div className="launch-sequence">
+            <ol>
+              {t.steps.map((step: string, index: number) => (
+                <li key={step}><i aria-hidden="true">{index + 1}</i><span>{step}</span><b aria-hidden="true" /></li>
+              ))}
+            </ol>
+          </div>
+        </section>
       </div>
       <p className="launch-footnote">{t.footnote}</p>
     </main>
@@ -693,7 +888,6 @@ function Workspace({
   const panelCloseTimer = useRef<number | null>(null);
   const diagnosticCopyTimer = useRef<number | null>(null);
   const [route, setRoute] = useState<WorkspaceRoute>("home");
-  const [catalogCompact, setCatalogCompact] = useState(false);
   const [motion, setMotion] = useState(() => getStorageItem("betterfy:motion") !== "off");
   const [startup, setStartup] = useState(() => getStorageItem("betterfy:startup-preference") === "on");
   const [diagnostic, setDiagnostic] = useState<"idle" | "checking" | "complete" | "error">("idle");
@@ -701,13 +895,16 @@ function Workspace({
   const [diagnosticCopied, setDiagnosticCopied] = useState(false);
   const [selectedModIds, setSelectedModIds] = useState<string[]>(() =>
     getStoredStringArray("betterfy:selected-mods"));
+  const [selectedGameModIds, setSelectedGameModIds] = useState<string[]>(() =>
+    getStoredStringArray("betterfy:selected-minify-mods"));
   const [telegramAvatarUrl, setTelegramAvatarUrl] = useState<string | null>(null);
   const [deviceSessions, setDeviceSessions] = useState<DeviceSession[]>([]);
   const [deviceSessionsError, setDeviceSessionsError] = useState(false);
   const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
 
   const accessSummary = useMemo(() => {
-    if (!session || session.accessTier !== "premium") return t.panel.earlyAccess;
+    if (!session || session.source === "demo") return t.panel.notConnected;
+    if (session.accessTier !== "premium") return t.panel.earlyAccess;
     const expiry = session.accessExpiresAt
       ? new Intl.DateTimeFormat(language === "ru" ? "ru-RU" : "en-GB", {
           day: "2-digit",
@@ -716,7 +913,7 @@ function Workspace({
         }).format(new Date(session.accessExpiresAt * 1000))
       : null;
     return [t.panel.premiumAccess, expiry ? `${t.panel.activeUntil} ${expiry}` : null].filter(Boolean).join(" · ");
-  }, [language, session, t.panel.activeUntil, t.panel.earlyAccess, t.panel.premiumAccess]);
+  }, [language, session, t.panel.activeUntil, t.panel.earlyAccess, t.panel.notConnected, t.panel.premiumAccess]);
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -804,13 +1001,6 @@ function Workspace({
   }, [motion]);
 
   useEffect(() => {
-    [wukongBuild, enigmaProgress, courierSuccess, pudgeRecovery].forEach((source) => {
-      const image = new Image();
-      image.src = source;
-    });
-  }, []);
-
-  useEffect(() => {
     if (!panel) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") closePanel();
@@ -818,12 +1008,6 @@ function Workspace({
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [panel, panelClosing]);
-
-  useEffect(() => {
-    if (route === "discover") return;
-    setCatalogCompact(false);
-    document.documentElement.style.removeProperty("--catalog-scroll-progress");
-  }, [route]);
 
   const toggleStartup = () => {
     setStartup((value) => {
@@ -870,11 +1054,27 @@ function Workspace({
     });
   };
 
-  const applyPreset = (modIds: string[]) => {
-    const next = [...new Set(modIds)];
-    setSelectedModIds(next);
-    setStorageItem("betterfy:selected-mods", JSON.stringify(next));
+  const toggleGameMod = (id: string) => {
+    setSelectedGameModIds((current) => {
+      const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
+      setStorageItem("betterfy:selected-minify-mods", JSON.stringify(next));
+      return next;
+    });
   };
+
+  const applyPreset = (modIds: string[], wardrobeIds: string[]) => {
+    const nextGame = [...new Set(modIds)];
+    const nextWardrobe = [...new Set(wardrobeIds)];
+    setSelectedGameModIds(nextGame);
+    setSelectedModIds(nextWardrobe);
+    setStorageItem("betterfy:selected-minify-mods", JSON.stringify(nextGame));
+    setStorageItem("betterfy:selected-mods", JSON.stringify(nextWardrobe));
+  };
+
+  const selectedBuildIds = useMemo(
+    () => [...selectedGameModIds, ...selectedModIds],
+    [selectedGameModIds, selectedModIds],
+  );
 
   const nav = [
     { key: "home", icon: Home, enabled: true },
@@ -894,7 +1094,7 @@ function Workspace({
   };
 
   return (
-    <main className={`app-frame ${route === "discover" && catalogCompact ? "catalog-focus-mode" : ""}`}>
+    <main className="app-frame">
       <aside className="app-rail" aria-label={language === "ru" ? "Основная навигация" : "Primary navigation"}>
         <nav>
           {nav.map(({ key, icon: Icon, enabled }) => (
@@ -947,8 +1147,10 @@ function Workspace({
           {route === "home" && (
             <HomeRoute
               t={t}
+              language={language}
               installation={installation}
-              selectedCount={selectedModIds.length}
+              signedIn={Boolean(session && session.source !== "demo")}
+              selectedIds={selectedBuildIds}
               onOpenBuild={() => navigate("build")}
               onOpenCatalog={() => navigate("discover")}
             />
@@ -957,9 +1159,10 @@ function Workspace({
             <Suspense fallback={<div className="catalog-route-loading"><LoaderCircle /></div>}>
               <ModCatalogRoute
                 language={language}
-                selectedIds={selectedModIds}
-                onToggle={toggleCatalogMod}
-                onNavigationCompactChange={setCatalogCompact}
+                selectedWardrobeIds={selectedModIds}
+                selectedGameIds={selectedGameModIds}
+                onToggleWardrobe={toggleCatalogMod}
+                onToggleGame={toggleGameMod}
               />
             </Suspense>
           )}
@@ -968,8 +1171,12 @@ function Workspace({
               t={t}
               language={language}
               installation={installation}
-              selectedCount={selectedModIds.length}
+              selectedWardrobeIds={selectedModIds}
+              selectedGameIds={selectedGameModIds}
+              onRemoveWardrobe={toggleCatalogMod}
+              onRemoveGame={toggleGameMod}
               onHome={() => navigate("home")}
+              onOpenCatalog={() => navigate("discover")}
               onOpenConfigs={() => navigate("library")}
             />
           )}
@@ -977,27 +1184,19 @@ function Workspace({
             <LibraryRoute
               t={t}
               language={language}
-              selectedIds={selectedModIds}
+              selectedWardrobeIds={selectedModIds}
+              selectedGameIds={selectedGameModIds}
               onApplyPreset={applyPreset}
             />
           )}
         </div>
 
-        <footer className="prototype-note">
-          {route === "home"
-            ? t.home.preview
-            : route === "discover"
-              ? t.catalog.prototype
-              : route === "build"
-                ? t.build.prototype
-                : t.library.prototype}
-        </footer>
       </section>
 
       {panel && (
         <div className={`side-panel-layer ${panelClosing ? "is-closing" : ""}`} onMouseDown={closePanel}>
           <aside
-            className="side-panel"
+            className={`side-panel ${panel === "profile" ? "profile-panel" : "settings-panel"}`}
             aria-label={panel === "settings" ? t.panel.settings : t.panel.profile}
             aria-modal="true"
             role="dialog"
@@ -1012,7 +1211,7 @@ function Workspace({
             </header>
 
             {panel === "settings" ? (
-              <div className="panel-content">
+              <div className="panel-content settings-panel-content">
                 <p>{t.panel.settingsText}</p>
                 <section className="panel-group">
                   <span>{t.panel.interface}</span>
@@ -1133,58 +1332,72 @@ function Workspace({
                     </section>
                   )}
                 </section>
+                <div className="settings-footnote"><ShieldCheck />{t.panel.diagnosticPrivacy}</div>
               </div>
             ) : (
-              <div className="panel-content">
+              <div className="panel-content profile-panel-content">
                 <p>{t.panel.profileText}</p>
                 <div className="profile-identity">
                   <span className="profile-brand-avatar" aria-label={session?.displayName ?? "BetterFy"}>
-                    {telegramAvatarUrl ? <img src={telegramAvatarUrl} alt="" /> : <BetterFyMark />}
+                    {telegramAvatarUrl ? <img src={telegramAvatarUrl} alt="" /> : <CircleUserRound />}
                   </span>
-                  <div>
+                  <div className="profile-identity-copy">
                     <h3>{session?.displayName ?? "BetterFy Tester"}</h3>
-                    <p>{session?.username ? `@${session.username}` : "@BeterFyBot"}</p>
+                    <p>{session?.username ? `@${session.username}` : session?.source === "demo" ? t.panel.notConnected : "@BeterFyBot"}</p>
+                    <small><Link2 />{session?.source === "demo" ? t.panel.previewProfile : t.panel.synced}</small>
                   </div>
-                  <i><Check /></i>
+                  <i><span />{session?.source === "demo" ? t.panel.notConnected : t.panel.connected}</i>
                 </div>
-                <dl className="profile-facts">
-                  <div><dt>{t.panel.signedIn}</dt><dd>{session?.username ? `@${session.username}` : t.panel.signedIn}</dd></div>
-                  <div><dt>{t.panel.access}</dt><dd>{accessSummary}</dd></div>
-                  {session?.accessRecurring && <div><dt>{t.panel.premiumAccess}</dt><dd>{t.panel.recurring}</dd></div>}
-                </dl>
-                <details className="profile-sessions">
-                  <summary>{t.panel.sessions}<span>{String(deviceSessions.length).padStart(2, "0")}</span></summary>
-                  <div>
-                    {deviceSessions.map((device) => {
-                      const label = device.current
-                        ? t.panel.currentSession
-                        : device.clientKind === "desktop"
-                          ? t.panel.desktopSession
-                          : device.clientKind === "web"
-                            ? t.panel.webSession
-                            : t.panel.unknownSession;
-                      const expiry = new Intl.DateTimeFormat(language === "ru" ? "ru-RU" : "en-GB", {
-                        day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
-                      }).format(new Date(device.expiresAt * 1000));
-                      return (
-                        <article key={device.sessionId}>
-                          <span><strong>{label}</strong><small>{t.panel.sessionUntil} {expiry}</small></span>
-                          {!device.current && (
-                            <button disabled={revokingSessionId === device.sessionId} onClick={() => void endDeviceSession(device)}>
-                              {t.panel.revokeSession}
-                            </button>
-                          )}
-                        </article>
-                      );
-                    })}
-                    {deviceSessionsError && <p>{t.panel.sessionsUnavailable}</p>}
+
+                <section className="profile-access-card">
+                  <div className="profile-access-head">
+                    <span><Crown /></span>
+                    <div><strong>{session?.source === "demo" ? t.panel.notConnected : session?.accessTier === "premium" ? t.panel.premiumAccess : t.panel.plan}</strong><small>{session?.source === "demo" ? t.panel.previewProfile : t.panel.accessCardText}</small></div>
+                    <em><Crown />{session?.source === "demo" ? t.panel.notConnected : session?.accessTier === "premium" ? t.panel.recurring : t.panel.earlyAccess}</em>
                   </div>
-                </details>
-                <section className="profile-community">
-                  <MessageCircle />
-                  <div><strong>{t.panel.community}</strong><small>{t.panel.communityText}</small></div>
+                  <dl>
+                    <div><dt>{t.panel.signedIn}</dt><dd>{session?.username ? `@${session.username}` : session?.source === "demo" ? t.panel.notConnected : t.panel.signedIn}</dd></div>
+                    <div><dt>{t.panel.access}</dt><dd>{accessSummary}</dd></div>
+                    <div><dt>{t.panel.sessions}</dt><dd>{String(deviceSessions.length).padStart(2, "0")}</dd></div>
+                  </dl>
+                </section>
+
+                <section className="profile-menu-group">
+                  <a href="https://t.me/BeterFyBot" target="_blank" rel="noreferrer">
+                    <i><Send /></i><span><strong>{t.panel.signedIn}</strong><small>{t.panel.telegramText}</small></span><em><span />{session?.source === "demo" ? t.panel.notConnected : t.panel.connected}</em><ChevronRight />
+                  </a>
+                  <div>
+                    <i><Crown /></i><span><strong>{t.panel.access}</strong><small>{t.panel.accessText}</small></span><em>{accessSummary}</em>
+                  </div>
+                  <details className="profile-sessions">
+                    <summary><i><Monitor /></i><span><strong>{t.panel.sessions}</strong><small>{t.panel.sessionsText}</small></span><em>{String(deviceSessions.length).padStart(2, "0")}</em><ChevronRight /></summary>
+                    <div>
+                      {deviceSessions.map((device) => {
+                        const label = device.current
+                          ? t.panel.currentSession
+                          : device.clientKind === "desktop"
+                            ? t.panel.desktopSession
+                            : device.clientKind === "web"
+                              ? t.panel.webSession
+                              : t.panel.unknownSession;
+                        const expiry = new Intl.DateTimeFormat(language === "ru" ? "ru-RU" : "en-GB", {
+                          day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+                        }).format(new Date(device.expiresAt * 1000));
+                        return (
+                          <article key={device.sessionId}>
+                            <span><strong>{label}</strong><small>{t.panel.sessionUntil} {expiry}</small></span>
+                            {!device.current && <button disabled={revokingSessionId === device.sessionId} onClick={() => void endDeviceSession(device)}>{t.panel.revokeSession}</button>}
+                          </article>
+                        );
+                      })}
+                      {deviceSessionsError && <p>{t.panel.sessionsUnavailable}</p>}
+                    </div>
+                  </details>
+                </section>
+
+                <section className="profile-menu-group profile-community-group">
                   <a href="https://t.me/BeterFyBot" target="_blank" rel="noreferrer" aria-label={t.panel.openBot}>
-                    <ExternalLink />
+                    <i><MessageCircle /></i><span><strong>{t.panel.community}</strong><small>{t.panel.communityText}</small></span><ChevronRight />
                   </a>
                 </section>
                 <button className="panel-signout" onClick={() => { void revokeAuthSession(session).then(onSignOut).catch(() => setDeviceSessionsError(true)); }}><LogOut />{t.panel.signout}</button>
@@ -1199,52 +1412,149 @@ function Workspace({
 
 function HomeRoute({
   t,
+  language,
   installation,
-  selectedCount,
+  signedIn,
+  selectedIds,
   onOpenBuild,
   onOpenCatalog,
 }: {
   t: typeof copy.ru;
+  language: Language;
   installation: GameInstallation;
-  selectedCount: number;
+  signedIn: boolean;
+  selectedIds: string[];
   onOpenBuild: () => void;
   onOpenCatalog: () => void;
 }) {
+  const [showcaseMods, setShowcaseMods] = useState<BetterFyCatalogMod[]>([]);
+  const [activeShowcaseIndex, setActiveShowcaseIndex] = useState(0);
+  useEffect(() => {
+    let active = true;
+    void import("./modCatalog").then(({ wardrobeCatalogItems }) => {
+      if (!active) return;
+      const curated = wardrobeCatalogItems.filter((mod) => (
+        homeShowcaseIds.has(mod.id) && mod.presentation.previewUrl
+      ));
+      const pool = curated.length >= 7
+        ? curated
+        : wardrobeCatalogItems.filter((mod) => mod.presentation.previewUrl);
+      let seed = Math.floor(Date.now() / 86_400_000) ^ 0x5bf17;
+      const random = () => {
+        seed = (seed * 1_664_525 + 1_013_904_223) >>> 0;
+        return seed / 4_294_967_296;
+      };
+      const shuffled = [...pool];
+      for (let index = shuffled.length - 1; index > 0; index -= 1) {
+        const target = Math.floor(random() * (index + 1));
+        [shuffled[index], shuffled[target]] = [shuffled[target], shuffled[index]];
+      }
+      setShowcaseMods(shuffled.slice(0, 18));
+      setActiveShowcaseIndex(0);
+    });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    if (showcaseMods.length < 2) return;
+    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const timer = window.setInterval(() => {
+      if (document.hidden || motionQuery.matches || document.documentElement.classList.contains("motion-disabled")) return;
+      setActiveShowcaseIndex((current) => (current + 1) % showcaseMods.length);
+    }, 5200);
+    return () => window.clearInterval(timer);
+  }, [showcaseMods.length]);
+  const selectedCount = selectedIds.length;
+  const hasSelection = selectedCount > 0;
+  const title = hasSelection ? t.home.titleActive : t.home.titleEmpty;
+  const activeMod = showcaseMods[activeShowcaseIndex];
+  const showPrevious = () => setActiveShowcaseIndex((current) => (
+    showcaseMods.length ? (current - 1 + showcaseMods.length) % showcaseMods.length : 0
+  ));
+  const showNext = () => setActiveShowcaseIndex((current) => (
+    showcaseMods.length ? (current + 1) % showcaseMods.length : 0
+  ));
+  const visibleShowcase = showcaseMods.length
+    ? [-2, -1, 0, 1, 2].map((offset) => ({
+        mod: showcaseMods[(activeShowcaseIndex + offset + showcaseMods.length) % showcaseMods.length],
+        offset,
+      }))
+    : [];
+
   return (
     <div className="home-content">
-      <section className="home-hero">
-        <div className="hero-copy">
-          <span className="eyebrow"><Sparkles />{t.home.eyebrow}</span>
-          <h1>{t.home.title.split("\n").map((line: string) => <span key={line}>{line}</span>)}</h1>
-          <p>{t.home.subtitle}</p>
-          <button className="primary-action" onClick={onOpenBuild}>
-            <span><Layers3 /></span><b>{t.home.action}</b><ArrowRight />
-          </button>
-          <small>{t.home.actionHint}</small>
-        </div>
+      <section className={`home-workbench ${hasSelection ? "has-selection" : "is-empty"}`} aria-label={t.home.artTitle}>
+        <img className="home-workbench-scene" src={betterfyWorkbenchScene} alt="" aria-hidden="true" />
+        <div className="home-workbench-shade" aria-hidden="true" />
 
-        <div className="hero-art-slot" aria-label={t.home.artTitle}>
-          <div className="art-orbit" aria-hidden="true"><i /><i /><i /></div>
-          <span>{t.home.artLabel}</span>
-          <img className="home-bane-art" src={baneHome} alt="" />
-          <div className="art-caption">
-            <strong>{t.home.artTitle}</strong>
-            <small>{t.home.artHint}</small>
+        <header className="home-workbench-intro">
+          <div className="hero-copy">
+            <span className="eyebrow"><Sparkles />{t.home.eyebrow}</span>
+            <h1>{title.split("\n").map((line: string) => <span key={line}>{line}</span>)}</h1>
+            <p>{installation.verified ? t.home.subtitle : t.home.demoSubtitle}</p>
+          </div>
+          <div className="home-workbench-actions">
+            <button className="primary-action" onClick={onOpenCatalog}>
+              <span><Layers3 /></span><b>{hasSelection ? t.home.actionActive : t.home.actionEmpty}</b><ArrowRight />
+            </button>
+            {hasSelection && <button className="home-edit-selection" onClick={onOpenBuild}><Check /><span>{t.home.editSelection}</span><b>{selectedCount}</b></button>}
+            <small>{t.home.actionHint}</small>
+          </div>
+        </header>
+
+        <div className="home-loadout-stage" aria-label={t.home.showcaseLabel}>
+          <div
+            className="home-coverflow"
+            role="region"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowLeft") { event.preventDefault(); showPrevious(); }
+              if (event.key === "ArrowRight") { event.preventDefault(); showNext(); }
+            }}
+          >
+            {visibleShowcase.map(({ mod, offset }) => (
+              <button
+                className={`home-coverflow-card position-${offset + 3} ${offset === 0 ? "is-active" : ""} ${selectedIds.includes(mod.id) ? "is-selected" : ""}`}
+                key={mod.id}
+                onClick={() => {
+                  if (offset === 0) onOpenCatalog();
+                  else setActiveShowcaseIndex((current) => (current + offset + showcaseMods.length) % showcaseMods.length);
+                }}
+                aria-current={offset === 0 ? "true" : undefined}
+                aria-label={offset === 0 ? `${mod.metadata.name}. ${language === "ru" ? "Открыть в каталоге" : "Open in catalog"}` : mod.metadata.name}
+              >
+                {mod.presentation.previewUrl && <img src={mod.presentation.previewUrl} alt="" onError={(event) => { event.currentTarget.hidden = true; }} />}
+                <span><small>{mod.metadata.categoryLabel[language]}</small><strong>{mod.metadata.name}</strong>{offset === 0 && <i>{language === "ru" ? "Смотреть в каталоге" : "View in catalog"}<ArrowRight /></i>}</span>
+                {selectedIds.includes(mod.id) && <b><Check /></b>}
+              </button>
+            ))}
+            {!activeMod && <div className="home-coverflow-card is-active is-loading" aria-hidden="true"><LoaderCircle /></div>}
+            <nav className="home-drop-controls" key={activeShowcaseIndex} aria-label={language === "ru" ? "Переключение модов" : "Mod showcase controls"}>
+              <button onClick={showPrevious} disabled={!showcaseMods.length} aria-label={language === "ru" ? "Предыдущий" : "Previous"}><ArrowLeft /></button>
+              <span><b>{String(activeShowcaseIndex + 1).padStart(2, "0")}</b><i>/</i>{String(showcaseMods.length || 18).padStart(2, "0")}</span>
+              <button onClick={showNext} disabled={!showcaseMods.length} aria-label={language === "ru" ? "Следующий" : "Next"}><ArrowRight /></button>
+            </nav>
           </div>
         </div>
+
+        <footer className="home-workbench-footer">
+          <div><span>{t.home.selectedLabel}</span><strong>{hasSelection ? `${selectedCount} ${t.home.selectedUnit}` : t.home.empty}</strong><small>{hasSelection ? t.home.sceneActive : t.home.sceneEmpty}</small></div>
+          <button className="home-carousel-hint" onClick={onOpenCatalog}><Search /><span>{t.home.carouselHint}</span><ArrowRight /></button>
+        </footer>
       </section>
 
-      <section className="home-lower">
-        <article className="build-preview">
-          <div><span>{t.home.buildEyebrow}</span><h2>{t.home.buildTitle}</h2><p>{t.home.buildText}</p></div>
-          <div className="empty-build"><Boxes /><span>{selectedCount ? `${selectedCount} ${t.home.build}` : t.home.empty}</span></div>
-          <button onClick={onOpenCatalog}>{t.home.browse}<ArrowRight /></button>
+      <section className="home-status-board" aria-label={language === "ru" ? "Состояние BetterFy" : "BetterFy status"}>
+        <article className={installation.verified ? "is-ready" : "is-preview"}>
+          <span><Monitor /></span>
+          <div><small>{t.home.state}</small><strong>{installation.verified ? t.home.connected : t.home.demoConnected}</strong><p>{installation.verified ? t.home.connectedNote : t.home.demoConnectedNote}</p></div>
         </article>
-        <aside className="system-strip">
-          <SystemState label={t.home.state} value={installation.verified ? t.home.connected : t.home.demoConnected} tone={installation.verified ? "ready" : "warning"} />
-          <SystemState label={t.home.build} value={t.home.buildValue} />
-          <SystemState label={t.home.access} value={t.home.accessValue} tone="ready" />
-        </aside>
+        <article className={hasSelection ? "is-ready" : ""}>
+          <span><Layers3 /></span>
+          <div><small>{t.home.build}</small><strong>{hasSelection ? `${selectedCount} ${t.home.selectedUnit}` : t.home.buildValue}</strong><p>{t.home.buildNote}</p></div>
+        </article>
+        <article className={signedIn ? "is-ready" : ""}>
+          <span><CircleUserRound /></span>
+          <div><small>{t.home.access}</small><strong>{signedIn ? t.home.accessValue : t.home.accessPreview}</strong><p>{t.home.accessNote}</p></div>
+        </article>
       </section>
 
       <CommunityCard t={t.community} />
@@ -1256,15 +1566,23 @@ function BuildRoute({
   t,
   language,
   installation,
-  selectedCount,
+  selectedWardrobeIds,
+  selectedGameIds,
+  onRemoveWardrobe,
+  onRemoveGame,
   onHome,
+  onOpenCatalog,
   onOpenConfigs,
 }: {
   t: typeof copy.ru;
   language: Language;
   installation: GameInstallation;
-  selectedCount: number;
+  selectedWardrobeIds: string[];
+  selectedGameIds: string[];
+  onRemoveWardrobe: (id: string) => void;
+  onRemoveGame: (id: string) => void;
   onHome: () => void;
+  onOpenCatalog: () => void;
   onOpenConfigs: () => void;
 }) {
   const [plan, setPlan] = useState<BuildPlan | null>(null);
@@ -1277,6 +1595,25 @@ function BuildRoute({
   const [recoveryOperationId, setRecoveryOperationId] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [steamReceipt, setSteamReceipt] = useState<SteamConfigReceipt | null>(null);
+  const [selectedWardrobeMods, setSelectedWardrobeMods] = useState<BetterFyCatalogMod[]>([]);
+  const [selectedGameMods, setSelectedGameMods] = useState<Array<MinifyCatalogItem & { previewUrl: string | null }>>([]);
+
+  useEffect(() => {
+    let active = true;
+    void Promise.all([import("./modCatalog"), import("./minifyCatalog")]).then(([wardrobe, game]) => {
+      if (!active) return;
+      const wardrobeById = new Map(wardrobe.wardrobeCatalogItems.map((mod) => [mod.id, mod]));
+      const gameById = new Map(game.minifyMods.map((mod) => [mod.id, mod]));
+      setSelectedWardrobeMods(selectedWardrobeIds
+        .map((id) => wardrobeById.get(id))
+        .filter((mod): mod is BetterFyCatalogMod => Boolean(mod)));
+      setSelectedGameMods(selectedGameIds
+        .map((id) => gameById.get(id))
+        .filter((mod): mod is MinifyCatalogItem => Boolean(mod))
+        .map((mod) => ({ ...mod, previewUrl: game.minifyPreviewUrl(mod.preview) })));
+    });
+    return () => { active = false; };
+  }, [selectedGameIds, selectedWardrobeIds]);
 
   const inspectPlan = async () => {
     setPlanning(true);
@@ -1373,22 +1710,91 @@ function BuildRoute({
 
   const phaseIndex = progress < 24 ? 0 : progress < 50 ? 1 : progress < 78 ? 2 : 3;
   const isPlanningSurface = view === "review" || view === "conflict" || view === "ready";
+  const selectedCount = selectedWardrobeIds.length + selectedGameIds.length;
+  const visibleWardrobeMods = selectedWardrobeMods.slice(0, 4);
+  const visibleGameMods = selectedGameMods.slice(0, 4);
+  const flowStep = view === "review" ? 0 : view === "conflict" || view === "ready" ? 1 : view === "progress" ? 2 : 3;
 
   return (
     <div className={`build-experience build-view-${view}`}>
       {isPlanningSurface && (
-        <section className="build-studio">
-          <div className="build-studio-copy">
-            <header className="route-heading">
-              <span>{t.build.eyebrow}</span>
-              <h1 className="accent-title"><AccentTitle text={t.build.title} /></h1>
-              <p>{t.build.text}</p>
-            </header>
+        <section className="build-studio build-preflight-stage">
+          <header className="route-heading build-preflight-heading">
+            <div>
+              <span>{t.build.eyebrow} · {t.build.selectedPrefix} {selectedCount}</span>
+              <h1 className="accent-title"><AccentTitle text={selectedCount ? t.build.title : t.build.titleEmpty} /></h1>
+              <p>{selectedCount ? t.build.text : t.build.textEmpty}</p>
+            </div>
+          </header>
 
-            <div className={`build-decision ${view === "conflict" ? "is-conflict" : view === "ready" ? "is-ready" : ""}`}>
+          <div className={`build-preflight-board ${selectedCount ? "has-selection" : "is-empty"}`}>
+            <section className="build-selection-stage" aria-label={t.build.selection}>
+              <header>
+                <span><Layers3 />{t.build.selection}</span>
+                {selectedCount > 0 && <button onClick={onOpenCatalog}><Plus />{t.build.addContent}</button>}
+              </header>
+
+              <div className={`build-blueprint ${selectedCount ? "has-items" : "is-empty"}`}>
+                <div className="build-blueprint-axis" aria-hidden="true">
+                  <span>BETTERFY</span><i /><small>LOADOUT / LOCAL</small>
+                </div>
+
+                <section className="build-blueprint-game" aria-label={t.build.gameDomain}>
+                  <header>
+                    <span><Wrench />{t.build.gameDomain}</span>
+                    <strong>{String(selectedGameIds.length).padStart(2, "0")}</strong>
+                  </header>
+                  <div className="build-game-stack">
+                    {visibleGameMods.map((mod, index) => (
+                      <article key={mod.id} style={{ "--build-index": index } as React.CSSProperties}>
+                        <i />
+                        <span><small>{mod.category}</small><strong>{mod.name[language]}</strong></span>
+                        <b>{Object.values(mod.evidence).reduce((total, value) => total + value, 0)}</b>
+                        <button onClick={() => onRemoveGame(mod.id)} aria-label={`${t.build.removeItem}: ${mod.name[language]}`}><X /></button>
+                      </article>
+                    ))}
+                    {!visibleGameMods.length && (
+                      <button className="build-domain-empty" onClick={onOpenCatalog}><Plus /><span>{t.build.gameEmpty}</span></button>
+                    )}
+                    {selectedGameIds.length > visibleGameMods.length && <button className="build-domain-more" onClick={onOpenCatalog}>+{selectedGameIds.length - visibleGameMods.length}</button>}
+                  </div>
+                  <p>{t.build.gameNote}</p>
+                </section>
+
+                <section className="build-blueprint-wardrobe" aria-label={t.build.wardrobeDomain}>
+                  <header>
+                    <span><Shirt />{t.build.wardrobeDomain}</span>
+                    <strong>{String(selectedWardrobeIds.length).padStart(2, "0")}</strong>
+                  </header>
+                  <div className="build-look-strip">
+                    {visibleWardrobeMods.map((mod, index) => (
+                      <figure key={mod.id} style={{ "--build-index": index } as React.CSSProperties}>
+                        {mod.presentation.previewUrl && <img src={mod.presentation.previewUrl} alt="" onError={(event) => { event.currentTarget.hidden = true; }} />}
+                        <figcaption><small>{mod.metadata.categoryLabel[language]}</small><strong>{mod.metadata.name}</strong></figcaption>
+                        <button onClick={() => onRemoveWardrobe(mod.id)} aria-label={`${t.build.removeItem}: ${mod.metadata.name}`}><X /></button>
+                      </figure>
+                    ))}
+                    {!visibleWardrobeMods.length && (
+                      <button className="build-domain-empty" onClick={onOpenCatalog}><Plus /><span>{t.build.wardrobeEmpty}</span></button>
+                    )}
+                    {selectedWardrobeIds.length > visibleWardrobeMods.length && <button className="build-domain-more" onClick={onOpenCatalog}>+{selectedWardrobeIds.length - visibleWardrobeMods.length}</button>}
+                  </div>
+                  <p>{t.build.wardrobeNote}</p>
+                </section>
+
+                {!selectedCount && (
+                  <div className="build-blueprint-empty-action">
+                    <Layers3 /><strong>{t.build.selectionEmpty}</strong>
+                  </div>
+                )}
+                <i className="build-blueprint-light" aria-hidden="true" />
+              </div>
+            </section>
+
+            <aside className={`build-decision build-checkpoint ${view === "conflict" ? "is-conflict" : view === "ready" ? "is-ready" : ""}`}>
               <span>
-                {view === "conflict" ? <TriangleAlert /> : view === "ready" ? <CircleCheckBig /> : <Layers3 />}
-                {view === "conflict" ? t.build.conflict : view === "ready" ? t.build.readyLabel : t.build.plan}
+                {view === "conflict" ? <TriangleAlert /> : view === "ready" ? <CircleCheckBig /> : <Stethoscope />}
+                {view === "conflict" ? t.build.conflict : view === "ready" ? t.build.readyLabel : t.build.demoLabel}
               </span>
               <h2>{view === "conflict" ? t.build.conflictTitle : view === "ready" ? t.build.readyTitle : t.build.emptyTitle}</h2>
               <p>{view === "conflict" ? t.build.conflictText : view === "ready" ? t.build.readyText : t.build.emptyText}</p>
@@ -1406,47 +1812,38 @@ function BuildRoute({
               )}
 
               <div className="build-studio-actions">
-                {view === "review" && (
+                {view === "review" && selectedCount > 0 && (
                   <button className="build-main-action" onClick={inspectPlan} disabled={planning}>
                     <Stethoscope />{planning ? t.build.planning : t.build.inspect}<ArrowRight />
                   </button>
                 )}
-                {view === "ready" && (
-                  <button className="build-main-action" onClick={startBuild}>
-                    <Play />{t.build.start}<ArrowRight />
-                  </button>
-                )}
-                {view !== "conflict" && (
-                  <button className="build-quiet-action" onClick={onHome}>
-                    <RotateCcw />{t.build.back}
-                  </button>
+                {view === "review" && selectedCount === 0 && (
+                  <>
+                    <button className="build-main-action" onClick={onOpenCatalog}><Plus />{t.build.chooseContent}<ArrowRight /></button>
+                    <button className="build-text-action" onClick={inspectPlan} disabled={planning}>
+                      <Stethoscope />{planning ? t.build.planning : t.build.inspect}
+                    </button>
+                  </>
                 )}
                 {view === "ready" && (
-                  <button className="build-text-action" onClick={() => setView("recovery")}>
-                    <ArchiveRestore />{t.build.recoveryPreview}
-                  </button>
+                  <button className="build-main-action" onClick={startBuild}><Play />{t.build.start}<ArrowRight /></button>
+                )}
+                {view === "ready" && (
+                  <button className="build-text-action" onClick={() => setView("recovery")}><ArchiveRestore />{t.build.recoveryPreview}</button>
                 )}
               </div>
-            </div>
-          </div>
+            </aside>
 
-          <div className="build-character-scene" aria-label="Sun Wukong build scene">
-            <span>WUKONG / BUILD REVIEW</span>
-            <div className="build-character-backlight" aria-hidden="true" />
-            <img src={wukongBuild} alt="" />
-            <i className="build-character-light" aria-hidden="true" />
-            <dl className="build-scene-plan">
-              <div><dt>{t.build.items}</dt><dd>{plan?.inputs.length ?? 2}</dd></div>
-              <div><dt>{t.build.dependencies}</dt><dd>{plan?.operations.length ?? "—"}</dd></div>
-              <div className={view === "conflict" ? "conflict" : choice ? "resolved" : ""}>
-                <dt>{t.build.conflicts}</dt>
-                <dd>{view === "conflict" ? plan?.conflicts.length ?? 1 : choice ? <Check /> : "—"}</dd>
-              </div>
-              <div className="build-plan-id">
-                <dt>{plan ? `DRY RUN · ${plan.planId}` : t.build.unavailable}</dt>
-                <dd><PackageOpen /></dd>
-              </div>
-            </dl>
+            <footer className="build-preflight-footer">
+              <ol className="build-flow" aria-label={t.build.plan}>
+                {t.build.flow.map((label: string, index: number) => (
+                  <li className={index < flowStep ? "done" : index === flowStep ? "active" : ""} key={label}>
+                    <i>{index < flowStep ? <Check /> : String(index + 1).padStart(2, "0")}</i><span>{label}</span>
+                  </li>
+                ))}
+              </ol>
+              <small><ShieldCheck />{plan ? `FIXTURE · ${plan.planId}` : t.build.selectionHint}</small>
+            </footer>
           </div>
         </section>
       )}
@@ -1454,10 +1851,12 @@ function BuildRoute({
       {view === "progress" && (
         <section className="build-operation">
           <div className="operation-world" aria-hidden="true">
-            <img src={enigmaProgress} alt="" />
-            <i className="operation-world-glow" />
-            <div className="operation-orbit"><i /><i /><i /></div>
             <span>STAGING / PREVIEW</span>
+            <div className="operation-field">
+              <i style={{ "--progress": `${progress}%` } as React.CSSProperties} />
+              <strong>{String(progress).padStart(2, "0")}</strong>
+              <small>BUILD PROFILE</small>
+            </div>
           </div>
           <div className="operation-copy" role="status" aria-live="polite">
             <span>{t.build.progressEyebrow}</span>
@@ -1486,16 +1885,16 @@ function BuildRoute({
 
       {view === "success" && (
         <section className="build-result success-result">
-          <div className="result-art" aria-hidden="true">
-            <span>FLYING COURIER / READY</span>
-            <div className="result-backlight" />
-            <img src={courierSuccess} alt="" />
-            <i className="result-light-pass" />
-          </div>
           <div className="result-copy">
-            <span className="result-status ready"><CircleCheckBig />{t.build.successEyebrow}</span>
+            <div className="result-ready-mark" aria-hidden="true"><CircleCheckBig /></div>
+            <span className="result-status ready">{t.build.successEyebrow}</span>
             <h1 className="accent-title"><AccentTitle text={t.build.successTitle} /></h1>
             <p>{t.build.successText}</p>
+            <dl className="success-summary">
+              <div><dt>{t.build.selectedContent}</dt><dd>{String(selectedCount).padStart(2, "0")}</dd></div>
+              <div><dt>{t.build.resolvedState}</dt><dd><Check /> OK</dd></div>
+              <div><dt>{t.build.operation}</dt><dd>{receipt?.operationId ?? "LOCAL PREVIEW"}</dd></div>
+            </dl>
             <SteamActivationPanel
               t={t}
               installation={installation}
@@ -1503,17 +1902,10 @@ function BuildRoute({
               onRequestRecovery={() => setView("recovery")}
             />
             <div className="success-config-panel">
-              <div className="success-config-copy">
-                <span><Save /></span>
-                <div><strong>{t.build.configTitle}</strong><small>{t.build.configText}</small></div>
-              </div>
-              <dl>
-                <div><dt>{t.build.selectedContent}</dt><dd>{selectedCount}</dd></div>
-                <div><dt>{t.build.resolvedState}</dt><dd><Check /> OK</dd></div>
-              </dl>
-              <button onClick={onOpenConfigs}><Save />{t.build.openConfigs}<ArrowRight /></button>
+              <div><strong>{t.build.configTitle}</strong><small>{t.build.configText}</small></div>
+              <button onClick={onOpenConfigs}><Save />{t.build.openConfigs}</button>
             </div>
-            <button className="result-secondary" onClick={onHome}>{t.build.finishPreview}<ArrowRight /></button>
+            <button className="result-secondary result-finish" onClick={onHome}>{t.build.finishPreview}<ArrowRight /></button>
           </div>
         </section>
       )}
@@ -1543,10 +1935,13 @@ function BuildRoute({
             <small className="recovery-truth"><ShieldCheck />{t.build.recoverySafe}</small>
           </div>
           <div className="result-art recovery-art" aria-hidden="true">
-            <span>PUDGE / RECOVERY</span>
-            <div className="result-backlight" />
-            <img src={pudgeRecovery} alt="" />
-            <i className="result-light-pass" />
+            <span>RECOVERY / LOCAL</span>
+            <div className="recovery-visual">
+              <ArchiveRestore />
+              <strong>{view === "restored" ? "RESTORED" : "ROLL BACK"}</strong>
+              <div><i /><i /><i /></div>
+              <small>JOURNAL → BACKUP → VERIFY</small>
+            </div>
           </div>
         </section>
       )}
@@ -1640,6 +2035,10 @@ function SteamActivationPanel({
     return t.build.activationInvalid;
   };
 
+  const activationErrorDetail = errorCode in t.build.activationErrors
+    ? t.build.activationErrors[errorCode as keyof typeof t.build.activationErrors]
+    : t.build.activationErrors.fallback;
+
   const activate = async () => {
     if (!preview || !confirmed) return;
     setErrorCode("");
@@ -1688,7 +2087,7 @@ function SteamActivationPanel({
         <div className="steam-activation-notice"><LoaderCircle />{t.build.activationLoading}</div>
       ) : phase === "error" && profiles.length === 0 ? (
         <div className="steam-activation-load-error" role="alert">
-          <div><TriangleAlert /><span>{t.build.activationError}<small>{errorCode}</small></span></div>
+          <div><TriangleAlert /><span>{t.build.activationError}<small>{activationErrorDetail}</small></span></div>
           <button onClick={() => setReloadNonce((value) => value + 1)}><RotateCcw />{t.build.activationRetry}</button>
         </div>
       ) : profiles.length === 0 ? (
@@ -1752,7 +2151,7 @@ function SteamActivationPanel({
           {phase === "error" && (
             <div className="steam-activation-error" role="alert">
               <TriangleAlert />
-              <span>{t.build.activationError}<small>{errorCode}</small></span>
+              <span>{t.build.activationError}<small>{activationErrorDetail}</small></span>
             </div>
           )}
           {canRecover && (
@@ -1769,13 +2168,15 @@ function SteamActivationPanel({
 function LibraryRoute({
   t,
   language,
-  selectedIds,
+  selectedWardrobeIds,
+  selectedGameIds,
   onApplyPreset,
 }: {
   t: typeof copy.ru;
   language: Language;
-  selectedIds: string[];
-  onApplyPreset: (modIds: string[]) => void;
+  selectedWardrobeIds: string[];
+  selectedGameIds: string[];
+  onApplyPreset: (modIds: string[], wardrobeIds: string[]) => void;
 }) {
   return (
     <div className="route-page library-route">
@@ -1784,7 +2185,12 @@ function LibraryRoute({
         <h1 className="accent-title"><AccentTitle text={t.library.title} /></h1>
         <p>{t.library.text}</p>
       </header>
-      <PresetManager language={language} selectedIds={selectedIds} onApply={onApplyPreset} />
+      <PresetManager
+        language={language}
+        selectedModIds={selectedGameIds}
+        selectedWardrobeIds={selectedWardrobeIds}
+        onApply={onApplyPreset}
+      />
       <section className="library-grid">
         <article>
           <i><FolderOpen /></i>
@@ -1807,12 +2213,33 @@ function LibraryRoute({
 }
 
 function CommunityCard({ t }: { t: typeof copy.ru.community }) {
+  const [moodIndex, setMoodIndex] = useState(0);
+  const mood = communityMoods[moodIndex];
+  useEffect(() => {
+    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const timer = window.setInterval(() => {
+      if (motionQuery.matches || document.documentElement.classList.contains("motion-disabled")) return;
+      setMoodIndex((current) => (current + 1) % communityMoods.length);
+    }, 7600);
+    return () => window.clearInterval(timer);
+  }, []);
+  const [titleBeforeBrand, titleAfterBrand = ""] = t.title.split("BetterFy");
   return (
-    <aside className="community-card">
-      <div className="community-symbol" aria-hidden="true"><Heart /><i /><i /></div>
-      <div>
+    <aside className={`community-card mood-${mood.key}`}>
+      <i className="community-color-field" key={`field-${mood.key}`} aria-hidden="true" />
+      <div className="community-emblem" aria-hidden="true">
+        <span key={mood.key}>
+          <img className="is-animated" src={mood.src} alt="" />
+          <img className="is-static" src={mood.still} alt="" />
+        </span>
+      </div>
+      <div className="community-copy">
         <span>{t.label}</span>
-        <h2>{t.title}</h2>
+        <h2>
+          {titleBeforeBrand}
+          <b key={`title-${mood.key}`}><span className="community-brand-better">Better</span><span className="community-brand-fy">Fy</span></b>
+          {titleAfterBrand}
+        </h2>
         <p>{t.text}</p>
         <small>{t.note}</small>
       </div>
@@ -1820,22 +2247,5 @@ function CommunityCard({ t }: { t: typeof copy.ru.community }) {
         <MessageCircle />{t.action}<ExternalLink />
       </a>
     </aside>
-  );
-}
-
-function SystemState({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  tone?: "neutral" | "warning" | "ready";
-}) {
-  return (
-    <div className={`system-state ${tone}`}>
-      <i aria-hidden="true" />
-      <span><small>{label}</small><strong>{value}</strong></span>
-    </div>
   );
 }

@@ -17,7 +17,6 @@ import BetterFyWordmark from "./BetterFyWordmark";
 import AccentTitle from "./AccentTitle";
 import { engineBridge, type GameInstallation } from "./engine";
 import { useLocale } from "./i18n";
-import dotaSpiritsSetup from "./assets/dota-spirits-setup.png";
 
 type Stage = "intro" | "scanning" | "found" | "manual" | "not-found" | "error";
 
@@ -171,10 +170,20 @@ export default function OnboardingFlow({
       </header>
 
       <section className="setup-scene" aria-hidden="true">
-        <div className="setup-art">
-          <span>{t.artLabel}</span>
-          <img src={dotaSpiritsSetup} alt="" />
-          <i className="hero-light-beam" />
+        <div className="setup-map">
+          <span>STEAM / APP 570</span>
+          <div className="setup-map-head">
+            <Gamepad2 />
+            <div><strong>Dota 2</strong><small>{stage === "found" ? "PATH VERIFIED" : "LOCAL DISCOVERY"}</small></div>
+          </div>
+          <ol>
+            {t.steps.map((item, index) => (
+              <li className={stage === "found" || index < step ? "done" : index === step && stage === "scanning" ? "active" : ""} key={item}>
+                <i>{stage === "found" || index < step ? <Check /> : index + 1}</i>
+                <span><strong>{item}</strong><small>{stage === "found" || index < step ? "OK" : index === step && stage === "scanning" ? "CHECKING" : "WAITING"}</small></span>
+              </li>
+            ))}
+          </ol>
         </div>
         <div className="setup-machine">
           <div className="machine-path">

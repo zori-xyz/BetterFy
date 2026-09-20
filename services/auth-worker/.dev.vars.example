@@ -1,6 +1,9 @@
 TELEGRAM_BOT_TOKEN=replace_locally
 TELEGRAM_WEBHOOK_SECRET=replace_with_random_header_secret
 AUTH_CODE_PEPPER=replace_with_at_least_32_random_bytes
+AUTH_PASSWORD_PEPPER=replace_with_a_different_32_byte_random_secret
+RESEND_API_KEY=replace_locally
+EMAIL_FROM="BetterFy ID <login@example.com>"
 BETTERFY_PLAN_3D_STARS=75
 BETTERFY_PLAN_15D_STARS=225
 BETTERFY_PLAN_30D_STARS=525

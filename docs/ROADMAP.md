@@ -55,12 +55,18 @@ The deployment foundation now also includes:
   crash recovery, and rollback that refuses external edits;
 - injected failures immediately before and after publication.
 
+Now covered by the internal Tree Mod pilot (not a product enablement claim):
+
+- a fixed 21-resource contract, pinned HTTPS acquisition with exact size/hash
+  checks, immutable cache reads, deterministic VPK construction, reopen, and
+  journaled staging/rollback on macOS;
+
 Still required before the pilot is enabled:
 
-- pin the 21 Tree Mod resources as an explicit package contract without importing
-  Minify's Python hooks or generic patcher;
-- normalize that package into immutable staging content and build `pak66_dir.vpk`;
-- repeat containment and output limits during extraction;
+- review distribution and notices for compiled game-derived resources;
+- expose a reviewed, cancellable Tree Mod plan and truthful progress in the UI;
+- bind confirmed staging and deployment into one resumable Windows journey;
+- repeat containment and output limits if an archive/extraction package is added;
 - add manifest signature and key-rotation policy;
 - pass the native Windows matrix, including interrupted deploy and rollback.
 
@@ -69,9 +75,10 @@ restarts, and every tested interruption returns to an explainable recoverable st
 
 ## Remaining pilot integration
 
-- turn the accepted Tree Mod ledger into the first real content recipe;
-- acquire and verify every listed resource without accepting package-defined code;
-- emit one reviewed VPK plan and one verified staging receipt;
+- complete provenance, redistribution, and signed-manifest review for the
+  pinned resources;
+- expose the internal plan and verified staging receipt through a cancellable,
+  truthful user flow only after its security and UX gates pass;
 - connect the existing confirmed runtime, deploy, recovery, Steam activation, and
   rollback commands as one resumable operation;
 - expose factual progress and recovery states without presenting success before

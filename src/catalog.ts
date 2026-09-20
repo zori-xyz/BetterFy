@@ -165,7 +165,7 @@ export const catalog: CatalogMod[] = [
     id: "compact-draft",
     name: { ru: "Компактный драфт", en: "Compact Draft" },
     shortDescription: {
-      ru: "Плотный и спокойный экран выбора героев.",
+      ru: "Компактный экран выбора героев с сохранённой читаемостью.",
       en: "A denser, calmer hero selection screen.",
     },
     description: {

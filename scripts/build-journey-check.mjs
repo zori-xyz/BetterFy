@@ -18,15 +18,11 @@ async function reachBuild(page) {
   await page.goto(base, { waitUntil: "networkidle" });
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: "networkidle" });
-  await page.getByRole("link", { name: /Открыть BetterFy Bot|Open BetterFy Bot/ }).waitFor();
-  await page.getByRole("button", { name: /У меня уже есть код|I already have a code/ }).click();
-  await page.locator(".otp-field input").fill("123456");
-  await page.getByRole("button", { name: /Подтвердить|Confirm/ }).click();
-  await page.getByRole("button", { name: /Найти автоматически|Find automatically/ }).waitFor();
-  await page.getByRole("button", { name: /Продолжить в preview-режиме|Continue in preview mode/ }).click();
-  await page.getByRole("button", { name: /Перейти на главную|Continue to Home/ }).click();
-  await page.getByRole("button", { name: /Открыть сборку|Open build/ }).click();
-  await page.getByRole("heading", { name: /Собери свою версию Dota|Compose your own Dota/ }).waitFor();
+  await page.getByRole("button", { name: /Открыть BetterFy Bot|Open BetterFy Bot/ }).waitFor();
+  await page.locator(".auth-preview-button").click();
+  await page.getByRole("button", { name: /Выбрать моды|Выбрать ещё|Choose mods|Choose more/ }).waitFor();
+  await page.getByRole("button", { name: /Сборка|Build/, exact: true }).click();
+  await page.getByRole("heading", { name: /Начни с первого мода|Start with your first mod|Всё выбранное|Everything you chose/ }).waitFor();
 }
 
 async function capture(viewport, suffix) {
@@ -34,11 +30,11 @@ async function capture(viewport, suffix) {
   await reachBuild(page);
 
   await page.screenshot({ path: `${output}/polish-build-review-${suffix}.png` });
-  await page.getByRole("button", { name: /Проверить тестовый план|Inspect fixture plan/ }).click();
-  await page.getByRole("heading", { name: /Найден конфликт|Fixture conflict detected/ }).waitFor();
+  await page.getByRole("button", { name: /Посмотреть, как работает проверка|See how checking works/ }).click();
+  await page.getByRole("heading", { name: /Один ресурс|One resource/ }).waitFor();
   await page.screenshot({ path: `${output}/polish-build-conflict-${suffix}.png` });
 
-  await page.getByRole("button", { name: /Оставить Violet|Keep Violet/ }).click();
+  await page.getByRole("button", { name: /Выбрать Violet|Choose Violet/ }).click();
   await page.getByRole("heading", { name: /Решения приняты|Every decision is resolved/ }).waitFor();
   await page.screenshot({ path: `${output}/polish-build-ready-${suffix}.png` });
 
@@ -48,12 +44,7 @@ async function capture(viewport, suffix) {
   await page.screenshot({ path: `${output}/polish-build-progress-${suffix}.png` });
 
   await page.getByRole("button", { name: /Смоделировать ошибку|Simulate an error/ }).click();
-  await page.getByRole("heading", { name: /Вернём всё|Return to a calm state/ }).waitFor();
-  await page.locator(".recovery-art img").evaluate((image) => {
-    if (image instanceof HTMLImageElement && !image.complete) {
-      return new Promise((resolve) => image.addEventListener("load", resolve, { once: true }));
-    }
-  });
+  await page.getByRole("heading", { name: /Очистим временную сборку|Clear the temporary build/ }).waitFor();
   await page.waitForTimeout(320);
   await page.screenshot({ path: `${output}/polish-build-recovery-${suffix}.png` });
   await page.getByRole("button", { name: /Восстановить staging|Restore staging/ }).click();
@@ -61,10 +52,10 @@ async function capture(viewport, suffix) {
   await page.screenshot({ path: `${output}/polish-build-restored-${suffix}.png` });
 
   await page.getByRole("button", { name: /Вернуться к плану|Return to plan/ }).click();
-  await page.getByRole("button", { name: /Проверить тестовый план|Inspect fixture plan/ }).click();
-  await page.getByRole("button", { name: /Оставить Violet|Keep Violet/ }).click();
+  await page.getByRole("button", { name: /Посмотреть, как работает проверка|See how checking works/ }).click();
+  await page.getByRole("button", { name: /Выбрать Violet|Choose Violet/ }).click();
   await page.getByRole("button", { name: /Запустить preview-сборку|Start preview build/ }).click();
-  await page.getByRole("heading", { name: /Можно отправляться в игру|Ready for the match/ }).waitFor({ timeout: 10000 });
+  await page.getByRole("heading", { name: /Preview завершён|Preview complete/ }).waitFor({ timeout: 10000 });
   await page.screenshot({ path: `${output}/polish-build-success-${suffix}.png` });
 
   const result = await page.evaluate(() => {

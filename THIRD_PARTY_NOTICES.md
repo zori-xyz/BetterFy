@@ -44,3 +44,12 @@ documented behavior (see
 [MINIFY_PATCHING_AUDIT.md](docs/MINIFY_PATCHING_AUDIT.md)) and ships an
 independent Rust implementation, written without reference to the upstream
 Python source.
+
+## Dota 2 emoticons
+
+The Home community card uses twelve 32x32 animated Dota 2 game emoticons sourced
+from the [Liquipedia Dota 2 Emoticons page](https://liquipedia.net/dota2/Emoticons)
+and its Liquipedia Commons file entries on 2026-08-29. The files are used only in
+the prototype at the founder's direction. Liquipedia states that media licenses
+vary; release redistribution permission has not been established. These assets
+must be reviewed or replaced before release.

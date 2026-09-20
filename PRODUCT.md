@@ -29,6 +29,10 @@ BetterFy turns fragmented community content into one curated, understandable, an
   ten-minute challenge and requires an explicit approve or deny action. A
   six-digit one-time code remains the cross-device fallback and the current
   website sign-in method.
+- BetterFy ID is being prepared as an additional account path: a username,
+  verified email and password, with Telegram remaining a one-tap alternative.
+  The new credentials are not deployed or validated on Windows yet. Accounts
+  created through different methods are not silently merged.
 - BetterFy has a curated catalog and allows users to import personal skins.
 - The skin library includes a BetterFy-curated view and a web catalog based on the team's Dota2PornFxWeb project.
 
@@ -45,10 +49,9 @@ BetterFy turns fragmented community content into one curated, understandable, an
 ## Brand Commitments
 
 - Product name: BetterFy.
-- The primary BetterFy logo is the text wordmark: `Days One` for “Better” and
-  handwritten `Mrs Sheppards` for “Fy”. The three-capsule mark remains a
-  secondary application/avatar symbol and must not replace the wordmark in
-  boot, authentication, onboarding, or persistent shell branding.
+- The BetterFy logo is the text wordmark: `Days One` for “Better” and
+  handwritten `Mrs Sheppards` for “Fy”. The archived three-capsule exploration
+  is not a BetterFy logo and must not appear as product identity.
 - The brand is dark, premium, energetic, and precise without becoming a monochrome purple interface.
 - Violet is the identity color, not the only interface color.
 - The product voice is direct, friendly, author-led, and available in Russian and English.

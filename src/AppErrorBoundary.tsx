@@ -23,7 +23,7 @@ export default class AppErrorBoundary extends Component<{ children: ReactNode },
         <div className="app-recovery-card">
           <BetterFyWordmark hero />
           <span>BETTERFY / SAFE MODE</span>
-          <h1>{isRu ? "Вернём интерфейс в спокойное состояние" : "Let’s return the interface to a calm state"}</h1>
+          <h1>{isRu ? "Перезапустим интерфейс BetterFy" : "Restart the BetterFy interface"}</h1>
           <p>
             {isRu
               ? "Произошла ошибка интерфейса. Игровые файлы не затронуты — перезапусти оболочку и продолжай."

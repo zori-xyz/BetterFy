@@ -27,7 +27,7 @@ confirmation, backup, journal, and recovery gates.
 | Component | Owns | Must never own |
 | --- | --- | --- |
 | Desktop React | Display name, avatar URL, sync state, device-code phase | Bot token, refresh token, database key, arbitrary auth URL |
-| Desktop Rust | HTTPS API origin allowlist, credential-vault access, device identity, token refresh | Telegram bot secret, user password, raw Steam profile data in IPC |
+| Desktop Rust | HTTPS API origin allowlist, one-shot password forwarding for ID entry, credential-vault access, device identity, token refresh | Telegram bot secret, persisted user password, raw Steam profile data in IPC |
 | Auth API | BetterFy user ID, device sessions, code challenges, entitlements, audit events | Dota paths, Steam files, build archives |
 | Telegram bot worker | Bot update handling and a narrow call to issue/approve challenges | Database administration credentials in client code |
 | Public website | Landing, documentation, downloads, release evidence, profile UI through the API | Desktop engine commands, local filesystem access, updater signing key |
@@ -57,6 +57,42 @@ bundled in the desktop application, written to logs, or included in diagnostics.
 
 The six-digit manual code is a fallback for crossing devices. The deep link is
 the primary path. Telegram identity is never treated as proof of a Steam account.
+
+## BetterFy ID account entry
+
+The founder's September 20 decision adds an independent BetterFy ID account:
+username, verified email, and password. Telegram remains the separate one-tap
+entry. The earlier email-code-only design remains a recovery sign-in option for
+linked addresses, not the primary ID credential. Registration verifies the email
+before creating a user, while password sign-in accepts the username or email.
+There is no implicit merge by matching email or name: separate ID and Telegram
+accounts remain separate until an explicit, verified linking and conflict policy
+is implemented. New account and credential flows are prepared in code, not
+deployed or proven on Windows.
+
+The current database schema still requires a unique Telegram identity string on
+each user. Until a reviewed account-table migration removes that legacy
+constraint, standalone IDs use an `id:`-namespaced internal value and every
+Telegram API call must reject it. This is a transitional schema accommodation,
+not a claim that the account is Telegram-backed. A production migration and
+account-linking/recovery review are required before general availability.
+
+Passwords are never stored as plaintext. The Worker applies a separate
+server-side pepper and salted PBKDF2-HMAC-SHA256 with 600,000 iterations, then
+stores only the encoded verifier. Sign-in is rate-limited by requester and keyed
+principal; missing accounts take the same password-verification path. The
+password pepper, email delivery key, and sender remain deployment secrets.
+
+The Worker stores keyed email and code hashes, a masked display hint, purpose,
+expiry, and one-time consumption state. It does not persist the clear email
+address. Its mail delivery key and verified sender stay server-side. Unknown
+addresses receive the same accepted response as known linked addresses. The
+native desktop exchanges an accepted code for rotating credentials through
+Rust, and stores refresh credentials in the OS vault; the static website retains
+its existing tab-scoped bearer-session boundary. Mail-provider configuration,
+the new D1 migration, staged delivery tests, and a human Windows pass are
+release gates. The UI must not promise email delivery until that deployment is
+configured and verified.
 
 ## Profile contract
 

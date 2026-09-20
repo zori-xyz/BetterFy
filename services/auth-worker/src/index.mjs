@@ -15,6 +15,7 @@ import {
   normalizeDeviceId,
 } from "./security.mjs";
 import { COPY } from "./copy.mjs";
+import { hashIdPassword, normalizeIdUsername, validIdPassword, verifyIdPassword } from "./id-password.mjs";
 import {
   ACCESS_PLANS,
   PREMIUM_ENTITLEMENT,
@@ -38,6 +39,20 @@ const CHALLENGE_POLL_SECONDS = 2;
 const MAX_BODY_BYTES = 8 * 1024;
 const AVATAR_REFRESH_SECONDS = 24 * 60 * 60;
 const AVATAR_RETRY_SECONDS = 5 * 60;
+const EMAIL_TTL_SECONDS = 10 * 60;
+
+export function normalizeEmail(value) {
+  if (typeof value !== "string" || value.length > 254 || value !== value.trim()) return null;
+  const email = value.toLowerCase();
+  if (!/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(email)) return null;
+  if (email.includes("..") || email.split("@")[1].split(".").some((label) => label.startsWith("-") || label.endsWith("-"))) return null;
+  return email;
+}
+
+function emailHint(email) {
+  const [local, domain] = email.split("@");
+  return `${local.slice(0, 1)}***@${domain}`;
+}
 
 function matchesConfiguredSecret(value, expected) {
   return typeof expected === "string" && expected.length >= 32 && constantTimeEqual(value, expected);
@@ -122,6 +137,7 @@ export function detectImageContentType(bytes) {
 }
 
 async function refreshAvatar(env, telegramUserId, now, force = false) {
+  if (!/^[0-9]+$/.test(String(telegramUserId ?? ""))) return null;
   const existing = await env.AUTH_DB.prepare(
     "SELECT avatar_file_id, avatar_checked_at FROM betterfy_users WHERE telegram_user_id = ?",
   ).bind(String(telegramUserId)).first();
@@ -320,6 +336,15 @@ async function sessionProfile(request, env, origin) {
     sessionExpiresAt: user.expires_at,
     sessionId: user.session_id ?? undefined,
   }, 200, headers);
+}
+
+async function emailIdentityStatus(request, env, origin) {
+  const headers = corsHeaders(origin);
+  const user = await authenticatedUser(request, env, Math.floor(Date.now() / 1000));
+  if (!user) return json({ error: "unauthorized" }, 401, headers);
+  const identity = await env.AUTH_DB.prepare("SELECT email_hint FROM betterfy_email_identities WHERE user_id = ?")
+    .bind(user.user_id).first();
+  return json({ linked: Boolean(identity), emailHint: identity?.email_hint ?? null }, 200, headers);
 }
 
 async function revokeSession(request, env, origin) {
@@ -1066,9 +1091,8 @@ async function handleWebhook(request, env) {
   return json({ ok: true });
 }
 
-async function consumeRequestLimit(env, request, now, namespace, limit, windowSeconds) {
-  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
-  const bucket = await keyedHash(`${namespace}:${ip}`, env.AUTH_CODE_PEPPER);
+async function consumeBucketLimit(env, value, now, namespace, limit, windowSeconds) {
+  const bucket = await keyedHash(`${namespace}:${value}`, env.AUTH_CODE_PEPPER);
   const resetBefore = now - windowSeconds;
   const row = await env.AUTH_DB.prepare(
     `INSERT INTO auth_rate_limits (bucket_hash, window_started_at, request_count)
@@ -1079,6 +1103,10 @@ async function consumeRequestLimit(env, request, now, namespace, limit, windowSe
      RETURNING request_count`,
   ).bind(bucket, now, resetBefore, resetBefore, now).first();
   return Number(row?.request_count ?? limit + 1) <= limit;
+}
+
+async function consumeRequestLimit(env, request, now, namespace, limit, windowSeconds) {
+  return consumeBucketLimit(env, request.headers.get("CF-Connecting-IP") ?? "unknown", now, namespace, limit, windowSeconds);
 }
 
 async function consumeRateLimit(env, request, now) {
@@ -1234,6 +1262,241 @@ async function verifyCode(request, env, origin) {
   } : {}), 200, headers);
 }
 
+async function sendEmailCode(env, email, code, language) {
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) throw new Error("email_not_configured");
+  const ru = language === "ru";
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      from: env.EMAIL_FROM,
+      to: [email],
+      subject: ru ? "Код входа BetterFy ID" : "Your BetterFy ID sign-in code",
+      text: ru
+        ? `Код BetterFy ID: ${code}\nОн действует 10 минут. Если ты не запрашивал вход, игнорируй это письмо.`
+        : `BetterFy ID code: ${code}\nIt is valid for 10 minutes. If you did not request this, ignore this email.`,
+    }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) throw new Error("email_delivery_failed");
+}
+
+async function requestEmailCode(request, env, origin, purpose) {
+  const headers = corsHeaders(origin);
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return json({ error: "email_unavailable" }, 503, headers);
+  let payload;
+  try { payload = await readJson(request); } catch { return json({ error: "invalid_request" }, 400, headers); }
+  const email = normalizeEmail(payload?.email);
+  if (!email) return json({ error: "invalid_email" }, 400, headers);
+  const now = Math.floor(Date.now() / 1000);
+  const emailHash = await keyedHash(`email:${email}`, env.AUTH_CODE_PEPPER);
+  const allowedIp = await consumeRequestLimit(env, request, now, `email_${purpose}`, 6, 600);
+  const allowedEmail = await consumeBucketLimit(env, emailHash, now, `email_address_${purpose}`, 3, 600);
+  if (!allowedIp || !allowedEmail) return json({ error: "rate_limited" }, 429, { ...headers, "retry-after": "600" });
+
+  let userId;
+  if (purpose === "link") {
+    const user = await authenticatedUser(request, env, now);
+    if (!user) return json({ error: "unauthorized" }, 401, headers);
+    const existing = await env.AUTH_DB.prepare("SELECT user_id FROM betterfy_email_identities WHERE email_hash = ? OR user_id = ? LIMIT 1")
+      .bind(emailHash, user.user_id).first();
+    if (existing) return json({ error: "email_already_linked" }, 409, headers);
+    userId = user.user_id;
+  } else {
+    const identity = await env.AUTH_DB.prepare("SELECT user_id FROM betterfy_email_identities WHERE email_hash = ?")
+      .bind(emailHash).first();
+    userId = identity?.user_id;
+    // The response is identical for unknown addresses. A new profile must first
+    // be established and linked through the verified Telegram session.
+    if (!userId) return json({ accepted: true }, 202, headers);
+  }
+
+  const code = generateCode();
+  const codeHash = await keyedHash(`email-code:${purpose}:${emailHash}:${code}`, env.AUTH_CODE_PEPPER);
+  await env.AUTH_DB.prepare(
+    "INSERT INTO betterfy_email_codes (code_hash, email_hash, user_id, purpose, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+  ).bind(codeHash, emailHash, userId, purpose, now, now + EMAIL_TTL_SECONDS).run();
+  try {
+    await sendEmailCode(env, email, code, payload?.language);
+  } catch {
+    await env.AUTH_DB.prepare("DELETE FROM betterfy_email_codes WHERE code_hash = ?").bind(codeHash).run();
+    return json({ error: "email_unavailable" }, 503, headers);
+  }
+  return json({ accepted: true }, 202, headers);
+}
+
+async function verifyEmailCode(request, env, origin, purpose) {
+  const headers = corsHeaders(origin);
+  const now = Math.floor(Date.now() / 1000);
+  if (!(await consumeRateLimit(env, request, now))) return json({ error: "rate_limited" }, 429, headers);
+  let payload;
+  try { payload = await readJson(request); } catch { return json({ error: "invalid_request" }, 400, headers); }
+  const email = normalizeEmail(payload?.email);
+  const code = normalizeCode(payload?.code);
+  if (!email || !code) return json({ error: "invalid_request" }, 400, headers);
+  const emailHash = await keyedHash(`email:${email}`, env.AUTH_CODE_PEPPER);
+  if (!(await consumeBucketLimit(env, emailHash, now, `email_verify_${purpose}`, 10, 600))) {
+    return json({ error: "rate_limited" }, 429, headers);
+  }
+  const codeHash = await keyedHash(`email-code:${purpose}:${emailHash}:${code}`, env.AUTH_CODE_PEPPER);
+  const caller = purpose === "link" ? await authenticatedUser(request, env, now) : null;
+  if (purpose === "link" && !caller) return json({ error: "unauthorized" }, 401, headers);
+  const consumed = await env.AUTH_DB.prepare(
+    `UPDATE betterfy_email_codes SET consumed_at = ?
+     WHERE code_hash = ? AND email_hash = ? AND purpose = ? AND consumed_at IS NULL AND expires_at > ?
+       AND (? = 'signin' OR user_id = ?)
+     RETURNING user_id`,
+  ).bind(now, codeHash, emailHash, purpose, now, purpose, caller?.user_id ?? "").first();
+  if (!consumed?.user_id) {
+    return json({ error: "code_invalid_or_expired" }, 401, headers);
+  }
+  if (purpose === "link") {
+    try {
+      await env.AUTH_DB.prepare("INSERT INTO betterfy_email_identities (email_hash, user_id, email_hint, verified_at) VALUES (?, ?, ?, ?)")
+        .bind(emailHash, caller.user_id, emailHint(email), now).run();
+    } catch {
+      return json({ error: "email_already_linked" }, 409, headers);
+    }
+    return json({ linked: true, emailHint: emailHint(email) }, 200, headers);
+  }
+  const identity = await env.AUTH_DB.prepare("SELECT user_id FROM betterfy_email_identities WHERE email_hash = ?")
+    .bind(emailHash).first();
+  if (identity?.user_id !== consumed.user_id) return json({ error: "code_invalid_or_expired" }, 401, headers);
+  const user = await env.AUTH_DB.prepare(
+    "SELECT user_id, telegram_user_id, display_name, username, language, avatar_file_id FROM betterfy_users WHERE user_id = ?",
+  ).bind(identity.user_id).first();
+  if (!user) return json({ error: "profile_missing" }, 500, headers);
+  const rotatingDesktop = supportsRotatingDesktopCredentials(payload);
+  const session = rotatingDesktop
+    ? await issueDesktopCredentials(env, user.user_id, now)
+    : await issueSession(env, user.user_id, now, normalizeClientKind(payload?.clientKind));
+  const entitlement = await subscriptionRecord(env, user.user_id);
+  const plan = planBySku(entitlement?.sku);
+  return json(authPayload(user, entitlement, plan, session, rotatingDesktop ? {
+    refreshToken: session.refreshToken,
+    refreshExpiresAt: now + REFRESH_FAMILY_TTL_SECONDS,
+  } : {}), 200, headers);
+}
+
+async function startIdRegistration(request, env, origin) {
+  const headers = corsHeaders(origin);
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM || !env.AUTH_PASSWORD_PEPPER) return json({ error: "id_unavailable" }, 503, headers);
+  let payload;
+  try { payload = await readJson(request); } catch { return json({ error: "invalid_request" }, 400, headers); }
+  const email = normalizeEmail(payload?.email);
+  const usernameKey = normalizeIdUsername(payload?.username);
+  if (!email || !usernameKey || !validIdPassword(payload?.password)) return json({ error: "invalid_request" }, 400, headers);
+  const now = Math.floor(Date.now() / 1000);
+  const emailHash = await keyedHash(`email:${email}`, env.AUTH_CODE_PEPPER);
+  const allowedIp = await consumeRequestLimit(env, request, now, "id_register", 4, 600);
+  const allowedEmail = await consumeBucketLimit(env, emailHash, now, "id_register_email", 3, 600);
+  if (!allowedIp || !allowedEmail) return json({ error: "rate_limited" }, 429, { ...headers, "retry-after": "600" });
+  const existing = await env.AUTH_DB.prepare(
+    `SELECT 1 FROM betterfy_email_identities WHERE email_hash = ?
+     UNION SELECT 1 FROM betterfy_id_credentials WHERE username_key = ? LIMIT 1`,
+  ).bind(emailHash, usernameKey).first();
+  if (existing) return json({ accepted: true }, 202, headers);
+  const passwordHash = await hashIdPassword(payload.password, env.AUTH_PASSWORD_PEPPER);
+  const code = generateCode();
+  const codeHash = await keyedHash(`id-registration:${emailHash}:${code}`, env.AUTH_CODE_PEPPER);
+  try {
+    await env.AUTH_DB.prepare(
+      `INSERT INTO betterfy_id_registrations
+       (email_hash, username_key, password_hash, code_hash, email_hint, language, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(email_hash) DO UPDATE SET username_key = excluded.username_key,
+       password_hash = excluded.password_hash, code_hash = excluded.code_hash,
+       language = excluded.language, created_at = excluded.created_at, expires_at = excluded.expires_at`,
+    ).bind(emailHash, usernameKey, passwordHash, codeHash, emailHint(email), payload.language === "en" ? "en" : "ru", now, now + EMAIL_TTL_SECONDS).run();
+  } catch {
+    return json({ accepted: true }, 202, headers);
+  }
+  try {
+    await sendEmailCode(env, email, code, payload.language);
+  } catch {
+    await env.AUTH_DB.prepare("DELETE FROM betterfy_id_registrations WHERE email_hash = ? AND code_hash = ?").bind(emailHash, codeHash).run();
+    return json({ error: "id_unavailable" }, 503, headers);
+  }
+  return json({ accepted: true }, 202, headers);
+}
+
+async function verifyIdRegistration(request, env, origin) {
+  const headers = corsHeaders(origin);
+  if (!env.AUTH_PASSWORD_PEPPER) return json({ error: "id_unavailable" }, 503, headers);
+  let payload;
+  try { payload = await readJson(request); } catch { return json({ error: "invalid_request" }, 400, headers); }
+  const email = normalizeEmail(payload?.email);
+  const code = normalizeCode(payload?.code);
+  if (!email || !code) return json({ error: "invalid_request" }, 400, headers);
+  const now = Math.floor(Date.now() / 1000);
+  const emailHash = await keyedHash(`email:${email}`, env.AUTH_CODE_PEPPER);
+  if (!(await consumeRequestLimit(env, request, now, "id_register_verify", 10, 600))
+    || !(await consumeBucketLimit(env, emailHash, now, "id_register_verify_email", 10, 600))) {
+    return json({ error: "rate_limited" }, 429, headers);
+  }
+  const codeHash = await keyedHash(`id-registration:${emailHash}:${code}`, env.AUTH_CODE_PEPPER);
+  const pending = await env.AUTH_DB.prepare(
+    "SELECT username_key, password_hash, email_hint, language FROM betterfy_id_registrations WHERE email_hash = ? AND code_hash = ? AND expires_at > ?",
+  ).bind(emailHash, codeHash, now).first();
+  if (!pending) return json({ error: "code_invalid_or_expired" }, 401, headers);
+  const userId = crypto.randomUUID();
+  try {
+    await env.AUTH_DB.batch([
+      env.AUTH_DB.prepare(
+        `INSERT INTO betterfy_users (user_id, telegram_user_id, display_name, username, language, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(userId, `id:${userId}`, pending.username_key, pending.username_key, pending.language, now, now),
+      env.AUTH_DB.prepare(
+        "INSERT INTO betterfy_email_identities (email_hash, user_id, email_hint, verified_at) VALUES (?, ?, ?, ?)",
+      ).bind(emailHash, userId, pending.email_hint, now),
+      env.AUTH_DB.prepare(
+        "INSERT INTO betterfy_id_credentials (user_id, username_key, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+      ).bind(userId, pending.username_key, pending.password_hash, now, now),
+      env.AUTH_DB.prepare("DELETE FROM betterfy_id_registrations WHERE email_hash = ? AND code_hash = ?").bind(emailHash, codeHash),
+    ]);
+  } catch {
+    return json({ error: "registration_unavailable" }, 409, headers);
+  }
+  const user = { user_id: userId, display_name: pending.username_key, username: pending.username_key, avatar_file_id: null };
+  const rotatingDesktop = supportsRotatingDesktopCredentials(payload);
+  const session = rotatingDesktop ? await issueDesktopCredentials(env, userId, now) : await issueSession(env, userId, now, normalizeClientKind(payload?.clientKind));
+  return json(authPayload(user, null, null, session, rotatingDesktop ? {
+    refreshToken: session.refreshToken, refreshExpiresAt: now + REFRESH_FAMILY_TTL_SECONDS,
+  } : {}), 200, headers);
+}
+
+async function signInWithId(request, env, origin) {
+  const headers = corsHeaders(origin);
+  if (!env.AUTH_PASSWORD_PEPPER) return json({ error: "id_unavailable" }, 503, headers);
+  let payload;
+  try { payload = await readJson(request); } catch { return json({ error: "invalid_request" }, 400, headers); }
+  const principal = normalizeEmail(payload?.identifier) ?? normalizeIdUsername(payload?.identifier);
+  if (!principal || !validIdPassword(payload?.password)) return json({ error: "invalid_credentials" }, 401, headers);
+  const now = Math.floor(Date.now() / 1000);
+  const principalHash = await keyedHash(`id-login:${principal}`, env.AUTH_CODE_PEPPER);
+  if (!(await consumeRequestLimit(env, request, now, "id_login", 12, 600))
+    || !(await consumeBucketLimit(env, principalHash, now, "id_login_principal", 8, 600))) {
+    return json({ error: "rate_limited" }, 429, headers);
+  }
+  const emailHash = principal.includes("@") ? await keyedHash(`email:${principal}`, env.AUTH_CODE_PEPPER) : "";
+  const user = await env.AUTH_DB.prepare(
+    `SELECT u.user_id, u.telegram_user_id, u.display_name, u.username, u.language, u.avatar_file_id, c.password_hash
+     FROM betterfy_id_credentials c JOIN betterfy_users u ON u.user_id = c.user_id
+     LEFT JOIN betterfy_email_identities e ON e.user_id = c.user_id
+     WHERE c.username_key = ? OR e.email_hash = ? LIMIT 1`,
+  ).bind(principal, emailHash).first();
+  const dummyHash = "pbkdf2-sha256$600000$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000";
+  const correct = await verifyIdPassword(payload.password, env.AUTH_PASSWORD_PEPPER, user?.password_hash ?? dummyHash);
+  if (!user || !correct) return json({ error: "invalid_credentials" }, 401, headers);
+  const rotatingDesktop = supportsRotatingDesktopCredentials(payload);
+  const session = rotatingDesktop ? await issueDesktopCredentials(env, user.user_id, now) : await issueSession(env, user.user_id, now, normalizeClientKind(payload?.clientKind));
+  const entitlement = await subscriptionRecord(env, user.user_id);
+  const plan = planBySku(entitlement?.sku);
+  return json(authPayload(user, entitlement, plan, session, rotatingDesktop ? {
+    refreshToken: session.refreshToken, refreshExpiresAt: now + REFRESH_FAMILY_TTL_SECONDS,
+  } : {}), 200, headers);
+}
+
 export async function route(request, env) {
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/health") {
@@ -1254,10 +1517,13 @@ export async function route(request, env) {
     if (origin === false) return json({ error: "origin_not_allowed" }, 403);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
     if (request.method === "GET" && url.pathname === "/v1/session/profile") return sessionProfile(request, env, origin);
+    if (request.method === "GET" && url.pathname === "/v1/session/email") return emailIdentityStatus(request, env, origin);
     if (request.method === "GET" && url.pathname === "/v1/session/avatar") return profileAvatar(request, env, origin);
     if (request.method === "GET" && url.pathname === "/v1/session/devices") return listDeviceSessions(request, env, origin);
     if (request.method === "POST" && url.pathname === "/v1/session/devices/revoke") return revokeDeviceSession(request, env, origin);
     if (request.method === "POST" && url.pathname === "/v1/session/logout") return revokeSession(request, env, origin);
+    if (request.method === "POST" && url.pathname === "/v1/session/email/start") return requestEmailCode(request, env, origin, "link");
+    if (request.method === "POST" && url.pathname === "/v1/session/email/verify") return verifyEmailCode(request, env, origin, "link");
     if (request.method === "GET" && url.pathname === "/v1/releases/latest") return latestRelease(request, env, origin);
     return json({ error: "method_not_allowed" }, 405, corsHeaders(origin));
   }
@@ -1266,6 +1532,23 @@ export async function route(request, env) {
     if (origin === false) return json({ error: "origin_not_allowed" }, 403);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
     if (request.method === "POST") return verifyCode(request, env, origin);
+  }
+  if (url.pathname === "/v1/auth/email/start" || url.pathname === "/v1/auth/email/verify") {
+    const origin = allowedOrigin(request, env);
+    if (origin === false) return json({ error: "origin_not_allowed" }, 403);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    if (request.method === "POST" && url.pathname.endsWith("/start")) return requestEmailCode(request, env, origin, "signin");
+    if (request.method === "POST") return verifyEmailCode(request, env, origin, "signin");
+    return json({ error: "method_not_allowed" }, 405, corsHeaders(origin));
+  }
+  if (["/v1/auth/id/login", "/v1/auth/id/register/start", "/v1/auth/id/register/verify"].includes(url.pathname)) {
+    const origin = allowedOrigin(request, env);
+    if (origin === false) return json({ error: "origin_not_allowed" }, 403);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405, corsHeaders(origin));
+    if (url.pathname.endsWith("/login")) return signInWithId(request, env, origin);
+    if (url.pathname.endsWith("/start")) return startIdRegistration(request, env, origin);
+    return verifyIdRegistration(request, env, origin);
   }
   if (url.pathname === "/v1/auth/device/challenges" || url.pathname === "/v1/auth/device/challenges/poll") {
     const origin = allowedOrigin(request, env);

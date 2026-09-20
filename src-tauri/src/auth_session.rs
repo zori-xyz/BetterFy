@@ -263,6 +263,231 @@ fn authenticated_request(
     send(&access_token(state)?)
 }
 
+fn valid_email(value: &str) -> bool {
+    let Some((local, domain)) = value.split_once('@') else {
+        return false;
+    };
+    value.len() <= 254
+        && value.is_ascii()
+        && value == value.trim()
+        && !local.is_empty()
+        && local.len() <= 64
+        && domain.contains('.')
+        && !domain.contains('@')
+        && !value.contains("..")
+}
+
+fn email_request(path: &str, payload: serde_json::Value) -> Result<Response, String> {
+    client()?
+        .post(format!("{AUTH_ORIGIN}{path}"))
+        .json(&payload)
+        .send()
+        .map_err(|_| "auth_service_unavailable".to_string())
+}
+
+fn authenticated_email_request(
+    state: &AuthState,
+    path: &str,
+    payload: serde_json::Value,
+) -> Result<Response, String> {
+    let send = |token: &str| {
+        client()?
+            .post(format!("{AUTH_ORIGIN}{path}"))
+            .header(AUTHORIZATION, format!("Bearer {token}"))
+            .json(&payload)
+            .send()
+            .map_err(|_| "auth_service_unavailable".to_string())
+    };
+    let first = send(&access_token(state)?)?;
+    if first.status().as_u16() != 401 {
+        return Ok(first);
+    }
+    refresh_from_vault(state)?.ok_or_else(|| "auth_session_expired".to_string())?;
+    send(&access_token(state)?)
+}
+
+#[tauri::command]
+pub fn auth_begin_email(email: String, language: String) -> Result<(), String> {
+    if !valid_email(&email) || !matches!(language.as_str(), "ru" | "en") {
+        return Err("auth_email_invalid".to_string());
+    }
+    let response = email_request(
+        "/v1/auth/email/start",
+        serde_json::json!({ "email": email, "language": language }),
+    )?;
+    if !response.status().is_success() {
+        return Err("auth_email_unavailable".to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn auth_verify_email(
+    email: String,
+    code: String,
+    state: tauri::State<'_, AuthState>,
+) -> Result<AuthProfile, String> {
+    if !valid_email(&email) || code.len() != 6 || !code.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err("auth_code_invalid".to_string());
+    }
+    let response = email_request(
+        "/v1/auth/email/verify",
+        serde_json::json!({ "email": email, "code": code, "clientKind": "desktop", "credentialMode": "rotating-v1" }),
+    )?;
+    if response.status().as_u16() == 401 {
+        return Err("auth_code_invalid".to_string());
+    }
+    if !response.status().is_success() {
+        return Err("auth_service_unavailable".to_string());
+    }
+    let credentials = response
+        .json::<CredentialResponse>()
+        .map_err(|_| "auth_response_invalid".to_string())?;
+    commit_credentials(&state, credentials)
+}
+
+fn valid_id_username(value: &str) -> bool {
+    let mut chars = value.chars();
+    value.len() >= 3
+        && value.len() <= 24
+        && chars.next().is_some_and(|ch| ch.is_ascii_alphabetic())
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+}
+
+fn valid_id_password(value: &str) -> bool {
+    value.len() >= 12 && value.len() <= 128 && !value.chars().any(|ch| ch.is_control())
+}
+
+fn id_credential_response(response: Response, state: &AuthState) -> Result<AuthProfile, String> {
+    if response.status().as_u16() == 401 {
+        return Err("auth_id_invalid_credentials".to_string());
+    }
+    if !response.status().is_success() {
+        return Err("auth_id_unavailable".to_string());
+    }
+    let credentials = response
+        .json::<CredentialResponse>()
+        .map_err(|_| "auth_response_invalid".to_string())?;
+    commit_credentials(state, credentials)
+}
+
+#[tauri::command]
+pub fn auth_id_login(
+    identifier: String,
+    password: String,
+    state: tauri::State<'_, AuthState>,
+) -> Result<AuthProfile, String> {
+    if !(valid_email(&identifier) || valid_id_username(&identifier))
+        || !valid_id_password(&password)
+    {
+        return Err("auth_id_invalid_credentials".to_string());
+    }
+    let response = email_request(
+        "/v1/auth/id/login",
+        serde_json::json!({ "identifier": identifier, "password": password, "clientKind": "desktop", "credentialMode": "rotating-v1" }),
+    )?;
+    id_credential_response(response, &state)
+}
+
+#[tauri::command]
+pub fn auth_id_register_start(
+    username: String,
+    email: String,
+    password: String,
+    language: String,
+) -> Result<(), String> {
+    if !valid_id_username(&username)
+        || !valid_email(&email)
+        || !valid_id_password(&password)
+        || !matches!(language.as_str(), "ru" | "en")
+    {
+        return Err("auth_id_invalid_request".to_string());
+    }
+    let response = email_request(
+        "/v1/auth/id/register/start",
+        serde_json::json!({ "username": username, "email": email, "password": password, "language": language }),
+    )?;
+    if !response.status().is_success() {
+        return Err("auth_id_unavailable".to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn auth_id_register_verify(
+    email: String,
+    code: String,
+    state: tauri::State<'_, AuthState>,
+) -> Result<AuthProfile, String> {
+    if !valid_email(&email) || code.len() != 6 || !code.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err("auth_code_invalid".to_string());
+    }
+    let response = email_request(
+        "/v1/auth/id/register/verify",
+        serde_json::json!({ "email": email, "code": code, "clientKind": "desktop", "credentialMode": "rotating-v1" }),
+    )?;
+    id_credential_response(response, &state)
+}
+
+#[tauri::command]
+pub fn auth_link_email_start(
+    email: String,
+    language: String,
+    state: tauri::State<'_, AuthState>,
+) -> Result<(), String> {
+    if !valid_email(&email) || !matches!(language.as_str(), "ru" | "en") {
+        return Err("auth_email_invalid".to_string());
+    }
+    let response = authenticated_email_request(
+        &state,
+        "/v1/session/email/start",
+        serde_json::json!({ "email": email, "language": language }),
+    )?;
+    if !response.status().is_success() {
+        return Err("auth_email_unavailable".to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn auth_link_email_verify(
+    email: String,
+    code: String,
+    state: tauri::State<'_, AuthState>,
+) -> Result<String, String> {
+    if !valid_email(&email) || code.len() != 6 || !code.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err("auth_code_invalid".to_string());
+    }
+    let response = authenticated_email_request(
+        &state,
+        "/v1/session/email/verify",
+        serde_json::json!({ "email": email, "code": code }),
+    )?;
+    if !response.status().is_success() {
+        return Err("auth_code_invalid".to_string());
+    }
+    let result = response
+        .json::<serde_json::Value>()
+        .map_err(|_| "auth_response_invalid".to_string())?;
+    result["emailHint"]
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| "auth_response_invalid".to_string())
+}
+
+#[tauri::command]
+pub fn auth_email_identity(
+    state: tauri::State<'_, AuthState>,
+) -> Result<serde_json::Value, String> {
+    let response = authenticated_request(&state, reqwest::Method::GET, "/v1/session/email")?;
+    if !response.status().is_success() {
+        return Err("auth_service_unavailable".to_string());
+    }
+    response
+        .json::<serde_json::Value>()
+        .map_err(|_| "auth_response_invalid".to_string())
+}
+
 #[tauri::command]
 pub fn auth_verify_code(
     code: String,

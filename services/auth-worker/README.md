@@ -18,6 +18,14 @@ the stable device identifier, the bot requires an explicit approve or deny
 action, and the approved challenge can be redeemed once. The six-digit code
 remains available as a cross-device fallback.
 
+BetterFy ID now has prepared independent username/email/password registration
+with email verification. Telegram remains a quick separate sign-in. Existing
+Telegram users can still link an email for code sign-in, but the two identities
+are not silently merged. Password recovery through a verified email code is
+available as a sign-in fallback; a dedicated password-change and account-linking
+flow remains a release gate. The new ID endpoints have not been deployed or
+validated through a real mail provider or Windows Credential Manager.
+
 Challenge creation, Telegram lookup, approval, denial, and redemption use the
 latest D1 primary state for the security-sensitive transition. This avoids
 accepting replica lag as part of the authentication contract.
@@ -49,6 +57,9 @@ file; it must never enter this repository or a client bundle.
    - `npx wrangler secret put TELEGRAM_BOT_TOKEN`
    - `npx wrangler secret put TELEGRAM_WEBHOOK_SECRET`
    - `npx wrangler secret put AUTH_CODE_PEPPER`
+   - `npx wrangler secret put AUTH_PASSWORD_PEPPER` (a different, independent secret)
+   - `npx wrangler secret put RESEND_API_KEY`
+   - `npx wrangler secret put EMAIL_FROM` (a sender on a verified email domain)
 4. Review `BETTERFY_PLAN_3D_STARS`, `BETTERFY_PLAN_15D_STARS`, and
    `BETTERFY_PLAN_30D_STARS` in `wrangler.jsonc` before charging users.
 5. Run `npm run db:migrate:remote` and `npm run deploy`.
@@ -56,6 +67,18 @@ file; it must never enter this repository or a client bundle.
    script once. It configures Telegram's secret webhook header and discards old
    pending updates.
 7. Set desktop `VITE_BETTERFY_AUTH_URL` to the deployed HTTPS Worker origin.
+
+The ID registration routes fail closed with HTTP 503 until mail values and the
+password pepper are configured. Password sign-in fails closed without its pepper.
+The email routes fail closed with HTTP 503 until both mail values are configured.
+Set up the sender domain with the mail provider before enabling the UI for real
+users. Migration `0007_betterfy_id_email.sql` must be applied before the email
+routes are used. Do not put the mail key or sender credentials in the app or
+website build. A rejected/unknown email address receives the same accepted
+response as a known address to avoid account enumeration. Requests are limited
+by IP and hashed email address; codes expire after ten minutes and can be used
+only once. Delivery, linked-account continuity, and Windows credential-vault
+behavior still require staged end-to-end testing before public release.
 
 The public bot cards are served from `/bot` on the BetterFy GitHub Pages site.
 
@@ -67,6 +90,15 @@ The public bot cards are served from `/bot` on the BetterFy GitHub Pages site.
   redeems one approved challenge for desktop credentials exactly once.
 - `POST /v1/auth/telegram/code` consumes a six-digit code and returns an opaque
   web session or explicitly negotiated rotating desktop credentials once.
+- `POST /v1/auth/email/start` requests a six-digit code for an already linked
+  email. `POST /v1/auth/email/verify` consumes it and issues credentials.
+- `POST /v1/auth/id/register/start` accepts username, email and password,
+  stores only a salted password verifier in a pending registration, and mails a
+  short-lived code. `/verify` creates the account after code confirmation.
+- `POST /v1/auth/id/login` accepts username or email and password. It returns
+  the same web or rotating desktop session contract as Telegram entry.
+- `GET /v1/session/email` returns link status and a masked address; authenticated
+  `POST /v1/session/email/start` and `/verify` verify a new email link.
 - `GET /v1/session/profile` returns the Telegram-backed BetterFy profile,
   current access period, and avatar availability. Missing avatars are retried
   without blocking sign-in.

@@ -3,7 +3,7 @@
 This ledger fixes the first real-patch candidate before any resource is accepted
 by BetterFy. It is evidence, not an enabled catalog package.
 
-- Upstream: `robbyz23/dota2-minify`
+- Pinned source repository: `Egezenn/dota2-minify` (Tree Mod credited upstream to `robbyz512`)
 - Commit: `3a85572029f2c264e2a17cee1c9b54ce93e4fd93`
 - Upstream directory: `Minify/mods/Tree Mod/files`
 - Upstream license declaration: GPL-3.0
@@ -13,6 +13,10 @@ by BetterFy. It is evidence, not an enabled catalog package.
 
 The repository does not contain these compiled game resources. Distribution and
 source-notice review must be accepted before a production registry points to them.
+
+The pinned source path was checked against the maintained `Egezenn/dota2-minify`
+repository. The previously recorded `robbyz23` owner returned 404. The resource
+paths, sizes, and hashes below were not changed.
 
 | VPK path | Bytes | SHA-256 |
 | --- | ---: | --- |
@@ -47,3 +51,15 @@ source-notice review must be accepted before a production registry points to the
    to the immutable store only after exact verification.
 4. Build the VPK in BetterFy staging and reopen it before deploy.
 5. Pass the Tree Mod section of the Windows checklist and retain the safe report.
+
+## Current internal pilot evidence
+
+- Rust has a fixed 21-resource contract and constructs a deterministic VPK only
+  after verifying every exact size and SHA-256. Unknown or missing paths fail.
+- A pinned HTTPS intake can acquire these resources into BetterFy's immutable
+  content-addressed cache. The VPK is built by reading verified cached objects.
+- The local integration test downloaded all 21 resources from the pinned commit,
+  built and reopened a VPK, staged it with a journal, then rolled staging back.
+  This is a macOS synthetic test, not a Dota installation or compatibility test.
+- Tree Mod is not exposed in the user catalog or production installer. The
+  deployment command rejects release builds pending rights and Windows evidence.

@@ -58,7 +58,7 @@ export const workshopPresets: BetterFyPreset[] = [
     schemaVersion: 1,
     id: "betterfy.clean-interface",
     name: "Clean Interface",
-    description: "Спокойный интерфейс: меньше фонового шума, прозрачный HUD и компактная сетка героев.",
+    description: "Чище поле боя: прозрачный HUD, компактная сетка героев и меньше фоновых эффектов.",
     author: "BetterFy",
     version: "1.0.0",
     modIds: [

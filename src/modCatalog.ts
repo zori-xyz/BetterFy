@@ -179,32 +179,50 @@ const fileKind = (fileName: string | null): CatalogArtifact["fileKind"] => {
 };
 
 const describe = (
-  name: string,
   category: string,
   group: CatalogMetadata["group"],
+  styleCount: number,
 ): Record<Language, string> => {
   const label = wardrobeCategoryLabels[category] ?? { ru: category, en: category };
+  const variants = styleCount > 1
+    ? {
+        ru: `В источнике доступно вариантов: ${styleCount}.`,
+        en: `Source variants: ${styleCount}.`,
+      }
+    : { ru: "", en: "" };
+  if (group === "characters") {
+    return {
+      ru: `Визуальная замена для категории «${label.ru}». Превью показывает результат из исходного каталога. ${variants.ru}`.trim(),
+      en: `A visual replacement for ${label.en}. The preview shows the result from the source catalog. ${variants.en}`.trim(),
+    };
+  }
   if (group === "interface") {
     return {
-      ru: `${name} меняет раздел «${label.ru}». BetterFy покажет исходное превью и сохранит мод отдельным элементом сборки.`,
-      en: `${name} changes ${label.en}. BetterFy keeps the source preview and adds it as a separate build item.`,
+      ru: `Меняет оформление категории «${label.ru}», не заменяя скины героев. Перед выбором оцени читаемость на исходном превью. ${variants.ru}`.trim(),
+      en: `Changes ${label.en} without replacing hero skins. Check readability in the source preview before choosing. ${variants.en}`.trim(),
     };
   }
   if (group === "audio") {
     return {
-      ru: `${name} заменяет звуковое оформление категории «${label.ru}». Послушать результат и проверить совместимость нужно до сборки.`,
-      en: `${name} replaces audio in ${label.en}. Preview the result and verify compatibility before building.`,
+      ru: `Заменяет звук в категории «${label.ru}». Изображение не передаёт аудио, поэтому перед выбором открой оригинальный источник. ${variants.ru}`.trim(),
+      en: `Replaces audio in ${label.en}. A still image cannot preview sound, so open the original source before choosing. ${variants.en}`.trim(),
     };
   }
   if (group === "world") {
     return {
-      ru: `${name} меняет визуальную часть мира Dota 2: ${label.ru.toLowerCase()}. BetterFy не смешивает его со скинами героев.`,
-      en: `${name} changes the Dota 2 world layer: ${label.en.toLowerCase()}. BetterFy keeps it separate from hero skins.`,
+      ru: `Меняет визуальный слой мира Dota: ${label.ru.toLowerCase()}. Это оформление карты, а не мод производительности. ${variants.ru}`.trim(),
+      en: `Changes the Dota world layer: ${label.en.toLowerCase()}. This is map presentation, not a performance mod. ${variants.en}`.trim(),
+    };
+  }
+  if (group === "effects") {
+    return {
+      ru: `Заменяет визуальный эффект категории «${label.ru}». Моды ускорения игры находятся в разделе «Игра». ${variants.ru}`.trim(),
+      en: `Replaces a visual effect in ${label.en}. Game performance mods stay in the Game section. ${variants.en}`.trim(),
     };
   }
   return {
-    ru: `${name} относится к категории «${label.ru}». Эффект добавляется в сборку отдельно, а совместимость пока не подтверждена.`,
-    en: `${name} belongs to ${label.en}. The effect is added separately and compatibility is not yet verified.`,
+    ru: `Визуальное изменение категории «${label.ru}». Превью и название сохранены из исходного каталога. ${variants.ru}`.trim(),
+    en: `A visual change in ${label.en}. The preview and name are preserved from the source catalog. ${variants.en}`.trim(),
   };
 };
 
@@ -216,16 +234,21 @@ const catalogSnapshot = snapshot as unknown as {
 
 const rawItems = catalogSnapshot.items;
 
+// These upstream categories describe tooling, source news, or performance work.
+// They belong to the functional catalog journey, never to the visual Wardrobe.
+const nonWardrobeCategories = new Set(["optimization", "tools", "news", "other"]);
+
 export const wardrobeCatalogItems: BetterFyCatalogMod[] = rawItems
   .map((item) => {
     const id = clean(item.id);
     const name = clean(item.name);
     const category = clean(item.category);
     const group = groupForCategory(category);
-    if (!id || !name || !group || item.type !== "mod") return null;
+    if (!id || !name || !group || item.type !== "mod" || nonWardrobeCategories.has(category)) return null;
 
     const preview = clean(item.preview);
     const fileName = clean(item.file) || null;
+    const styleCount = Array.isArray(item.styles) ? item.styles.length : 0;
     return {
       id,
       metadata: {
@@ -236,10 +259,10 @@ export const wardrobeCatalogItems: BetterFyCatalogMod[] = rawItems
         tags: Object.entries(item.tags ?? {})
           .filter(([, enabled]) => enabled)
           .map(([tag]) => tag),
-        styleCount: Array.isArray(item.styles) ? item.styles.length : 0,
+        styleCount,
       },
       presentation: {
-        description: describe(name, category, group),
+        description: describe(category, group, styleCount),
         previewUrl: preview
           ? `${PREVIEW_ROOT}${encodeURIComponent(category)}/${encodeURIComponent(preview)}`
           : null,
@@ -270,7 +293,7 @@ export const wardrobeCatalogItems: BetterFyCatalogMod[] = rawItems
   .sort((left, right) => (right.verification.updatedAt ?? 0) - (left.verification.updatedAt ?? 0));
 
 export const modGroupLabels: Record<ModCatalogGroup, Record<Language, string>> = {
-  all: { ru: "Все моды", en: "All mods" },
+  all: { ru: "Все облики", en: "All looks" },
   characters: { ru: "Герои", en: "Heroes" },
   interface: { ru: "Интерфейс", en: "Interface" },
   audio: { ru: "Звук", en: "Audio" },
