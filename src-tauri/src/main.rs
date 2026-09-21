@@ -5,6 +5,7 @@ mod auth_session;
 mod build_engine;
 mod content_store;
 mod game_deployment;
+mod game_language;
 mod presets;
 mod remote_intake;
 mod runtime_control;
@@ -32,6 +33,7 @@ use game_deployment::{
     DeployStagedVpkRequest, DeploymentOperationRequest, DeploymentReceipt,
     DeploymentRecoveryRequest, RecoveryReceipt,
 };
+use game_language::GameLanguage;
 use presets::{delete_preset, export_preset, import_preset, list_presets, save_preset};
 use remote_intake::ContentDownloadStatus;
 use runtime_control::{RuntimePrepareRequest, RuntimeState, SteamStartRequest};
@@ -52,6 +54,8 @@ use tauri::{AppHandle, Manager};
 struct StartSteamAfterProfileRequest {
     profile_token: String,
     operation_id: Option<String>,
+    #[serde(default)]
+    language: GameLanguage,
     confirmed: bool,
 }
 
@@ -60,6 +64,39 @@ struct StartSteamAfterProfileRequest {
 struct InstallTreePilotRequest {
     game_path: String,
     expected_plan_id: String,
+    language: GameLanguage,
+    confirmed: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TreeCurrentState {
+    #[serde(flatten)]
+    receipt: DeploymentReceipt,
+    package_verified: bool,
+    steam_operation_id: Option<String>,
+    steam_profile_token: Option<String>,
+    steam_recovery_required: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ApplyTreeSteamRequest {
+    game_path: String,
+    deployment_operation_id: String,
+    profile_token: String,
+    confirmation_token: String,
+    language: GameLanguage,
+    confirmed: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StartSteamAfterTreePilotRequest {
+    game_path: String,
+    operation_id: String,
+    profile_token: Option<String>,
+    steam_operation_id: Option<String>,
     confirmed: bool,
 }
 
@@ -368,9 +405,10 @@ async fn list_steam_profiles() -> Result<Vec<SteamProfileSummary>, String> {
 #[tauri::command]
 async fn preview_steam_launch_options(
     profile_token: String,
+    language: Option<GameLanguage>,
 ) -> Result<SteamLaunchOptionPreview, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        steam_accounts::preview_platform_profile(&profile_token)
+        steam_accounts::preview_platform_profile(&profile_token, language.unwrap_or_default())
     })
     .await
     .map_err(|_| "runtime_worker_failed".to_string())?
@@ -391,6 +429,9 @@ async fn apply_steam_launch_options(
     app: AppHandle,
     request: ApplySteamLaunchOptionRequest,
 ) -> Result<SteamConfigReceipt, String> {
+    if request.linked_deployment_id.is_some() {
+        return Err("steam_activation_not_ready".to_string());
+    }
     let app_data = app
         .path()
         .app_data_dir()
@@ -523,11 +564,12 @@ async fn install_tree_pilot(
             return Err("verification_failed".to_string());
         }
         require_patch_ready_runtime()?;
-        game_deployment::deploy_verified_vpk(
+        game_deployment::deploy_verified_vpk_for_language(
             &app_data,
             Path::new(&request.game_path),
             &reopened.bytes,
             &reopened.sha256,
+            request.language,
         )
     })
     .await
@@ -538,7 +580,7 @@ async fn install_tree_pilot(
 async fn current_tree_pilot(
     app: AppHandle,
     game_path: String,
-) -> Result<Option<DeploymentReceipt>, String> {
+) -> Result<Option<TreeCurrentState>, String> {
     let app_data = app
         .path()
         .app_data_dir()
@@ -548,9 +590,151 @@ async fn current_tree_pilot(
             return Err("platform_not_supported".to_string());
         }
         validate_candidate(Path::new(&game_path), "manual")?;
+        let Some(receipt) =
+            game_deployment::current_owned_deployment(&app_data, Path::new(&game_path))?
+        else {
+            return Ok(None);
+        };
+        let package_verified = tree_pilot::build_from_verified_store(&app_data)
+            .map(|verified| {
+                format!("{:x}", sha2::Sha256::digest(verified.bytes())) == receipt.installed_sha256
+            })
+            .unwrap_or(false);
+        let (linked, steam_recovery_required) =
+            match steam_accounts::linked_platform_operation(&app_data, &receipt.operation_id) {
+                Ok(linked) => (linked, false),
+                Err(code) if code == "steam_recovery_required" => (None, true),
+                Err(code) => return Err(code),
+            };
+        if linked
+            .as_ref()
+            .is_some_and(|operation| operation.language != receipt.language)
+        {
+            return Err("steam_journal_invalid".to_string());
+        }
+        Ok(Some(TreeCurrentState {
+            receipt,
+            package_verified,
+            steam_operation_id: linked
+                .as_ref()
+                .map(|operation| operation.operation_id.clone()),
+            steam_profile_token: linked.map(|operation| operation.profile_token),
+            steam_recovery_required,
+        }))
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+#[tauri::command]
+async fn apply_tree_steam_launch_options(
+    app: AppHandle,
+    request: ApplyTreeSteamRequest,
+) -> Result<SteamConfigReceipt, String> {
+    if !request.confirmed {
+        return Err("steam_config_confirmation_required".to_string());
+    }
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "backup_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        require_patch_ready_runtime()?;
+        validate_candidate(Path::new(&request.game_path), "manual")?;
         let verified = tree_pilot::build_from_verified_store(&app_data)?;
         let hash = format!("{:x}", sha2::Sha256::digest(verified.bytes()));
-        game_deployment::current_verified_deployment(&app_data, Path::new(&game_path), &hash)
+        let receipt = game_deployment::current_verified_deployment(
+            &app_data,
+            Path::new(&request.game_path),
+            &hash,
+        )?
+        .ok_or_else(|| "deployment_not_found".to_string())?;
+        if receipt.operation_id != request.deployment_operation_id
+            || receipt.language != request.language
+        {
+            return Err("deployment_conflict".to_string());
+        }
+        steam_accounts::apply_platform_profile(
+            &app_data,
+            ApplySteamLaunchOptionRequest {
+                profile_token: request.profile_token,
+                confirmation_token: request.confirmation_token,
+                language: request.language,
+                confirmed: true,
+                linked_deployment_id: Some(receipt.operation_id),
+            },
+        )
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+#[tauri::command]
+async fn preview_tree_language(
+    app: AppHandle,
+    game_path: String,
+    language: GameLanguage,
+) -> Result<(), String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "deployment_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        if !cfg!(target_os = "windows") {
+            return Err("platform_not_supported".to_string());
+        }
+        validate_candidate(Path::new(&game_path), "manual")?;
+        game_deployment::preview_language_destination(&app_data, Path::new(&game_path), language)
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+#[tauri::command]
+async fn start_steam_after_tree_pilot(
+    app: AppHandle,
+    request: StartSteamAfterTreePilotRequest,
+) -> Result<RuntimeState, String> {
+    if !request.confirmed {
+        return Err("runtime_confirmation_required".to_string());
+    }
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "deployment_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        if !cfg!(target_os = "windows") {
+            return Err("platform_not_supported".to_string());
+        }
+        require_patch_ready_runtime()?;
+        validate_candidate(Path::new(&request.game_path), "manual")?;
+        let verified = tree_pilot::build_from_verified_store(&app_data)?;
+        let hash = format!("{:x}", sha2::Sha256::digest(verified.bytes()));
+        let receipt = game_deployment::current_verified_deployment(
+            &app_data,
+            Path::new(&request.game_path),
+            &hash,
+        )?
+        .ok_or_else(|| "deployment_not_found".to_string())?;
+        if receipt.operation_id != request.operation_id {
+            return Err("deployment_conflict".to_string());
+        }
+        match (
+            request.profile_token.as_deref(),
+            request.steam_operation_id.as_deref(),
+        ) {
+            (Some(profile), steam_operation) => {
+                steam_accounts::verify_platform_activation(
+                    &app_data,
+                    profile,
+                    steam_operation,
+                    receipt.language,
+                )?;
+            }
+            (None, None) => {}
+            (None, Some(_)) => return Err("steam_activation_not_ready".to_string()),
+        }
+        runtime_control::start_steam(SteamStartRequest { confirmed: true })
     })
     .await
     .map_err(|_| "runtime_worker_failed".to_string())?
@@ -615,6 +799,7 @@ async fn start_steam_after_profile(
             &app_data,
             &request.profile_token,
             request.operation_id.as_deref(),
+            request.language,
         )?;
         runtime_control::start_steam(SteamStartRequest {
             confirmed: request.confirmed,
@@ -647,6 +832,7 @@ fn main() {
             list_steam_profiles,
             preview_steam_launch_options,
             apply_steam_launch_options,
+            apply_tree_steam_launch_options,
             rollback_steam_launch_options,
             recover_steam_launch_options,
             deploy_staged_vpk,
@@ -655,6 +841,8 @@ fn main() {
             cancel_tree_pilot_download,
             install_tree_pilot,
             current_tree_pilot,
+            preview_tree_language,
+            start_steam_after_tree_pilot,
             rollback_game_deployment,
             recover_game_deployments,
             start_steam_after_profile,

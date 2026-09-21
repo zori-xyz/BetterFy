@@ -144,8 +144,11 @@ export type SteamProfileSummary = {
   status: "ready" | "already_managed" | "launch_option_conflict" | "invalid_config";
 };
 
+export type GameLanguage = "russian" | "koreana" | "schinese" | "dutch";
+
 export type SteamLaunchOptionPreview = {
   profileToken: string;
+  language: GameLanguage;
   changed: boolean;
   beforeSha256: string;
   afterSha256: string;
@@ -165,6 +168,7 @@ export type SteamConfigReceipt = {
 
 export type GameDeploymentReceipt = {
   operationId: string;
+  language: GameLanguage;
   beforeSha256: string | null;
   installedSha256: string;
   backupVerified: boolean;
@@ -197,7 +201,7 @@ export interface EngineBridge {
   rollbackOperation(operationId: string): Promise<RollbackReceipt>;
   listOperations(): Promise<EngineOperationSummary[]>;
   listSteamProfiles(): Promise<SteamProfileSummary[]>;
-  previewSteamLaunchOptions(profileToken: string): Promise<SteamLaunchOptionPreview>;
+  previewSteamLaunchOptions(profileToken: string, language?: GameLanguage): Promise<SteamLaunchOptionPreview>;
   applySteamLaunchOptions(preview: SteamLaunchOptionPreview): Promise<SteamConfigReceipt>;
   rollbackSteamLaunchOptions(operationId: string): Promise<SteamConfigReceipt>;
   recoverSteamLaunchOptions(): Promise<SteamConfigReceipt[]>;
@@ -207,6 +211,7 @@ export interface EngineBridge {
   startSteamAfterProfile(
     profileToken: string,
     operationId: string | null,
+    language?: GameLanguage,
   ): Promise<RuntimeState>;
 }
 
@@ -623,12 +628,12 @@ export const engineBridge: EngineBridge = {
     }
     return result;
   },
-  async previewSteamLaunchOptions(profileToken) {
-    if (!isTauriRuntime()) return mockEngine.previewSteamLaunchOptions(profileToken);
+  async previewSteamLaunchOptions(profileToken, language = "dutch") {
+    if (!isTauriRuntime()) return mockEngine.previewSteamLaunchOptions(profileToken, language);
     const { invoke } = await import("@tauri-apps/api/core");
     return guardedEngineCall(
       "preview_steam_launch_options",
-      invoke<SteamLaunchOptionPreview>("preview_steam_launch_options", { profileToken }),
+      invoke<SteamLaunchOptionPreview>("preview_steam_launch_options", { profileToken, language }),
     );
   },
   async applySteamLaunchOptions(preview) {
@@ -640,6 +645,7 @@ export const engineBridge: EngineBridge = {
         request: {
           profileToken: preview.profileToken,
           confirmationToken: preview.confirmationToken,
+          language: preview.language,
           confirmed: true,
         },
       }),
@@ -708,9 +714,9 @@ export const engineBridge: EngineBridge = {
       90_000,
     );
   },
-  async startSteamAfterProfile(profileToken, operationId) {
+  async startSteamAfterProfile(profileToken, operationId, language = "dutch") {
     if (!isTauriRuntime()) {
-      return mockEngine.startSteamAfterProfile(profileToken, operationId);
+      return mockEngine.startSteamAfterProfile(profileToken, operationId, language);
     }
     const { invoke } = await import("@tauri-apps/api/core");
     return guardedEngineCall(
@@ -719,6 +725,7 @@ export const engineBridge: EngineBridge = {
         request: {
           profileToken,
           operationId,
+          language,
           confirmed: true,
         },
       }),

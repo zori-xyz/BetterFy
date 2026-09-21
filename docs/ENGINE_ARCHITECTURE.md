@@ -226,8 +226,9 @@ activation step. It lists profiles by neutral ordinal, requires explicit shutdow
 confirmation, applies the selected preview, verifies either the matching committed
 journal or an already-managed profile, then resolves `steam.exe` from the registry
 and starts Steam. Dota is never launched. A changed transaction exposes its exact
-rollback path. This transaction currently owns only BetterFy's `-language dutch`
-argument.
+rollback path. The internal Tree Mod pilot binds one selected, allowlisted
+`-language` value to the same language folder used for its VPK. Earlier Dutch
+operations remain readable and restorable.
 
 ### Implemented game-deployment transaction foundation
 
@@ -239,7 +240,9 @@ opened and checked again. External archive parts are not accepted.
 `deploy_staged_vpk` cannot receive a source or destination from the interface. It
 resolves a confirmed BetterFy staging journal, requires its exact reviewed plan ID,
 requires one verified `pak66_dir.vpk`, rehashes and reopens it, then targets only
-`game/dota_dutch/pak66_dir.vpk`. The runtime must already prove Steam and Dota are
+`game/dota_dutch/pak66_dir.vpk` for the generic debug path. The Tree Mod pilot
+instead chooses an allowlisted language folder before installation and records
+it in the journal and receipt. The runtime must already prove Steam and Dota are
 closed. An existing target is replaceable only when BetterFy's ownership record
 matches its current hash; an unknown target is a hard conflict.
 
@@ -252,7 +255,23 @@ interruption before publish from one after publish and either marks the untouche
 operation failed or rolls the published bytes back. Synthetic tests inject both
 failures. Only the pinned Tree Mod selection can invoke the internal live-deploy
 path on Windows. No other catalog selection can invoke a live deploy, and no
-Windows compatibility result is claimed yet.
+general Windows compatibility result is claimed. The founder has observed the
+intended Tree Mod result in Dota through the Dutch slot only.
+
+Installed-state discovery now reads the ownership record and committed journal,
+rehashes the on-disk target, and checks a required previous-version backup without
+depending on the resource cache or browser storage. The Tree Mod screen separately
+reports whether the installed hash still matches a VPK rebuilt from the pinned
+resources. If that second check is unavailable, file rollback remains discoverable
+but automatic Steam activation is not offered. This is synthetic recovery coverage,
+not a Windows rollback result.
+
+The internal Tree Mod Steam write now carries the validated VPK deployment ID
+inside the Steam journal. On restart, Rust locates the matching committed Steam
+operation by that ID; React no longer relies on localStorage for either rollback
+identifier. An interrupted linked Steam journal blocks VPK rollback until Steam
+recovery runs, preventing an orphaned launch option. Legacy Steam changes that
+predate this link cannot be inferred safely and require a separate manual check.
 
 Preset persistence is implemented as a separate BetterFy-owned boundary. The
 backend validates the schema and identifiers, rejects symlinks and oversized

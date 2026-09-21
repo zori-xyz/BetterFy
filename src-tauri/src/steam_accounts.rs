@@ -1,4 +1,5 @@
-use crate::steam_config::{plan_managed_launch_option, LaunchOptionPlan};
+use crate::game_language::GameLanguage;
+use crate::steam_config::{plan_launch_option_for_language, LaunchOptionPlan};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
@@ -51,6 +52,7 @@ pub struct SteamProfileDiagnosticCounts {
 #[serde(rename_all = "camelCase")]
 pub struct SteamLaunchOptionPreview {
     profile_token: String,
+    language: GameLanguage,
     changed: bool,
     before_sha256: String,
     after_sha256: String,
@@ -62,7 +64,11 @@ pub struct SteamLaunchOptionPreview {
 pub struct ApplySteamLaunchOptionRequest {
     pub profile_token: String,
     pub confirmation_token: String,
+    #[serde(default)]
+    pub language: GameLanguage,
     pub confirmed: bool,
+    #[serde(default)]
+    pub linked_deployment_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -101,6 +107,8 @@ struct SteamConfigJournal {
     schema_version: u32,
     operation_id: String,
     profile_token: String,
+    #[serde(default)]
+    language: GameLanguage,
     before_sha256: String,
     after_sha256: String,
     phase: SteamConfigPhase,
@@ -108,6 +116,16 @@ struct SteamConfigJournal {
     updated_at_ms: u128,
     backup_relative_path: String,
     error_code: Option<String>,
+    #[serde(default)]
+    linked_deployment_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkedSteamOperation {
+    pub operation_id: String,
+    pub language: GameLanguage,
+    pub profile_token: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -332,10 +350,18 @@ fn read_localconfig(path: &Path) -> Result<String, String> {
 }
 
 fn status_for_contents(contents: &str) -> SteamProfileStatus {
-    match plan_managed_launch_option(contents) {
+    match plan_launch_option_for_language(contents, GameLanguage::Dutch) {
         Ok(plan) if plan.changed => SteamProfileStatus::Ready,
         Ok(_) => SteamProfileStatus::AlreadyManaged,
-        Err(code) if code == "launch_option_conflict" => SteamProfileStatus::LaunchOptionConflict,
+        Err(code) if code == "launch_option_conflict" => {
+            if GameLanguage::ALL.iter().any(|language| {
+                plan_launch_option_for_language(contents, *language).is_ok_and(|plan| !plan.changed)
+            }) {
+                SteamProfileStatus::AlreadyManaged
+            } else {
+                SteamProfileStatus::LaunchOptionConflict
+            }
+        }
         Err(_) => SteamProfileStatus::InvalidConfig,
     }
 }
@@ -348,11 +374,17 @@ fn resolve_profile(roots: &[PathBuf], token: &str) -> Result<SteamProfile, Strin
         .ok_or_else(|| "steam_profile_not_found".to_string())
 }
 
-fn confirmation_token(profile_token: &str, plan: &LaunchOptionPlan) -> String {
+fn confirmation_token(
+    profile_token: &str,
+    plan: &LaunchOptionPlan,
+    language: GameLanguage,
+) -> String {
     let mut hasher = Sha256::new();
     hasher.update(CONFIRMATION_DOMAIN);
     hasher.update([0]);
     hasher.update(profile_token.as_bytes());
+    hasher.update([0]);
+    hasher.update(language.suffix().as_bytes());
     hasher.update([0]);
     hasher.update(plan.before_sha256.as_bytes());
     hasher.update([0]);
@@ -399,20 +431,28 @@ fn list_profiles(roots: &[PathBuf]) -> Result<Vec<SteamProfileSummary>, String> 
         .collect()
 }
 
-pub fn preview_platform_profile(token: &str) -> Result<SteamLaunchOptionPreview, String> {
-    preview_profile(&platform_steam_roots(), token)
+pub fn preview_platform_profile(
+    token: &str,
+    language: GameLanguage,
+) -> Result<SteamLaunchOptionPreview, String> {
+    preview_profile(&platform_steam_roots(), token, language)
 }
 
-fn preview_profile(roots: &[PathBuf], token: &str) -> Result<SteamLaunchOptionPreview, String> {
+fn preview_profile(
+    roots: &[PathBuf],
+    token: &str,
+    language: GameLanguage,
+) -> Result<SteamLaunchOptionPreview, String> {
     let profile = resolve_profile(roots, token)?;
     let contents = read_localconfig(&profile.localconfig_path)?;
-    let plan = plan_managed_launch_option(&contents)?;
+    let plan = plan_launch_option_for_language(&contents, language)?;
     Ok(SteamLaunchOptionPreview {
         profile_token: profile.token.clone(),
+        language,
         changed: plan.changed,
         before_sha256: plan.before_sha256.clone(),
         after_sha256: plan.after_sha256.clone(),
-        confirmation_token: confirmation_token(&profile.token, &plan),
+        confirmation_token: confirmation_token(&profile.token, &plan, language),
     })
 }
 
@@ -758,16 +798,80 @@ pub fn apply_platform_profile(
     )
 }
 
+pub fn linked_platform_operation(
+    app_data_root: &Path,
+    deployment_operation_id: &str,
+) -> Result<Option<LinkedSteamOperation>, String> {
+    linked_operation(app_data_root, deployment_operation_id)
+}
+
+fn linked_operation(
+    app_data_root: &Path,
+    deployment_operation_id: &str,
+) -> Result<Option<LinkedSteamOperation>, String> {
+    let (_, journals_root) = transaction_roots(app_data_root)?;
+    let _lock = acquire_transaction_lock(app_data_root)?;
+    linked_operation_locked(&journals_root, deployment_operation_id)
+}
+
+fn linked_operation_locked(
+    journals_root: &Path,
+    deployment_operation_id: &str,
+) -> Result<Option<LinkedSteamOperation>, String> {
+    if deployment_operation_id.len() < 10
+        || deployment_operation_id.len() > 96
+        || !deployment_operation_id.starts_with("deploy-op-")
+        || !deployment_operation_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+    {
+        return Err("deployment_not_found".to_string());
+    }
+    recover_journal_sidecars(journals_root)?;
+    let mut linked = None;
+    for entry in fs::read_dir(journals_root).map_err(|_| "steam_journal_invalid".to_string())? {
+        let path = entry
+            .map_err(|_| "steam_journal_invalid".to_string())?
+            .path();
+        if path.extension().and_then(|value| value.to_str()) != Some("json") {
+            continue;
+        }
+        let journal = read_journal(&path)?;
+        if journal.linked_deployment_id.as_deref() != Some(deployment_operation_id) {
+            continue;
+        }
+        match journal.phase {
+            SteamConfigPhase::BackedUp | SteamConfigPhase::Prepared => {
+                return Err("steam_recovery_required".to_string());
+            }
+            SteamConfigPhase::Committed => {
+                if linked.is_some() {
+                    return Err("steam_journal_invalid".to_string());
+                }
+                linked = Some(LinkedSteamOperation {
+                    operation_id: journal.operation_id,
+                    language: journal.language,
+                    profile_token: journal.profile_token,
+                });
+            }
+            SteamConfigPhase::RolledBack | SteamConfigPhase::Failed => {}
+        }
+    }
+    Ok(linked)
+}
+
 pub fn verify_platform_activation(
     app_data_root: &Path,
     profile_token: &str,
     operation_id: Option<&str>,
+    language: GameLanguage,
 ) -> Result<(), String> {
     verify_activation(
         app_data_root,
         &platform_steam_roots(),
         profile_token,
         operation_id,
+        language,
     )
 }
 
@@ -776,6 +880,7 @@ fn verify_activation(
     roots: &[PathBuf],
     profile_token: &str,
     operation_id: Option<&str>,
+    language: GameLanguage,
 ) -> Result<(), String> {
     validate_profile_token(profile_token)?;
     let (operations_root, journals_root) = transaction_roots(app_data_root)?;
@@ -788,7 +893,7 @@ fn verify_activation(
     let profile = resolve_profile(roots, profile_token)?;
     let contents = read_localconfig(&profile.localconfig_path)?;
     let current_hash = sha256(contents.as_bytes());
-    let current_plan = plan_managed_launch_option(&contents)?;
+    let current_plan = plan_launch_option_for_language(&contents, language)?;
     if current_plan.changed {
         return Err("steam_activation_not_ready".to_string());
     }
@@ -800,6 +905,7 @@ fn verify_activation(
     let journal = read_journal(&journals_root.join(format!("{operation_id}.json")))?;
     if journal.operation_id != operation_id
         || journal.profile_token != profile_token
+        || journal.language != language
         || journal.phase != SteamConfigPhase::Committed
         || journal.after_sha256 != current_hash
     {
@@ -819,14 +925,19 @@ fn apply_profile_with_failure(
     }
     let (operations_root, journals_root) = transaction_roots(app_data_root)?;
     let _lock = acquire_transaction_lock(app_data_root)?;
+    if let Some(id) = &request.linked_deployment_id {
+        if linked_operation_locked(&journals_root, id)?.is_some() {
+            return Err("steam_activation_not_ready".to_string());
+        }
+    }
     cleanup_orphan_operations(&operations_root, &journals_root)?;
     if !pending_operations(&journals_root)?.is_empty() {
         return Err("steam_recovery_required".to_string());
     }
     let profile = resolve_profile(roots, &request.profile_token)?;
     let contents = read_localconfig(&profile.localconfig_path)?;
-    let plan = plan_managed_launch_option(&contents)?;
-    if request.confirmation_token != confirmation_token(&profile.token, &plan) {
+    let plan = plan_launch_option_for_language(&contents, request.language)?;
+    if request.confirmation_token != confirmation_token(&profile.token, &plan, request.language) {
         return Err("steam_config_plan_stale".to_string());
     }
     if !plan.changed {
@@ -875,6 +986,7 @@ fn apply_profile_with_failure(
         schema_version: JOURNAL_SCHEMA_VERSION,
         operation_id: operation_id.clone(),
         profile_token: profile.token.clone(),
+        language: request.language,
         before_sha256: plan.before_sha256.clone(),
         after_sha256: plan.after_sha256.clone(),
         phase: SteamConfigPhase::BackedUp,
@@ -882,6 +994,7 @@ fn apply_profile_with_failure(
         updated_at_ms: timestamp,
         backup_relative_path,
         error_code: None,
+        linked_deployment_id: request.linked_deployment_id,
     };
     if let Err(code) = write_journal(&journal_path, &journal) {
         let _ = fs::remove_dir_all(&operation_root);
@@ -896,7 +1009,7 @@ fn apply_profile_with_failure(
             "steam_config_write_failed",
         )?;
         let prepared = read_localconfig_unchecked(&temporary)?;
-        let verified_plan = plan_managed_launch_option(&prepared)?;
+        let verified_plan = plan_launch_option_for_language(&prepared, request.language)?;
         if sha256(prepared.as_bytes()) != plan.after_sha256 || verified_plan.changed {
             return Err("verification_failed".to_string());
         }
@@ -1141,11 +1254,14 @@ mod tests {
     fn request_for(steam: &Path) -> ApplySteamLaunchOptionRequest {
         let roots = vec![steam.to_path_buf()];
         let profiles = discover_profiles_in_roots(&roots).expect("profiles");
-        let preview = preview_profile(&roots, &profiles[0].token).expect("preview");
+        let preview =
+            preview_profile(&roots, &profiles[0].token, GameLanguage::Dutch).expect("preview");
         ApplySteamLaunchOptionRequest {
             profile_token: preview.profile_token,
             confirmation_token: preview.confirmation_token,
+            language: GameLanguage::Dutch,
             confirmed: true,
+            linked_deployment_id: None,
         }
     }
 
@@ -1237,6 +1353,7 @@ mod tests {
             std::slice::from_ref(&steam),
             &profile_token,
             Some(&operation_id),
+            GameLanguage::Dutch,
         )
         .expect("authorized");
         assert_eq!(
@@ -1245,6 +1362,7 @@ mod tests {
                 std::slice::from_ref(&steam),
                 &format!("{PROFILE_TOKEN_PREFIX}{}", "0".repeat(64)),
                 Some(&operation_id),
+                GameLanguage::Dutch,
             )
             .err()
             .as_deref(),
@@ -1260,6 +1378,7 @@ mod tests {
                 std::slice::from_ref(&steam),
                 &profile_token,
                 Some(&operation_id),
+                GameLanguage::Dutch,
             )
             .err()
             .as_deref(),
@@ -1279,7 +1398,173 @@ mod tests {
         let profile = discover_profiles_in_roots(&roots)
             .expect("profiles")
             .remove(0);
-        verify_activation(&app_data, &roots, &profile.token, None).expect("authorized");
+        verify_activation(&app_data, &roots, &profile.token, None, GameLanguage::Dutch)
+            .expect("authorized");
+        fs::remove_dir_all(base).expect("cleanup");
+    }
+
+    #[test]
+    fn selected_language_round_trips_through_profile_journal() {
+        let (base, steam, app_data) = fixture("russian-profile", "45", &local_config("-novid"));
+        let roots = vec![steam.clone()];
+        let profile = discover_profiles_in_roots(&roots)
+            .expect("profiles")
+            .remove(0);
+        let preview = preview_profile(&roots, &profile.token, GameLanguage::Russian)
+            .expect("Russian preview");
+        assert_eq!(preview.language, GameLanguage::Russian);
+        let receipt = apply_profile_with_failure(
+            &app_data,
+            &roots,
+            ApplySteamLaunchOptionRequest {
+                profile_token: preview.profile_token,
+                confirmation_token: preview.confirmation_token,
+                language: preview.language,
+                confirmed: true,
+                linked_deployment_id: None,
+            },
+            FailurePoint::None,
+        )
+        .expect("apply Russian");
+        let operation = receipt.operation_id.expect("journaled change");
+        verify_activation(
+            &app_data,
+            &roots,
+            &profile.token,
+            Some(&operation),
+            GameLanguage::Russian,
+        )
+        .expect("Russian active");
+        assert_eq!(
+            verify_activation(
+                &app_data,
+                &roots,
+                &profile.token,
+                Some(&operation),
+                GameLanguage::Dutch,
+            )
+            .err()
+            .as_deref(),
+            Some("launch_option_conflict")
+        );
+        rollback_operation(
+            &app_data,
+            &roots,
+            SteamConfigOperationRequest {
+                operation_id: operation,
+                confirmed: true,
+            },
+        )
+        .expect("restore profile");
+        let restored = fs::read_to_string(steam.join("userdata/45/config/localconfig.vdf"))
+            .expect("restored config");
+        assert_eq!(restored, local_config("-novid"));
+        fs::remove_dir_all(base).expect("cleanup");
+    }
+
+    #[test]
+    fn linked_tree_steam_change_is_discoverable_after_restart_and_clears_on_rollback() {
+        let (base, steam, app_data) = fixture("linked-tree", "46", &local_config("-novid"));
+        let roots = vec![steam.clone()];
+        let deployment_id = "deploy-op-1234567890-1-0";
+        let mut request = request_for(&steam);
+        request.linked_deployment_id = Some(deployment_id.to_string());
+        let receipt = apply_profile_with_failure(&app_data, &roots, request, FailurePoint::None)
+            .expect("linked Steam write");
+        let operation_id = receipt.operation_id.expect("Steam journal");
+        let linked = linked_operation(&app_data, deployment_id)
+            .expect("read link")
+            .expect("committed link");
+        assert_eq!(linked.operation_id, operation_id);
+        assert_eq!(linked.language, GameLanguage::Dutch);
+        let mut duplicate = request_for(&steam);
+        duplicate.linked_deployment_id = Some(deployment_id.to_string());
+        assert_eq!(
+            apply_profile_with_failure(&app_data, &roots, duplicate, FailurePoint::None)
+                .err()
+                .as_deref(),
+            Some("steam_activation_not_ready")
+        );
+        rollback_operation(
+            &app_data,
+            &roots,
+            SteamConfigOperationRequest {
+                operation_id,
+                confirmed: true,
+            },
+        )
+        .expect("restore Steam");
+        assert!(linked_operation(&app_data, deployment_id)
+            .expect("read after rollback")
+            .is_none());
+        fs::remove_dir_all(base).expect("cleanup");
+    }
+
+    #[test]
+    fn interrupted_linked_change_requires_recovery_before_reuse() {
+        let (base, steam, app_data) = fixture("linked-interruption", "47", &local_config("-novid"));
+        let roots = vec![steam.clone()];
+        let deployment_id = "deploy-op-1234567890-1-1";
+        let mut request = request_for(&steam);
+        request.linked_deployment_id = Some(deployment_id.to_string());
+        assert_eq!(
+            apply_profile_with_failure(&app_data, &roots, request, FailurePoint::AfterReplace,)
+                .err()
+                .as_deref(),
+            Some("injected_failure")
+        );
+        assert_eq!(
+            linked_operation(&app_data, deployment_id).err().as_deref(),
+            Some("steam_recovery_required")
+        );
+        recover_operations(&app_data, &roots).expect("restore interrupted Steam write");
+        assert!(linked_operation(&app_data, deployment_id)
+            .expect("read recovered journals")
+            .is_none());
+        assert_eq!(
+            linked_operation(&app_data, "deploy-op-../bad")
+                .err()
+                .as_deref(),
+            Some("deployment_not_found")
+        );
+        fs::remove_dir_all(base).expect("cleanup");
+    }
+
+    #[test]
+    fn legacy_dutch_profile_journal_without_language_is_restorable() {
+        let (base, steam, app_data) =
+            fixture("legacy-dutch-profile", "46", &local_config("-novid"));
+        let roots = vec![steam.clone()];
+        let request = request_for(&steam);
+        let receipt = apply_profile_with_failure(&app_data, &roots, request, FailurePoint::None)
+            .expect("apply Dutch");
+        let operation_id = receipt.operation_id.expect("operation");
+        let journal_path = app_data
+            .join("engine-v1/steam-config/journals")
+            .join(format!("{operation_id}.json"));
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&fs::read(&journal_path).expect("journal")).expect("valid JSON");
+        value
+            .as_object_mut()
+            .expect("journal object")
+            .remove("language");
+        fs::write(
+            &journal_path,
+            serde_json::to_vec(&value).expect("JSON bytes"),
+        )
+        .expect("legacy journal");
+        rollback_operation(
+            &app_data,
+            &roots,
+            SteamConfigOperationRequest {
+                operation_id,
+                confirmed: true,
+            },
+        )
+        .expect("restore old profile");
+        let restored = fs::read_to_string(steam.join("userdata/46/config/localconfig.vdf"))
+            .expect("restored config");
+        assert_eq!(restored, local_config("-novid"));
         fs::remove_dir_all(base).expect("cleanup");
     }
 

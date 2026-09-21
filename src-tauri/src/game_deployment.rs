@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::game_language::GameLanguage;
 use crate::vpk;
 
 const SCHEMA_VERSION: u32 = 1;
@@ -53,6 +54,7 @@ pub enum DeploymentPhase {
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentReceipt {
     pub operation_id: String,
+    pub language: GameLanguage,
     pub before_sha256: Option<String>,
     pub installed_sha256: String,
     pub backup_verified: bool,
@@ -80,6 +82,8 @@ struct DeploymentJournal {
     schema_version: u32,
     operation_id: String,
     target_identity: String,
+    #[serde(default)]
+    language: GameLanguage,
     before_sha256: Option<String>,
     before_operation_id: Option<String>,
     installed_sha256: String,
@@ -95,6 +99,8 @@ struct DeploymentJournal {
 struct OwnershipState {
     schema_version: u32,
     target_identity: String,
+    #[serde(default)]
+    language: GameLanguage,
     installed_sha256: String,
     operation_id: String,
 }
@@ -162,7 +168,7 @@ fn owned_roots(app_data_root: &Path) -> Result<(PathBuf, PathBuf, PathBuf), Stri
     Ok((root, operations, journals))
 }
 
-fn target_for(dota_root: &Path) -> Result<PathBuf, String> {
+fn target_for(dota_root: &Path, language: GameLanguage) -> Result<PathBuf, String> {
     reject_symlink(dota_root)?;
     let canonical = dota_root
         .canonicalize()
@@ -187,9 +193,7 @@ fn target_for(dota_root: &Path) -> Result<PathBuf, String> {
     }
     let game = canonical.join("game");
     reject_symlink(&game)?;
-    let locale = game.join("dota_dutch");
-    reject_symlink(&locale)?;
-    fs::create_dir_all(&locale).map_err(|_| "deployment_failed".to_string())?;
+    let locale = game.join(format!("dota_{}", language.suffix()));
     reject_symlink(&locale)?;
     let target = locale.join(OWNED_VPK_NAME);
     reject_symlink(&target)?;
@@ -369,13 +373,27 @@ fn deploy_with_failure(
     dota_root: &Path,
     package: &[u8],
     expected_sha256: &str,
+    language: GameLanguage,
     failure: FailurePoint,
 ) -> Result<DeploymentReceipt, String> {
     let installed_sha256 = verify_package(package, expected_sha256)?;
-    let target = target_for(dota_root)?;
+    let target = target_for(dota_root, language)?;
     let identity = target_identity(dota_root)?;
     let (root, operations, journals) = owned_roots(app_data_root)?;
     let _lock = transaction_lock(&root)?;
+
+    if ownership_path(&root).exists() {
+        let state: OwnershipState = read_json(&ownership_path(&root))?;
+        if state.schema_version != SCHEMA_VERSION || state.target_identity != identity {
+            return Err("deployment_journal_invalid".to_string());
+        }
+        if state.language != language {
+            return Err("deployment_language_change_requires_restore".to_string());
+        }
+        if !target.is_file() {
+            return Err("deployment_conflict".to_string());
+        }
+    }
 
     let before = if target.exists() {
         let bytes = fs::read(&target).map_err(|_| "deployment_failed".to_string())?;
@@ -384,6 +402,7 @@ fn deploy_with_failure(
             .map_err(|_| "deployment_target_foreign".to_string())?;
         if state.schema_version != SCHEMA_VERSION
             || state.target_identity != identity
+            || state.language != language
             || state.installed_sha256 != before_hash
         {
             return Err("deployment_target_foreign".to_string());
@@ -392,6 +411,14 @@ fn deploy_with_failure(
     } else {
         None
     };
+
+    let locale = target
+        .parent()
+        .ok_or_else(|| "deployment_failed".to_string())?;
+    reject_symlink(locale)?;
+    fs::create_dir_all(locale).map_err(|_| "deployment_failed".to_string())?;
+    reject_symlink(locale)?;
+    reject_symlink(&target)?;
 
     let operation_id = new_operation_id()?;
     let operation_root = operations.join(&operation_id);
@@ -413,6 +440,7 @@ fn deploy_with_failure(
         schema_version: SCHEMA_VERSION,
         operation_id: operation_id.clone(),
         target_identity: identity.clone(),
+        language,
         before_sha256: before_sha256.clone(),
         before_operation_id,
         installed_sha256: installed_sha256.clone(),
@@ -458,6 +486,7 @@ fn deploy_with_failure(
         &OwnershipState {
             schema_version: SCHEMA_VERSION,
             target_identity: identity,
+            language,
             installed_sha256: installed_sha256.clone(),
             operation_id: operation_id.clone(),
         },
@@ -467,6 +496,7 @@ fn deploy_with_failure(
     atomic_json(&journal_path, &journal)?;
     Ok(DeploymentReceipt {
         operation_id,
+        language,
         before_sha256,
         installed_sha256,
         backup_verified: before.is_none() || backup_path.is_file(),
@@ -486,6 +516,74 @@ pub(crate) fn deploy_verified_vpk(
         dota_root,
         package,
         expected_sha256,
+        GameLanguage::Dutch,
+        FailurePoint::None,
+    )
+}
+
+pub(crate) fn verify_language_folder(
+    dota_root: &Path,
+    language: GameLanguage,
+) -> Result<(), String> {
+    if language != GameLanguage::Dutch {
+        let folder = dota_root
+            .join("game")
+            .join(format!("dota_{}", language.suffix()));
+        let gameinfo = folder.join("gameinfo.gi");
+        reject_symlink(&folder)?;
+        reject_symlink(&gameinfo)?;
+        if !gameinfo.is_file() {
+            return Err("language_folder_unavailable".to_string());
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn preview_language_destination(
+    app_data_root: &Path,
+    dota_root: &Path,
+    language: GameLanguage,
+) -> Result<(), String> {
+    verify_language_folder(dota_root, language)?;
+    let target = target_for(dota_root, language)?;
+    let identity = target_identity(dota_root)?;
+    let (root, _, _) = owned_roots(app_data_root)?;
+    let _lock = transaction_lock(&root)?;
+    let ownership_file = ownership_path(&root);
+    if ownership_file.exists() {
+        let state: OwnershipState = read_json(&ownership_file)?;
+        if state.schema_version != SCHEMA_VERSION || state.target_identity != identity {
+            return Err("deployment_journal_invalid".to_string());
+        }
+        if state.language != language {
+            return Err("deployment_language_change_requires_restore".to_string());
+        }
+        if !target.is_file()
+            || sha256(&fs::read(&target).map_err(|_| "deployment_conflict".to_string())?)
+                != state.installed_sha256
+        {
+            return Err("deployment_conflict".to_string());
+        }
+    } else if target.exists() {
+        return Err("deployment_target_foreign".to_string());
+    }
+    Ok(())
+}
+
+pub(crate) fn deploy_verified_vpk_for_language(
+    app_data_root: &Path,
+    dota_root: &Path,
+    package: &[u8],
+    expected_sha256: &str,
+    language: GameLanguage,
+) -> Result<DeploymentReceipt, String> {
+    verify_language_folder(dota_root, language)?;
+    deploy_with_failure(
+        app_data_root,
+        dota_root,
+        package,
+        expected_sha256,
+        language,
         FailurePoint::None,
     )
 }
@@ -495,9 +593,16 @@ pub(crate) fn current_verified_deployment(
     dota_root: &Path,
     expected_sha256: &str,
 ) -> Result<Option<DeploymentReceipt>, String> {
-    let target = target_for(dota_root)?;
+    current_owned_deployment(app_data_root, dota_root)
+        .map(|receipt| receipt.filter(|receipt| receipt.installed_sha256 == expected_sha256))
+}
+
+pub(crate) fn current_owned_deployment(
+    app_data_root: &Path,
+    dota_root: &Path,
+) -> Result<Option<DeploymentReceipt>, String> {
     let identity = target_identity(dota_root)?;
-    let (root, _, journals) = owned_roots(app_data_root)?;
+    let (root, operations, journals) = owned_roots(app_data_root)?;
     let _lock = transaction_lock(&root)?;
     let ownership_file = ownership_path(&root);
     if !ownership_file.exists() {
@@ -507,27 +612,40 @@ pub(crate) fn current_verified_deployment(
     if ownership.schema_version != SCHEMA_VERSION || ownership.target_identity != identity {
         return Err("deployment_journal_invalid".to_string());
     }
-    if ownership.installed_sha256 != expected_sha256 {
-        return Ok(None);
-    }
+    validate_operation_id(&ownership.operation_id)?;
+    let target = target_for(dota_root, ownership.language)?;
     let journal: DeploymentJournal =
         read_json(&journals.join(format!("{}.json", ownership.operation_id)))?;
     if journal.schema_version != SCHEMA_VERSION
         || journal.operation_id != ownership.operation_id
         || journal.target_identity != identity
-        || journal.installed_sha256 != expected_sha256
+        || journal.language != ownership.language
+        || journal.installed_sha256 != ownership.installed_sha256
         || journal.phase != DeploymentPhase::Committed
     {
         return Err("deployment_journal_invalid".to_string());
     }
     let current = fs::read(&target).map_err(|_| "deployment_conflict".to_string())?;
-    if sha256(&current) != expected_sha256 {
+    if sha256(&current) != ownership.installed_sha256 {
         return Err("deployment_conflict".to_string());
+    }
+    if let Some(expected) = &journal.before_sha256 {
+        if journal.backup_relative_path.as_deref() != Some("before.vpk") {
+            return Err("deployment_journal_invalid".to_string());
+        }
+        let backup = operations.join(&ownership.operation_id).join("before.vpk");
+        reject_symlink(&backup)?;
+        if sha256(&fs::read(&backup).map_err(|_| "backup_failed".to_string())?) != *expected {
+            return Err("backup_verification_failed".to_string());
+        }
+    } else if journal.backup_relative_path.is_some() {
+        return Err("deployment_journal_invalid".to_string());
     }
     Ok(Some(DeploymentReceipt {
         operation_id: ownership.operation_id,
+        language: ownership.language,
         before_sha256: journal.before_sha256,
-        installed_sha256: expected_sha256.to_string(),
+        installed_sha256: ownership.installed_sha256,
         backup_verified: true,
         committed: true,
         rolled_back: false,
@@ -540,7 +658,6 @@ pub(crate) fn rollback(
     operation_id: &str,
 ) -> Result<DeploymentReceipt, String> {
     validate_operation_id(operation_id)?;
-    let target = target_for(dota_root)?;
     let identity = target_identity(dota_root)?;
     let (root, operations, journals) = owned_roots(app_data_root)?;
     let _lock = transaction_lock(&root)?;
@@ -552,9 +669,11 @@ pub(crate) fn rollback(
     {
         return Err("deployment_journal_invalid".to_string());
     }
+    let target = target_for(dota_root, journal.language)?;
     if journal.phase == DeploymentPhase::RolledBack {
         return Ok(DeploymentReceipt {
             operation_id: operation_id.to_string(),
+            language: journal.language,
             before_sha256: journal.before_sha256,
             installed_sha256: journal.installed_sha256,
             backup_verified: true,
@@ -589,6 +708,7 @@ pub(crate) fn rollback(
                 &OwnershipState {
                     schema_version: SCHEMA_VERSION,
                     target_identity: identity.clone(),
+                    language: journal.language,
                     installed_sha256: expected.clone(),
                     operation_id: previous_operation.clone(),
                 },
@@ -609,6 +729,7 @@ pub(crate) fn rollback(
     atomic_json(&journal_path, &journal)?;
     Ok(DeploymentReceipt {
         operation_id: operation_id.to_string(),
+        language: journal.language,
         before_sha256: journal.before_sha256,
         installed_sha256: journal.installed_sha256,
         backup_verified: true,
@@ -621,7 +742,6 @@ pub(crate) fn recover_pending(
     app_data_root: &Path,
     dota_root: &Path,
 ) -> Result<RecoveryReceipt, String> {
-    let target = target_for(dota_root)?;
     let identity = target_identity(dota_root)?;
     let (root, _, journals) = owned_roots(app_data_root)?;
     let mut rollback_ids = Vec::new();
@@ -648,6 +768,7 @@ pub(crate) fn recover_pending(
             ) {
                 continue;
             }
+            let target = target_for(dota_root, journal.language)?;
             inspected += 1;
             let current = target
                 .is_file()
@@ -784,6 +905,247 @@ mod tests {
     }
 
     #[test]
+    fn selected_language_is_bound_to_target_receipt_and_rollback() {
+        let base = root("russian-language");
+        let app = base.join("app");
+        let dota = game(&base);
+        let bytes = package(b"russian-tree");
+        assert_eq!(
+            deploy_verified_vpk_for_language(
+                &app,
+                &dota,
+                &bytes,
+                &sha256(&bytes),
+                GameLanguage::Russian,
+            )
+            .err()
+            .as_deref(),
+            Some("language_folder_unavailable")
+        );
+        let locale = dota.join("game/dota_russian");
+        fs::create_dir_all(&locale).expect("language folder");
+        fs::write(locale.join("gameinfo.gi"), b"fixture").expect("gameinfo marker");
+        preview_language_destination(&app, &dota, GameLanguage::Russian)
+            .expect("destination ready before process shutdown");
+        let receipt = deploy_verified_vpk_for_language(
+            &app,
+            &dota,
+            &bytes,
+            &sha256(&bytes),
+            GameLanguage::Russian,
+        )
+        .expect("deploy Russian");
+        assert_eq!(receipt.language, GameLanguage::Russian);
+        assert_eq!(
+            fs::read(locale.join(OWNED_VPK_NAME)).expect("installed"),
+            bytes
+        );
+        let current = current_verified_deployment(&app, &dota, &sha256(&bytes))
+            .expect("current")
+            .expect("owned");
+        assert_eq!(current.language, GameLanguage::Russian);
+        assert_eq!(
+            deploy_verified_vpk_for_language(
+                &app,
+                &dota,
+                &bytes,
+                &sha256(&bytes),
+                GameLanguage::Dutch,
+            )
+            .err()
+            .as_deref(),
+            Some("deployment_language_change_requires_restore")
+        );
+        assert_eq!(
+            preview_language_destination(&app, &dota, GameLanguage::Dutch)
+                .err()
+                .as_deref(),
+            Some("deployment_language_change_requires_restore")
+        );
+        rollback(&app, &dota, &receipt.operation_id).expect("rollback Russian");
+        assert!(!locale.join(OWNED_VPK_NAME).exists());
+        assert!(locale.join("gameinfo.gi").exists());
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn preview_does_not_create_a_dutch_language_folder() {
+        let base = root("preview-no-game-write");
+        let app = base.join("app");
+        let dota = game(&base);
+        let locale = dota.join("game/dota_dutch");
+        assert!(!locale.exists());
+        preview_language_destination(&app, &dota, GameLanguage::Dutch).expect("preview is safe");
+        assert!(!locale.exists(), "preview must not write inside the game");
+        let bytes = package(b"tree");
+        let receipt = deploy_verified_vpk_for_language(
+            &app,
+            &dota,
+            &bytes,
+            &sha256(&bytes),
+            GameLanguage::Dutch,
+        )
+        .expect("confirmed deployment creates its destination");
+        assert!(locale.join(OWNED_VPK_NAME).is_file());
+        rollback(&app, &dota, &receipt.operation_id).expect("rollback");
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn owned_install_remains_discoverable_without_source_cache() {
+        let base = root("owned-without-cache");
+        let app = base.join("app");
+        let dota = game(&base);
+        let bytes = package(b"tree");
+        let receipt = deploy_verified_vpk(&app, &dota, &bytes, &sha256(&bytes))
+            .expect("deploy without a content cache");
+        let current = current_owned_deployment(&app, &dota)
+            .expect("read ownership")
+            .expect("installed operation");
+        assert_eq!(current.operation_id, receipt.operation_id);
+        assert_eq!(current.installed_sha256, sha256(&bytes));
+        fs::write(dota.join("game/dota_dutch/pak66_dir.vpk"), b"external edit")
+            .expect("tamper target");
+        assert_eq!(
+            current_owned_deployment(&app, &dota).err().as_deref(),
+            Some("deployment_conflict")
+        );
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn missing_backup_is_not_reported_as_restorable() {
+        let base = root("lost-backup");
+        let app = base.join("app");
+        let dota = game(&base);
+        let first = package(b"first");
+        deploy_verified_vpk(&app, &dota, &first, &sha256(&first)).expect("first install");
+        let second = package(b"second");
+        let receipt = deploy_verified_vpk(&app, &dota, &second, &sha256(&second))
+            .expect("update with backup");
+        let backup = app
+            .join("engine-v1/game-deployment/operations")
+            .join(&receipt.operation_id)
+            .join("before.vpk");
+        fs::remove_file(backup).expect("simulate lost backup");
+        assert_eq!(
+            current_owned_deployment(&app, &dota).err().as_deref(),
+            Some("backup_failed")
+        );
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn every_existing_language_folder_uses_only_its_own_slot() {
+        for language in GameLanguage::ALL {
+            let base = root(language.suffix());
+            let app = base.join("app");
+            let dota = game(&base);
+            let selected = dota
+                .join("game")
+                .join(format!("dota_{}", language.suffix()));
+            fs::create_dir_all(&selected).expect("language folder");
+            if language != GameLanguage::Dutch {
+                fs::write(selected.join("gameinfo.gi"), b"fixture").expect("language marker");
+            }
+            let foreign = dota.join("game/dota_other/pak66_dir.vpk");
+            fs::create_dir_all(foreign.parent().expect("foreign parent")).expect("foreign folder");
+            fs::write(&foreign, b"foreign data").expect("foreign file");
+            let bytes = package(language.suffix().as_bytes());
+            let receipt =
+                deploy_verified_vpk_for_language(&app, &dota, &bytes, &sha256(&bytes), language)
+                    .expect("selected language deployment");
+            assert_eq!(receipt.language, language);
+            assert_eq!(
+                fs::read(selected.join(OWNED_VPK_NAME)).expect("installed"),
+                bytes
+            );
+            assert_eq!(
+                fs::read(&foreign).expect("foreign unchanged"),
+                b"foreign data"
+            );
+            rollback(&app, &dota, &receipt.operation_id).expect("restore selected slot");
+            assert!(!selected.join(OWNED_VPK_NAME).exists());
+            assert_eq!(
+                fs::read(&foreign).expect("foreign unchanged"),
+                b"foreign data"
+            );
+            let _ = fs::remove_dir_all(base);
+        }
+    }
+
+    #[test]
+    fn interrupted_selected_language_deployment_recovers_without_touching_other_folders() {
+        let base = root("russian-recovery");
+        let app = base.join("app");
+        let dota = game(&base);
+        let russian = dota.join("game/dota_russian");
+        let dutch = dota.join("game/dota_dutch");
+        fs::create_dir_all(&russian).expect("Russian folder");
+        fs::create_dir_all(&dutch).expect("Dutch folder");
+        fs::write(russian.join("gameinfo.gi"), b"fixture").expect("language marker");
+        fs::write(dutch.join(OWNED_VPK_NAME), b"other mod").expect("foreign file");
+        let bytes = package(b"interrupted Russian tree");
+        assert_eq!(
+            deploy_with_failure(
+                &app,
+                &dota,
+                &bytes,
+                &sha256(&bytes),
+                GameLanguage::Russian,
+                FailurePoint::AfterReplace,
+            )
+            .err()
+            .as_deref(),
+            Some("injected_failure")
+        );
+        assert_eq!(
+            fs::read(russian.join(OWNED_VPK_NAME)).expect("published before failure"),
+            bytes
+        );
+        let recovered = recover_pending(&app, &dota).expect("recover Russian operation");
+        assert_eq!(recovered.rolled_back, 1);
+        assert!(!russian.join(OWNED_VPK_NAME).exists());
+        assert_eq!(
+            fs::read(dutch.join(OWNED_VPK_NAME)).expect("other language unchanged"),
+            b"other mod"
+        );
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn legacy_dutch_journal_without_language_remains_restorable() {
+        let base = root("legacy-dutch");
+        let app = base.join("app");
+        let dota = game(&base);
+        let bytes = package(b"old-tree");
+        let receipt =
+            deploy_verified_vpk(&app, &dota, &bytes, &sha256(&bytes)).expect("Dutch deployment");
+        let root = app.join("engine-v1/game-deployment");
+        for path in [
+            root.join("ownership.json"),
+            root.join("journals")
+                .join(format!("{}.json", receipt.operation_id)),
+        ] {
+            let mut value: serde_json::Value =
+                serde_json::from_slice(&fs::read(&path).expect("record")).expect("valid JSON");
+            value
+                .as_object_mut()
+                .expect("record object")
+                .remove("language");
+            fs::write(&path, serde_json::to_vec(&value).expect("JSON bytes"))
+                .expect("legacy record");
+        }
+        let current = current_verified_deployment(&app, &dota, &sha256(&bytes))
+            .expect("read old deployment")
+            .expect("owned Dutch deployment");
+        assert_eq!(current.language, GameLanguage::Dutch);
+        rollback(&app, &dota, &receipt.operation_id).expect("restore old deployment");
+        assert!(!dota.join("game/dota_dutch/pak66_dir.vpk").exists());
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
     fn updates_only_an_owned_slot_and_restores_exact_bytes() {
         let base = root("owned-update");
         let app = base.join("app");
@@ -812,6 +1174,12 @@ mod tests {
         fs::create_dir_all(dota.join("game/dota_dutch")).expect("locale");
         fs::write(dota.join("game/dota_dutch/pak66_dir.vpk"), b"foreign").expect("foreign");
         let bytes = package(b"tree");
+        assert_eq!(
+            preview_language_destination(&app, &dota, GameLanguage::Dutch)
+                .err()
+                .as_deref(),
+            Some("deployment_target_foreign")
+        );
         assert_eq!(
             deploy_verified_vpk(&app, &dota, &bytes, &sha256(&bytes))
                 .err()
@@ -842,6 +1210,7 @@ mod tests {
                 &dota,
                 &first,
                 &sha256(&first),
+                GameLanguage::Dutch,
                 FailurePoint::AfterPrepared,
             )
             .err()
@@ -858,6 +1227,7 @@ mod tests {
                 &dota,
                 &second,
                 &sha256(&second),
+                GameLanguage::Dutch,
                 FailurePoint::AfterReplace,
             )
             .err()

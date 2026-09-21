@@ -8,7 +8,9 @@ that is not a compatibility or public-release claim.
 - Commit: `3a85572029f2c264e2a17cee1c9b54ce93e4fd93`
 - Upstream directory: `Minify/mods/Tree Mod/files`
 - Upstream license declaration: GPL-3.0
-- Intended target: `game/dota_dutch/pak66_dir.vpk`
+- Intended target: `game/dota_<selected-language>/pak66_dir.vpk`, with an
+  explicit choice of `dutch`, `russian`, `koreana`, or `schinese`.
+- `game/dota_betterfy` is not a verified mount point and is not used.
 - Runtime actions allowed: data-only VPK construction; no upstream scripts
 - Compatibility note: default terrain is required
 
@@ -66,6 +68,11 @@ paths, sizes, and hashes below were not changed.
 - The internal pilot exposes only the pinned Tree Mod path. Generic staged-VPK
   deployment remains debug-only. The fixed pilot command rechecks the exact
   pinned VPK after staging before any game-directory write.
-- macOS does not permit game deployment. Windows compatibility, rollback, Steam
-  interaction and visible in-game result remain unverified until the user runs
-  the internal installer and returns evidence.
+- Destination preview does not create a language folder in Dota. Synthetic
+  tests cover all four allowlisted destination folders, foreign-file isolation,
+  rollback, and interrupted Russian-folder recovery; these are not in-game
+  compatibility evidence.
+- macOS does not permit game deployment. The founder reports a Windows installer
+  run in which Tree Mod changed the trees as intended through `dota_dutch`.
+  Rollback, recovery, and the three newly selectable language folders remain
+  unverified on Windows. English has no separate game language folder.

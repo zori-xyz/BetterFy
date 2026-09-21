@@ -1,7 +1,7 @@
+use crate::game_language::GameLanguage;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-const MANAGED_LANGUAGE: &str = "dutch";
 const DOTA_CONFIG_PATH: [&str; 7] = [
     "UserLocalConfigStore",
     "Software",
@@ -268,15 +268,15 @@ fn command_tokens(value: &str) -> Result<Vec<String>, String> {
     Ok(tokens)
 }
 
-fn add_managed_argument(existing: &str) -> Result<String, String> {
+fn add_managed_argument(existing: &str, language: GameLanguage) -> Result<String, String> {
     let tokens = command_tokens(existing)?;
     let mut managed_language_found = false;
     for (index, token) in tokens.iter().enumerate() {
         if token.eq_ignore_ascii_case("-language") {
-            let Some(language) = tokens.get(index + 1) else {
+            let Some(existing_language) = tokens.get(index + 1) else {
                 return Err("launch_options_invalid".to_string());
             };
-            if language.eq_ignore_ascii_case(MANAGED_LANGUAGE) {
+            if existing_language.eq_ignore_ascii_case(language.suffix()) {
                 if managed_language_found {
                     return Err("launch_options_invalid".to_string());
                 }
@@ -300,7 +300,10 @@ fn add_managed_argument(existing: &str) -> Result<String, String> {
     } else {
         " "
     };
-    Ok(format!("{existing}{separator}-language {MANAGED_LANGUAGE}"))
+    Ok(format!(
+        "{existing}{separator}-language {}",
+        language.suffix()
+    ))
 }
 
 fn encode_vdf(value: &str) -> String {
@@ -308,6 +311,13 @@ fn encode_vdf(value: &str) -> String {
 }
 
 pub fn plan_managed_launch_option(contents: &str) -> Result<LaunchOptionPlan, String> {
+    plan_launch_option_for_language(contents, GameLanguage::Dutch)
+}
+
+pub fn plan_launch_option_for_language(
+    contents: &str,
+    language: GameLanguage,
+) -> Result<LaunchOptionPlan, String> {
     let root = parse(contents)?;
     let app_path = &DOTA_CONFIG_PATH[..DOTA_CONFIG_PATH.len() - 1];
     let app = find_value(&root, app_path).ok_or_else(|| "dota_config_missing".to_string())?;
@@ -317,7 +327,7 @@ pub fn plan_managed_launch_option(contents: &str) -> Result<LaunchOptionPlan, St
 
     let updated_contents = match find_value(&root, &DOTA_CONFIG_PATH) {
         Some(Value::Text(value)) => {
-            let updated = add_managed_argument(&value.decoded)?;
+            let updated = add_managed_argument(&value.decoded, language)?;
             if updated == value.decoded {
                 contents.to_string()
             } else {
@@ -335,8 +345,10 @@ pub fn plan_managed_launch_option(contents: &str) -> Result<LaunchOptionPlan, St
                 .chars()
                 .take_while(|character| matches!(character, ' ' | '\t'))
                 .collect::<String>();
-            let insertion =
-                format!("{indentation}\t\"LaunchOptions\"\t\t\"-language {MANAGED_LANGUAGE}\"\n");
+            let insertion = format!(
+                "{indentation}\t\"LaunchOptions\"\t\t\"-language {}\"\n",
+                language.suffix()
+            );
             let mut result = String::with_capacity(contents.len() + insertion.len());
             result.push_str(&contents[..app.close_line_start]);
             result.push_str(&insertion);
@@ -398,6 +410,30 @@ mod tests {
         assert!(!plan.changed);
         assert_eq!(plan.updated_contents, input);
         assert_eq!(plan.before_sha256, plan.after_sha256);
+    }
+
+    #[test]
+    fn selected_language_is_preserved_and_conflicts_with_another() {
+        let input = local_config(Some("-novid"));
+        for language in GameLanguage::ALL {
+            let plan = plan_launch_option_for_language(&input, language).expect("language plan");
+            assert!(plan
+                .updated_contents
+                .contains(&format!("-novid -language {}", language.suffix())));
+            let repeat = plan_launch_option_for_language(&plan.updated_contents, language)
+                .expect("same language");
+            assert!(!repeat.changed);
+            for other in GameLanguage::ALL {
+                if other != language {
+                    assert_eq!(
+                        plan_launch_option_for_language(&plan.updated_contents, other)
+                            .err()
+                            .as_deref(),
+                        Some("launch_option_conflict")
+                    );
+                }
+            }
+        }
     }
 
     #[test]

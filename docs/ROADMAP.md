@@ -24,7 +24,7 @@ Completed:
 ## Active milestone: one real patch, end to end
 
 The next engine slice is deliberately narrow: package the pinned Minify Tree Mod,
-deploy it to BetterFy's fixed language slot, prove it in Dota on Windows, and
+deploy it to one selected, allowlisted language slot, prove it in Dota on Windows, and
 restore the previous state exactly. No Workshop or community layer starts first.
 
 Implemented foundation:
@@ -49,7 +49,8 @@ The deployment foundation now also includes:
 
 - deterministic VPK v1 construction with embedded entries and CRC verification;
 - a second VPK open and validation pass before a staged artifact is accepted;
-- a single fixed BetterFy target, `game/dota_dutch/pak66_dir.vpk`;
+- a single BetterFy-owned `pak66_dir.vpk` target under the selected language
+  folder; the generic debug path remains fixed to `game/dota_dutch`;
 - refusal to replace a target not proven to be owned by BetterFy;
 - verified backup, same-directory publish, installed-hash verification, journal,
   crash recovery, and rollback that refuses external edits;

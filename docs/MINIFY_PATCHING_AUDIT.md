@@ -40,6 +40,14 @@ The important consequence is persistent activation: the language launch option
 and side-loaded VPK files remain in place. A player can later launch Dota normally
 through Steam without opening the patcher again.
 
+This describes the pinned Minify implementation, not proof that every custom
+`-language` suffix is mounted by the current Dota client. The founder has
+observed Tree Mod working with BetterFy's `dutch` pilot slot on Windows.
+The pilot now allows a pre-install choice of Dutch, Russian, Korean or Simplified
+Chinese; the latter three still need in-game Windows verification. A branded
+`dota_betterfy` directory is not used, and English has no separate language
+folder. The selected language may change Dota text and audio.
+
 ## Supported transformation vocabulary
 
 Minify mods use several mechanisms. BetterFy will represent supported mechanisms
@@ -206,5 +214,5 @@ as replacing trees with small round bushes and requires the default terrain.
 BetterFy will not copy the upstream patcher or silently vendor these game-derived
 resources. Before enabling the item, every resource needs a pinned path, byte size,
 SHA-256, source notice, and accepted distribution decision. Only those bytes may
-enter the deterministic VPK builder. The output is fixed to BetterFy's owned
-`game/dota_dutch/pak66_dir.vpk` slot.
+enter the deterministic VPK builder. The output is restricted to BetterFy's
+owned `pak66_dir.vpk` slot in the selected allowlisted language folder.

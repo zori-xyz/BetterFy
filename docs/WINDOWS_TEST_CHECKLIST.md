@@ -85,27 +85,58 @@ BetterFy must not force-terminate processes and must never launch Dota itself.
   remain.
 
 This flow writes only inside BetterFy application data. The game-deployment
-transaction exists behind a strict verified-VPK boundary. The fixed Tree Mod
+transaction exists behind a strict verified-VPK boundary. The Tree Mod language
 path is available for the internal pilot; no other catalog item may be treated
-as installable. Do not report a successful real patch before the Windows run.
+as installable. Dutch has founder-observed in-game evidence, not a general
+compatibility result for other languages or mods.
 
 ## 7. Tree Mod internal pilot
 
 - Confirm `pak66_dir.vpk` is absent, or is identified by BetterFy as its own prior
   install. A foreign file in that slot must block the operation.
-- Run with Dota open and confirm graceful shutdown is required before any write.
+- Run with Dota and Steam open. After clicking Install, confirm BetterFy requests
+  graceful shutdown before any write and refuses to continue if either remains
+  open after the timeout. No force-kill should occur.
 - Select only Tree Mod in My build. Prepare the 21 resources and check the verified
-  plan. Close Dota 2 and Steam, confirm installation, and check the receipt.
+  plan. Choose the game language before installation, then check that both the
+  receipt and actual target file use `game/dota_<selected-language>/pak66_dir.vpk`.
+  A BetterFy success state alone is not proof that Dota mounted the file.
+- Before confirming installation, verify that merely previewing the selected
+  destination did not create a new `dota_<selected-language>` folder in `game`.
 - During preparation, cancel once, reopen the app, and resume. The verified file
   count must continue without publishing an unverified resource.
-- Choose the intended Steam profile in the Tree Mod panel and confirm activation.
-  Verify BetterFy starts Steam only; Dota must remain closed. Start Dota manually.
-- Confirm the default-terrain trees are replaced as described by the pilot.
+- Choose the intended Steam profile before installation. Verify BetterFy adds
+  `-language <selected-language>` only to that profile and restarts Steam, but does not launch
+  Dota. Repeat without a selected profile: Steam should restart without a profile
+  edit, and the command should be available to copy for manual entry.
+- Start Dota manually. Record the visible game language and whether it can be
+  changed without losing the Tree Mod effect.
+- Confirm the default-terrain trees are replaced as described by the pilot for
+  each newly selected language. Dutch has already been observed by the founder;
+  Russian, Korean and Simplified Chinese have not.
+- Restore the existing Dutch operation before switching to another language.
+  Check that the prior VPK and BetterFy-owned launch option are removed and no
+  unrelated Steam option or language-folder file changes.
+- Do not switch the installer to `dota_betterfy` until a separate Windows test
+  demonstrates that the current Dota client mounts that exact folder.
 - Close Dota and Steam, then roll back in BetterFy. Verify both the exact
   previous target bytes and Steam launch options return, or the initial BetterFy
   target disappears when no previous file existed.
 - Restart BetterFy between install and rollback once. The installed operation
   and its restore action must still be discoverable.
+- For version 0.1.3, restart BetterFy after automatic Steam profile activation
+  and verify that the same Steam profile and its rollback operation are found
+  without browser storage. Then restore and confirm the VPK and the exact
+  previous launch options are both restored. A pre-0.1.3 Steam edit has no
+  durable Tree Mod link and must be checked separately.
+- Interrupt the Steam profile change in an internal failure-injection build.
+  BetterFy must require Steam recovery before allowing VPK rollback, and the
+  recovery action must not overwrite an unrelated Steam edit.
+- In a disposable Windows test installation, remove only BetterFy's pinned
+  downloaded-resource cache after install, then restart BetterFy. The owned VPK
+  and file-restore action should remain visible, while automatic Steam setup is
+  blocked until the package can be verified again. Do not delete the deployment
+  journal or its private backup for this test.
 - Repeat with a failure-injection internal build on both sides of atomic publish.
   Recovery must be deterministic and diagnostics must remain safe.
 

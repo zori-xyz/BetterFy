@@ -41,7 +41,7 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - Preserve the Home, Mods, Skin Library, Settings, and Profile workflows.
 - Preserve Russian and English localization.
 - Mod selection must communicate added, removed, conflicting, building, ready, and error states unambiguously.
-- Only the pinned Tree Mod internal Windows pilot may request a game-directory write. Its native Windows behavior and compatibility remain unverified; the interface must not imply that synthetic transaction tests are verified game-file behavior. General catalog deployment remains unavailable.
+- Only the pinned Tree Mod internal Windows pilot may request a game-directory write. The founder has observed the intended trees in Dota with the Dutch language slot on Windows. Other languages, rollback, recovery, and general compatibility remain unverified; general catalog deployment remains unavailable.
 - Original game files must be described as protected only where the prototype already presents that intended capability.
 - Avoid dependencies on Dota-owned artwork for core product identity. Dota-inspired assets should be transformed into a distinct BetterFy production language.
 - The repository is intended to be open source.
@@ -80,7 +80,7 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - Telegram Stars provides 3-day and 15-day passes plus recurring 30-day access.
   Privacy-safe per-device session listing and revocation are implemented.
 - Team web catalog: `https://h6rd.github.io/Dota2PornFxWeb/`.
-- No production catalog delivery, live Dota deployment, compatibility benchmark, or
+- No production catalog delivery, general Dota deployment, compatibility benchmark, or
   community activity data is available yet. Future surfaces must not fabricate
   these claims.
 
