@@ -61,11 +61,13 @@ Now covered by the internal Tree Mod pilot (not a product enablement claim):
   checks, immutable cache reads, deterministic VPK construction, reopen, and
   journaled staging/rollback on macOS;
 
-Still required before the pilot is enabled:
+Still required before public enablement (the fixed internal UI path is now wired):
 
 - review distribution and notices for compiled game-derived resources;
-- expose a reviewed, cancellable Tree Mod plan and truthful progress in the UI;
-- bind confirmed staging and deployment into one resumable Windows journey;
+- exercise the cancellable per-resource intake worker on Windows and confirm
+  that an interrupted download resumes from the verified cache;
+- validate the confirmed staging/deployment and post-restart recovery journey on
+  Windows; the fixed command and rollback UI are wired but unproven there;
 - repeat containment and output limits if an archive/extraction package is added;
 - add manifest signature and key-rotation policy;
 - pass the native Windows matrix, including interrupted deploy and rollback.
@@ -77,10 +79,10 @@ restarts, and every tested interruption returns to an explainable recoverable st
 
 - complete provenance, redistribution, and signed-manifest review for the
   pinned resources;
-- expose the internal plan and verified staging receipt through a cancellable,
-  truthful user flow only after its security and UX gates pass;
-- connect the existing confirmed runtime, deploy, recovery, Steam activation, and
-  rollback commands as one resumable operation;
+- verify the per-resource cancellation and progress UI under slow and broken
+  network conditions on Windows;
+- validate the connected Steam-profile activation and interrupted-operation
+  recovery actions on Windows. The user still starts Dota manually;
 - expose factual progress and recovery states without presenting success before
   the final installed-byte verification;
 - record the native Windows evidence in the test checklist.

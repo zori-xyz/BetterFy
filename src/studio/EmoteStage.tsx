@@ -1,6 +1,4 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { ChevronRight, Pause, Play } from "lucide-react";
-import { useLocale } from "../i18n";
 import { useMotion } from "./useMotion";
 import kitty from "../assets/dota-emoticons/kitty-jug.gif";
 import kittyStill from "../assets/dota-emoticons/kitty-jug.png";
@@ -33,20 +31,14 @@ export function emoteStyle(index: number): CSSProperties {
 }
 
 export default function EmoteStage({ motion, active, onChange }: { motion: boolean; active: number; onChange: (index: number) => void }) {
-  const { isRu } = useLocale();
   const { animated, visible } = useMotion(motion);
   const [paused, setPaused] = useState(false);
-  const [stopped, setStopped] = useState(false);
   useEffect(() => {
-    if (!animated || !visible || paused || stopped) return;
+    if (!animated || !visible || paused) return;
     const timer = window.setTimeout(() => onChange((active + 1) % emoteMoods.length), 7500);
     return () => window.clearTimeout(timer);
-  }, [active, animated, visible, paused, stopped, onChange]);
+  }, [active, animated, visible, paused, onChange]);
   return <div className="s-emote-stage" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }}>
-    <div className="s-emote-portrait" aria-hidden="true">{emoteMoods.map((mood, index) => <img key={mood.name} className={active === index ? "is-active" : ""} src={active === index && animated && visible && !stopped && !paused ? mood.image : mood.still} alt="" width="96" height="96" />)}</div>
-    <div className="s-emote-tools">
-      <button className="s-icon" onClick={() => onChange((active + 1) % emoteMoods.length)} aria-label={isRu ? "Следующий эмодзи" : "Next emoticon"}><ChevronRight /></button>
-      {animated && <button className="s-icon" onClick={() => setStopped(value => !value)} aria-label={isRu ? (stopped ? "Продолжить анимацию эмодзи" : "Остановить анимацию эмодзи") : (stopped ? "Resume emoticon animation" : "Pause emoticon animation")} aria-pressed={stopped}>{stopped ? <Play /> : <Pause />}</button>}
-    </div>
+    <div className="s-emote-portrait" aria-hidden="true">{emoteMoods.map((mood, index) => <img key={mood.name} className={active === index ? "is-active" : ""} src={active === index && animated && visible && !paused ? mood.image : mood.still} alt="" width="96" height="96" />)}</div>
   </div>;
 }

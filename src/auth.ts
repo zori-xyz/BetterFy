@@ -1,14 +1,14 @@
 export type AuthSession = {
   userId: string;
   displayName: string;
-  username?: string;
+  username?: string | null;
   accessTier: string;
-  accessExpiresAt?: number;
-  accessPlan?: string;
-  accessRecurring?: boolean;
-  sessionId?: string;
-  sessionToken?: string;
-  avatarAvailable?: boolean;
+  accessExpiresAt?: number | null;
+  accessPlan?: string | null;
+  accessRecurring?: boolean | null;
+  sessionId?: string | null;
+  sessionToken?: string | null;
+  avatarAvailable?: boolean | null;
   source: "demo" | "server";
 };
 
@@ -146,14 +146,14 @@ const isAuthSession = (value: unknown): value is Omit<AuthSession, "source"> => 
   return (
     typeof record.userId === "string"
     && typeof record.displayName === "string"
-    && (record.username === undefined || typeof record.username === "string")
+    && (record.username == null || typeof record.username === "string")
     && typeof record.accessTier === "string"
-    && (record.accessExpiresAt === undefined || typeof record.accessExpiresAt === "number")
-    && (record.accessPlan === undefined || typeof record.accessPlan === "string")
-    && (record.accessRecurring === undefined || typeof record.accessRecurring === "boolean")
-    && (record.sessionId === undefined || typeof record.sessionId === "string")
-    && (record.sessionToken === undefined || typeof record.sessionToken === "string")
-    && (record.avatarAvailable === undefined || typeof record.avatarAvailable === "boolean")
+    && (record.accessExpiresAt == null || typeof record.accessExpiresAt === "number")
+    && (record.accessPlan == null || typeof record.accessPlan === "string")
+    && (record.accessRecurring == null || typeof record.accessRecurring === "boolean")
+    && (record.sessionId == null || typeof record.sessionId === "string")
+    && (record.sessionToken == null || typeof record.sessionToken === "string")
+    && (record.avatarAvailable == null || typeof record.avatarAvailable === "boolean")
   );
 };
 

@@ -50,6 +50,7 @@ struct PendingChallenge {
 pub struct AuthState {
     session: Mutex<Option<ActiveSession>>,
     pending_challenge: Mutex<Option<PendingChallenge>>,
+    refresh_lock: Mutex<()>,
 }
 
 #[derive(Deserialize)]
@@ -207,7 +208,24 @@ fn commit_credentials(
     Ok(profile)
 }
 
-fn refresh_from_vault(state: &AuthState) -> Result<Option<AuthProfile>, String> {
+fn refresh_from_vault(
+    state: &AuthState,
+    stale_access_token: Option<&str>,
+) -> Result<Option<AuthProfile>, String> {
+    let _refresh_guard = state
+        .refresh_lock
+        .lock()
+        .map_err(|_| "auth_state_unavailable".to_string())?;
+    if let Some(session) = state
+        .session
+        .lock()
+        .map_err(|_| "auth_state_unavailable".to_string())?
+        .clone()
+    {
+        if stale_access_token.is_none_or(|token| token != session.access_token) {
+            return Ok(Some(session.profile.clone()));
+        }
+    }
     let Some(refresh_token) = read_refresh_credential()? else {
         return Ok(None);
     };
@@ -255,11 +273,13 @@ fn authenticated_request(
             .send()
             .map_err(|_| "auth_service_unavailable".to_string())
     };
-    let first = send(&access_token(state)?)?;
+    let first_token = access_token(state)?;
+    let first = send(&first_token)?;
     if first.status().as_u16() != 401 {
         return Ok(first);
     }
-    refresh_from_vault(state)?.ok_or_else(|| "auth_session_expired".to_string())?;
+    refresh_from_vault(state, Some(&first_token))?
+        .ok_or_else(|| "auth_session_expired".to_string())?;
     send(&access_token(state)?)
 }
 
@@ -298,11 +318,13 @@ fn authenticated_email_request(
             .send()
             .map_err(|_| "auth_service_unavailable".to_string())
     };
-    let first = send(&access_token(state)?)?;
+    let first_token = access_token(state)?;
+    let first = send(&first_token)?;
     if first.status().as_u16() != 401 {
         return Ok(first);
     }
-    refresh_from_vault(state)?.ok_or_else(|| "auth_session_expired".to_string())?;
+    refresh_from_vault(state, Some(&first_token))?
+        .ok_or_else(|| "auth_session_expired".to_string())?;
     send(&access_token(state)?)
 }
 
@@ -663,7 +685,7 @@ pub fn auth_restore_session(
     {
         return Ok(Some(session.profile));
     }
-    refresh_from_vault(&state)
+    refresh_from_vault(&state, None)
 }
 
 #[tauri::command]
@@ -769,6 +791,32 @@ pub fn auth_logout(state: tauri::State<'_, AuthState>) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn concurrent_restore_reuses_the_in_memory_session() {
+        let state = AuthState::default();
+        let profile = AuthProfile {
+            user_id: "bf-user".into(),
+            display_name: "Tester".into(),
+            username: None,
+            access_tier: "early-access".into(),
+            access_expires_at: None,
+            access_plan: None,
+            access_recurring: None,
+            session_id: None,
+            avatar_available: None,
+        };
+        *state.session.lock().expect("session lock") = Some(ActiveSession {
+            profile: profile.clone(),
+            access_token: "current-access-token".into(),
+        });
+        for stale_token in [None, Some("old-access-token")] {
+            let restored = refresh_from_vault(&state, stale_token)
+                .expect("reuse session without reading the vault")
+                .expect("active profile");
+            assert_eq!(restored.user_id, profile.user_id);
+        }
+    }
 
     #[test]
     fn public_profile_serialization_never_contains_tokens() {

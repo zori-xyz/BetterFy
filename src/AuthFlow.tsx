@@ -112,6 +112,8 @@ const copy = {
     challengeDenied: "Запрос отклонён. Можно начать новый или войти по коду.",
     challengeExpired: "Запрос истёк. Открой бота ещё раз или используй шестизначный код.",
     challengeFailed: "Не удалось создать запрос. Проверь соединение или войди по коду.",
+    challengePollFailed: "Не удаётся получить подтверждение на этом устройстве. Проверь соединение или начни вход заново.",
+    challengeVaultFailed: "Telegram подтвердил вход, но Windows не сохранила сеанс. Попробуй снова и сообщи нам об этой ошибке.",
     codeStep: "TELEGRAM / CODE",
     codeTitle: "Введи код из бота",
     codeText: "Шесть цифр из сообщения @BeterFyBot.",
@@ -194,6 +196,8 @@ const copy = {
     challengeDenied: "The request was denied. Start a new one or use a code.",
     challengeExpired: "The request expired. Open the bot again or use a six-digit code.",
     challengeFailed: "The request could not be created. Check your connection or use a code.",
+    challengePollFailed: "This device cannot receive the confirmation. Check your connection or start sign-in again.",
+    challengeVaultFailed: "Telegram approved sign-in, but Windows could not save the session. Try again and report this error.",
     codeStep: "TELEGRAM / CODE",
     codeTitle: "Enter the bot code",
     codeText: "Six digits from the @BeterFyBot message.",
@@ -338,6 +342,7 @@ export default function AuthFlow({
     if (stage !== "awaiting") return undefined;
     let cancelled = false;
     let timer = 0;
+    let consecutiveFailures = 0;
     const poll = async () => {
       if (cancelled) return;
       if (Math.floor(Date.now() / 1000) >= challengeExpiresAt) {
@@ -348,6 +353,8 @@ export default function AuthFlow({
       try {
         const result = await pollTelegramDeviceChallenge();
         if (cancelled) return;
+        consecutiveFailures = 0;
+        setChallengeMessage(null);
         if (result.state === "confirmed" && result.profile) {
           setStage("confirmed");
           await new Promise((resolve) => window.setTimeout(resolve, 1000));
@@ -359,8 +366,11 @@ export default function AuthFlow({
           setStage("login");
           return;
         }
-      } catch {
-        // A temporary network failure does not destroy the local challenge.
+      } catch (cause) {
+        if (++consecutiveFailures >= 2) {
+          const code = cause instanceof Error ? cause.message : cause;
+          setChallengeMessage(code === "auth_vault_unavailable" ? t.challengeVaultFailed : t.challengePollFailed);
+        }
       }
       timer = window.setTimeout(poll, challengePollMs);
     };
@@ -369,7 +379,7 @@ export default function AuthFlow({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [challengeExpiresAt, challengePollMs, onComplete, stage, t.challengeDenied, t.challengeExpired]);
+  }, [challengeExpiresAt, challengePollMs, onComplete, stage, t.challengeDenied, t.challengeExpired, t.challengePollFailed, t.challengeVaultFailed]);
 
   const verify = async (event: FormEvent) => {
     event.preventDefault();
@@ -539,6 +549,7 @@ export default function AuthFlow({
             <h1 className="accent-title"><AccentTitle text={t.awaiting} /></h1>
             <p>{t.awaitingText}</p>
             <div className="challenge-wait-status"><LoaderCircle className="spin" /><span>{t.awaitingStatus}</span></div>
+            {challengeMessage && <p className="auth-inline-error" role="alert">{challengeMessage}</p>}
             <div className="challenge-actions">
               {challengeLink && <button className="challenge-reopen" type="button" onClick={reopenTelegram}><MessageCircle />{t.openAgain}<ExternalLink /></button>}
               <button type="button" onClick={() => {

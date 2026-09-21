@@ -1,7 +1,8 @@
 # Tree Mod pilot ledger
 
 This ledger fixes the first real-patch candidate before any resource is accepted
-by BetterFy. It is evidence, not an enabled catalog package.
+by BetterFy. The catalog exposes it for an internal Windows installation pilot;
+that is not a compatibility or public-release claim.
 
 - Pinned source repository: `Egezenn/dota2-minify` (Tree Mod credited upstream to `robbyz512`)
 - Commit: `3a85572029f2c264e2a17cee1c9b54ce93e4fd93`
@@ -11,8 +12,9 @@ by BetterFy. It is evidence, not an enabled catalog package.
 - Runtime actions allowed: data-only VPK construction; no upstream scripts
 - Compatibility note: default terrain is required
 
-The repository does not contain these compiled game resources. Distribution and
-source-notice review must be accepted before a production registry points to them.
+The repository does not contain these compiled game resources. The founder reports
+permission from the upstream developer for this pilot. The exact grant and required
+notices are not recorded here, so public redistribution remains gated.
 
 The pinned source path was checked against the maintained `Egezenn/dota2-minify`
 repository. The previously recorded `robbyz23` owner returned 404. The resource
@@ -44,7 +46,7 @@ paths, sizes, and hashes below were not changed.
 
 ## Enablement gates
 
-1. Accept the distribution and attribution decision for the compiled resources.
+1. Record the distribution and attribution terms for a public release.
 2. Convert this ledger into a signed production package manifest without changing
    a path, size, or hash.
 3. Download each resource through the pinned HTTPS content boundary and publish it
@@ -61,5 +63,9 @@ paths, sizes, and hashes below were not changed.
 - The local integration test downloaded all 21 resources from the pinned commit,
   built and reopened a VPK, staged it with a journal, then rolled staging back.
   This is a macOS synthetic test, not a Dota installation or compatibility test.
-- Tree Mod is not exposed in the user catalog or production installer. The
-  deployment command rejects release builds pending rights and Windows evidence.
+- The internal pilot exposes only the pinned Tree Mod path. Generic staged-VPK
+  deployment remains debug-only. The fixed pilot command rechecks the exact
+  pinned VPK after staging before any game-directory write.
+- macOS does not permit game deployment. Windows compatibility, rollback, Steam
+  interaction and visible in-game result remain unverified until the user runs
+  the internal installer and returns evidence.

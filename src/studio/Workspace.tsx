@@ -4,7 +4,7 @@ import AuthFlow from "../AuthFlow";
 import OnboardingFlow from "../OnboardingFlow";
 import AppUpdater from "../AppUpdater";
 import BetterFyWordmark from "../BetterFyWordmark";
-import { restoreDesktopSession, revokeAuthSession, type AuthSession } from "../auth";
+import { fetchTelegramAvatar, restoreDesktopSession, revokeAuthSession, type AuthSession } from "../auth";
 import type { GameInstallation } from "../engine";
 import { useLocale, modCount } from "../i18n";
 import { getStorageItem, getStoredStringArray, setStorageItem } from "../storage";
@@ -45,12 +45,28 @@ export default function Workspace({ session, installation, theme, setTheme, moti
   const [toast, setToast] = useState<{ text: string; key: number } | null>(null);
   const [launchNotice, setLaunchNotice] = useState(false);
   const [storageError, setStorageError] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollPositions = useRef<Partial<Record<Route, number>>>({});
   const currentRoute = useRef(route);
   const buildTimer = useRef<number | null>(null);
   const busy = build.phase === "preparing" || build.phase === "restoring";
   const preview = !session || session.source === "demo";
+  useEffect(() => {
+    let active = true;
+    let objectUrl: string | null = null;
+    setAvatarUrl(null);
+    if (preview || !session?.avatarAvailable) return undefined;
+    fetchTelegramAvatar(session).then(blob => {
+      if (!active || !blob) return;
+      objectUrl = URL.createObjectURL(blob);
+      setAvatarUrl(objectUrl);
+    }).catch(() => undefined);
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [session, preview]);
   const labels = { home: isRu ? "Обзор" : "Overview", catalog: isRu ? "Каталог" : "Discover", build: isRu ? "Моя сборка" : "My build", library: isRu ? "Библиотека" : "Library", settings: isRu ? "Настройки" : "Settings", profile: isRu ? "Профиль" : "Profile" };
   const notify = (text: string) => setToast({ text, key: Date.now() });
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(null), 3800); return () => window.clearTimeout(timer); }, [toast]);
@@ -84,16 +100,16 @@ export default function Workspace({ session, installation, theme, setTheme, moti
   const cancelBuild = () => { if (buildTimer.current !== null) window.clearInterval(buildTimer.current); buildTimer.current = null; setBuild(initialBuild); notify(isRu ? "Подготовка отменена. Твой выбор сохранён." : "Preparation cancelled. Your selection is saved."); };
   return <main className="s-app">
     <a className="s-skip" href="#studio-content">{isRu ? "К содержимому" : "Skip to content"}</a>
-    <aside className="s-sidebar"><div className="s-brand" data-tauri-drag-region><BetterFyWordmark /></div><button className="s-game-switch" onClick={onReconnect} disabled={busy}><span className="s-dota-icon"><Gamepad2 /></span><span><strong>Dota 2</strong><small>{isRu ? "Твоя игра" : "Your game"}</small></span><ChevronDown /></button><span className="s-nav-label">{isRu ? "ПРОСТРАНСТВО" : "WORKSPACE"}</span><nav aria-label={isRu ? "Основная навигация" : "Main navigation"}>{([{ id: "home", icon: Compass }, { id: "catalog", icon: SlidersHorizontal }, { id: "build", icon: Layers3 }, { id: "library", icon: FolderHeart }] as const).map(({ id, icon: Icon }) => <button key={id} aria-current={route === id ? "page" : undefined} onClick={() => navigate(id)}><Icon /><span>{labels[id]}</span>{id === "build" && selected.length > 0 && <b>{selected.length}</b>}</button>)}</nav><div className="s-sidebar-bottom">{selected.length > 0 && <button className="s-sidebar-build" onClick={() => navigate("build")}><span>{busy ? <LoaderCircle className="s-spin" /> : <Layers3 />}<strong>{busy ? `${build.progress}%` : modCount(selected.length, language)}</strong><ChevronRight /></span><small>{busy ? (isRu ? "Готовим твою сборку" : "Preparing your build") : (isRu ? "Продолжить настройку" : "Continue your build")}</small>{busy && <i style={{ width: `${build.progress}%` }} />}</button>}<nav><button aria-current={route === "settings" ? "page" : undefined} onClick={() => navigate("settings")}><Settings /><span>{labels.settings}</span></button><a href="https://t.me/BeterFyBot" target="_blank" rel="noreferrer"><Send /><span>{isRu ? "Помощь и идеи" : "Help & ideas"}</span><ArrowUpRight /></a><a href="https://zori-xyz.github.io/BetterFy/" target="_blank" rel="noreferrer"><Sparkles /><span>{isRu ? "Сайт BetterFy" : "BetterFy website"}</span><ArrowUpRight /></a></nav><button className="s-sidebar-profile" onClick={() => navigate("profile")} aria-current={route === "profile" ? "page" : undefined}><span className="s-mini-avatar"><CircleUserRound /></span><span><strong>{preview ? (isRu ? "Гость BetterFy" : "BetterFy guest") : session.displayName}</strong><small>{preview ? (isRu ? "Знакомство с приложением" : "Exploring the app") : (isRu ? "Аккаунт BetterFy" : "BetterFy account")}</small></span><ChevronRight /></button></div></aside>
-    <section className="s-workspace"><header className="s-topbar" data-tauri-drag-region><div className="s-breadcrumb"><span>Dota 2</span><ChevronRight /><strong>{labels[route]}</strong></div><button className="s-top-search" onClick={search}><Search /><span>{isRu ? "Найти мод" : "Find a mod"}</span><kbd>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘ K" : "Ctrl K"}</kbd></button><button className="s-prototype-badge" onClick={() => navigate("settings")} title={isRu ? "Интерактивный прототип. Файлы Dota 2 не изменяются." : "Interactive prototype. Dota 2 files are not changed."}>{isRu ? "Прототип" : "Prototype"}</button></header>
+    <aside className="s-sidebar"><div className="s-brand" data-tauri-drag-region><BetterFyWordmark /></div><button className="s-game-switch" onClick={onReconnect} disabled={busy}><span className="s-dota-icon"><Gamepad2 /></span><span><strong>Dota 2</strong><small>{isRu ? "Твоя игра" : "Your game"}</small></span><ChevronDown /></button><span className="s-nav-label">{isRu ? "ПРОСТРАНСТВО" : "WORKSPACE"}</span><nav aria-label={isRu ? "Основная навигация" : "Main navigation"}>{([{ id: "home", icon: Compass }, { id: "catalog", icon: SlidersHorizontal }, { id: "build", icon: Layers3 }, { id: "library", icon: FolderHeart }] as const).map(({ id, icon: Icon }) => <button key={id} aria-current={route === id ? "page" : undefined} onClick={() => navigate(id)}><Icon /><span>{labels[id]}</span>{id === "build" && selected.length > 0 && <b>{selected.length}</b>}</button>)}</nav><div className="s-sidebar-bottom">{selected.length > 0 && <button className="s-sidebar-build" onClick={() => navigate("build")}><span>{busy ? <LoaderCircle className="s-spin" /> : <Layers3 />}<strong>{busy ? `${build.progress}%` : modCount(selected.length, language)}</strong><ChevronRight /></span><small>{busy ? (isRu ? "Готовим твою сборку" : "Preparing your build") : (isRu ? "Продолжить настройку" : "Continue your build")}</small>{busy && <i style={{ width: `${build.progress}%` }} />}</button>}<nav><button aria-current={route === "settings" ? "page" : undefined} onClick={() => navigate("settings")}><Settings /><span>{labels.settings}</span></button><a href="https://t.me/BeterFyBot" target="_blank" rel="noreferrer"><Send /><span>{isRu ? "Помощь и идеи" : "Help & ideas"}</span><ArrowUpRight /></a><a href="https://zori-xyz.github.io/BetterFy/" target="_blank" rel="noreferrer"><Sparkles /><span>{isRu ? "Сайт BetterFy" : "BetterFy website"}</span><ArrowUpRight /></a></nav><button className="s-sidebar-profile" onClick={() => navigate("profile")} aria-current={route === "profile" ? "page" : undefined}><span className="s-mini-avatar">{avatarUrl ? <img src={avatarUrl} alt="" /> : <CircleUserRound />}</span><span><strong>{preview ? (isRu ? "Гость BetterFy" : "BetterFy guest") : session.displayName}</strong><small>{preview ? (isRu ? "Знакомство с приложением" : "Exploring the app") : (isRu ? "Аккаунт BetterFy" : "BetterFy account")}</small></span><ChevronRight /></button></div></aside>
+    <section className="s-workspace"><header className="s-topbar" data-tauri-drag-region><div className="s-breadcrumb"><span>Dota 2</span><ChevronRight /><strong>{labels[route]}</strong></div><button className="s-top-search" onClick={search}><Search /><span>{isRu ? "Найти мод" : "Find a mod"}</span><kbd>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘ K" : "Ctrl K"}</kbd></button><button className="s-prototype-badge" onClick={() => navigate("settings")} title={selected.includes("minify-tree-mod") ? (isRu ? "Реальная установка доступна только для Tree Mod на Windows." : "Real installation is available only for Tree Mod on Windows.") : (isRu ? "Интерактивный прототип. Файлы Dota 2 не изменяются." : "Interactive prototype. Dota 2 files are not changed.")}>{selected.includes("minify-tree-mod") ? (isRu ? "Пилот Tree Mod" : "Tree Mod pilot") : (isRu ? "Прототип" : "Prototype")}</button></header>
       {storageError && <div className="s-storage-warning" role="alert"><TriangleAlert />{isRu ? "Не удалось сохранить изменения на устройстве. Оставь приложение открытым." : "Changes could not be saved on this device. Keep the app open."}</div>}
       <div className="s-scroll" id="studio-content" ref={scrollRef} tabIndex={-1}><div className={`s-page s-page-${route}`} key={route}>
         {route === "home" && <Home selected={selected} motion={motion} onCatalog={openCatalog} onBuild={() => navigate("build")} onOpen={setDetails} onToggle={toggle} onCollection={preset => setCollection({ preset, replace: false })} />}
         {route === "catalog" && <Catalog filters={filters} setFilters={setFilters} selected={selected} favorites={favorites} onOpen={setDetails} onToggle={toggle} />}
-        {route === "build" && <Build ids={selected} variants={variants} state={build} onRemove={toggle} onOpen={setDetails} onCatalog={() => openCatalog()} onStart={startBuild} onCancel={cancelBuild} onSave={openSave} onReset={() => setBuild(initialBuild)} onResolve={(keep, alternatives) => saveSelection(selected.filter(id => id === keep.id || !alternatives.some(mod => mod.id === id)))} onPlay={() => setLaunchNotice(true)} />}
+        {route === "build" && <Build ids={selected} variants={variants} state={build} installation={installation} preview={preview} onRemove={toggle} onOpen={setDetails} onCatalog={() => openCatalog()} onStart={startBuild} onCancel={cancelBuild} onSave={openSave} onReset={() => setBuild(initialBuild)} onResolve={(keep, alternatives) => saveSelection(selected.filter(id => id === keep.id || !alternatives.some(mod => mod.id === id)))} onPlay={() => setLaunchNotice(true)} />}
         {route === "library" && <Library onApply={preset => setCollection({ preset, replace: true })} onSave={openSave} onCatalog={() => openCatalog()} notify={notify} revision={libraryRevision} />}
         {route === "settings" && <Preferences theme={theme} setTheme={setTheme} motion={motion} setMotion={setMotion} installation={installation} onReconnect={onReconnect} />}
-        {route === "profile" && <Profile session={session} onSignOut={onSignOut} />}
+        {route === "profile" && <Profile session={session} avatarUrl={avatarUrl} onSignOut={onSignOut} />}
         <footer className="s-page-footer"><span>BetterFy · Dota 2</span><span>{isRu ? "Твои моды. Твой выбор." : "Your mods. Your choice."}</span></footer>
       </div></div>
     </section>

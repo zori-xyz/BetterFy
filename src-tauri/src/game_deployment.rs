@@ -490,6 +490,50 @@ pub(crate) fn deploy_verified_vpk(
     )
 }
 
+pub(crate) fn current_verified_deployment(
+    app_data_root: &Path,
+    dota_root: &Path,
+    expected_sha256: &str,
+) -> Result<Option<DeploymentReceipt>, String> {
+    let target = target_for(dota_root)?;
+    let identity = target_identity(dota_root)?;
+    let (root, _, journals) = owned_roots(app_data_root)?;
+    let _lock = transaction_lock(&root)?;
+    let ownership_file = ownership_path(&root);
+    if !ownership_file.exists() {
+        return Ok(None);
+    }
+    let ownership: OwnershipState = read_json(&ownership_file)?;
+    if ownership.schema_version != SCHEMA_VERSION || ownership.target_identity != identity {
+        return Err("deployment_journal_invalid".to_string());
+    }
+    if ownership.installed_sha256 != expected_sha256 {
+        return Ok(None);
+    }
+    let journal: DeploymentJournal =
+        read_json(&journals.join(format!("{}.json", ownership.operation_id)))?;
+    if journal.schema_version != SCHEMA_VERSION
+        || journal.operation_id != ownership.operation_id
+        || journal.target_identity != identity
+        || journal.installed_sha256 != expected_sha256
+        || journal.phase != DeploymentPhase::Committed
+    {
+        return Err("deployment_journal_invalid".to_string());
+    }
+    let current = fs::read(&target).map_err(|_| "deployment_conflict".to_string())?;
+    if sha256(&current) != expected_sha256 {
+        return Err("deployment_conflict".to_string());
+    }
+    Ok(Some(DeploymentReceipt {
+        operation_id: ownership.operation_id,
+        before_sha256: journal.before_sha256,
+        installed_sha256: expected_sha256.to_string(),
+        backup_verified: true,
+        committed: true,
+        rolled_back: false,
+    }))
+}
+
 pub(crate) fn rollback(
     app_data_root: &Path,
     dota_root: &Path,
@@ -723,9 +767,19 @@ mod tests {
         let target = dota.join("game/dota_dutch/pak66_dir.vpk");
         assert_eq!(fs::read(&target).expect("installed"), bytes);
         assert!(receipt.committed);
+        let current = current_verified_deployment(&app, &dota, &sha256(&bytes))
+            .expect("read current deployment")
+            .expect("owned deployment");
+        assert_eq!(current.operation_id, receipt.operation_id);
+        assert!(current_verified_deployment(&app, &dota, &sha256(b"other"))
+            .expect("different package is not current")
+            .is_none());
         let rolled_back = rollback(&app, &dota, &receipt.operation_id).expect("rollback");
         assert!(rolled_back.rolled_back);
         assert!(!target.exists());
+        assert!(current_verified_deployment(&app, &dota, &sha256(&bytes))
+            .expect("no current deployment after rollback")
+            .is_none());
         let _ = fs::remove_dir_all(base);
     }
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, Pause, Play } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { useLocale } from "../i18n";
 import { featuredMods, mods, type StudioMod } from "./model";
 import { Media } from "./ui";
@@ -31,11 +31,10 @@ export default function LookCarousel({ motion, onOpen }: { motion: boolean; onOp
   const { language, isRu } = useLocale();
   const { animated, visible } = useMotion(motion);
   const [paused, setPaused] = useState(false);
-  const [stopped, setStopped] = useState(false);
   const [inView, setInView] = useState(true);
   const track = useRef<HTMLDivElement>(null);
   const animations = useRef<Animation[]>([]);
-  const running = !paused && !stopped && visible && inView;
+  const running = !paused && visible && inView;
   const list = useMemo(() => looks.filter(mod => mod.image), []);
 
   useEffect(() => {
@@ -62,8 +61,8 @@ export default function LookCarousel({ motion, onOpen }: { motion: boolean; onOp
   useEffect(() => { animations.current.forEach(animation => running ? animation.play() : animation.pause()); }, [running, animated]);
 
   return <div className={`s-look-carousel ${animated ? "is-animated" : ""}`} role="region" aria-label={isRu ? "Облики из каталога: движение слева направо" : "Catalog looks moving left to right"} onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }}>
-    <div className="s-carousel-heading"><span>{isRu ? "В ВИТРИНЕ СЕЙЧАС" : "ON THE DISPLAY"}</span><span>{String(list.length).padStart(2, "0")} {isRu ? "ОБЛИКОВ" : "LOOKS"} <ArrowUpRight /></span></div>
+    <div className="s-carousel-heading"><span>{isRu ? "В ВИТРИНЕ СЕЙЧАС" : "ON THE DISPLAY"}</span><span>{String(list.length).padStart(2, "0")} {isRu ? "ОБЛИКОВ" : "LOOKS"}</span></div>
     <div className="s-home-showcase" ref={track}>{list.map(mod => <button key={mod.id} className="s-showcase-look" onClick={() => onOpen(mod)} aria-label={`${isRu ? "Посмотреть облик" : "View look"}: ${mod.name[language]}`}><Media src={mod.image ?? undefined} showPending pendingLabel={mod.categoryName[language]} /><span><small>{mod.categoryName[language]}</small><strong>{mod.name[language]}</strong><ArrowUpRight /></span></button>)}</div>
-    <div className="s-carousel-footer"><span>{isRu ? "Наведи, чтобы рассмотреть · нажми, чтобы открыть" : "Hover to inspect · click to open"}</span>{animated && <button className="s-carousel-pause s-icon" onClick={() => setStopped(value => !value)} aria-label={isRu ? (stopped ? "Продолжить карусель" : "Остановить карусель") : (stopped ? "Resume carousel" : "Pause carousel")} aria-pressed={stopped}>{stopped ? <Play /> : <Pause />}</button>}</div>
+    <div className="s-carousel-footer"><span>{isRu ? "Наведи, чтобы рассмотреть · нажми, чтобы открыть" : "Hover to inspect · click to open"}</span></div>
   </div>;
 }

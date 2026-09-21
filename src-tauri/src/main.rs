@@ -36,6 +36,7 @@ use presets::{delete_preset, export_preset, import_preset, list_presets, save_pr
 use remote_intake::ContentDownloadStatus;
 use runtime_control::{RuntimePrepareRequest, RuntimeState, SteamStartRequest};
 use serde::{Deserialize, Serialize};
+use sha2::Digest;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -51,6 +52,14 @@ use tauri::{AppHandle, Manager};
 struct StartSteamAfterProfileRequest {
     profile_token: String,
     operation_id: Option<String>,
+    confirmed: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InstallTreePilotRequest {
+    game_path: String,
+    expected_plan_id: String,
     confirmed: bool,
 }
 
@@ -465,6 +474,89 @@ async fn deploy_staged_vpk(
 }
 
 #[tauri::command]
+fn begin_tree_pilot_download(app: AppHandle) -> Result<tree_pilot::TreeDownloadStatus, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "build_failed".to_string())?;
+    tree_pilot::begin_download(app_data)
+}
+
+#[tauri::command]
+fn tree_pilot_download_status() -> Result<Option<tree_pilot::TreeDownloadStatus>, String> {
+    tree_pilot::download_status()
+}
+
+#[tauri::command]
+fn cancel_tree_pilot_download() -> Result<tree_pilot::TreeDownloadStatus, String> {
+    tree_pilot::cancel_download()
+}
+
+#[tauri::command]
+async fn install_tree_pilot(
+    app: AppHandle,
+    request: InstallTreePilotRequest,
+) -> Result<DeploymentReceipt, String> {
+    if !request.confirmed {
+        return Err("deployment_confirmation_required".to_string());
+    }
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "deployment_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        require_patch_ready_runtime()?;
+        validate_candidate(Path::new(&request.game_path), "manual")?;
+        let verified = tree_pilot::build_from_verified_store(&app_data)?;
+        let expected_hash = format!("{:x}", sha2::Sha256::digest(verified.bytes()));
+        if request.expected_plan_id != format!("sha256:{expected_hash}") {
+            return Err("build_plan_stale".to_string());
+        }
+        let staged =
+            tree_pilot::stage_from_verified_store(&app_data, &request.expected_plan_id, true)?;
+        let reopened = build_engine::verified_staged_vpk(
+            &app_data,
+            &staged.operation_id,
+            &request.expected_plan_id,
+        )?;
+        if reopened.sha256 != expected_hash || reopened.bytes != verified.bytes() {
+            return Err("verification_failed".to_string());
+        }
+        require_patch_ready_runtime()?;
+        game_deployment::deploy_verified_vpk(
+            &app_data,
+            Path::new(&request.game_path),
+            &reopened.bytes,
+            &reopened.sha256,
+        )
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+#[tauri::command]
+async fn current_tree_pilot(
+    app: AppHandle,
+    game_path: String,
+) -> Result<Option<DeploymentReceipt>, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "deployment_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        if !cfg!(target_os = "windows") {
+            return Err("platform_not_supported".to_string());
+        }
+        validate_candidate(Path::new(&game_path), "manual")?;
+        let verified = tree_pilot::build_from_verified_store(&app_data)?;
+        let hash = format!("{:x}", sha2::Sha256::digest(verified.bytes()));
+        game_deployment::current_verified_deployment(&app_data, Path::new(&game_path), &hash)
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+#[tauri::command]
 async fn rollback_game_deployment(
     app: AppHandle,
     request: DeploymentOperationRequest,
@@ -558,6 +650,11 @@ fn main() {
             rollback_steam_launch_options,
             recover_steam_launch_options,
             deploy_staged_vpk,
+            begin_tree_pilot_download,
+            tree_pilot_download_status,
+            cancel_tree_pilot_download,
+            install_tree_pilot,
+            current_tree_pilot,
             rollback_game_deployment,
             recover_game_deployments,
             start_steam_after_profile,

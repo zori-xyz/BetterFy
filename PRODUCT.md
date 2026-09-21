@@ -41,7 +41,7 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - Preserve the Home, Mods, Skin Library, Settings, and Profile workflows.
 - Preserve Russian and English localization.
 - Mod selection must communicate added, removed, conflicting, building, ready, and error states unambiguously.
-- Production Dota deployment remains unavailable to users until trusted Tree Mod intake and native Windows evidence pass; the interface must not imply that synthetic transaction tests are verified game-file behavior.
+- Only the pinned Tree Mod internal Windows pilot may request a game-directory write. Its native Windows behavior and compatibility remain unverified; the interface must not imply that synthetic transaction tests are verified game-file behavior. General catalog deployment remains unavailable.
 - Original game files must be described as protected only where the prototype already presents that intended capability.
 - Avoid dependencies on Dota-owned artwork for core product identity. Dota-inspired assets should be transformed into a distinct BetterFy production language.
 - The repository is intended to be open source.
@@ -66,7 +66,7 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - A versioned fixture-package contract, cancellable HTTPS fixture acquisition,
   immutable SHA-256 content store, and ZIP metadata preflight. A deterministic
   VPK builder plus an ownership-scoped deployment/recovery transaction pass
-  synthetic tests, but Tree Mod intake and live Windows deployment remain disabled.
+  synthetic tests. The pinned Tree Mod internal pilot now connects verified intake, staging, and a guarded Windows deployment path; native Windows behavior has not yet been validated.
 - A real local config manager backed by validated, atomic app-data storage,
   plus three built-in BetterFy Workshop presets resolved against the same
   Minify catalog IDs as the selection UI.

@@ -85,19 +85,27 @@ BetterFy must not force-terminate processes and must never launch Dota itself.
   remain.
 
 This flow writes only inside BetterFy application data. The game-deployment
-transaction exists behind a strict verified-VPK boundary, but no current catalog
-package satisfies it. Do not report a real patch until the Tree Mod pilot is
-explicitly enabled in an internal build.
+transaction exists behind a strict verified-VPK boundary. The fixed Tree Mod
+path is available for the internal pilot; no other catalog item may be treated
+as installable. Do not report a successful real patch before the Windows run.
 
-## 7. Tree Mod pilot (only after an internal build marks it enabled)
+## 7. Tree Mod internal pilot
 
 - Confirm `pak66_dir.vpk` is absent, or is identified by BetterFy as its own prior
   install. A foreign file in that slot must block the operation.
 - Run with Dota open and confirm graceful shutdown is required before any write.
-- Patch Tree Mod, verify Steam restarts and Dota does not, then start Dota manually.
+- Select only Tree Mod in My build. Prepare the 21 resources and check the verified
+  plan. Close Dota 2 and Steam, confirm installation, and check the receipt.
+- During preparation, cancel once, reopen the app, and resume. The verified file
+  count must continue without publishing an unverified resource.
+- Choose the intended Steam profile in the Tree Mod panel and confirm activation.
+  Verify BetterFy starts Steam only; Dota must remain closed. Start Dota manually.
 - Confirm the default-terrain trees are replaced as described by the pilot.
-- Roll back and verify the exact previous target bytes return, or the initial
-  BetterFy target disappears.
+- Close Dota and Steam, then roll back in BetterFy. Verify both the exact
+  previous target bytes and Steam launch options return, or the initial BetterFy
+  target disappears when no previous file existed.
+- Restart BetterFy between install and rollback once. The installed operation
+  and its restore action must still be discoverable.
 - Repeat with a failure-injection internal build on both sides of atomic publish.
   Recovery must be deterministic and diagnostics must remain safe.
 

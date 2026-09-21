@@ -187,8 +187,9 @@ exists, but it accepts only a `Ready` journal containing exactly one verified
 `pak66_dir.vpk`; the current CSS fixtures cannot satisfy that contract. The
 confirmed activation step stops Dota and Steam, commits BetterFy's owned launch
 option, verifies the profile against its journal, and starts Steam only. The
-user-facing game-directory write remains closed until the Tree Mod package and
-native Windows evidence exist.
+generic game-directory write remains closed in release builds. The fixed Tree
+Mod pilot command now stages and re-verifies the 21-resource VPK before calling
+the deployment transaction; native Windows evidence is still outstanding.
 
 The runtime preflight is now implemented behind typed Tauri commands. Windows
 process enumeration uses Tool Help APIs and recognizes the Steam client, Web
@@ -249,8 +250,9 @@ the exact prior bytes and prior ownership chain, or removes an initial install. 
 refuses to overwrite a post-install external edit. Recovery distinguishes an
 interruption before publish from one after publish and either marks the untouched
 operation failed or rolls the published bytes back. Synthetic tests inject both
-failures. The Tree Mod resource package and native Windows validation are still
-gates; therefore no current catalog selection can invoke a live deploy.
+failures. Only the pinned Tree Mod selection can invoke the internal live-deploy
+path on Windows. No other catalog selection can invoke a live deploy, and no
+Windows compatibility result is claimed yet.
 
 Preset persistence is implemented as a separate BetterFy-owned boundary. The
 backend validates the schema and identifiers, rejects symlinks and oversized
@@ -306,8 +308,8 @@ operation ID and factual phases; URLs and paths stay inside Rust.
 A ZIP metadata preflight rejects traversal, links, ambiguous names, executable
 content, unsupported compression, and archive-bomb limits without extracting any
 entry. No ZIP package is enabled in the registry yet. Local imports, signatures,
-archive extraction, Tree Mod package wiring, and live Dota deployment remain
-disabled. The full threat model is documented in
+archive extraction, and generic live Dota deployment remain disabled. The fixed
+Tree Mod internal pilot is separate. The full threat model is documented in
 `docs/CONTENT_INTAKE_SECURITY.md`.
 
 ## Definition of done for filesystem writes

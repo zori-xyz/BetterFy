@@ -1,4 +1,4 @@
-//! Pinned, data-only contract for the first engine pilot. No game write is exposed here.
+//! Pinned, data-only contract for the first engine pilot.
 
 use crate::vpk::{self, VpkInput};
 use serde::Serialize;
@@ -6,6 +6,29 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+
+static DOWNLOAD: OnceLock<Mutex<Option<Arc<TreeDownload>>>> = OnceLock::new();
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TreeDownloadStatus {
+    phase: &'static str,
+    verified_resources: usize,
+    total_resources: usize,
+    error_code: Option<String>,
+    plan: Option<TreePilotPlan>,
+}
+
+struct TreeDownload {
+    status: Mutex<TreeDownloadStatus>,
+    cancelled: AtomicBool,
+    app_data_root: std::path::PathBuf,
+}
+
+fn download_slot() -> &'static Mutex<Option<Arc<TreeDownload>>> {
+    DOWNLOAD.get_or_init(|| Mutex::new(None))
+}
 
 pub(crate) const PACKAGE_ID: &str = "minify.tree-mod";
 pub(crate) const SOURCE_COMMIT: &str = "3a85572029f2c264e2a17cee1c9b54ce93e4fd93";
@@ -157,15 +180,20 @@ pub(crate) fn pinned_url(resource: &Resource) -> String {
     )
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "Tree Mod intake is not user-enabled")
-)]
+#[cfg(test)]
 pub(crate) fn acquire_verified_resources(
     app_data_root: &Path,
     cancelled: &AtomicBool,
 ) -> Result<(), String> {
-    for resource in &RESOURCES {
+    acquire_verified_resources_with_progress(app_data_root, cancelled, |_| {})
+}
+
+fn acquire_verified_resources_with_progress(
+    app_data_root: &Path,
+    cancelled: &AtomicBool,
+    mut progress: impl FnMut(usize),
+) -> Result<(), String> {
+    for (index, resource) in RESOURCES.iter().enumerate() {
         if cancelled.load(Ordering::Relaxed) {
             return Err("download_cancelled".to_string());
         }
@@ -176,17 +204,131 @@ pub(crate) fn acquire_verified_resources(
         )
         .is_ok()
         {
+            progress(index + 1);
             continue;
         }
         let bytes = crate::remote_intake::fetch_pinned_tree_resource(resource, cancelled)?;
+        if cancelled.load(Ordering::Relaxed) {
+            return Err("download_cancelled".to_string());
+        }
         crate::content_store::store_pinned_resource(
             app_data_root,
             resource.bytes,
             resource.sha256,
             &bytes,
         )?;
+        progress(index + 1);
     }
     Ok(())
+}
+
+pub(crate) fn begin_download(
+    app_data_root: std::path::PathBuf,
+) -> Result<TreeDownloadStatus, String> {
+    let mut slot = download_slot()
+        .lock()
+        .map_err(|_| "download_failed".to_string())?;
+    if let Some(current) = slot.as_ref() {
+        let status = current
+            .status
+            .lock()
+            .map_err(|_| "download_failed".to_string())?
+            .clone();
+        if matches!(status.phase, "downloading" | "verifying")
+            || (status.phase == "ready" && plan_from_verified_store(&app_data_root).is_ok())
+        {
+            return Ok(status);
+        }
+    }
+    let operation = Arc::new(TreeDownload {
+        status: Mutex::new(TreeDownloadStatus {
+            phase: "downloading",
+            verified_resources: 0,
+            total_resources: RESOURCES.len(),
+            error_code: None,
+            plan: None,
+        }),
+        cancelled: AtomicBool::new(false),
+        app_data_root: app_data_root.clone(),
+    });
+    *slot = Some(operation.clone());
+    std::thread::spawn(move || {
+        let result = acquire_verified_resources_with_progress(
+            &app_data_root,
+            &operation.cancelled,
+            |count| {
+                if let Ok(mut status) = operation.status.lock() {
+                    status.verified_resources = count;
+                }
+            },
+        )
+        .and_then(|_| {
+            if operation.cancelled.load(Ordering::Relaxed) {
+                return Err("download_cancelled".to_string());
+            }
+            if let Ok(mut status) = operation.status.lock() {
+                status.phase = "verifying";
+            }
+            plan_from_verified_store(&app_data_root)
+        });
+        if let Ok(mut status) = operation.status.lock() {
+            match result {
+                Ok(plan) => {
+                    status.phase = "ready";
+                    status.plan = Some(plan);
+                }
+                Err(code) => {
+                    status.phase = if code == "download_cancelled" {
+                        "cancelled"
+                    } else {
+                        "failed"
+                    };
+                    status.error_code = Some(code);
+                }
+            }
+        }
+    });
+    Ok(TreeDownloadStatus {
+        phase: "downloading",
+        verified_resources: 0,
+        total_resources: RESOURCES.len(),
+        error_code: None,
+        plan: None,
+    })
+}
+
+pub(crate) fn download_status() -> Result<Option<TreeDownloadStatus>, String> {
+    let slot = download_slot()
+        .lock()
+        .map_err(|_| "download_failed".to_string())?;
+    let Some(operation) = slot.as_ref() else {
+        return Ok(None);
+    };
+    let mut status = operation
+        .status
+        .lock()
+        .map_err(|_| "download_failed".to_string())?;
+    if status.phase == "ready" && plan_from_verified_store(&operation.app_data_root).is_err() {
+        status.phase = "failed";
+        status.plan = None;
+        status.error_code = Some("content_store_invalid".to_string());
+    }
+    Ok(Some(status.clone()))
+}
+
+pub(crate) fn cancel_download() -> Result<TreeDownloadStatus, String> {
+    let slot = download_slot()
+        .lock()
+        .map_err(|_| "download_failed".to_string())?;
+    let operation = slot
+        .as_ref()
+        .ok_or_else(|| "download_not_found".to_string())?;
+    operation.cancelled.store(true, Ordering::Relaxed);
+    operation
+        .status
+        .lock()
+        .map(|status| status.clone())
+        .map_err(|_| "download_failed".to_string())
 }
 
 pub(crate) fn build_from_verified_store(app_data_root: &Path) -> Result<VerifiedTreeVpk, String> {
@@ -216,23 +358,15 @@ fn plan_for(verified: &VerifiedTreeVpk) -> TreePilotPlan {
         vpk_bytes: verified.bytes().len(),
         vpk_sha256: hash,
         compatibility: "unknown",
-        distribution: "pending_review",
-        deploy_enabled: false,
+        distribution: "internal_pilot",
+        deploy_enabled: cfg!(target_os = "windows"),
     }
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "developer pilot not exposed to users")
-)]
 pub(crate) fn plan_from_verified_store(app_data_root: &Path) -> Result<TreePilotPlan, String> {
     build_from_verified_store(app_data_root).map(|verified| plan_for(&verified))
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "developer pilot not exposed to users")
-)]
 pub(crate) fn stage_from_verified_store(
     app_data_root: &Path,
     expected_plan_id: &str,
@@ -342,6 +476,18 @@ mod tests {
     }
 
     #[test]
+    fn cancelled_intake_does_not_start_a_download() {
+        let cancelled = AtomicBool::new(true);
+        let root = std::env::temp_dir().join("betterfy-tree-cancel-no-write");
+        assert_eq!(
+            acquire_verified_resources(&root, &cancelled)
+                .err()
+                .as_deref(),
+            Some("download_cancelled")
+        );
+    }
+
+    #[test]
     #[ignore = "requires the 21 pinned upstream resources outside the repository"]
     fn builds_the_real_pinned_tree_vpk_without_touching_dota() {
         let root = std::env::var_os("BETTERFY_TREE_RESOURCE_ROOT")
@@ -382,7 +528,7 @@ mod tests {
         assert_eq!(from_store.bytes(), first.bytes());
         let plan = plan_from_verified_store(&app_data).expect("reviewed plan");
         assert_eq!(plan.resource_count, 21);
-        assert!(!plan.deploy_enabled);
+        assert_eq!(plan.deploy_enabled, cfg!(target_os = "windows"));
         let plan_id = plan.plan_id;
         assert_eq!(
             stage_from_verified_store(&app_data, &plan_id, false)
@@ -461,7 +607,26 @@ mod tests {
                 .as_nanos()
         ));
         let cancelled = AtomicBool::new(false);
-        acquire_verified_resources(&root, &cancelled).expect("download all pinned resources");
+        begin_download(root.clone()).expect("start pinned download");
+        let mut completed = None;
+        for _ in 0..1200 {
+            let status = download_status()
+                .expect("read download status")
+                .expect("operation");
+            if matches!(status.phase, "ready" | "failed" | "cancelled") {
+                completed = Some(status);
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let status = completed.expect("download completes within a minute");
+        assert_eq!(
+            status.phase, "ready",
+            "download failed: {:?}",
+            status.error_code
+        );
+        assert_eq!(status.verified_resources, RESOURCES.len());
+        assert!(status.plan.is_some());
         let first = build_from_verified_store(&root).expect("build from cache");
         acquire_verified_resources(&root, &cancelled).expect("idempotent cache read");
         let second = build_from_verified_store(&root).expect("rebuild from cache");

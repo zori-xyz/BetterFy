@@ -121,7 +121,7 @@ struct BuildJournal {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildReceipt {
-    operation_id: String,
+    pub(crate) operation_id: String,
     plan_id: String,
     phase: OperationPhase,
     staged_root: String,
@@ -752,9 +752,6 @@ pub(crate) fn verified_staged_vpk(
         return Err("staged_vpk_not_ready".to_string());
     }
     let file = &journal.files[0];
-    if file.owner_id == crate::tree_pilot::PACKAGE_ID && !cfg!(debug_assertions) {
-        return Err("tree_pilot_disabled".to_string());
-    }
     if !file.staged
         || file.destination != "pak66_dir.vpk"
         || file.actual_sha256.as_deref() != Some(file.expected_sha256.as_str())
