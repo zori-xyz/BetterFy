@@ -31,8 +31,9 @@ use build_engine::{
 };
 use content_store::{ContentIntakeRequest, ContentReceipt};
 use game_deployment::{
-    DeployStagedVpkRequest, DeploymentOperationRequest, DeploymentReceipt,
-    DeploymentRecoveryRequest, RecoveryReceipt,
+    DeployStagedVpkRequest, DeploymentEvidenceReport, DeploymentOperationRequest,
+    DeploymentReceipt, DeploymentRecoveryRequest, DeploymentStressCapabilities,
+    DeploymentStressFailurePoint, RecoveryReceipt,
 };
 use game_language::GameLanguage;
 use presets::{delete_preset, export_preset, import_preset, list_presets, save_preset};
@@ -70,6 +71,17 @@ struct InstallTreePilotRequest {
     confirmed: bool,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InstallTreePilotStressRequest {
+    game_path: String,
+    package_ids: Vec<String>,
+    expected_plan_id: String,
+    language: GameLanguage,
+    failure_point: DeploymentStressFailurePoint,
+    confirmed: bool,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TreeCurrentState {
@@ -81,6 +93,14 @@ struct TreeCurrentState {
     steam_recovery_required: bool,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TreePilotEvidenceReport {
+    #[serde(flatten)]
+    deployment: DeploymentEvidenceReport,
+    steam_entries: Vec<steam_accounts::SteamEvidenceEntry>,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ApplyTreeSteamRequest {
@@ -89,6 +109,18 @@ struct ApplyTreeSteamRequest {
     profile_token: String,
     confirmation_token: String,
     language: GameLanguage,
+    confirmed: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ApplyTreeSteamStressRequest {
+    game_path: String,
+    deployment_operation_id: String,
+    profile_token: String,
+    confirmation_token: String,
+    language: GameLanguage,
+    failure_point: steam_accounts::SteamStressFailurePoint,
     confirmed: bool,
 }
 
@@ -538,6 +570,34 @@ fn cancel_tree_pilot_download() -> Result<tree_pilot::TreeDownloadStatus, String
     tree_pilot::cancel_download()
 }
 
+fn build_verified_tree_pilot(
+    app_data: &Path,
+    request: &InstallTreePilotRequest,
+) -> Result<tree_pilot::VerifiedTreeVpk, String> {
+    require_patch_ready_runtime()?;
+    validate_candidate(Path::new(&request.game_path), "manual")?;
+    let verified = tree_pilot::build_from_verified_store(app_data, &request.package_ids)?;
+    if request.expected_plan_id != verified.plan_id() {
+        return Err("build_plan_stale".to_string());
+    }
+    let staged = tree_pilot::stage_from_verified_store(
+        app_data,
+        &request.expected_plan_id,
+        &request.package_ids,
+        true,
+    )?;
+    let reopened = build_engine::verified_staged_vpk(
+        app_data,
+        &staged.operation_id,
+        &request.expected_plan_id,
+    )?;
+    if reopened.sha256 != verified.sha256() || reopened.bytes != verified.bytes() {
+        return Err("verification_failed".to_string());
+    }
+    require_patch_ready_runtime()?;
+    Ok(verified)
+}
+
 #[tauri::command]
 async fn install_tree_pilot(
     app: AppHandle,
@@ -551,39 +611,89 @@ async fn install_tree_pilot(
         .app_data_dir()
         .map_err(|_| "deployment_failed".to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
-        require_patch_ready_runtime()?;
-        validate_candidate(Path::new(&request.game_path), "manual")?;
-        let verified = tree_pilot::build_from_verified_store(&app_data, &request.package_ids)?;
-        let expected_hash = verified.sha256().to_string();
-        if request.expected_plan_id != verified.plan_id() {
-            return Err("build_plan_stale".to_string());
-        }
-        let staged = tree_pilot::stage_from_verified_store(
-            &app_data,
-            &request.expected_plan_id,
-            &request.package_ids,
-            true,
-        )?;
-        let reopened = build_engine::verified_staged_vpk(
-            &app_data,
-            &staged.operation_id,
-            &request.expected_plan_id,
-        )?;
-        if reopened.sha256 != expected_hash || reopened.bytes != verified.bytes() {
-            return Err("verification_failed".to_string());
-        }
-        require_patch_ready_runtime()?;
+        let verified = build_verified_tree_pilot(&app_data, &request)?;
         game_deployment::deploy_verified_bundle_for_language(
             &app_data,
             Path::new(&request.game_path),
-            &reopened.bytes,
-            &reopened.sha256,
+            verified.bytes(),
+            verified.sha256(),
             request.language,
             game_deployment::DeploymentBundleIdentity {
                 plan_id: Some(verified.plan_id().to_string()),
                 package_ids: verified.bundle_plan().package_ids.clone(),
             },
         )
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+#[tauri::command]
+fn tree_pilot_stress_capabilities() -> DeploymentStressCapabilities {
+    game_deployment::deployment_stress_capabilities()
+}
+
+#[tauri::command]
+async fn install_tree_pilot_stress(
+    app: AppHandle,
+    request: InstallTreePilotStressRequest,
+) -> Result<DeploymentReceipt, String> {
+    if !request.confirmed {
+        return Err("deployment_confirmation_required".to_string());
+    }
+    if !game_deployment::deployment_stress_capabilities().enabled {
+        return Err("stress_test_disabled".to_string());
+    }
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "deployment_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let install = InstallTreePilotRequest {
+            game_path: request.game_path,
+            package_ids: request.package_ids,
+            expected_plan_id: request.expected_plan_id,
+            language: request.language,
+            confirmed: request.confirmed,
+        };
+        let verified = build_verified_tree_pilot(&app_data, &install)?;
+        game_deployment::deploy_verified_bundle_for_language_stress(
+            &app_data,
+            Path::new(&install.game_path),
+            verified.bytes(),
+            verified.sha256(),
+            install.language,
+            game_deployment::DeploymentBundleIdentity {
+                plan_id: Some(verified.plan_id().to_string()),
+                package_ids: verified.bundle_plan().package_ids.clone(),
+            },
+            request.failure_point,
+        )
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+#[tauri::command]
+async fn collect_tree_pilot_evidence(
+    app: AppHandle,
+    game_path: String,
+) -> Result<TreePilotEvidenceReport, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "deployment_failed".to_string())?;
+    let app_version = app.package_info().version.to_string();
+    tauri::async_runtime::spawn_blocking(move || {
+        validate_candidate(Path::new(&game_path), "manual")?;
+        Ok(TreePilotEvidenceReport {
+            deployment: game_deployment::collect_evidence(
+                &app_data,
+                Path::new(&game_path),
+                app_version,
+            )?,
+            steam_entries: steam_accounts::collect_platform_evidence(&app_data)?,
+        })
     })
     .await
     .map_err(|_| "runtime_worker_failed".to_string())?
@@ -661,40 +771,76 @@ async fn apply_tree_steam_launch_options(
         .app_data_dir()
         .map_err(|_| "backup_failed".to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
-        require_patch_ready_runtime()?;
-        validate_candidate(Path::new(&request.game_path), "manual")?;
-        let receipt =
-            game_deployment::current_owned_deployment(&app_data, Path::new(&request.game_path))?
-                .ok_or_else(|| "deployment_not_found".to_string())?;
-        let package_ids = if receipt.package_ids.is_empty() {
-            vec![tree_pilot::PACKAGE_ID.to_string()]
-        } else {
-            receipt.package_ids.clone()
-        };
-        let verified = tree_pilot::build_from_verified_store(&app_data, &package_ids)?;
-        if receipt.installed_sha256 != format!("{:x}", sha2::Sha256::digest(verified.bytes()))
-            || receipt
-                .bundle_plan_id
-                .as_deref()
-                .is_some_and(|plan| plan != verified.plan_id())
-        {
-            return Err("deployment_conflict".to_string());
-        }
-        if receipt.operation_id != request.deployment_operation_id
-            || receipt.language != request.language
-        {
-            return Err("deployment_conflict".to_string());
-        }
-        steam_accounts::apply_platform_profile(
+        let profile_request = validate_tree_steam_request(&app_data, request)?;
+        steam_accounts::apply_platform_profile(&app_data, profile_request)
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+fn validate_tree_steam_request(
+    app_data: &Path,
+    request: ApplyTreeSteamRequest,
+) -> Result<ApplySteamLaunchOptionRequest, String> {
+    require_patch_ready_runtime()?;
+    validate_candidate(Path::new(&request.game_path), "manual")?;
+    let receipt =
+        game_deployment::current_owned_deployment(app_data, Path::new(&request.game_path))?
+            .ok_or_else(|| "deployment_not_found".to_string())?;
+    let package_ids = if receipt.package_ids.is_empty() {
+        vec![tree_pilot::PACKAGE_ID.to_string()]
+    } else {
+        receipt.package_ids.clone()
+    };
+    let verified = tree_pilot::build_from_verified_store(app_data, &package_ids)?;
+    if receipt.installed_sha256 != format!("{:x}", sha2::Sha256::digest(verified.bytes()))
+        || receipt
+            .bundle_plan_id
+            .as_deref()
+            .is_some_and(|plan| plan != verified.plan_id())
+        || receipt.operation_id != request.deployment_operation_id
+        || receipt.language != request.language
+    {
+        return Err("deployment_conflict".to_string());
+    }
+    Ok(ApplySteamLaunchOptionRequest {
+        profile_token: request.profile_token,
+        confirmation_token: request.confirmation_token,
+        language: request.language,
+        confirmed: true,
+        linked_deployment_id: Some(receipt.operation_id),
+    })
+}
+
+#[tauri::command]
+async fn apply_tree_steam_launch_options_stress(
+    app: AppHandle,
+    request: ApplyTreeSteamStressRequest,
+) -> Result<SteamConfigReceipt, String> {
+    if !request.confirmed {
+        return Err("steam_config_confirmation_required".to_string());
+    }
+    if !game_deployment::deployment_stress_capabilities().enabled {
+        return Err("stress_test_disabled".to_string());
+    }
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "backup_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let failure_point = request.failure_point;
+        let profile_request = validate_tree_steam_request(
             &app_data,
-            ApplySteamLaunchOptionRequest {
+            ApplyTreeSteamRequest {
+                game_path: request.game_path,
+                deployment_operation_id: request.deployment_operation_id,
                 profile_token: request.profile_token,
                 confirmation_token: request.confirmation_token,
                 language: request.language,
-                confirmed: true,
-                linked_deployment_id: Some(receipt.operation_id),
+                confirmed: request.confirmed,
             },
-        )
+        )?;
+        steam_accounts::apply_platform_profile_stress(&app_data, profile_request, failure_point)
     })
     .await
     .map_err(|_| "runtime_worker_failed".to_string())?
@@ -873,6 +1019,7 @@ fn main() {
             preview_steam_launch_options,
             apply_steam_launch_options,
             apply_tree_steam_launch_options,
+            apply_tree_steam_launch_options_stress,
             rollback_steam_launch_options,
             recover_steam_launch_options,
             deploy_staged_vpk,
@@ -880,6 +1027,9 @@ fn main() {
             tree_pilot_download_status,
             cancel_tree_pilot_download,
             install_tree_pilot,
+            tree_pilot_stress_capabilities,
+            install_tree_pilot_stress,
+            collect_tree_pilot_evidence,
             current_tree_pilot,
             preview_tree_language,
             start_steam_after_tree_pilot,

@@ -4,6 +4,36 @@ import rawCatalog from "../webCatalog.json";
 import type { Language } from "../i18n";
 
 export type Domain = "wardrobe" | "game";
+export const pilotModIds = new Set([
+  "minify-tree-mod",
+  "minify-show-networth",
+  "minify-repopulate-unit-query-hud",
+]);
+
+export function isPilotMod(id: string) {
+  return pilotModIds.has(id);
+}
+
+export function deliveryLabel(status: "pilot" | "preview", language: Language) {
+  if (status === "pilot") return language === "ru" ? "WINDOWS-ПИЛОТ" : "WINDOWS PILOT";
+  return language === "ru" ? "ТОЛЬКО ПРЕВЬЮ" : "PREVIEW ONLY";
+}
+
+export function isPilotSelection(ids: string[]) {
+  return ids.length > 0 && ids.length <= pilotModIds.size && new Set(ids).size === ids.length && ids.every(isPilotMod);
+}
+
+export function getSelectionDelivery(ids: string[]) {
+  const known = ids.flatMap(id => modById.has(id) ? [modById.get(id)!] : []);
+  const gameIds = known.filter(mod => mod.domain === "game").map(mod => mod.id);
+  const previewCount = known.filter(mod => mod.domain === "wardrobe" || !isPilotMod(mod.id)).length;
+  return {
+    gameIds,
+    pilotReady: isPilotSelection(gameIds),
+    previewCount,
+  };
+}
+
 export type StudioMod = {
   id: string;
   domain: Domain;

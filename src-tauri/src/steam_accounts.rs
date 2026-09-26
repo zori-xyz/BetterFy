@@ -115,9 +115,26 @@ struct SteamConfigJournal {
     created_at_ms: u128,
     updated_at_ms: u128,
     backup_relative_path: String,
+    #[serde(default)]
+    rollback_verified: bool,
     error_code: Option<String>,
     #[serde(default)]
     linked_deployment_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SteamEvidenceEntry {
+    sequence: usize,
+    language: GameLanguage,
+    phase: String,
+    before_sha256: String,
+    after_sha256: String,
+    backup_verified: bool,
+    rollback_verified: bool,
+    created_at_ms: u128,
+    updated_at_ms: u128,
+    error_code: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -132,6 +149,13 @@ pub struct LinkedSteamOperation {
 enum FailurePoint {
     None,
     AfterPreparedJournal,
+    AfterReplace,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SteamStressFailurePoint {
+    AfterPrepared,
     AfterReplace,
 }
 
@@ -798,6 +822,26 @@ pub fn apply_platform_profile(
     )
 }
 
+pub fn apply_platform_profile_stress(
+    app_data_root: &Path,
+    request: ApplySteamLaunchOptionRequest,
+    failure: SteamStressFailurePoint,
+) -> Result<SteamConfigReceipt, String> {
+    #[cfg(feature = "internal-stress-test")]
+    {
+        let failure = match failure {
+            SteamStressFailurePoint::AfterPrepared => FailurePoint::AfterPreparedJournal,
+            SteamStressFailurePoint::AfterReplace => FailurePoint::AfterReplace,
+        };
+        apply_profile_with_failure(app_data_root, &platform_steam_roots(), request, failure)
+    }
+    #[cfg(not(feature = "internal-stress-test"))]
+    {
+        let _ = (app_data_root, request, failure);
+        Err("stress_test_disabled".to_string())
+    }
+}
+
 pub fn linked_platform_operation(
     app_data_root: &Path,
     deployment_operation_id: &str,
@@ -993,6 +1037,7 @@ fn apply_profile_with_failure(
         created_at_ms: timestamp,
         updated_at_ms: timestamp,
         backup_relative_path,
+        rollback_verified: false,
         error_code: None,
         linked_deployment_id: request.linked_deployment_id,
     };
@@ -1173,9 +1218,59 @@ fn rollback_operation_locked(
     }
     journal.phase = SteamConfigPhase::RolledBack;
     journal.updated_at_ms = now_ms()?;
+    journal.rollback_verified = true;
     journal.error_code = None;
     write_journal(&journal_path, &journal)?;
     Ok(receipt_from_journal(&journal, true))
+}
+
+pub fn collect_platform_evidence(app_data_root: &Path) -> Result<Vec<SteamEvidenceEntry>, String> {
+    let (operations_root, journals_root) = transaction_roots(app_data_root)?;
+    let _lock = acquire_transaction_lock(app_data_root)?;
+    let mut journals = Vec::new();
+    for entry in fs::read_dir(journals_root).map_err(|_| "steam_journal_invalid".to_string())? {
+        let path = entry
+            .map_err(|_| "steam_journal_invalid".to_string())?
+            .path();
+        if path.extension().and_then(|value| value.to_str()) != Some("json") {
+            continue;
+        }
+        let journal = read_journal(&path)?;
+        let backup_verified = backup_path(app_data_root, &operations_root, &journal)
+            .and_then(|path| fs::read(path).map_err(|_| "backup_failed".to_string()))
+            .map(|bytes| sha256(&bytes) == journal.before_sha256)
+            .unwrap_or(false);
+        journals.push((journal, backup_verified));
+    }
+    journals.sort_by_key(|(journal, _)| journal.created_at_ms);
+    Ok(journals
+        .into_iter()
+        .rev()
+        .take(100)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .enumerate()
+        .map(|(index, (journal, backup_verified))| SteamEvidenceEntry {
+            sequence: index + 1,
+            language: journal.language,
+            phase: match journal.phase {
+                SteamConfigPhase::BackedUp => "backed_up",
+                SteamConfigPhase::Prepared => "prepared",
+                SteamConfigPhase::Committed => "committed",
+                SteamConfigPhase::RolledBack => "rolled_back",
+                SteamConfigPhase::Failed => "failed",
+            }
+            .to_string(),
+            before_sha256: journal.before_sha256,
+            after_sha256: journal.after_sha256,
+            backup_verified,
+            rollback_verified: journal.rollback_verified,
+            created_at_ms: journal.created_at_ms,
+            updated_at_ms: journal.updated_at_ms,
+            error_code: journal.error_code,
+        })
+        .collect())
 }
 
 fn receipt_from_journal(journal: &SteamConfigJournal, rolled_back: bool) -> SteamConfigReceipt {
@@ -1321,6 +1416,15 @@ mod tests {
         .expect("rollback");
         assert!(rollback.rolled_back);
         assert_eq!(fs::read_to_string(&target).expect("restored"), original);
+        let evidence = collect_platform_evidence(&app_data).expect("privacy-safe evidence");
+        assert_eq!(evidence.len(), 1);
+        assert!(evidence[0].backup_verified);
+        assert!(evidence[0].rollback_verified);
+        let serialized = serde_json::to_string(&evidence).expect("serialize evidence");
+        assert!(!serialized.contains("profileToken"));
+        assert!(!serialized.contains("765611"));
+        assert!(!serialized.contains("localconfig"));
+        assert!(!serialized.contains(&steam.to_string_lossy().to_string()));
         rollback_operation(
             &app_data,
             &[steam],

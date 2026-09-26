@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type ImgHTMLAttributes } from "react";
 import { ArrowLeft, Check, ImageOff, Plus, X } from "lucide-react";
 import { useLocale } from "../i18n";
-import type { StudioMod } from "./model";
+import { deliveryLabel, isPilotMod, type StudioMod } from "./model";
 
 export function Media({ src, alt = "", showPending = false, pendingLabel, className, onLoad, ...props }: ImgHTMLAttributes<HTMLImageElement> & { showPending?: boolean; pendingLabel?: string }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
@@ -37,8 +37,9 @@ export function PageHead({ eyebrow, title, description, children }: { eyebrow?: 
 
 export function ModCard({ mod, selected, favorite, onOpen, onToggle, onFavorite }: { mod: StudioMod; selected: boolean; favorite?: boolean; onOpen: () => void; onToggle: () => void; onFavorite?: () => void }) {
   const { language, isRu } = useLocale();
+  const pilot = isPilotMod(mod.id);
   return <article className={`s-mod-card ${selected ? "is-selected" : ""} ${mod.domain === "game" ? "is-game" : ""}`}>
-    <button className="s-mod-image" onClick={onOpen} aria-label={`${isRu ? "Подробнее" : "Details"}: ${mod.name[language]}`}><Media src={mod.image ?? undefined} loading="lazy" showPending pendingLabel={mod.categoryName[language]} />{selected && <span className="s-selected-flag"><Check />{isRu ? "В сборке" : "In build"}</span>}</button>
+    <button className="s-mod-image" onClick={onOpen} aria-label={`${isRu ? "Подробнее" : "Details"}: ${mod.name[language]}`}><Media src={mod.image ?? undefined} loading="lazy" showPending pendingLabel={mod.categoryName[language]} /><span className={`s-delivery-flag ${pilot ? "is-pilot" : "is-preview"}`} title={pilot ? (isRu ? "Доступно для проверяемой установки в Windows-пилоте" : "Available for verifiable installation in the Windows pilot") : (isRu ? "Карточка доступна для просмотра и сохранения; установка ещё не включена" : "Available to preview and save; installation is not enabled yet")}>{deliveryLabel(pilot ? "pilot" : "preview", language)}</span>{selected && <span className="s-selected-flag"><Check />{isRu ? "В сборке" : "In build"}</span>}</button>
     <div className="s-mod-copy"><span className="s-mod-category">{mod.categoryName[language]}</span><button className="s-mod-name" onClick={onOpen}>{mod.name[language]}</button>{mod.domain === "game" && <p>{mod.description[language].split("\n")[0]}</p>}<div className="s-mod-bottom"><span title={mod.author}>{mod.author}</span><button className={`s-add ${selected ? "is-selected" : ""}`} onClick={onToggle} aria-label={`${selected ? (isRu ? "Убрать" : "Remove") : (isRu ? "Добавить" : "Add")}: ${mod.name[language]}`} aria-pressed={selected}>{selected ? <Check /> : <Plus />}</button></div></div>
   </article>;
 }

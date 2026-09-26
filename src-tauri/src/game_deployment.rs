@@ -72,6 +72,48 @@ pub struct RecoveryReceipt {
     pub marked_failed: usize,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeploymentStressCapabilities {
+    pub enabled: bool,
+    pub failure_points: Vec<&'static str>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeploymentStressFailurePoint {
+    AfterPrepared,
+    AfterReplace,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeploymentEvidenceEntry {
+    pub sequence: usize,
+    pub language: GameLanguage,
+    pub phase: DeploymentPhase,
+    pub before_sha256: Option<String>,
+    pub installed_sha256: String,
+    pub backup_verified: bool,
+    pub rollback_verified: bool,
+    pub active: bool,
+    pub bundle_plan_id: Option<String>,
+    pub package_ids: Vec<String>,
+    pub created_at_ms: u128,
+    pub updated_at_ms: u128,
+    pub error_code: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeploymentEvidenceReport {
+    pub schema_version: u32,
+    pub app_version: String,
+    pub platform: &'static str,
+    pub generated_at_ms: u128,
+    pub entries: Vec<DeploymentEvidenceEntry>,
+}
+
 #[derive(Clone, Debug)]
 pub struct DeploymentDiagnosticCounts {
     pub total: usize,
@@ -97,6 +139,8 @@ struct DeploymentJournal {
     created_at_ms: u128,
     updated_at_ms: u128,
     backup_relative_path: Option<String>,
+    #[serde(default)]
+    rollback_verified: bool,
     error_code: Option<String>,
 }
 
@@ -467,6 +511,7 @@ fn deploy_with_failure(
         created_at_ms: timestamp,
         updated_at_ms: timestamp,
         backup_relative_path: before.as_ref().map(|_| "before.vpk".to_string()),
+        rollback_verified: false,
         error_code: None,
     };
     atomic_json(&journal_path, &journal)?;
@@ -612,6 +657,58 @@ pub(crate) fn deploy_verified_bundle_for_language(
         bundle,
         FailurePoint::None,
     )
+}
+
+pub(crate) fn deployment_stress_capabilities() -> DeploymentStressCapabilities {
+    DeploymentStressCapabilities {
+        enabled: cfg!(feature = "internal-stress-test"),
+        failure_points: if cfg!(feature = "internal-stress-test") {
+            vec!["after_prepared", "after_replace"]
+        } else {
+            Vec::new()
+        },
+    }
+}
+
+pub(crate) fn deploy_verified_bundle_for_language_stress(
+    app_data_root: &Path,
+    dota_root: &Path,
+    package: &[u8],
+    expected_sha256: &str,
+    language: GameLanguage,
+    bundle: DeploymentBundleIdentity,
+    failure: DeploymentStressFailurePoint,
+) -> Result<DeploymentReceipt, String> {
+    #[cfg(feature = "internal-stress-test")]
+    {
+        verify_language_folder(dota_root, language)?;
+        let failure = match failure {
+            DeploymentStressFailurePoint::AfterPrepared => FailurePoint::AfterPrepared,
+            DeploymentStressFailurePoint::AfterReplace => FailurePoint::AfterReplace,
+        };
+        deploy_with_failure(
+            app_data_root,
+            dota_root,
+            package,
+            expected_sha256,
+            language,
+            bundle,
+            failure,
+        )
+    }
+    #[cfg(not(feature = "internal-stress-test"))]
+    {
+        let _ = (
+            app_data_root,
+            dota_root,
+            package,
+            expected_sha256,
+            language,
+            bundle,
+            failure,
+        );
+        Err("stress_test_disabled".to_string())
+    }
 }
 
 #[cfg(test)]
@@ -788,6 +885,17 @@ pub(crate) fn rollback(
     }
     journal.phase = DeploymentPhase::RolledBack;
     journal.updated_at_ms = now_ms()?;
+    journal.rollback_verified = match &journal.before_sha256 {
+        Some(expected) => {
+            target.is_file()
+                && sha256(&fs::read(&target).map_err(|_| "rollback_failed".to_string())?)
+                    == *expected
+        }
+        None => !target.exists(),
+    };
+    if !journal.rollback_verified {
+        return Err("rollback_verification_failed".to_string());
+    }
     journal.error_code = None;
     atomic_json(&journal_path, &journal)?;
     Ok(DeploymentReceipt {
@@ -902,6 +1010,90 @@ pub(crate) fn diagnostic_counts(
         }
     }
     Ok(DeploymentDiagnosticCounts { total, recoverable })
+}
+
+pub(crate) fn collect_evidence(
+    app_data_root: &Path,
+    dota_root: &Path,
+    app_version: String,
+) -> Result<DeploymentEvidenceReport, String> {
+    let identity = target_identity(dota_root)?;
+    let (root, operations, journals) = owned_roots(app_data_root)?;
+    let _lock = transaction_lock(&root)?;
+    let active_operation = if ownership_path(&root).exists() {
+        let ownership: OwnershipState = read_json(&ownership_path(&root))?;
+        if ownership.schema_version != SCHEMA_VERSION || ownership.target_identity != identity {
+            return Err("deployment_journal_invalid".to_string());
+        }
+        Some(ownership.operation_id)
+    } else {
+        None
+    };
+    let mut journals_for_target = Vec::new();
+    for entry in fs::read_dir(journals).map_err(|_| "deployment_journal_invalid".to_string())? {
+        let path = entry
+            .map_err(|_| "deployment_journal_invalid".to_string())?
+            .path();
+        if path.extension().and_then(|value| value.to_str()) != Some("json") {
+            continue;
+        }
+        let journal: DeploymentJournal = read_json(&path)?;
+        if journal.schema_version != SCHEMA_VERSION || journal.target_identity != identity {
+            continue;
+        }
+        let backup_verified = match (&journal.before_sha256, &journal.backup_relative_path) {
+            (None, None) => true,
+            (Some(expected), Some(relative)) if relative == "before.vpk" => {
+                let backup = operations.join(&journal.operation_id).join(relative);
+                reject_symlink(&backup)?;
+                fs::read(&backup)
+                    .map(|bytes| sha256(&bytes) == *expected)
+                    .unwrap_or(false)
+            }
+            _ => false,
+        };
+        journals_for_target.push((journal, backup_verified));
+    }
+    journals_for_target.sort_by_key(|(journal, _)| journal.created_at_ms);
+    let entries = journals_for_target
+        .into_iter()
+        .rev()
+        .take(100)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .enumerate()
+        .map(
+            |(index, (journal, backup_verified))| DeploymentEvidenceEntry {
+                sequence: index + 1,
+                language: journal.language,
+                phase: journal.phase,
+                before_sha256: journal.before_sha256,
+                installed_sha256: journal.installed_sha256,
+                backup_verified,
+                rollback_verified: journal.rollback_verified,
+                active: active_operation.as_deref() == Some(journal.operation_id.as_str()),
+                bundle_plan_id: journal.bundle_plan_id,
+                package_ids: journal.package_ids,
+                created_at_ms: journal.created_at_ms,
+                updated_at_ms: journal.updated_at_ms,
+                error_code: journal.error_code,
+            },
+        )
+        .collect();
+    Ok(DeploymentEvidenceReport {
+        schema_version: 1,
+        app_version,
+        platform: if cfg!(target_os = "windows") {
+            "windows"
+        } else if cfg!(target_os = "macos") {
+            "macos"
+        } else {
+            "other"
+        },
+        generated_at_ms: now_ms()?,
+        entries,
+    })
 }
 
 #[cfg(test)]
@@ -1363,6 +1555,21 @@ mod tests {
         let second_recovery = recover_pending(&app, &dota).expect("recover published");
         assert_eq!(second_recovery.rolled_back, 1);
         assert!(!dota.join("game/dota_dutch/pak66_dir.vpk").exists());
+        let report =
+            collect_evidence(&app, &dota, "0.1-test".to_string()).expect("privacy-safe evidence");
+        assert_eq!(report.entries.len(), 2);
+        assert_eq!(report.entries[0].phase, DeploymentPhase::Failed);
+        assert_eq!(
+            report.entries[0].error_code.as_deref(),
+            Some("interrupted_before_commit")
+        );
+        assert_eq!(report.entries[1].phase, DeploymentPhase::RolledBack);
+        assert!(report.entries[1].rollback_verified);
+        assert!(!report.entries[1].active);
+        let serialized = serde_json::to_string(&report).expect("serialize evidence");
+        assert!(!serialized.contains("targetIdentity"));
+        assert!(!serialized.contains("gamePath"));
+        assert!(!serialized.contains(&dota.to_string_lossy().to_string()));
         let _ = fs::remove_dir_all(base);
     }
 }

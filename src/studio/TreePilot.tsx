@@ -1,34 +1,10 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Check, Copy, Download, LoaderCircle, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
-import { engineBridge, type GameDeploymentReceipt, type GameInstallation, type GameLanguage, type SteamConfigReceipt, type SteamProfileSummary } from "../engine";
+import { ArrowRight, Check, Copy, Download, FileCheck2, FlaskConical, LoaderCircle, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
+import { EngineFault, engineBridge, type DeploymentEvidenceReport, type DeploymentStressFailurePoint, type GameInstallation, type GameLanguage, type SteamProfileSummary, type TreePilotDownloadStatus, type TreePilotPlan } from "../engine";
 import { useLocale } from "../i18n";
+import { deliveryLabel } from "./model";
 
-type TreePlan = {
-  planId: string;
-  packageId: string;
-  packageIds: string[];
-  sourceCommit: string;
-  targetFile: string;
-  resourceCount: number;
-  resourceBytes: number;
-  vpkBytes: number;
-  vpkSha256: string;
-  bundlePlanId: string;
-  packageCount: number;
-  duplicateResources: number;
-  overriddenResources: number;
-  duplicates: Array<{ path: string; keptPackageId: string; duplicatePackageIds: string[] }>;
-  overrides: Array<{ path: string; winnerPackageId: string; shadowedPackageIds: string[] }>;
-  contributions: Array<{ packageId: string; inputResources: number; effectiveResources: number; duplicateResources: number; shadowedResources: number }>;
-  compatibility: "unknown";
-  distribution: "internal_pilot";
-  deployEnabled: boolean;
-};
-type TreeDownloadStatus = { phase: "downloading" | "verifying" | "ready" | "failed" | "cancelled"; verifiedResources: number; totalResources: number; errorCode: string | null; plan: TreePlan | null };
-type TreeCurrentState = GameDeploymentReceipt & { packageVerified: boolean; steamOperationId: string | null; steamProfileToken: string | null; steamRecoveryRequired: boolean };
-
-const codeOf = (error: unknown) => error instanceof Error ? error.message : String(error);
+const codeOf = (error: unknown) => error instanceof EngineFault ? error.code : error instanceof Error ? error.message : String(error);
 const explainError = (code: string, isRu: boolean) => {
   const messages: Record<string, [string, string]> = {
     runtime_busy: ["Закрой Dota 2 и Steam, затем повтори.", "Close Dota 2 and Steam, then retry."],
@@ -52,13 +28,17 @@ const explainError = (code: string, isRu: boolean) => {
     steam_activation_not_ready: ["Параметры Steam не подтверждены. Не считай мод активным в игре.", "Steam settings were not verified. Do not assume the mod is active in game."],
     steam_recovery_required: ["Найдено прерванное изменение Steam. Сначала восстанови его в диагностике.", "An interrupted Steam change was found. Recover it in diagnostics first."],
     clipboard_unavailable: ["Не удалось скопировать параметр. Выдели и скопируй его вручную.", "Could not copy the option. Select and copy it manually."],
+    stress_requires_unmanaged_profile: ["Для этого теста выбери Steam-профиль, где BetterFy ещё не добавлял выбранный язык.", "Choose a Steam profile where BetterFy has not already added the selected language."],
+    stress_recovery_unverified: ["Тестовое восстановление не дало ожидаемого подтверждения. Не запускай Dota и скопируй отчёт.", "Test recovery did not produce the expected proof. Do not launch Dota; copy the report."],
+    stress_injection_did_not_fire: ["Тестовая точка отказа не сработала. Обычная установка не подтверждена этим тестом.", "The test failure point did not fire. This test did not verify the normal installation."],
+    stress_test_disabled: ["Контролируемый стресс-тест доступен только во внутренней Windows-сборке.", "Controlled stress testing is available only in the internal Windows build."],
   };
   return messages[code]?.[isRu ? 0 : 1] ?? (isRu ? `Операция остановлена (${code}). Проверь состояние установки перед запуском игры.` : `Operation stopped (${code}). Check installation state before launching the game.`);
 };
 
 export default function TreePilot({ ids, installation, preview }: { ids: string[]; installation: GameInstallation; preview: boolean }) {
-  const { isRu } = useLocale();
-  const [plan, setPlan] = useState<TreePlan | null>(null);
+  const { isRu, language } = useLocale();
+  const [plan, setPlan] = useState<TreePilotPlan | null>(null);
   const [operationId, setOperationId] = useState<string | null>(null);
   const [verifiedInstall, setVerifiedInstall] = useState(false);
   const [packageVerified, setPackageVerified] = useState(false);
@@ -77,6 +57,11 @@ export default function TreePilot({ ids, installation, preview }: { ids: string[
   const [steamStarted, setSteamStarted] = useState(false);
   const [steamRestarted, setSteamRestarted] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [stressEnabled, setStressEnabled] = useState(false);
+  const [stressPhase, setStressPhase] = useState<DeploymentStressFailurePoint | null>(null);
+  const [stressMessage, setStressMessage] = useState("");
+  const [evidence, setEvidence] = useState<DeploymentEvidenceReport | null>(null);
+  const [reportCopied, setReportCopied] = useState(false);
   const [error, setError] = useState("");
   const supportedIds = ["minify-tree-mod", "minify-show-networth", "minify-repopulate-unit-query-hud"];
   const packageLabel = (id: string) => id.includes("tree-mod") ? "Tree Mod" : id.includes("show-networth") ? "Show Net Worth" : id.includes("unit-query-hud") ? "Unit Query HUD" : id;
@@ -85,7 +70,7 @@ export default function TreePilot({ ids, installation, preview }: { ids: string[
   const windows = /Windows/i.test(navigator.userAgent);
   const desktop = "__TAURI_INTERNALS__" in window;
   const canInstall = desktop && windows && !preview && installation.verified && supportedBundle;
-  function applyDownloadStatus(status: TreeDownloadStatus | null) {
+  function applyDownloadStatus(status: TreePilotDownloadStatus | null) {
     if (!status) return;
     setVerifiedResources(status.verifiedResources);
     setTotalResources(status.totalResources);
@@ -112,7 +97,7 @@ export default function TreePilot({ ids, installation, preview }: { ids: string[
       setTotalResources(0);
     }
     let active = true;
-    invoke<TreeDownloadStatus | null>("tree_pilot_download_status").then(status => {
+    engineBridge.treePilotDownloadStatus().then(status => {
       if (active) applyDownloadStatus(status);
     }).catch(() => undefined);
     return () => { active = false; };
@@ -121,7 +106,7 @@ export default function TreePilot({ ids, installation, preview }: { ids: string[
     if (phase !== "download") return;
     let active = true;
     const timer = window.setInterval(() => {
-      invoke<TreeDownloadStatus | null>("tree_pilot_download_status").then(status => {
+      engineBridge.treePilotDownloadStatus().then(status => {
         if (active) applyDownloadStatus(status);
       }).catch(cause => { if (active) { setError(codeOf(cause)); setPhase("idle"); } });
     }, 450);
@@ -130,7 +115,7 @@ export default function TreePilot({ ids, installation, preview }: { ids: string[
   useEffect(() => {
     if (!desktop || !windows || preview || !installation.verified) return;
     let active = true;
-    invoke<TreeCurrentState | null>("current_tree_pilot", { gamePath: installation.path })
+    engineBridge.currentTreePilot(installation.path)
       .then(receipt => {
         if (!active) return;
         setOperationId(receipt?.operationId ?? null);
@@ -159,18 +144,29 @@ export default function TreePilot({ ids, installation, preview }: { ids: string[
     }).catch(cause => { if (active) setError(codeOf(cause)); });
     return () => { active = false; };
   }, [canInstall]);
+  useEffect(() => {
+    if (!canInstall) return;
+    let active = true;
+    engineBridge.treePilotStressCapabilities()
+      .then(capabilities => { if (active) setStressEnabled(capabilities.enabled); })
+      .catch(() => { if (active) setStressEnabled(false); });
+    engineBridge.collectTreePilotEvidence(installation.path)
+      .then(report => { if (active) setEvidence(report); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [canInstall, installation.path]);
 
   async function prepare() {
     if (!desktop || phase !== "idle") return;
     setError("");
     setPhase("download");
     try {
-      applyDownloadStatus(await invoke<TreeDownloadStatus>("begin_tree_pilot_download", { packageIds: ids }));
+      applyDownloadStatus(await engineBridge.beginTreePilotDownload(ids));
     } catch (cause) { setError(codeOf(cause)); setPhase("idle"); }
   }
 
   async function cancelPrepare() {
-    try { await invoke<TreeDownloadStatus>("cancel_tree_pilot_download"); }
+    try { await engineBridge.cancelTreePilotDownload(); }
     catch (cause) { setError(codeOf(cause)); }
   }
 
@@ -179,7 +175,7 @@ export default function TreePilot({ ids, installation, preview }: { ids: string[
     setError("");
     setPhase("install");
     try {
-      await invoke("preview_tree_language", { gamePath: installation.path, language: selectedLanguage });
+      await engineBridge.previewTreeLanguage(installation.path, selectedLanguage);
       if (selectedProfile) {
         const profile = profiles.find(item => item.profileToken === selectedProfile);
         if (!profile || !["ready", "already_managed"].includes(profile.status)) throw new Error("steam_profile_conflict");
@@ -187,9 +183,7 @@ export default function TreePilot({ ids, installation, preview }: { ids: string[
       }
       const runtime = await engineBridge.prepareRuntimeForPatch();
       if (!runtime.patchReady) throw new Error("runtime_busy");
-      const receipt = await invoke<GameDeploymentReceipt>("install_tree_pilot", {
-        request: { gamePath: installation.path, packageIds: ids, expectedPlanId: plan.planId, language: selectedLanguage, confirmed: true },
-      });
+      const receipt = await engineBridge.installTreePilot(installation.path, ids, plan.planId, selectedLanguage);
       if (!receipt.committed || !receipt.backupVerified) throw new Error("deployment_unverified");
       setOperationId(receipt.operationId);
       setInstalledLanguage(receipt.language);
@@ -201,33 +195,30 @@ export default function TreePilot({ ids, installation, preview }: { ids: string[
         const profile = profiles.find(item => item.profileToken === selectedProfile);
         if (!profile || !["ready", "already_managed"].includes(profile.status)) throw new Error("steam_profile_conflict");
         const steamPlan = await engineBridge.previewSteamLaunchOptions(selectedProfile, receipt.language);
-        const steamReceipt = await invoke<SteamConfigReceipt>("apply_tree_steam_launch_options", { request: {
+        const steamReceipt = await engineBridge.applyTreeSteamLaunchOptions({
           gamePath: installation.path,
           deploymentOperationId: receipt.operationId,
           profileToken: selectedProfile,
           confirmationToken: steamPlan.confirmationToken,
           language: receipt.language,
-          confirmed: true,
-        } });
+        });
         if (!steamReceipt.committed || (steamReceipt.changed && !steamReceipt.backupVerified)) throw new Error("steam_activation_not_ready");
         if (steamReceipt.operationId) {
           setSteamOperationId(steamReceipt.operationId);
         }
-        await invoke("start_steam_after_tree_pilot", { request: {
+        await engineBridge.startSteamAfterTreePilot({
           gamePath: installation.path,
           operationId: receipt.operationId,
           profileToken: selectedProfile,
           steamOperationId: steamReceipt.operationId,
-          confirmed: true,
-        } });
+        });
         setSteamStarted(true);
         setSteamRestarted(true);
       } else {
-        await invoke("start_steam_after_tree_pilot", { request: {
+        await engineBridge.startSteamAfterTreePilot({
           gamePath: installation.path,
           operationId: receipt.operationId,
-          confirmed: true,
-        } });
+        });
         setSteamRestarted(true);
       }
     } catch (cause) { setError(codeOf(cause)); }
@@ -278,37 +269,34 @@ export default function TreePilot({ ids, installation, preview }: { ids: string[
       const runtime = await engineBridge.prepareRuntimeForPatch();
       if (!runtime.patchReady) throw new Error("runtime_busy");
       if (steamOperationId) {
-        await invoke("start_steam_after_tree_pilot", { request: {
+        await engineBridge.startSteamAfterTreePilot({
           gamePath: installation.path,
           operationId,
           profileToken: selectedProfile,
           steamOperationId,
-          confirmed: true,
-        } });
+        });
         setSteamStarted(true);
         setSteamRestarted(true);
         return;
       }
       const preview = await engineBridge.previewSteamLaunchOptions(selectedProfile, installedLanguage);
-      const receipt = await invoke<SteamConfigReceipt>("apply_tree_steam_launch_options", { request: {
+      const receipt = await engineBridge.applyTreeSteamLaunchOptions({
         gamePath: installation.path,
         deploymentOperationId: operationId,
         profileToken: selectedProfile,
         confirmationToken: preview.confirmationToken,
         language: installedLanguage,
-        confirmed: true,
-      } });
+      });
       if (!receipt.committed || (receipt.changed && !receipt.backupVerified)) throw new Error("steam_activation_not_ready");
       if (receipt.operationId) {
         setSteamOperationId(receipt.operationId);
       }
-      await invoke("start_steam_after_tree_pilot", { request: {
+      await engineBridge.startSteamAfterTreePilot({
         gamePath: installation.path,
         operationId,
         profileToken: selectedProfile,
         steamOperationId: receipt.operationId,
-        confirmed: true,
-      } });
+      });
       setSteamStarted(true);
       setSteamRestarted(true);
     } catch (cause) { setError(codeOf(cause)); }
@@ -354,7 +342,7 @@ export default function TreePilot({ ids, installation, preview }: { ids: string[
       setRecoveryMessage(result.inspected === 0
         ? (isRu ? "Незавершённых операций не найдено." : "No interrupted operations found.")
         : (isRu ? `Проверено ${result.inspected}; откат выполнен для ${result.rolledBack}.` : `Inspected ${result.inspected}; restored ${result.rolledBack}.`));
-      const current = await invoke<TreeCurrentState | null>("current_tree_pilot", { gamePath: installation.path });
+      const current = await engineBridge.currentTreePilot(installation.path);
       setOperationId(current?.operationId ?? null);
       setInstalledLanguage(current?.language ?? null);
       setInstalledPackageIds(current?.packageIds ?? []);
@@ -367,8 +355,90 @@ export default function TreePilot({ ids, installation, preview }: { ids: string[
     finally { setRecovering(false); }
   }
 
+  async function refreshEvidence(copy = false) {
+    if (!canInstall) return;
+    try {
+      const report = await engineBridge.collectTreePilotEvidence(installation.path);
+      setEvidence(report);
+      if (copy) {
+        await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+        setReportCopied(true);
+        window.setTimeout(() => setReportCopied(false), 2200);
+      }
+    } catch (cause) { setError(codeOf(cause)); }
+  }
+
+  async function runStressTest(failurePoint: DeploymentStressFailurePoint) {
+    if (!stressEnabled || !plan || !selectedLanguage || !canInstall || operationId || phase !== "idle" || stressPhase) return;
+    setError("");
+    setStressMessage("");
+    setStressPhase(failurePoint);
+    try {
+      const runtime = await engineBridge.prepareRuntimeForPatch();
+      if (!runtime.patchReady) throw new Error("runtime_busy");
+      try {
+        await engineBridge.installTreePilotStress(
+          installation.path,
+          ids,
+          plan.planId,
+          selectedLanguage,
+          failurePoint,
+        );
+        throw new Error("stress_injection_did_not_fire");
+      } catch (cause) {
+        if (codeOf(cause) !== "injected_failure") throw cause;
+      }
+      const recovery = await engineBridge.recoverGameDeployments(installation.path);
+      const passed = failurePoint === "after_prepared"
+        ? recovery.markedFailed > 0 && recovery.rolledBack === 0
+        : recovery.rolledBack > 0;
+      if (!passed) throw new Error("stress_recovery_unverified");
+      await refreshEvidence(false);
+      setStressMessage(failurePoint === "after_prepared"
+        ? (isRu ? "PASS · Обрыв до публикации не изменил файл игры." : "PASS · Interruption before publish left the game file unchanged.")
+        : (isRu ? "PASS · Обрыв после публикации восстановлен из проверенного состояния." : "PASS · Interruption after publish was restored from verified state."));
+    } catch (cause) { setError(codeOf(cause)); }
+    finally { setStressPhase(null); }
+  }
+
+  async function runSteamStressTest(failurePoint: DeploymentStressFailurePoint) {
+    if (!stressEnabled || !operationId || !installedLanguage || !selectedProfile || !packageVerified || steamOperationId || !canInstall || phase !== "idle" || stressPhase) return;
+    setError("");
+    setStressMessage("");
+    setStressPhase(failurePoint);
+    try {
+      const profile = profiles.find(item => item.profileToken === selectedProfile);
+      if (!profile || !["ready", "already_managed"].includes(profile.status)) throw new Error("steam_profile_conflict");
+      const runtime = await engineBridge.prepareRuntimeForPatch();
+      if (!runtime.patchReady) throw new Error("runtime_busy");
+      const previewPlan = await engineBridge.previewSteamLaunchOptions(selectedProfile, installedLanguage);
+      if (!previewPlan.changed) throw new Error("stress_requires_unmanaged_profile");
+      try {
+        await engineBridge.applyTreeSteamLaunchOptionsStress({
+          gamePath: installation.path,
+          deploymentOperationId: operationId,
+          profileToken: selectedProfile,
+          confirmationToken: previewPlan.confirmationToken,
+          language: installedLanguage,
+        }, failurePoint);
+        throw new Error("stress_injection_did_not_fire");
+      } catch (cause) {
+        if (codeOf(cause) !== "injected_failure") throw cause;
+      }
+      const receipts = await engineBridge.recoverSteamLaunchOptions();
+      if (!receipts.some(receipt => receipt.rolledBack && receipt.beforeSha256 === previewPlan.beforeSha256)) {
+        throw new Error("stress_recovery_unverified");
+      }
+      await refreshEvidence(false);
+      setStressMessage(failurePoint === "after_prepared"
+        ? (isRu ? "PASS · Обрыв подготовки Steam не изменил параметры запуска." : "PASS · Interrupted Steam preparation left launch options unchanged.")
+        : (isRu ? "PASS · Изменение Steam после записи восстановлено byte-for-byte." : "PASS · Steam change after publish was restored byte-for-byte."));
+    } catch (cause) { setError(codeOf(cause)); }
+    finally { setStressPhase(null); }
+  }
+
   return <section className="s-tree-pilot" aria-labelledby="tree-pilot-title">
-    <div className="s-tree-pilot-head"><span className="s-tree-pilot-symbol"><ShieldCheck /></span><div><small>{isRu ? "ПРОВЕРЯЕМАЯ СБОРКА · WINDOWS-ПИЛОТ" : "VERIFIABLE BUILD · WINDOWS PILOT"}</small><h2 id="tree-pilot-title">{bundleName}</h2></div><span className="s-tree-pilot-mark">{String(ids.length).padStart(2, "0")} / 03</span></div>
+    <div className="s-tree-pilot-head"><span className="s-tree-pilot-symbol"><ShieldCheck /></span><div><small>{isRu ? "ПРОВЕРЯЕМАЯ СБОРКА" : "VERIFIABLE BUILD"} · {deliveryLabel("pilot", language)}</small><h2 id="tree-pilot-title">{bundleName}</h2></div><span className="s-tree-pilot-mark">{String(ids.length).padStart(2, "0")} / 03</span></div>
     <p>{isRu ? "BetterFy скачивает только закреплённые ресурсы, сверяет каждый файл и собирает один VPK в выбранном тобой порядке. Первый мод имеет приоритет при совпадении ресурсов." : "BetterFy downloads only pinned resources, verifies every file, and assembles one VPK in your chosen order. The first mod wins when resources overlap."}</p>
     <div className="s-tree-pilot-steps"><span className={plan ? "done" : ""}>01 <b>{isRu ? "Скачать и сверить ресурсы" : "Download and verify resources"}</b></span><span className={operationId ? "done" : ""}>02 <b>{isRu ? "Собрать и записать с откатом" : "Build and install with rollback"}</b></span><span className={steamRestarted ? "done" : ""}>03 <b>{isRu ? "Открыть Steam" : "Open Steam"}</b></span><span>04 <b>{isRu ? "Проверить в Dota 2" : "Check in Dota 2"}</b></span></div>
     {!canInstall && <div className="s-inline-note warning"><TriangleAlert /><p>{!desktop ? (isRu ? "Реальная подготовка доступна только в приложении BetterFy." : "Real preparation is only available in the BetterFy desktop app.") : preview ? (isRu ? "В гостевом просмотре запись в игру недоступна." : "Game installation is unavailable in guest preview.") : !windows ? (isRu ? "Установка доступна только на Windows. На Mac можно проверить интерфейс и подготовить ресурсы." : "Installation is Windows-only. On Mac you can inspect the UI and prepare resources.") : !installation.verified ? (isRu ? "Сначала подключи настоящую установку Dota 2 в настройках." : "Connect a real Dota 2 installation in Settings first.") : (isRu ? "В живой пилот входят Tree Mod, Show Net Worth и Unit Query HUD. Убери остальные игровые моды из сборки." : "The live pilot supports Tree Mod, Show Net Worth, and Unit Query HUD. Remove other game mods from the build.")}</p></div>}
@@ -395,6 +465,13 @@ export default function TreePilot({ ids, installation, preview }: { ids: string[
     {operationId && installedLanguage && <div className="s-tree-pilot-steam"><div><strong>{isRu ? "Где находится сборка" : "Where the build is installed"}</strong><p><code>game/dota_{installedLanguage}/pak66_dir.vpk</code></p>{installedPackageIds.length > 0 && <p>{installedPackageIds.map(packageLabel).join(" · ")}</p>}<p>{!packageVerified ? (isRu ? "Исходные ресурсы сейчас не подтверждены. Настройка Steam заблокирована; можно откатить установленный файл." : "Source resources are not currently verified. Steam setup is blocked; the installed file can be restored.") : steamStarted ? (isRu ? "Выбранный Steam-профиль использует нужный язык; Steam открыт. Запусти Dota 2 и проверь каждый мод сборки." : "The selected Steam profile uses the required language; Steam is open. Launch Dota 2 and check every mod in the build.") : steamRestarted ? (isRu ? "Steam открыт. Добавь параметр ниже в свойствах Dota 2 → параметры запуска, затем запусти игру." : "Steam is open. Add the option below in Dota 2 properties → launch options, then launch the game.") : (isRu ? "Файл записан, но запуск Steam или его настройка не завершились. Проверь профиль и повтори настройку." : "The file was written, but Steam startup or setup did not finish. Check the profile and retry setup.")}</p><p>{isRu ? "Чтобы выбрать другой язык, сначала откати эту установку." : "Restore this installation before choosing another language."}</p></div><div className="s-tree-pilot-command"><code>-language {installedLanguage}</code><button className="s-btn" type="button" onClick={() => void copyLaunchOption()}><Copy />{copied ? (isRu ? "Скопировано" : "Copied") : (isRu ? "Копировать" : "Copy")}</button></div>{canInstall && !steamStarted && packageVerified && <><select aria-label={isRu ? "Steam-профиль" : "Steam profile"} value={selectedProfile} onChange={event => setSelectedProfile(event.target.value)}><option value="">{isRu ? "Вручную" : "Manual setup"}</option>{profiles.map(profile => <option key={profile.profileToken} value={profile.profileToken} disabled={profile.status !== "ready" && profile.status !== "already_managed"}>{isRu ? "Профиль" : "Profile"} {profile.profileIndex} · {profile.status === "ready" ? (isRu ? "готов" : "ready") : profile.status === "already_managed" ? (isRu ? "язык задан" : "language set") : (isRu ? "конфликт" : "conflict")}</option>)}</select><button className="s-btn" disabled={phase !== "idle" || !selectedProfile} onClick={() => void activateSteam()}>{phase === "steam" ? <LoaderCircle className="s-spin" /> : <ArrowRight />}{isRu ? "Настроить Steam" : "Set up Steam"}</button></>}</div>}
     {!operationId && steamOperationId && canInstall && <button className="s-btn" disabled={phase !== "idle"} onClick={() => void restoreSteam()}><RotateCcw />{isRu ? "Восстановить параметры Steam" : "Restore Steam settings"}</button>}
     {canInstall && <div className="s-tree-pilot-recovery">{steamRecoveryRequired && <span role="alert">{isRu ? "Изменение Steam было прервано. Сначала восстанови Steam, затем откатывай файл игры." : "A Steam change was interrupted. Recover Steam before restoring the game file."}</span>}<button className="s-text-button" disabled={phase !== "idle" || recovering} onClick={() => void recover()}>{recovering ? <LoaderCircle className="s-spin" /> : <RotateCcw />}{steamRecoveryRequired ? (isRu ? "Восстановить Steam и проверить установку" : "Recover Steam and check installation") : (isRu ? "Проверить прерванную установку" : "Check interrupted installation")}</button>{recoveryMessage && <span role="status">{recoveryMessage}</span>}</div>}
+    {canInstall && <details className="s-tree-pilot-evidence">
+      <summary><FileCheck2 />{isRu ? "Отчёт Windows-теста" : "Windows test report"}<span>{(evidence?.entries.length ?? 0) + (evidence?.steamEntries.length ?? 0)}</span></summary>
+      <div><p>{isRu ? "Отчёт содержит только версии, этапы, языки, пакеты, SHA-256 и результат точного отката Steam. Путей, Steam ID и данных аккаунта в нём нет." : "The report contains only versions, phases, languages, packages, SHA-256 values, and exact Steam rollback results. It contains no paths, Steam IDs, or account data."}</p><button className="s-btn" type="button" onClick={() => void refreshEvidence(true)}><Copy />{reportCopied ? (isRu ? "Скопировано" : "Copied") : (isRu ? "Скопировать отчёт" : "Copy report")}</button></div>
+      {stressEnabled && plan && !operationId && <section><strong><FlaskConical />{isRu ? "Контролируемое восстановление" : "Controlled recovery"}</strong><p>{isRu ? "Только для внутренней тестовой сборки. BetterFy намеренно останавливает транзакцию в безопасной точке и сразу запускает восстановление." : "Internal test build only. BetterFy intentionally stops the transaction at a safe boundary and immediately runs recovery."}</p><div><button className="s-btn" disabled={!selectedLanguage || Boolean(stressPhase)} onClick={() => void runStressTest("after_prepared")}>{stressPhase === "after_prepared" && <LoaderCircle className="s-spin" />}{isRu ? "Обрыв до записи" : "Interrupt before publish"}</button><button className="s-btn" disabled={!selectedLanguage || Boolean(stressPhase)} onClick={() => void runStressTest("after_replace")}>{stressPhase === "after_replace" && <LoaderCircle className="s-spin" />}{isRu ? "Обрыв после записи" : "Interrupt after publish"}</button></div></section>}
+      {stressEnabled && operationId && installedLanguage && selectedProfile && packageVerified && !steamOperationId && <section><strong><FlaskConical />{isRu ? "Восстановление Steam" : "Steam recovery"}</strong><p>{isRu ? "Проверяет обе стороны атомарной записи localconfig.vdf. Текущий профиль должен ещё не содержать выбранный параметр языка." : "Tests both sides of the atomic localconfig.vdf write. The current profile must not already contain the selected language option."}</p><div><button className="s-btn" disabled={Boolean(stressPhase)} onClick={() => void runSteamStressTest("after_prepared")}>{stressPhase === "after_prepared" && <LoaderCircle className="s-spin" />}{isRu ? "Steam · до записи" : "Steam · before publish"}</button><button className="s-btn" disabled={Boolean(stressPhase)} onClick={() => void runSteamStressTest("after_replace")}>{stressPhase === "after_replace" && <LoaderCircle className="s-spin" />}{isRu ? "Steam · после записи" : "Steam · after publish"}</button></div></section>}
+      {stressMessage && <p className="s-tree-pilot-stress-pass" role="status">{stressMessage}</p>}
+    </details>}
     {error && <p className="s-tree-pilot-error" role="alert">{explainError(error, isRu)}</p>}
     <small className="s-tree-pilot-foot">{isRu ? "Источник: Egezenn/dota2-minify · Tree Mod: robbyz512. Tree Mod проверен в игре только с Dutch; Show Net Worth и Unit Query HUD требуют Windows-проверки. Параметр -language меняет язык текста и может повлиять на озвучку. BetterFy мягко закрывает Dota 2 и Steam; после отката Steam останется закрытым." : "Source: Egezenn/dota2-minify · Tree Mod: robbyz512. Tree Mod was verified in game only with Dutch; Show Net Worth and Unit Query HUD still require Windows verification. The -language option changes text language and may affect audio. BetterFy closes Dota 2 and Steam gracefully; Steam stays closed after restore."}</small>
   </section>;

@@ -143,6 +143,31 @@ evidence for Tree Mod, not a general compatibility result for other languages or
 - Repeat with a failure-injection internal build on both sides of atomic publish.
   Recovery must be deterministic and diagnostics must remain safe.
 
+### Controlled recovery pass in the stress artifact
+
+The `Windows build` workflow produces an internal artifact whose name starts with
+`BetterFy-Windows-Stress`. The public Early Access release intentionally does not
+contain these controls.
+
+1. Prepare the selected package set and choose one language. Do not run this pass
+   over an active BetterFy installation; restore it first.
+2. Open **Windows test report → Controlled recovery**.
+3. Run **Interrupt before publish**. It must report `PASS`, leave the target
+   unchanged, and record a failed pre-commit journal.
+4. Run **Interrupt after publish**. It must report `PASS`, remove or restore the
+   target, and record `rollbackVerified: true`.
+5. Install normally without automatic Steam activation. The game VPK remains
+   installed so the Steam transaction can be tested independently.
+6. Choose a Steam profile which does not already contain the selected BetterFy
+   language, then run **Steam · before publish** and **Steam · after publish**.
+   Both must report `PASS`; unrelated launch options must remain byte-for-byte
+   unchanged.
+7. Copy the Windows test report after every language/package matrix. The JSON is
+   designed to be shareable: verify visually that it contains no paths, Steam ID,
+   account name, profile token, or authentication data.
+8. Finish by restoring the normal installation and rerunning diagnostics. No
+   recoverable deployment or Steam transaction may remain.
+
 ## 8. Verify installation and updates
 
 Before installer/update checks, run one multi-mod pass:

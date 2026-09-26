@@ -195,6 +195,14 @@ package IDs, so restart detection and rollback cannot mistake two builds that
 produce a different selected composition. Native Windows evidence exists only
 for Tree Mod through Dutch; the multi-package path still requires Windows proof.
 
+The normal release build and the internal stress build share the same transaction
+code. Only the CI `windows-build` artifact enables the `internal-stress-test`
+feature. That feature exposes two deterministic stop points on each game-file and
+Steam-profile transaction: after the verified temporary state is journaled, and
+immediately after the atomic replacement. Each control immediately invokes the
+normal recovery path and requires a matching recovery receipt. The Early Access
+release workflow does not enable these controls.
+
 The runtime preflight is now implemented behind typed Tauri commands. Windows
 process enumeration uses Tool Help APIs and recognizes the Steam client, Web
 Helper, overlay, and Dota processes without invoking a shell. With explicit
@@ -316,6 +324,15 @@ app-data roots and listing staging journals may finish an interrupted journal
 rename there; it does not modify Dota, Steam, launch options, or game content.
 Browser and unsupported platforms return an explicit unsupported state instead
 of imitating Windows readiness.
+
+`collect_tree_pilot_evidence` exports at most the latest 100 deployment journal
+records for the validated installation. It includes the app version, platform,
+language, package order, phases, timestamps, SHA-256 values, backup verification,
+and durable rollback verification. It deliberately omits filesystem paths,
+target identities, Steam profile tokens, account identifiers, and authentication
+data. A rollback is marked verified only after the restored target hashes to the
+recorded pre-install value, or after an initially absent target is confirmed
+absent again.
 
 ### Implemented trusted content foundation
 

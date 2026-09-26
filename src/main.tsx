@@ -10,6 +10,7 @@ import "@fontsource/manrope/latin-700.css";
 import "@fontsource/manrope/cyrillic-700.css";
 import "@fontsource/jetbrains-mono/latin-400.css";
 import "@fontsource/jetbrains-mono/cyrillic-400.css";
+import "./studio/studio-tokens.css";
 import "./studio/studio.css";
 import "./studio/studio-polish.css";
 import "./studio/studio-finish.css";

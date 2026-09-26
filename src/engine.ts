@@ -185,6 +185,99 @@ export type GameDeploymentRecovery = {
   markedFailed: number;
 };
 
+export type TreePilotPlan = {
+  planId: string;
+  packageId: string;
+  packageIds: string[];
+  sourceCommit: string;
+  targetFile: string;
+  resourceCount: number;
+  resourceBytes: number;
+  vpkBytes: number;
+  vpkSha256: string;
+  bundlePlanId: string;
+  packageCount: number;
+  duplicateResources: number;
+  overriddenResources: number;
+  duplicates: Array<{ path: string; keptPackageId: string; duplicatePackageIds: string[] }>;
+  overrides: Array<{ path: string; winnerPackageId: string; shadowedPackageIds: string[] }>;
+  contributions: Array<{ packageId: string; inputResources: number; effectiveResources: number; duplicateResources: number; shadowedResources: number }>;
+  compatibility: "unknown";
+  distribution: "internal_pilot";
+  deployEnabled: boolean;
+};
+
+export type TreePilotDownloadStatus = {
+  phase: "downloading" | "verifying" | "ready" | "failed" | "cancelled";
+  verifiedResources: number;
+  totalResources: number;
+  errorCode: string | null;
+  plan: TreePilotPlan | null;
+};
+
+export type TreePilotCurrentState = GameDeploymentReceipt & {
+  packageVerified: boolean;
+  steamOperationId: string | null;
+  steamProfileToken: string | null;
+  steamRecoveryRequired: boolean;
+};
+
+export type TreeSteamActivationRequest = {
+  gamePath: string;
+  deploymentOperationId: string;
+  profileToken: string;
+  confirmationToken: string;
+  language: GameLanguage;
+};
+
+export type TreeSteamStartRequest = {
+  gamePath: string;
+  operationId: string;
+  profileToken?: string;
+  steamOperationId?: string | null;
+};
+
+export type DeploymentStressFailurePoint = "after_prepared" | "after_replace";
+
+export type DeploymentStressCapabilities = {
+  enabled: boolean;
+  failurePoints: DeploymentStressFailurePoint[];
+};
+
+export type DeploymentEvidenceReport = {
+  schemaVersion: 1;
+  appVersion: string;
+  platform: "windows" | "macos" | "other";
+  generatedAtMs: number;
+  entries: Array<{
+    sequence: number;
+    language: GameLanguage;
+    phase: "backed_up" | "prepared" | "committed" | "rolled_back" | "failed";
+    beforeSha256: string | null;
+    installedSha256: string;
+    backupVerified: boolean;
+    rollbackVerified: boolean;
+    active: boolean;
+    bundlePlanId: string | null;
+    packageIds: string[];
+    createdAtMs: number;
+    updatedAtMs: number;
+    errorCode: string | null;
+  }>;
+  steamEntries: Array<{
+    sequence: number;
+    language: GameLanguage;
+    phase: "backed_up" | "prepared" | "committed" | "rolled_back" | "failed";
+    beforeSha256: string;
+    afterSha256: string;
+    backupVerified: boolean;
+    rollbackVerified: boolean;
+    createdAtMs: number;
+    updatedAtMs: number;
+    errorCode: string | null;
+  }>;
+};
+
 export interface EngineBridge {
   intakeFixtureContent(packageIds: string[]): Promise<ContentReceipt[]>;
   beginContentDownload(packageId: string): Promise<ContentDownloadStatus>;
@@ -211,6 +304,32 @@ export interface EngineBridge {
   deployStagedVpk(gamePath: string, receipt: BuildReceipt): Promise<GameDeploymentReceipt>;
   rollbackGameDeployment(gamePath: string, operationId: string): Promise<GameDeploymentReceipt>;
   recoverGameDeployments(gamePath: string): Promise<GameDeploymentRecovery>;
+  beginTreePilotDownload(packageIds: string[]): Promise<TreePilotDownloadStatus>;
+  treePilotDownloadStatus(): Promise<TreePilotDownloadStatus | null>;
+  cancelTreePilotDownload(): Promise<TreePilotDownloadStatus>;
+  previewTreeLanguage(gamePath: string, language: GameLanguage): Promise<void>;
+  installTreePilot(
+    gamePath: string,
+    packageIds: string[],
+    expectedPlanId: string,
+    language: GameLanguage,
+  ): Promise<GameDeploymentReceipt>;
+  currentTreePilot(gamePath: string): Promise<TreePilotCurrentState | null>;
+  applyTreeSteamLaunchOptions(request: TreeSteamActivationRequest): Promise<SteamConfigReceipt>;
+  applyTreeSteamLaunchOptionsStress(
+    request: TreeSteamActivationRequest,
+    failurePoint: DeploymentStressFailurePoint,
+  ): Promise<SteamConfigReceipt>;
+  startSteamAfterTreePilot(request: TreeSteamStartRequest): Promise<RuntimeState>;
+  treePilotStressCapabilities(): Promise<DeploymentStressCapabilities>;
+  installTreePilotStress(
+    gamePath: string,
+    packageIds: string[],
+    expectedPlanId: string,
+    language: GameLanguage,
+    failurePoint: DeploymentStressFailurePoint,
+  ): Promise<GameDeploymentReceipt>;
+  collectTreePilotEvidence(gamePath: string): Promise<DeploymentEvidenceReport>;
   startSteamAfterProfile(
     profileToken: string,
     operationId: string | null,
@@ -444,6 +563,49 @@ export const mockEngine: EngineBridge = {
   },
   async recoverGameDeployments() {
     throw new EngineFault("desktop_runtime_required", "recover_game_deployments");
+  },
+  async beginTreePilotDownload() {
+    throw new EngineFault("desktop_runtime_required", "begin_tree_pilot_download");
+  },
+  async treePilotDownloadStatus() {
+    return null;
+  },
+  async cancelTreePilotDownload() {
+    throw new EngineFault("desktop_runtime_required", "cancel_tree_pilot_download");
+  },
+  async previewTreeLanguage() {
+    throw new EngineFault("desktop_runtime_required", "preview_tree_language");
+  },
+  async installTreePilot() {
+    throw new EngineFault("desktop_runtime_required", "install_tree_pilot");
+  },
+  async currentTreePilot() {
+    return null;
+  },
+  async applyTreeSteamLaunchOptions() {
+    throw new EngineFault("desktop_runtime_required", "apply_tree_steam_launch_options");
+  },
+  async applyTreeSteamLaunchOptionsStress() {
+    throw new EngineFault("stress_test_disabled", "apply_tree_steam_launch_options_stress");
+  },
+  async startSteamAfterTreePilot() {
+    throw new EngineFault("platform_not_supported", "start_steam_after_tree_pilot");
+  },
+  async treePilotStressCapabilities() {
+    return { enabled: false, failurePoints: [] };
+  },
+  async installTreePilotStress() {
+    throw new EngineFault("stress_test_disabled", "install_tree_pilot_stress");
+  },
+  async collectTreePilotEvidence() {
+    return {
+      schemaVersion: 1,
+      appVersion: "0.1.0-preview",
+      platform: "other",
+      generatedAtMs: Date.now(),
+      entries: [],
+      steamEntries: [],
+    };
   },
   async startSteamAfterProfile() {
     throw new EngineFault("platform_not_supported", "start_steam_after_profile");
@@ -716,6 +878,143 @@ export const engineBridge: EngineBridge = {
       }),
       90_000,
     );
+  },
+  async beginTreePilotDownload(packageIds) {
+    if (!isTauriRuntime()) return mockEngine.beginTreePilotDownload(packageIds);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "begin_tree_pilot_download",
+      invoke<TreePilotDownloadStatus>("begin_tree_pilot_download", { packageIds: uniqueModIds(packageIds) }),
+      20_000,
+    );
+  },
+  async treePilotDownloadStatus() {
+    if (!isTauriRuntime()) return mockEngine.treePilotDownloadStatus();
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "tree_pilot_download_status",
+      invoke<TreePilotDownloadStatus | null>("tree_pilot_download_status"),
+    );
+  },
+  async cancelTreePilotDownload() {
+    if (!isTauriRuntime()) return mockEngine.cancelTreePilotDownload();
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "cancel_tree_pilot_download",
+      invoke<TreePilotDownloadStatus>("cancel_tree_pilot_download"),
+    );
+  },
+  async previewTreeLanguage(gamePath, language) {
+    if (!isTauriRuntime()) return mockEngine.previewTreeLanguage(gamePath, language);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "preview_tree_language",
+      invoke<void>("preview_tree_language", { gamePath, language }),
+    );
+  },
+  async installTreePilot(gamePath, packageIds, expectedPlanId, language) {
+    if (!isTauriRuntime()) {
+      return mockEngine.installTreePilot(gamePath, packageIds, expectedPlanId, language);
+    }
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "install_tree_pilot",
+      invoke<GameDeploymentReceipt>("install_tree_pilot", {
+        request: {
+          gamePath,
+          packageIds: uniqueModIds(packageIds),
+          expectedPlanId,
+          language,
+          confirmed: true,
+        },
+      }),
+      120_000,
+    );
+  },
+  async currentTreePilot(gamePath) {
+    if (!isTauriRuntime()) return mockEngine.currentTreePilot(gamePath);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "current_tree_pilot",
+      invoke<TreePilotCurrentState | null>("current_tree_pilot", { gamePath }),
+      30_000,
+    );
+  },
+  async applyTreeSteamLaunchOptions(request) {
+    if (!isTauriRuntime()) return mockEngine.applyTreeSteamLaunchOptions(request);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "apply_tree_steam_launch_options",
+      invoke<SteamConfigReceipt>("apply_tree_steam_launch_options", {
+        request: { ...request, confirmed: true },
+      }),
+      30_000,
+    );
+  },
+  async applyTreeSteamLaunchOptionsStress(request, failurePoint) {
+    if (!isTauriRuntime()) {
+      return mockEngine.applyTreeSteamLaunchOptionsStress(request, failurePoint);
+    }
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "apply_tree_steam_launch_options_stress",
+      invoke<SteamConfigReceipt>("apply_tree_steam_launch_options_stress", {
+        request: { ...request, failurePoint, confirmed: true },
+      }),
+      30_000,
+    );
+  },
+  async startSteamAfterTreePilot(request) {
+    if (!isTauriRuntime()) return mockEngine.startSteamAfterTreePilot(request);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "start_steam_after_tree_pilot",
+      invoke<RuntimeState>("start_steam_after_tree_pilot", {
+        request: { ...request, confirmed: true },
+      }),
+      steamLifecycleTimeoutMs,
+    );
+  },
+  async treePilotStressCapabilities() {
+    if (!isTauriRuntime()) return mockEngine.treePilotStressCapabilities();
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "tree_pilot_stress_capabilities",
+      invoke<DeploymentStressCapabilities>("tree_pilot_stress_capabilities"),
+    );
+  },
+  async installTreePilotStress(gamePath, packageIds, expectedPlanId, language, failurePoint) {
+    if (!isTauriRuntime()) {
+      return mockEngine.installTreePilotStress(gamePath, packageIds, expectedPlanId, language, failurePoint);
+    }
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "install_tree_pilot_stress",
+      invoke<GameDeploymentReceipt>("install_tree_pilot_stress", {
+        request: {
+          gamePath,
+          packageIds: uniqueModIds(packageIds),
+          expectedPlanId,
+          language,
+          failurePoint,
+          confirmed: true,
+        },
+      }),
+      120_000,
+    );
+  },
+  async collectTreePilotEvidence(gamePath) {
+    if (!isTauriRuntime()) return mockEngine.collectTreePilotEvidence(gamePath);
+    const { invoke } = await import("@tauri-apps/api/core");
+    const report = await guardedEngineCall(
+      "collect_tree_pilot_evidence",
+      invoke<DeploymentEvidenceReport>("collect_tree_pilot_evidence", { gamePath }),
+      30_000,
+    );
+    if (report.schemaVersion !== 1 || !Array.isArray(report.entries)) {
+      throw new EngineFault("invalid_response", "collect_tree_pilot_evidence");
+    }
+    return report;
   },
   async startSteamAfterProfile(profileToken, operationId, language = "dutch") {
     if (!isTauriRuntime()) {
