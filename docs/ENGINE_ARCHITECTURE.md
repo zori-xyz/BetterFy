@@ -188,8 +188,12 @@ exists, but it accepts only a `Ready` journal containing exactly one verified
 confirmed activation step stops Dota and Steam, commits BetterFy's owned launch
 option, verifies the profile against its journal, and starts Steam only. The
 generic game-directory write remains closed in release builds. The fixed Tree
-Mod pilot command now stages and re-verifies the 21-resource VPK before calling
-the deployment transaction; native Windows evidence is still outstanding.
+verified-build pilot now stages and re-verifies an ordered Tree Mod / Show Net
+Worth / Repopulate Unit Query HUD bundle before calling the deployment transaction. The deployment ownership
+record and journal persist both the complete bundle-plan identity and ordered
+package IDs, so restart detection and rollback cannot mistake two builds that
+produce a different selected composition. Native Windows evidence exists only
+for Tree Mod through Dutch; the multi-package path still requires Windows proof.
 
 The runtime preflight is now implemented behind typed Tauri commands. Windows
 process enumeration uses Tool Help APIs and recognizes the Steam client, Web
@@ -226,7 +230,7 @@ activation step. It lists profiles by neutral ordinal, requires explicit shutdow
 confirmation, applies the selected preview, verifies either the matching committed
 journal or an already-managed profile, then resolves `steam.exe` from the registry
 and starts Steam. Dota is never launched. A changed transaction exposes its exact
-rollback path. The internal Tree Mod pilot binds one selected, allowlisted
+rollback path. The internal verified-build pilot binds one selected, allowlisted
 `-language` value to the same language folder used for its VPK. Earlier Dutch
 operations remain readable and restorable.
 
@@ -237,10 +241,27 @@ embedded data entries. Paths are lowercase relative ASCII, traversal and case-fo
 collisions are rejected, CRC32 is recorded per entry, and the finished archive is
 opened and checked again. External archive parts are not accepted.
 
+The next multi-package layer now merges verified embedded resources into one
+BetterFy-owned VPK. Selected package order is explicit: the first package has
+priority when different bytes target the same resource path. Identical resources
+are deduplicated, differing collisions are recorded as overrides, and all inputs —
+including shadowed bytes — are bound into the reviewed SHA-256 plan identity. The
+same ordered package list is persisted in the staging journal. This foundation is
+covered synthetically; it does not open general catalog deployment and has not yet
+been exercised with the complete three-package bundle on Windows. Each package's
+input, effective, deduplicated, and shadowed resource counts are included in the
+reviewed plan so a selected package cannot silently contribute zero effective
+resources.
+
+Verified embedded upstream VPKs can be reopened into their resource maps before
+the merge, so repeated upstream names such as `pak66_dir.vpk` do not become target
+filenames and do not require blind numeric renaming. External numbered archive
+parts remain unsupported and are rejected rather than partially copied.
+
 `deploy_staged_vpk` cannot receive a source or destination from the interface. It
 resolves a confirmed BetterFy staging journal, requires its exact reviewed plan ID,
 requires one verified `pak66_dir.vpk`, rehashes and reopens it, then targets only
-`game/dota_dutch/pak66_dir.vpk` for the generic debug path. The Tree Mod pilot
+`game/dota_dutch/pak66_dir.vpk` for the generic debug path. The verified-build pilot
 instead chooses an allowlisted language folder before installation and records
 it in the journal and receipt. The runtime must already prove Steam and Dota are
 closed. An existing target is replaceable only when BetterFy's ownership record
@@ -253,10 +274,11 @@ the exact prior bytes and prior ownership chain, or removes an initial install. 
 refuses to overwrite a post-install external edit. Recovery distinguishes an
 interruption before publish from one after publish and either marks the untouched
 operation failed or rolls the published bytes back. Synthetic tests inject both
-failures. Only the pinned Tree Mod selection can invoke the internal live-deploy
+failures. Only pinned Tree Mod, Show Net Worth, and Repopulate Unit Query HUD selections can invoke the internal live-deploy
 path on Windows. No other catalog selection can invoke a live deploy, and no
 general Windows compatibility result is claimed. The founder has observed the
-intended Tree Mod result in Dota through the Dutch slot only.
+intended Tree Mod result in Dota through the Dutch slot and completed the visible
+rollback, after which the game returned to its normal tree state.
 
 Installed-state discovery now reads the ownership record and committed journal,
 rehashes the on-disk target, and checks a required previous-version backup without
@@ -264,7 +286,7 @@ depending on the resource cache or browser storage. The Tree Mod screen separate
 reports whether the installed hash still matches a VPK rebuilt from the pinned
 resources. If that second check is unavailable, file rollback remains discoverable
 but automatic Steam activation is not offered. This is synthetic recovery coverage,
-not a Windows rollback result.
+not proof of exact-byte Windows restoration or interruption recovery.
 
 The internal Tree Mod Steam write now carries the validated VPK deployment ID
 inside the Steam journal. On restart, Rust locates the matching committed Steam

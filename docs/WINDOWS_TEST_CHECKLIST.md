@@ -85,10 +85,10 @@ BetterFy must not force-terminate processes and must never launch Dota itself.
   remain.
 
 This flow writes only inside BetterFy application data. The game-deployment
-transaction exists behind a strict verified-VPK boundary. The Tree Mod language
-path is available for the internal pilot; no other catalog item may be treated
-as installable. Dutch has founder-observed in-game evidence, not a general
-compatibility result for other languages or mods.
+transaction exists behind a strict verified-VPK boundary. Tree Mod, Show Net
+Worth, and Repopulate Unit Query HUD are the only live pilot packages; no other
+catalog item may be treated as installable. Dutch has founder-observed in-game
+evidence for Tree Mod, not a general compatibility result for other languages or mods.
 
 ## 7. Tree Mod internal pilot
 
@@ -117,6 +117,9 @@ compatibility result for other languages or mods.
 - Restore the existing Dutch operation before switching to another language.
   Check that the prior VPK and BetterFy-owned launch option are removed and no
   unrelated Steam option or language-folder file changes.
+  Founder evidence now covers the visible rollback and return to normal trees;
+  retain exact before/after hashes in the next pass before marking byte-perfect
+  restoration verified.
 - Do not switch the installer to `dota_betterfy` until a separate Windows test
   demonstrates that the current Dota client mounts that exact folder.
 - Close Dota and Steam, then roll back in BetterFy. Verify both the exact
@@ -141,6 +144,21 @@ compatibility result for other languages or mods.
   Recovery must be deterministic and diagnostics must remain safe.
 
 ## 8. Verify installation and updates
+
+Before installer/update checks, run one multi-mod pass:
+
+- select Tree Mod, Show Net Worth, and Repopulate Unit Query HUD and note their visible priority order;
+- prepare the bundle and confirm it reports 3 packages and 25 resources;
+- install through Dutch, restart BetterFy, and confirm the same three-package
+  operation is rediscovered with all three package IDs;
+- launch Dota manually and verify the tree replacement, net-worth HUD, and
+  unit-query HUD changes; a BetterFy success state alone is not proof;
+- reverse the priority and prepare again; the plan identity must change even if
+  the packages do not collide;
+- restore and confirm normal trees/HUD and the previous exact target bytes.
+
+Show Net Worth and Repopulate Unit Query HUD stay internal unverified pilots
+until this pass succeeds.
 
 - Install the same internal version over the existing installation and confirm
   that settings survive.

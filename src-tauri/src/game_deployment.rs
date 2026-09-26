@@ -60,6 +60,8 @@ pub struct DeploymentReceipt {
     pub backup_verified: bool,
     pub committed: bool,
     pub rolled_back: bool,
+    pub bundle_plan_id: Option<String>,
+    pub package_ids: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -87,6 +89,10 @@ struct DeploymentJournal {
     before_sha256: Option<String>,
     before_operation_id: Option<String>,
     installed_sha256: String,
+    #[serde(default)]
+    bundle_plan_id: Option<String>,
+    #[serde(default)]
+    package_ids: Vec<String>,
     phase: DeploymentPhase,
     created_at_ms: u128,
     updated_at_ms: u128,
@@ -103,6 +109,16 @@ struct OwnershipState {
     language: GameLanguage,
     installed_sha256: String,
     operation_id: String,
+    #[serde(default)]
+    bundle_plan_id: Option<String>,
+    #[serde(default)]
+    package_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct DeploymentBundleIdentity {
+    pub plan_id: Option<String>,
+    pub package_ids: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -374,6 +390,7 @@ fn deploy_with_failure(
     package: &[u8],
     expected_sha256: &str,
     language: GameLanguage,
+    bundle: DeploymentBundleIdentity,
     failure: FailurePoint,
 ) -> Result<DeploymentReceipt, String> {
     let installed_sha256 = verify_package(package, expected_sha256)?;
@@ -444,6 +461,8 @@ fn deploy_with_failure(
         before_sha256: before_sha256.clone(),
         before_operation_id,
         installed_sha256: installed_sha256.clone(),
+        bundle_plan_id: bundle.plan_id.clone(),
+        package_ids: bundle.package_ids.clone(),
         phase: DeploymentPhase::BackedUp,
         created_at_ms: timestamp,
         updated_at_ms: timestamp,
@@ -489,6 +508,8 @@ fn deploy_with_failure(
             language,
             installed_sha256: installed_sha256.clone(),
             operation_id: operation_id.clone(),
+            bundle_plan_id: bundle.plan_id.clone(),
+            package_ids: bundle.package_ids.clone(),
         },
     )?;
     journal.phase = DeploymentPhase::Committed;
@@ -502,6 +523,8 @@ fn deploy_with_failure(
         backup_verified: before.is_none() || backup_path.is_file(),
         committed: true,
         rolled_back: false,
+        bundle_plan_id: bundle.plan_id,
+        package_ids: bundle.package_ids,
     })
 }
 
@@ -517,6 +540,7 @@ pub(crate) fn deploy_verified_vpk(
         package,
         expected_sha256,
         GameLanguage::Dutch,
+        DeploymentBundleIdentity::default(),
         FailurePoint::None,
     )
 }
@@ -570,12 +594,13 @@ pub(crate) fn preview_language_destination(
     Ok(())
 }
 
-pub(crate) fn deploy_verified_vpk_for_language(
+pub(crate) fn deploy_verified_bundle_for_language(
     app_data_root: &Path,
     dota_root: &Path,
     package: &[u8],
     expected_sha256: &str,
     language: GameLanguage,
+    bundle: DeploymentBundleIdentity,
 ) -> Result<DeploymentReceipt, String> {
     verify_language_folder(dota_root, language)?;
     deploy_with_failure(
@@ -584,10 +609,30 @@ pub(crate) fn deploy_verified_vpk_for_language(
         package,
         expected_sha256,
         language,
+        bundle,
         FailurePoint::None,
     )
 }
 
+#[cfg(test)]
+pub(crate) fn deploy_verified_vpk_for_language(
+    app_data_root: &Path,
+    dota_root: &Path,
+    package: &[u8],
+    expected_sha256: &str,
+    language: GameLanguage,
+) -> Result<DeploymentReceipt, String> {
+    deploy_verified_bundle_for_language(
+        app_data_root,
+        dota_root,
+        package,
+        expected_sha256,
+        language,
+        DeploymentBundleIdentity::default(),
+    )
+}
+
+#[cfg(test)]
 pub(crate) fn current_verified_deployment(
     app_data_root: &Path,
     dota_root: &Path,
@@ -621,6 +666,8 @@ pub(crate) fn current_owned_deployment(
         || journal.target_identity != identity
         || journal.language != ownership.language
         || journal.installed_sha256 != ownership.installed_sha256
+        || journal.bundle_plan_id != ownership.bundle_plan_id
+        || journal.package_ids != ownership.package_ids
         || journal.phase != DeploymentPhase::Committed
     {
         return Err("deployment_journal_invalid".to_string());
@@ -649,6 +696,8 @@ pub(crate) fn current_owned_deployment(
         backup_verified: true,
         committed: true,
         rolled_back: false,
+        bundle_plan_id: ownership.bundle_plan_id,
+        package_ids: ownership.package_ids,
     }))
 }
 
@@ -679,6 +728,8 @@ pub(crate) fn rollback(
             backup_verified: true,
             committed: false,
             rolled_back: true,
+            bundle_plan_id: journal.bundle_plan_id,
+            package_ids: journal.package_ids,
         });
     }
     let current = fs::read(&target).map_err(|_| "rollback_conflict".to_string())?;
@@ -703,6 +754,16 @@ pub(crate) fn rollback(
                 .join(format!(".betterfy-rollback-{operation_id}.tmp"));
             write_new_synced(&replacement, &bytes)?;
             publish(&target, &replacement, true)?;
+            let previous: DeploymentJournal =
+                read_json(&journals.join(format!("{previous_operation}.json")))?;
+            if previous.operation_id != *previous_operation
+                || previous.target_identity != identity
+                || previous.language != journal.language
+                || previous.installed_sha256 != *expected
+                || previous.phase != DeploymentPhase::Committed
+            {
+                return Err("deployment_journal_invalid".to_string());
+            }
             atomic_json(
                 &ownership_path(&root),
                 &OwnershipState {
@@ -711,6 +772,8 @@ pub(crate) fn rollback(
                     language: journal.language,
                     installed_sha256: expected.clone(),
                     operation_id: previous_operation.clone(),
+                    bundle_plan_id: previous.bundle_plan_id,
+                    package_ids: previous.package_ids,
                 },
             )?;
         }
@@ -735,6 +798,8 @@ pub(crate) fn rollback(
         backup_verified: true,
         committed: false,
         rolled_back: true,
+        bundle_plan_id: journal.bundle_plan_id,
+        package_ids: journal.package_ids,
     })
 }
 
@@ -868,6 +933,57 @@ mod tests {
             .expect("executable directory");
         fs::write(executable, b"executable-marker").expect("executable marker");
         dota
+    }
+
+    #[test]
+    fn bundle_identity_survives_install_restart_and_rollback() {
+        let base = root("bundle-identity");
+        let app = base.join("app");
+        let dota = game(&base);
+        let first = package(b"first bundle");
+        let first_identity = DeploymentBundleIdentity {
+            plan_id: Some("sha256:first-plan".to_string()),
+            package_ids: vec!["minify.tree-mod".to_string()],
+        };
+        let first_receipt = deploy_verified_bundle_for_language(
+            &app,
+            &dota,
+            &first,
+            &sha256(&first),
+            GameLanguage::Dutch,
+            first_identity.clone(),
+        )
+        .expect("first bundle");
+        let second = package(b"second bundle");
+        let second_identity = DeploymentBundleIdentity {
+            plan_id: Some("sha256:second-plan".to_string()),
+            package_ids: vec![
+                "minify.show-networth".to_string(),
+                "minify.tree-mod".to_string(),
+            ],
+        };
+        let second_receipt = deploy_verified_bundle_for_language(
+            &app,
+            &dota,
+            &second,
+            &sha256(&second),
+            GameLanguage::Dutch,
+            second_identity.clone(),
+        )
+        .expect("second bundle");
+        let current = current_owned_deployment(&app, &dota)
+            .expect("current state")
+            .expect("owned state");
+        assert_eq!(current.bundle_plan_id, second_identity.plan_id);
+        assert_eq!(current.package_ids, second_identity.package_ids);
+        rollback(&app, &dota, &second_receipt.operation_id).expect("restore first bundle");
+        let restored = current_owned_deployment(&app, &dota)
+            .expect("restored state")
+            .expect("restored ownership");
+        assert_eq!(restored.operation_id, first_receipt.operation_id);
+        assert_eq!(restored.bundle_plan_id, first_identity.plan_id);
+        assert_eq!(restored.package_ids, first_identity.package_ids);
+        let _ = fs::remove_dir_all(base);
     }
 
     fn package(label: &'static [u8]) -> Vec<u8> {
@@ -1093,6 +1209,7 @@ mod tests {
                 &bytes,
                 &sha256(&bytes),
                 GameLanguage::Russian,
+                DeploymentBundleIdentity::default(),
                 FailurePoint::AfterReplace,
             )
             .err()
@@ -1211,6 +1328,7 @@ mod tests {
                 &first,
                 &sha256(&first),
                 GameLanguage::Dutch,
+                DeploymentBundleIdentity::default(),
                 FailurePoint::AfterPrepared,
             )
             .err()
@@ -1228,6 +1346,7 @@ mod tests {
                 &second,
                 &sha256(&second),
                 GameLanguage::Dutch,
+                DeploymentBundleIdentity::default(),
                 FailurePoint::AfterReplace,
             )
             .err()

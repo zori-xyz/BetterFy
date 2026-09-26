@@ -6,6 +6,7 @@ mod build_engine;
 mod content_store;
 mod game_deployment;
 mod game_language;
+mod mod_bundle;
 mod presets;
 mod remote_intake;
 mod runtime_control;
@@ -63,6 +64,7 @@ struct StartSteamAfterProfileRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct InstallTreePilotRequest {
     game_path: String,
+    package_ids: Vec<String>,
     expected_plan_id: String,
     language: GameLanguage,
     confirmed: bool,
@@ -515,12 +517,15 @@ async fn deploy_staged_vpk(
 }
 
 #[tauri::command]
-fn begin_tree_pilot_download(app: AppHandle) -> Result<tree_pilot::TreeDownloadStatus, String> {
+fn begin_tree_pilot_download(
+    app: AppHandle,
+    package_ids: Vec<String>,
+) -> Result<tree_pilot::TreeDownloadStatus, String> {
     let app_data = app
         .path()
         .app_data_dir()
         .map_err(|_| "build_failed".to_string())?;
-    tree_pilot::begin_download(app_data)
+    tree_pilot::begin_download(app_data, package_ids)
 }
 
 #[tauri::command]
@@ -548,13 +553,17 @@ async fn install_tree_pilot(
     tauri::async_runtime::spawn_blocking(move || {
         require_patch_ready_runtime()?;
         validate_candidate(Path::new(&request.game_path), "manual")?;
-        let verified = tree_pilot::build_from_verified_store(&app_data)?;
-        let expected_hash = format!("{:x}", sha2::Sha256::digest(verified.bytes()));
-        if request.expected_plan_id != format!("sha256:{expected_hash}") {
+        let verified = tree_pilot::build_from_verified_store(&app_data, &request.package_ids)?;
+        let expected_hash = verified.sha256().to_string();
+        if request.expected_plan_id != verified.plan_id() {
             return Err("build_plan_stale".to_string());
         }
-        let staged =
-            tree_pilot::stage_from_verified_store(&app_data, &request.expected_plan_id, true)?;
+        let staged = tree_pilot::stage_from_verified_store(
+            &app_data,
+            &request.expected_plan_id,
+            &request.package_ids,
+            true,
+        )?;
         let reopened = build_engine::verified_staged_vpk(
             &app_data,
             &staged.operation_id,
@@ -564,12 +573,16 @@ async fn install_tree_pilot(
             return Err("verification_failed".to_string());
         }
         require_patch_ready_runtime()?;
-        game_deployment::deploy_verified_vpk_for_language(
+        game_deployment::deploy_verified_bundle_for_language(
             &app_data,
             Path::new(&request.game_path),
             &reopened.bytes,
             &reopened.sha256,
             request.language,
+            game_deployment::DeploymentBundleIdentity {
+                plan_id: Some(verified.plan_id().to_string()),
+                package_ids: verified.bundle_plan().package_ids.clone(),
+            },
         )
     })
     .await
@@ -595,9 +608,18 @@ async fn current_tree_pilot(
         else {
             return Ok(None);
         };
-        let package_verified = tree_pilot::build_from_verified_store(&app_data)
+        let package_ids = if receipt.package_ids.is_empty() {
+            vec![tree_pilot::PACKAGE_ID.to_string()]
+        } else {
+            receipt.package_ids.clone()
+        };
+        let package_verified = tree_pilot::build_from_verified_store(&app_data, &package_ids)
             .map(|verified| {
                 format!("{:x}", sha2::Sha256::digest(verified.bytes())) == receipt.installed_sha256
+                    && receipt
+                        .bundle_plan_id
+                        .as_deref()
+                        .is_none_or(|plan| plan == verified.plan_id())
             })
             .unwrap_or(false);
         let (linked, steam_recovery_required) =
@@ -641,14 +663,23 @@ async fn apply_tree_steam_launch_options(
     tauri::async_runtime::spawn_blocking(move || {
         require_patch_ready_runtime()?;
         validate_candidate(Path::new(&request.game_path), "manual")?;
-        let verified = tree_pilot::build_from_verified_store(&app_data)?;
-        let hash = format!("{:x}", sha2::Sha256::digest(verified.bytes()));
-        let receipt = game_deployment::current_verified_deployment(
-            &app_data,
-            Path::new(&request.game_path),
-            &hash,
-        )?
-        .ok_or_else(|| "deployment_not_found".to_string())?;
+        let receipt =
+            game_deployment::current_owned_deployment(&app_data, Path::new(&request.game_path))?
+                .ok_or_else(|| "deployment_not_found".to_string())?;
+        let package_ids = if receipt.package_ids.is_empty() {
+            vec![tree_pilot::PACKAGE_ID.to_string()]
+        } else {
+            receipt.package_ids.clone()
+        };
+        let verified = tree_pilot::build_from_verified_store(&app_data, &package_ids)?;
+        if receipt.installed_sha256 != format!("{:x}", sha2::Sha256::digest(verified.bytes()))
+            || receipt
+                .bundle_plan_id
+                .as_deref()
+                .is_some_and(|plan| plan != verified.plan_id())
+        {
+            return Err("deployment_conflict".to_string());
+        }
         if receipt.operation_id != request.deployment_operation_id
             || receipt.language != request.language
         {
@@ -708,14 +739,23 @@ async fn start_steam_after_tree_pilot(
         }
         require_patch_ready_runtime()?;
         validate_candidate(Path::new(&request.game_path), "manual")?;
-        let verified = tree_pilot::build_from_verified_store(&app_data)?;
-        let hash = format!("{:x}", sha2::Sha256::digest(verified.bytes()));
-        let receipt = game_deployment::current_verified_deployment(
-            &app_data,
-            Path::new(&request.game_path),
-            &hash,
-        )?
-        .ok_or_else(|| "deployment_not_found".to_string())?;
+        let receipt =
+            game_deployment::current_owned_deployment(&app_data, Path::new(&request.game_path))?
+                .ok_or_else(|| "deployment_not_found".to_string())?;
+        let package_ids = if receipt.package_ids.is_empty() {
+            vec![tree_pilot::PACKAGE_ID.to_string()]
+        } else {
+            receipt.package_ids.clone()
+        };
+        let verified = tree_pilot::build_from_verified_store(&app_data, &package_ids)?;
+        if receipt.installed_sha256 != format!("{:x}", sha2::Sha256::digest(verified.bytes()))
+            || receipt
+                .bundle_plan_id
+                .as_deref()
+                .is_some_and(|plan| plan != verified.plan_id())
+        {
+            return Err("deployment_conflict".to_string());
+        }
         if receipt.operation_id != request.operation_id {
             return Err("deployment_conflict".to_string());
         }

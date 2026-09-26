@@ -64,6 +64,7 @@ export type EngineOperationSummary = {
   phase: "staging" | "verifying" | "ready" | "failed" | "rolled_back";
   createdAtMs: number;
   stagedFiles: number;
+  packageCount: number;
 };
 
 export type RuntimeState = {
@@ -174,6 +175,8 @@ export type GameDeploymentReceipt = {
   backupVerified: boolean;
   committed: boolean;
   rolledBack: boolean;
+  bundlePlanId: string | null;
+  packageIds: string[];
 };
 
 export type GameDeploymentRecovery = {

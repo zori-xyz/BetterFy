@@ -230,23 +230,18 @@ fn fetch_verified_binary_with<T: DownloadTransport>(
 
 /// Used only with Rust-owned Tree Mod URLs and hashes. No caller-supplied URL
 /// crosses the Tauri bridge.
-pub(crate) fn fetch_pinned_tree_resource(
+pub(crate) fn fetch_pinned_pilot_resource(
+    package_id: &str,
     resource: &crate::tree_pilot::Resource,
     cancelled: &AtomicBool,
 ) -> Result<Vec<u8>, String> {
-    if !crate::tree_pilot::RESOURCES.iter().any(|expected| {
-        expected.path == resource.path
-            && expected.bytes == resource.bytes
-            && expected.sha256 == resource.sha256
-    }) {
-        return Err("download_contract_invalid".to_string());
-    }
+    let download_url = crate::tree_pilot::pinned_url(package_id, resource)?;
     let spec = RemotePackageSpec {
-        package_id: crate::tree_pilot::PACKAGE_ID.to_string(),
+        package_id: package_id.to_string(),
         version: crate::tree_pilot::SOURCE_COMMIT.to_string(),
         format: "raw".to_string(),
         file_name: "compiled-resource".to_string(),
-        download_url: crate::tree_pilot::pinned_url(resource),
+        download_url,
         media_type: "application/octet-stream".to_string(),
         size: resource.bytes as u64,
         sha256: resource.sha256.to_string(),
@@ -560,9 +555,13 @@ mod tests {
         let mut forged = crate::tree_pilot::RESOURCES[0];
         forged.bytes += 1;
         assert_eq!(
-            fetch_pinned_tree_resource(&forged, &AtomicBool::new(false))
-                .err()
-                .as_deref(),
+            fetch_pinned_pilot_resource(
+                crate::tree_pilot::PACKAGE_ID,
+                &forged,
+                &AtomicBool::new(false),
+            )
+            .err()
+            .as_deref(),
             Some("download_contract_invalid")
         );
     }

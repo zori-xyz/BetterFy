@@ -22,6 +22,29 @@ The pinned source path was checked against the maintained `Egezenn/dota2-minify`
 repository. The previously recorded `robbyz23` owner returned 404. The resource
 paths, sizes, and hashes below were not changed.
 
+## Second pinned pilot package: Show Net Worth
+
+The internal pilot may now build Tree Mod, Show Net Worth, or both in the exact
+order selected by the user. Show Net Worth is not yet Windows-verified and must
+not be described as compatible until its HUD change is observed in Dota 2 and
+rollback is checked.
+
+- Package ID: `minify.show-networth`
+- Same pinned repository and commit as Tree Mod
+- Upstream directory: `Minify/mods/Show NetWorth/files`
+- Runtime actions allowed: one compiled, data-only Panorama resource; no scripts
+
+| VPK path | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `panorama/layout/hud/dota_hud_quick_stats.vxml_c` | 2705 | `91193b3e5ced7d0d4122cfd5910aa3e16d7e2e3a38864f4146e8c9af1075a13d` |
+
+BetterFy does not rename upstream VPK archives to resolve collisions. It verifies
+the pinned resources, merges their resource maps, applies the visible selected
+order (first package wins a differing same-path collision), and writes one
+deterministic BetterFy-owned `pak66_dir.vpk`. Identical resources are deduplicated.
+The full ordered inputs remain bound to the reviewed plan even when a later file
+is shadowed.
+
 | VPK path | Bytes | SHA-256 |
 | --- | ---: | --- |
 | `materials/default/default_color_tga_41192599.vtex_c` | 2184 | `31b8213992d35927c009f82a6dc25104e90179f1285317ccad4f81a78d90f247` |
@@ -65,7 +88,28 @@ paths, sizes, and hashes below were not changed.
 - The local integration test downloaded all 21 resources from the pinned commit,
   built and reopened a VPK, staged it with a journal, then rolled staging back.
   This is a macOS synthetic test, not a Dota installation or compatibility test.
-- The internal pilot exposes only the pinned Tree Mod path. Generic staged-VPK
+- A second network integration test downloaded all three pinned packages,
+  rebuilt different selected orders from the verified cache, and confirmed 25
+  resources. The ordered plan IDs differ while the non-colliding VPK bytes remain
+  identical, proving priority is part of review identity rather than an accidental
+  archive-name scheme.
+
+## Third pinned pilot package: Repopulate Unit Query HUD
+
+- Package ID: `minify.repopulate-unit-query-hud`
+- Upstream directory: `Minify/mods/Repopulate Unit Query HUD/files`
+- Runtime actions allowed: three compiled, data-only Panorama style resources;
+  no blacklist, styling generator, or scripts
+
+| VPK path | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `panorama/styles/hud/dota_hud_query_unit_overrides.vcss_c` | 3957 | `bc9c831aacc37d21f5c48d6157ee6b80b9a06c3f9f51c48aed7c8446bb534e21` |
+| `panorama/styles/hud/dota_hud_str_agi_int_overrides.vcss_c` | 1470 | `a6e25ccb69a40c145c75e590da8d5c19ac8a50224c2c54d09ffe4e8de8603871` |
+| `panorama/styles/hud/tooltip_unit_damage_armor_overrides.vcss_c` | 1458 | `55efe3ff6bee15030c4016f6b18580d5d0877bfc8fbdcb3550beef4f23b70730` |
+
+This third package is also unverified in Dota on Windows until the release pass.
+- The internal pilot exposes only the pinned Tree Mod, Show Net Worth, and
+  Repopulate Unit Query HUD paths. Generic staged-VPK
   deployment remains debug-only. The fixed pilot command rechecks the exact
   pinned VPK after staging before any game-directory write.
 - Destination preview does not create a language folder in Dota. Synthetic
@@ -74,5 +118,7 @@ paths, sizes, and hashes below were not changed.
   compatibility evidence.
 - macOS does not permit game deployment. The founder reports a Windows installer
   run in which Tree Mod changed the trees as intended through `dota_dutch`.
-  Rollback, recovery, and the three newly selectable language folders remain
-  unverified on Windows. English has no separate game language folder.
+  The same run completed the visible BetterFy rollback and the game returned to
+  its normal tree state. Exact previous-byte comparison, interruption recovery,
+  and the three newly selectable language folders remain unverified on Windows.
+  English has no separate game language folder.

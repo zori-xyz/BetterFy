@@ -87,5 +87,5 @@ jobs:
             --repo "${{ github.repository }}" `
             --target "${{ github.sha }}" `
             --title "$env:RELEASE_TITLE" `
-            --notes "Unsigned Early Access installer for Windows testing. Windows may show an unknown publisher warning. Production Dota deployment remains disabled." `
+            --notes "Unsigned Early Access installer for Windows testing. Windows may show an unknown publisher warning. Live Dota deployment is limited to the pinned internal pilot packages documented in the repository." `
             --prerelease

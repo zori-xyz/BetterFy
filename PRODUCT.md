@@ -41,7 +41,7 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - Preserve the Home, Mods, Skin Library, Settings, and Profile workflows.
 - Preserve Russian and English localization.
 - Mod selection must communicate added, removed, conflicting, building, ready, and error states unambiguously.
-- Only the pinned Tree Mod internal Windows pilot may request a game-directory write. The founder has observed the intended trees in Dota with the Dutch language slot on Windows. Other languages, rollback, recovery, and general compatibility remain unverified; general catalog deployment remains unavailable.
+- Only the pinned Tree Mod, Show Net Worth, and Unit Query HUD internal Windows pilots may request a game-directory write, individually or as one ordered bundle. The founder has observed the intended Tree Mod result in Dota with the Dutch language slot and then completed the visible BetterFy rollback, after which the game returned to its normal state. The HUD pilots, other languages, interruption recovery, exact-byte restoration evidence, and general compatibility remain unverified; general catalog deployment remains unavailable.
 - Original game files must be described as protected only where the prototype already presents that intended capability.
 - Avoid dependencies on Dota-owned artwork for core product identity. Dota-inspired assets should be transformed into a distinct BetterFy production language.
 - The repository is intended to be open source.
@@ -66,7 +66,10 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - A versioned fixture-package contract, cancellable HTTPS fixture acquisition,
   immutable SHA-256 content store, and ZIP metadata preflight. A deterministic
   VPK builder plus an ownership-scoped deployment/recovery transaction pass
-  synthetic tests. The pinned Tree Mod internal pilot now connects verified intake, staging, and a guarded Windows deployment path; native Windows behavior has not yet been validated.
+  synthetic tests. The pinned Tree Mod / Show Net Worth internal pilot connects verified intake,
+  staging, guarded Windows deployment, Steam restart, and rollback. A founder-run
+  Windows pass proved the intended Dutch-slot tree change and visible restoration;
+  the broader recovery and compatibility matrix remains open.
 - A real local config manager backed by validated, atomic app-data storage,
   plus three built-in BetterFy Workshop presets resolved against the same
   Minify catalog IDs as the selection UI.

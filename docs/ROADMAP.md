@@ -56,11 +56,13 @@ The deployment foundation now also includes:
   crash recovery, and rollback that refuses external edits;
 - injected failures immediately before and after publication.
 
-Now covered by the internal Tree Mod pilot (not a product enablement claim):
+Now covered by the internal verified-build pilot (not a product enablement claim):
 
 - a fixed 21-resource contract, pinned HTTPS acquisition with exact size/hash
   checks, immutable cache reads, deterministic VPK construction, reopen, and
   journaled staging/rollback on macOS;
+- two additional pinned HUD contracts and an ordered three-package build whose
+  plan identity changes with priority even when output resources do not collide;
 
 Still required before public enablement (the fixed internal UI path is now wired):
 
@@ -68,10 +70,27 @@ Still required before public enablement (the fixed internal UI path is now wired
 - exercise the cancellable per-resource intake worker on Windows and confirm
   that an interrupted download resumes from the verified cache;
 - validate the confirmed staging/deployment and post-restart recovery journey on
-  Windows; the fixed command and rollback UI are wired but unproven there;
+  Windows; Dutch install and the visible rollback have founder evidence, while
+  exact-byte comparison, post-restart discovery, and interruption recovery remain open;
 - repeat containment and output limits if an archive/extraction package is added;
 - add manifest signature and key-rotation policy;
 - pass the native Windows matrix, including interrupted deploy and rollback.
+
+Implemented locally as the foundation for the next slice:
+
+- ordered multi-package bundle planning where the first selected package wins a
+  differing-resource collision;
+- identical-resource deduplication and an explicit override report;
+- one deterministic embedded VPK instead of blindly renaming upstream
+  `pak##_dir.vpk` files;
+- verified embedded-VPK normalization back into resource maps before merging;
+- reviewed plan identities and staging journals bound to the complete ordered
+  input set, including resources shadowed by higher-priority packages.
+
+The three-package path remains unverified in Dota until a native Windows
+multi-package pass exists. Its deterministic merge, priority accounting,
+per-package effective-resource report, and transactional boundaries are covered
+synthetically.
 
 Exit condition: Tree Mod is visibly active after a confirmed patch, Steam alone
 restarts, and every tested interruption returns to an explainable recoverable state.

@@ -33,7 +33,7 @@ struct NormalizedInput<'a> {
     bytes: &'a [u8],
 }
 
-fn validate_path(value: &str) -> Result<(), String> {
+pub(crate) fn validate_path(value: &str) -> Result<(), String> {
     if value.is_empty()
         || value.len() > 512
         || value.contains('\\')
@@ -217,7 +217,7 @@ fn read_cstring(bytes: &[u8], cursor: &mut usize, end: usize) -> Result<String, 
     Ok(value)
 }
 
-pub fn inspect(bytes: &[u8]) -> Result<VpkReport, String> {
+pub(crate) fn extract_embedded(bytes: &[u8]) -> Result<BTreeMap<String, Vec<u8>>, String> {
     if bytes.len() < 15 || bytes.len() > MAX_VPK_BYTES {
         return Err("vpk_invalid".to_string());
     }
@@ -237,8 +237,9 @@ pub fn inspect(bytes: &[u8]) -> Result<VpkReport, String> {
     let data_start = tree_end;
     let mut cursor = 12usize;
     let mut paths = BTreeSet::new();
+    let mut resources = BTreeMap::new();
     let mut entries = 0usize;
-    let mut payload_bytes = 0u64;
+    let mut extracted_bytes = 0usize;
     loop {
         let extension = read_cstring(bytes, &mut cursor, tree_end)?;
         if extension.is_empty() {
@@ -297,18 +298,36 @@ pub fn inspect(bytes: &[u8]) -> Result<VpkReport, String> {
                 if crc.finalize() != expected_crc {
                     return Err("vpk_crc_mismatch".to_string());
                 }
-                payload_bytes = payload_bytes
-                    .checked_add((preload_length + length) as u64)
+                let payload_length = preload_length
+                    .checked_add(length)
                     .ok_or_else(|| "vpk_invalid".to_string())?;
+                extracted_bytes = extracted_bytes
+                    .checked_add(payload_length)
+                    .filter(|total| *total <= MAX_VPK_BYTES)
+                    .ok_or_else(|| "vpk_invalid".to_string())?;
+                let mut payload = Vec::with_capacity(payload_length);
+                payload.extend_from_slice(preload);
+                payload.extend_from_slice(&bytes[data_offset..data_end]);
+                resources.insert(path, payload);
             }
         }
     }
     if cursor != tree_end || entries == 0 {
         return Err("vpk_invalid".to_string());
     }
+    Ok(resources)
+}
+
+pub fn inspect(bytes: &[u8]) -> Result<VpkReport, String> {
+    let resources = extract_embedded(bytes)?;
+    let payload_bytes = resources.values().try_fold(0u64, |total, resource| {
+        total
+            .checked_add(resource.len() as u64)
+            .ok_or_else(|| "vpk_invalid".to_string())
+    })?;
     Ok(VpkReport {
-        version,
-        entries,
+        version: VPK_VERSION,
+        entries: resources.len(),
         payload_bytes,
     })
 }
@@ -342,6 +361,15 @@ mod tests {
         let report = inspect(&first).expect("inspect");
         assert_eq!(report.entries, 3);
         assert_eq!(report.payload_bytes, 53);
+        let resources = extract_embedded(&first).expect("extract");
+        assert_eq!(
+            resources["materials/tree_topiary.vmat_c"],
+            b"compiled-material"
+        );
+        assert_eq!(
+            resources["betterfy_manifest.txt"],
+            b"schema=1\nmod=tree-mod\n"
+        );
     }
 
     #[test]

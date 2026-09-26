@@ -1,6 +1,6 @@
 [package]
 name = "betterfy"
-version = "0.1.3"
+version = "0.1.4"
 description = "BetterFy desktop application"
 authors = ["BetterFy contributors"]
 edition = "2021"

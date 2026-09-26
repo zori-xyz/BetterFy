@@ -1,6 +1,9 @@
 //! Pinned, data-only contract for the first engine pilot.
 
-use crate::vpk::{self, VpkInput};
+use crate::mod_bundle::{
+    self, BundleContribution, BundleDuplicate, BundleOverride, BundlePackage, BundlePlan,
+};
+use crate::vpk;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -24,6 +27,7 @@ struct TreeDownload {
     status: Mutex<TreeDownloadStatus>,
     cancelled: AtomicBool,
     app_data_root: std::path::PathBuf,
+    package_ids: Vec<String>,
 }
 
 fn download_slot() -> &'static Mutex<Option<Arc<TreeDownload>>> {
@@ -31,6 +35,8 @@ fn download_slot() -> &'static Mutex<Option<Arc<TreeDownload>>> {
 }
 
 pub(crate) const PACKAGE_ID: &str = "minify.tree-mod";
+pub(crate) const SHOW_NETWORTH_PACKAGE_ID: &str = "minify.show-networth";
+pub(crate) const UNIT_QUERY_HUD_PACKAGE_ID: &str = "minify.repopulate-unit-query-hud";
 pub(crate) const SOURCE_COMMIT: &str = "3a85572029f2c264e2a17cee1c9b54ce93e4fd93";
 pub(crate) const TARGET_FILE: &str = "pak66_dir.vpk";
 
@@ -149,19 +155,92 @@ pub const RESOURCES: [Resource; 21] = [
     },
 ];
 
-pub(crate) struct VerifiedTreeVpk(Vec<u8>);
+pub const SHOW_NETWORTH_RESOURCES: [Resource; 1] = [Resource {
+    path: "panorama/layout/hud/dota_hud_quick_stats.vxml_c",
+    bytes: 2705,
+    sha256: "91193b3e5ced7d0d4122cfd5910aa3e16d7e2e3a38864f4146e8c9af1075a13d",
+}];
+
+pub const UNIT_QUERY_HUD_RESOURCES: [Resource; 3] = [
+    Resource {
+        path: "panorama/styles/hud/dota_hud_query_unit_overrides.vcss_c",
+        bytes: 3957,
+        sha256: "bc9c831aacc37d21f5c48d6157ee6b80b9a06c3f9f51c48aed7c8446bb534e21",
+    },
+    Resource {
+        path: "panorama/styles/hud/dota_hud_str_agi_int_overrides.vcss_c",
+        bytes: 1470,
+        sha256: "a6e25ccb69a40c145c75e590da8d5c19ac8a50224c2c54d09ffe4e8de8603871",
+    },
+    Resource {
+        path: "panorama/styles/hud/tooltip_unit_damage_armor_overrides.vcss_c",
+        bytes: 1458,
+        sha256: "55efe3ff6bee15030c4016f6b18580d5d0877bfc8fbdcb3550beef4f23b70730",
+    },
+];
+
+fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
+    if ids.is_empty() || ids.len() > 3 {
+        return Err("pilot_package_unsupported".to_string());
+    }
+    let mut seen = BTreeSet::new();
+    ids.iter()
+        .map(|id| match id.as_str() {
+            "minify-tree-mod" | PACKAGE_ID => Ok(PACKAGE_ID.to_string()),
+            "minify-show-networth" | SHOW_NETWORTH_PACKAGE_ID => {
+                Ok(SHOW_NETWORTH_PACKAGE_ID.to_string())
+            }
+            "minify-repopulate-unit-query-hud" | UNIT_QUERY_HUD_PACKAGE_ID => {
+                Ok(UNIT_QUERY_HUD_PACKAGE_ID.to_string())
+            }
+            _ => Err("pilot_package_unsupported".to_string()),
+        })
+        .map(|result| {
+            let id = result?;
+            if !seen.insert(id.clone()) {
+                return Err("pilot_package_invalid".to_string());
+            }
+            Ok(id)
+        })
+        .collect()
+}
+
+fn contract(id: &str) -> Result<(&'static str, &'static [Resource]), String> {
+    match id {
+        PACKAGE_ID => Ok(("Tree%20Mod", &RESOURCES)),
+        SHOW_NETWORTH_PACKAGE_ID => Ok(("Show%20NetWorth", &SHOW_NETWORTH_RESOURCES)),
+        UNIT_QUERY_HUD_PACKAGE_ID => {
+            Ok(("Repopulate%20Unit%20Query%20HUD", &UNIT_QUERY_HUD_RESOURCES))
+        }
+        _ => Err("pilot_package_unsupported".to_string()),
+    }
+}
+
+pub(crate) struct VerifiedTreeVpk {
+    bytes: Vec<u8>,
+    sha256: String,
+    bundle_plan: BundlePlan,
+}
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TreePilotPlan {
     plan_id: String,
-    package_id: &'static str,
+    package_id: String,
+    package_ids: Vec<String>,
     source_commit: &'static str,
     target_file: &'static str,
     resource_count: usize,
     resource_bytes: usize,
     vpk_bytes: usize,
     vpk_sha256: String,
+    bundle_plan_id: String,
+    package_count: usize,
+    duplicate_resources: usize,
+    overridden_resources: usize,
+    duplicates: Vec<BundleDuplicate>,
+    overrides: Vec<BundleOverride>,
+    contributions: Vec<BundleContribution>,
     compatibility: &'static str,
     distribution: &'static str,
     deploy_enabled: bool,
@@ -169,15 +248,52 @@ pub(crate) struct TreePilotPlan {
 
 impl VerifiedTreeVpk {
     pub(crate) fn bytes(&self) -> &[u8] {
-        &self.0
+        &self.bytes
+    }
+
+    pub(crate) fn sha256(&self) -> &str {
+        &self.sha256
+    }
+
+    pub(crate) fn plan_id(&self) -> &str {
+        &self.bundle_plan.plan_id
+    }
+
+    pub(crate) fn bundle_plan(&self) -> &BundlePlan {
+        &self.bundle_plan
     }
 }
 
-pub(crate) fn pinned_url(resource: &Resource) -> String {
-    format!(
-        "https://raw.githubusercontent.com/Egezenn/dota2-minify/{SOURCE_COMMIT}/Minify/mods/Tree%20Mod/files/{}",
+#[cfg(test)]
+pub(crate) fn verified_test_vpk() -> VerifiedTreeVpk {
+    let bundle = mod_bundle::build(vec![BundlePackage {
+        package_id: PACKAGE_ID.to_string(),
+        resources: BTreeMap::from([(
+            "models/props_tree/test_tree.vmdl_c".to_string(),
+            b"verified-test-tree".to_vec(),
+        )]),
+    }])
+    .expect("test VPK bundle");
+    VerifiedTreeVpk {
+        bytes: bundle.bytes().to_vec(),
+        sha256: bundle.sha256().to_string(),
+        bundle_plan: bundle.plan().clone(),
+    }
+}
+
+pub(crate) fn pinned_url(package_id: &str, resource: &Resource) -> Result<String, String> {
+    let (folder, resources) = contract(package_id)?;
+    if !resources.iter().any(|expected| {
+        expected.path == resource.path
+            && expected.bytes == resource.bytes
+            && expected.sha256 == resource.sha256
+    }) {
+        return Err("download_contract_invalid".to_string());
+    }
+    Ok(format!(
+        "https://raw.githubusercontent.com/Egezenn/dota2-minify/{SOURCE_COMMIT}/Minify/mods/{folder}/files/{}",
         resource.path
-    )
+    ))
 }
 
 #[cfg(test)]
@@ -185,46 +301,67 @@ pub(crate) fn acquire_verified_resources(
     app_data_root: &Path,
     cancelled: &AtomicBool,
 ) -> Result<(), String> {
-    acquire_verified_resources_with_progress(app_data_root, cancelled, |_| {})
+    acquire_verified_resources_with_progress(
+        app_data_root,
+        &[PACKAGE_ID.to_string()],
+        cancelled,
+        |_| {},
+    )
 }
 
 fn acquire_verified_resources_with_progress(
     app_data_root: &Path,
+    package_ids: &[String],
     cancelled: &AtomicBool,
     mut progress: impl FnMut(usize),
 ) -> Result<(), String> {
-    for (index, resource) in RESOURCES.iter().enumerate() {
-        if cancelled.load(Ordering::Relaxed) {
-            return Err("download_cancelled".to_string());
+    let resources = package_ids
+        .iter()
+        .map(|id| contract(id))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut index = 0usize;
+    for (package_id, (_, contract)) in package_ids.iter().zip(resources) {
+        for resource in contract {
+            if cancelled.load(Ordering::Relaxed) {
+                return Err("download_cancelled".to_string());
+            }
+            if crate::content_store::read_pinned_resource(
+                app_data_root,
+                resource.bytes,
+                resource.sha256,
+            )
+            .is_ok()
+            {
+                index += 1;
+                progress(index);
+                continue;
+            }
+            let bytes =
+                crate::remote_intake::fetch_pinned_pilot_resource(package_id, resource, cancelled)?;
+            if cancelled.load(Ordering::Relaxed) {
+                return Err("download_cancelled".to_string());
+            }
+            crate::content_store::store_pinned_resource(
+                app_data_root,
+                resource.bytes,
+                resource.sha256,
+                &bytes,
+            )?;
+            index += 1;
+            progress(index);
         }
-        if crate::content_store::read_pinned_resource(
-            app_data_root,
-            resource.bytes,
-            resource.sha256,
-        )
-        .is_ok()
-        {
-            progress(index + 1);
-            continue;
-        }
-        let bytes = crate::remote_intake::fetch_pinned_tree_resource(resource, cancelled)?;
-        if cancelled.load(Ordering::Relaxed) {
-            return Err("download_cancelled".to_string());
-        }
-        crate::content_store::store_pinned_resource(
-            app_data_root,
-            resource.bytes,
-            resource.sha256,
-            &bytes,
-        )?;
-        progress(index + 1);
     }
     Ok(())
 }
 
 pub(crate) fn begin_download(
     app_data_root: std::path::PathBuf,
+    requested_package_ids: Vec<String>,
 ) -> Result<TreeDownloadStatus, String> {
+    let package_ids = normalize_package_ids(&requested_package_ids)?;
+    let total_resources = package_ids.iter().try_fold(0usize, |total, id| {
+        contract(id).map(|(_, resources)| total + resources.len())
+    })?;
     let mut slot = download_slot()
         .lock()
         .map_err(|_| "download_failed".to_string())?;
@@ -235,7 +372,9 @@ pub(crate) fn begin_download(
             .map_err(|_| "download_failed".to_string())?
             .clone();
         if matches!(status.phase, "downloading" | "verifying")
-            || (status.phase == "ready" && plan_from_verified_store(&app_data_root).is_ok())
+            || (current.package_ids == package_ids
+                && status.phase == "ready"
+                && plan_from_verified_store(&app_data_root, &package_ids).is_ok())
         {
             return Ok(status);
         }
@@ -244,17 +383,19 @@ pub(crate) fn begin_download(
         status: Mutex::new(TreeDownloadStatus {
             phase: "downloading",
             verified_resources: 0,
-            total_resources: RESOURCES.len(),
+            total_resources,
             error_code: None,
             plan: None,
         }),
         cancelled: AtomicBool::new(false),
         app_data_root: app_data_root.clone(),
+        package_ids: package_ids.clone(),
     });
     *slot = Some(operation.clone());
     std::thread::spawn(move || {
         let result = acquire_verified_resources_with_progress(
             &app_data_root,
+            &package_ids,
             &operation.cancelled,
             |count| {
                 if let Ok(mut status) = operation.status.lock() {
@@ -269,7 +410,7 @@ pub(crate) fn begin_download(
             if let Ok(mut status) = operation.status.lock() {
                 status.phase = "verifying";
             }
-            plan_from_verified_store(&app_data_root)
+            plan_from_verified_store(&app_data_root, &package_ids)
         });
         if let Ok(mut status) = operation.status.lock() {
             match result {
@@ -291,7 +432,7 @@ pub(crate) fn begin_download(
     Ok(TreeDownloadStatus {
         phase: "downloading",
         verified_resources: 0,
-        total_resources: RESOURCES.len(),
+        total_resources,
         error_code: None,
         plan: None,
     })
@@ -308,7 +449,9 @@ pub(crate) fn download_status() -> Result<Option<TreeDownloadStatus>, String> {
         .status
         .lock()
         .map_err(|_| "download_failed".to_string())?;
-    if status.phase == "ready" && plan_from_verified_store(&operation.app_data_root).is_err() {
+    if status.phase == "ready"
+        && plan_from_verified_store(&operation.app_data_root, &operation.package_ids).is_err()
+    {
         status.phase = "failed";
         status.plan = None;
         status.error_code = Some("content_store_invalid".to_string());
@@ -331,63 +474,89 @@ pub(crate) fn cancel_download() -> Result<TreeDownloadStatus, String> {
         .map_err(|_| "download_failed".to_string())
 }
 
-pub(crate) fn build_from_verified_store(app_data_root: &Path) -> Result<VerifiedTreeVpk, String> {
-    let resources = RESOURCES
+pub(crate) fn build_from_verified_store(
+    app_data_root: &Path,
+    requested_package_ids: &[String],
+) -> Result<VerifiedTreeVpk, String> {
+    let package_ids = normalize_package_ids(requested_package_ids)?;
+    let packages = package_ids
         .iter()
-        .map(|resource| {
-            crate::content_store::read_pinned_resource(
-                app_data_root,
-                resource.bytes,
-                resource.sha256,
-            )
-            .map(|bytes| (resource.path.to_string(), bytes))
+        .map(|package_id| {
+            let (_, contract) = contract(package_id)?;
+            let resources = contract
+                .iter()
+                .map(|resource| {
+                    crate::content_store::read_pinned_resource(
+                        app_data_root,
+                        resource.bytes,
+                        resource.sha256,
+                    )
+                    .map(|bytes| (resource.path.to_string(), bytes))
+                })
+                .collect::<Result<BTreeMap<_, _>, _>>()?;
+            verify_resources(contract, &resources)?;
+            Ok(BundlePackage {
+                package_id: package_id.clone(),
+                resources,
+            })
         })
-        .collect::<Result<BTreeMap<_, _>, _>>()?;
-    build_verified_vpk(&resources)
+        .collect::<Result<Vec<_>, String>>()?;
+    build_verified_bundle(packages)
 }
 
 fn plan_for(verified: &VerifiedTreeVpk) -> TreePilotPlan {
-    let hash = format!("{:x}", Sha256::digest(verified.bytes()));
+    let hash = verified.sha256().to_string();
     TreePilotPlan {
-        plan_id: format!("sha256:{hash}"),
-        package_id: PACKAGE_ID,
+        plan_id: verified.plan_id().to_string(),
+        package_id: verified.bundle_plan().package_ids.join("+"),
+        package_ids: verified.bundle_plan().package_ids.clone(),
         source_commit: SOURCE_COMMIT,
         target_file: TARGET_FILE,
-        resource_count: RESOURCES.len(),
-        resource_bytes: RESOURCES.iter().map(|resource| resource.bytes).sum(),
+        resource_count: verified.bundle_plan().resource_count,
+        resource_bytes: verified.bundle_plan().payload_bytes,
         vpk_bytes: verified.bytes().len(),
         vpk_sha256: hash,
+        bundle_plan_id: verified.bundle_plan().plan_id.clone(),
+        package_count: verified.bundle_plan().package_ids.len(),
+        duplicate_resources: verified.bundle_plan().duplicates.len(),
+        overridden_resources: verified.bundle_plan().overrides.len(),
+        duplicates: verified.bundle_plan().duplicates.clone(),
+        overrides: verified.bundle_plan().overrides.clone(),
+        contributions: verified.bundle_plan().contributions.clone(),
         compatibility: "unknown",
         distribution: "internal_pilot",
         deploy_enabled: cfg!(target_os = "windows"),
     }
 }
 
-pub(crate) fn plan_from_verified_store(app_data_root: &Path) -> Result<TreePilotPlan, String> {
-    build_from_verified_store(app_data_root).map(|verified| plan_for(&verified))
+pub(crate) fn plan_from_verified_store(
+    app_data_root: &Path,
+    package_ids: &[String],
+) -> Result<TreePilotPlan, String> {
+    build_from_verified_store(app_data_root, package_ids).map(|verified| plan_for(&verified))
 }
 
 pub(crate) fn stage_from_verified_store(
     app_data_root: &Path,
     expected_plan_id: &str,
+    package_ids: &[String],
     confirmed: bool,
 ) -> Result<crate::build_engine::BuildReceipt, String> {
     if !confirmed {
         return Err("build_confirmation_required".to_string());
     }
-    let verified = build_from_verified_store(app_data_root)?;
+    let verified = build_from_verified_store(app_data_root, package_ids)?;
     crate::build_engine::stage_verified_vpk(app_data_root, &verified, expected_plan_id, confirmed)
 }
 
-fn verify_resources<'a>(
+fn verify_resources(
     contract: &[Resource],
-    resources: &'a BTreeMap<String, Vec<u8>>,
-) -> Result<Vec<VpkInput<'a>>, String> {
+    resources: &BTreeMap<String, Vec<u8>>,
+) -> Result<(), String> {
     if resources.len() != contract.len() {
         return Err("tree_resource_set_invalid".to_string());
     }
     let mut seen = BTreeSet::new();
-    let mut inputs = Vec::with_capacity(contract.len());
     for expected in contract {
         if !seen.insert(expected.path.to_ascii_lowercase()) {
             return Err("tree_contract_invalid".to_string());
@@ -400,24 +569,32 @@ fn verify_resources<'a>(
         {
             return Err("tree_resource_unverified".to_string());
         }
-        inputs.push(VpkInput {
-            path: expected.path,
-            bytes,
-        });
     }
-    Ok(inputs)
+    Ok(())
 }
 
+#[cfg(test)]
 pub(crate) fn build_verified_vpk(
     resources: &BTreeMap<String, Vec<u8>>,
 ) -> Result<VerifiedTreeVpk, String> {
-    let inputs = verify_resources(&RESOURCES, resources)?;
-    let vpk = vpk::build(inputs)?;
-    let report = vpk::inspect(&vpk)?;
-    if report.entries != RESOURCES.len() {
+    verify_resources(&RESOURCES, resources)?;
+    build_verified_bundle(vec![BundlePackage {
+        package_id: PACKAGE_ID.to_string(),
+        resources: resources.clone(),
+    }])
+}
+
+fn build_verified_bundle(packages: Vec<BundlePackage>) -> Result<VerifiedTreeVpk, String> {
+    let bundle = mod_bundle::build(packages)?;
+    let report = vpk::inspect(bundle.bytes())?;
+    if report.entries != bundle.plan().resource_count {
         return Err("tree_vpk_invalid".to_string());
     }
-    Ok(VerifiedTreeVpk(vpk))
+    Ok(VerifiedTreeVpk {
+        bytes: bundle.bytes().to_vec(),
+        sha256: bundle.sha256().to_string(),
+        bundle_plan: bundle.plan().clone(),
+    })
 }
 
 #[cfg(test)]
@@ -442,6 +619,60 @@ mod tests {
     }
 
     #[test]
+    fn verified_pilot_allowlist_preserves_selected_priority() {
+        let ids = vec![
+            "minify-show-networth".to_string(),
+            "minify-tree-mod".to_string(),
+        ];
+        assert_eq!(
+            normalize_package_ids(&ids).expect("known pilot packages"),
+            vec![SHOW_NETWORTH_PACKAGE_ID.to_string(), PACKAGE_ID.to_string()]
+        );
+        assert_eq!(SHOW_NETWORTH_RESOURCES.len(), 1);
+        assert_eq!(SHOW_NETWORTH_RESOURCES[0].bytes, 2705);
+        assert_eq!(SHOW_NETWORTH_RESOURCES[0].sha256.len(), 64);
+        assert!(
+            pinned_url(SHOW_NETWORTH_PACKAGE_ID, &SHOW_NETWORTH_RESOURCES[0])
+                .expect("pinned URL")
+                .contains("/Show%20NetWorth/files/")
+        );
+        assert_eq!(
+            normalize_package_ids(&["unknown".to_string()])
+                .err()
+                .as_deref(),
+            Some("pilot_package_unsupported")
+        );
+    }
+
+    #[test]
+    #[ignore = "requires pinned upstream resources outside the repository"]
+    fn downloads_and_builds_the_multi_package_pilot_in_selected_order() {
+        let root =
+            std::env::temp_dir().join(format!("betterfy-two-package-pilot-{}", std::process::id()));
+        let ids = vec![
+            PACKAGE_ID.to_string(),
+            SHOW_NETWORTH_PACKAGE_ID.to_string(),
+            UNIT_QUERY_HUD_PACKAGE_ID.to_string(),
+        ];
+        let cancelled = AtomicBool::new(false);
+        acquire_verified_resources_with_progress(&root, &ids, &cancelled, |_| {})
+            .expect("download both pinned contracts");
+        let first = build_from_verified_store(&root, &ids).expect("build ordered bundle");
+        assert_eq!(first.bundle_plan().package_ids, ids);
+        assert_eq!(first.bundle_plan().resource_count, 25);
+        let reversed = vec![
+            UNIT_QUERY_HUD_PACKAGE_ID.to_string(),
+            SHOW_NETWORTH_PACKAGE_ID.to_string(),
+            PACKAGE_ID.to_string(),
+        ];
+        let second = build_from_verified_store(&root, &reversed).expect("build reversed bundle");
+        assert_eq!(second.bundle_plan().package_ids, reversed);
+        assert_ne!(first.plan_id(), second.plan_id());
+        assert_eq!(first.sha256(), second.sha256());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn only_complete_untampered_resources_can_enter_vpk_writer() {
         assert_eq!(
             build_verified_vpk(&BTreeMap::new()).err().as_deref(),
@@ -454,9 +685,10 @@ mod tests {
         }];
         let mut resources = BTreeMap::from([(contract[0].path.to_string(), b"tree".to_vec())]);
         assert!(verify_resources(&contract, &resources).is_ok());
-        assert!(vpk::inspect(
-            &vpk::build(verify_resources(&contract, &resources).unwrap()).unwrap()
-        )
+        assert!(mod_bundle::build(vec![BundlePackage {
+            package_id: "test.tree".to_string(),
+            resources: resources.clone(),
+        }])
         .is_ok());
         resources.get_mut(contract[0].path).unwrap()[0] ^= 1;
         assert_eq!(
@@ -524,26 +756,28 @@ mod tests {
         }
         acquire_verified_resources(&app_data, &AtomicBool::new(false))
             .expect("reuse verified cache without network");
-        let from_store = build_from_verified_store(&app_data).expect("build from immutable store");
+        let ids = vec![PACKAGE_ID.to_string()];
+        let from_store =
+            build_from_verified_store(&app_data, &ids).expect("build from immutable store");
         assert_eq!(from_store.bytes(), first.bytes());
-        let plan = plan_from_verified_store(&app_data).expect("reviewed plan");
+        let plan = plan_from_verified_store(&app_data, &ids).expect("reviewed plan");
         assert_eq!(plan.resource_count, 21);
         assert_eq!(plan.deploy_enabled, cfg!(target_os = "windows"));
         let plan_id = plan.plan_id;
         assert_eq!(
-            stage_from_verified_store(&app_data, &plan_id, false)
+            stage_from_verified_store(&app_data, &plan_id, &ids, false)
                 .err()
                 .as_deref(),
             Some("build_confirmation_required")
         );
         assert_eq!(
-            stage_from_verified_store(&app_data, "sha256:stale", true)
+            stage_from_verified_store(&app_data, "sha256:stale", &ids, true)
                 .err()
                 .as_deref(),
             Some("build_plan_stale")
         );
         let receipt =
-            stage_from_verified_store(&app_data, &plan_id, true).expect("stage verified VPK");
+            stage_from_verified_store(&app_data, &plan_id, &ids, true).expect("stage verified VPK");
         let operation_id = serde_json::to_value(&receipt)
             .expect("receipt")
             .get("operationId")
@@ -607,7 +841,7 @@ mod tests {
                 .as_nanos()
         ));
         let cancelled = AtomicBool::new(false);
-        begin_download(root.clone()).expect("start pinned download");
+        begin_download(root.clone(), vec![PACKAGE_ID.to_string()]).expect("start pinned download");
         let mut completed = None;
         for _ in 0..1200 {
             let status = download_status()
@@ -627,9 +861,10 @@ mod tests {
         );
         assert_eq!(status.verified_resources, RESOURCES.len());
         assert!(status.plan.is_some());
-        let first = build_from_verified_store(&root).expect("build from cache");
+        let ids = vec![PACKAGE_ID.to_string()];
+        let first = build_from_verified_store(&root, &ids).expect("build from cache");
         acquire_verified_resources(&root, &cancelled).expect("idempotent cache read");
-        let second = build_from_verified_store(&root).expect("rebuild from cache");
+        let second = build_from_verified_store(&root, &ids).expect("rebuild from cache");
         assert_eq!(first.bytes(), second.bytes());
         std::fs::remove_dir_all(root).expect("clean generated test cache");
     }
