@@ -335,6 +335,7 @@ export interface EngineBridge {
     operationId: string | null,
     language?: GameLanguage,
   ): Promise<RuntimeState>;
+  startSteamAfterRestore(): Promise<RuntimeState>;
 }
 
 const wait = (duration: number) => new Promise((resolve) => window.setTimeout(resolve, duration));
@@ -609,6 +610,9 @@ export const mockEngine: EngineBridge = {
   },
   async startSteamAfterProfile() {
     throw new EngineFault("platform_not_supported", "start_steam_after_profile");
+  },
+  async startSteamAfterRestore() {
+    throw new EngineFault("platform_not_supported", "start_steam_after_restore");
   },
 };
 
@@ -1030,6 +1034,17 @@ export const engineBridge: EngineBridge = {
           language,
           confirmed: true,
         },
+      }),
+      steamLifecycleTimeoutMs,
+    );
+  },
+  async startSteamAfterRestore() {
+    if (!isTauriRuntime()) return mockEngine.startSteamAfterRestore();
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "start_steam_after_restore",
+      invoke<RuntimeState>("start_steam_after_restore", {
+        request: { confirmed: true },
       }),
       steamLifecycleTimeoutMs,
     );

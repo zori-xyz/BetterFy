@@ -141,6 +141,8 @@ struct DeploymentJournal {
     backup_relative_path: Option<String>,
     #[serde(default)]
     rollback_verified: bool,
+    #[serde(default)]
+    locale_directory_created: bool,
     error_code: Option<String>,
 }
 
@@ -428,6 +430,18 @@ fn ownership_path(root: &Path) -> PathBuf {
     root.join("ownership.json")
 }
 
+fn remove_locale_if_empty(locale: &Path) -> Result<(), String> {
+    reject_symlink(locale)?;
+    if !locale.is_dir() {
+        return Ok(());
+    }
+    let mut entries = fs::read_dir(locale).map_err(|_| "rollback_failed".to_string())?;
+    if entries.next().is_none() {
+        fs::remove_dir(locale).map_err(|_| "rollback_failed".to_string())?;
+    }
+    Ok(())
+}
+
 fn deploy_with_failure(
     app_data_root: &Path,
     dota_root: &Path,
@@ -477,6 +491,7 @@ fn deploy_with_failure(
         .parent()
         .ok_or_else(|| "deployment_failed".to_string())?;
     reject_symlink(locale)?;
+    let locale_directory_created = !locale.exists();
     fs::create_dir_all(locale).map_err(|_| "deployment_failed".to_string())?;
     reject_symlink(locale)?;
     reject_symlink(&target)?;
@@ -512,6 +527,7 @@ fn deploy_with_failure(
         updated_at_ms: timestamp,
         backup_relative_path: before.as_ref().map(|_| "before.vpk".to_string()),
         rollback_verified: false,
+        locale_directory_created,
         error_code: None,
     };
     atomic_json(&journal_path, &journal)?;
@@ -594,16 +610,12 @@ pub(crate) fn verify_language_folder(
     dota_root: &Path,
     language: GameLanguage,
 ) -> Result<(), String> {
-    if language != GameLanguage::Dutch {
-        let folder = dota_root
-            .join("game")
-            .join(format!("dota_{}", language.suffix()));
-        let gameinfo = folder.join("gameinfo.gi");
-        reject_symlink(&folder)?;
-        reject_symlink(&gameinfo)?;
-        if !gameinfo.is_file() {
-            return Err("language_folder_unavailable".to_string());
-        }
+    let folder = dota_root
+        .join("game")
+        .join(format!("dota_{}", language.suffix()));
+    reject_symlink(&folder)?;
+    if folder.exists() && !folder.is_dir() {
+        return Err("language_folder_unavailable".to_string());
     }
     Ok(())
 }
@@ -880,6 +892,12 @@ pub(crate) fn rollback(
             if ownership.exists() {
                 fs::remove_file(ownership).map_err(|_| "rollback_failed".to_string())?;
             }
+            if journal.locale_directory_created {
+                let locale = target
+                    .parent()
+                    .ok_or_else(|| "rollback_failed".to_string())?;
+                remove_locale_if_empty(locale)?;
+            }
         }
         _ => return Err("deployment_journal_invalid".to_string()),
     }
@@ -963,6 +981,13 @@ pub(crate) fn recover_pending(
             if temporary.exists() {
                 reject_symlink(&temporary)?;
                 fs::remove_file(temporary)
+                    .map_err(|_| "deployment_recovery_conflict".to_string())?;
+            }
+            if journal.locale_directory_created {
+                let locale = target
+                    .parent()
+                    .ok_or_else(|| "deployment_recovery_conflict".to_string())?;
+                remove_locale_if_empty(locale)
                     .map_err(|_| "deployment_recovery_conflict".to_string())?;
             }
             journal.phase = DeploymentPhase::Failed;
@@ -1218,23 +1243,11 @@ mod tests {
         let app = base.join("app");
         let dota = game(&base);
         let bytes = package(b"russian-tree");
-        assert_eq!(
-            deploy_verified_vpk_for_language(
-                &app,
-                &dota,
-                &bytes,
-                &sha256(&bytes),
-                GameLanguage::Russian,
-            )
-            .err()
-            .as_deref(),
-            Some("language_folder_unavailable")
-        );
         let locale = dota.join("game/dota_russian");
-        fs::create_dir_all(&locale).expect("language folder");
-        fs::write(locale.join("gameinfo.gi"), b"fixture").expect("gameinfo marker");
+        assert!(!locale.exists());
         preview_language_destination(&app, &dota, GameLanguage::Russian)
             .expect("destination ready before process shutdown");
+        assert!(!locale.exists(), "preview must remain read-only");
         let receipt = deploy_verified_vpk_for_language(
             &app,
             &dota,
@@ -1271,8 +1284,10 @@ mod tests {
             Some("deployment_language_change_requires_restore")
         );
         rollback(&app, &dota, &receipt.operation_id).expect("rollback Russian");
-        assert!(!locale.join(OWNED_VPK_NAME).exists());
-        assert!(locale.join("gameinfo.gi").exists());
+        assert!(
+            !locale.exists(),
+            "restore removes an empty BetterFy-created folder"
+        );
         let _ = fs::remove_dir_all(base);
     }
 

@@ -52,66 +52,15 @@
         width: 164px;
         height: 314px;
         overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        background:
-          radial-gradient(120% 52% at 50% 46%, rgba(168, 77, 255, .17), transparent 70%),
-          #050508;
+        background: #050508;
       }
 
-      .wordmark {
-        position: relative;
-        display: inline-flex;
-        align-items: baseline;
-        z-index: 2;
-        white-space: nowrap;
+      .sidebar-banner {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: fill;
       }
-
-      .wordmark-better {
-        font: 400 22px/1 "Days One BetterFy", sans-serif;
-        letter-spacing: -.075em;
-        color: #f7f5fb;
-      }
-
-      .wordmark-fy {
-        position: relative;
-        top: 6px;
-        margin-left: 1px;
-        font: 400 31px/.7 "Mrs Sheppards BetterFy", cursive;
-        color: #d157ff;
-        transform: rotate(-4deg);
-        transform-origin: center;
-        text-shadow: 0 0 18px rgba(209, 87, 255, .34);
-      }
-
-      .sidebar-art .wordmark { margin-top: 21px; }
-      .sidebar-art .wordmark-better { font-size: 27px; }
-      .sidebar-art .wordmark-fy { top: 8px; font-size: 38px; }
-
-      .sidebar-join {
-        margin-top: 24px;
-        text-align: center;
-        font: 800 27px/.94 "Manrope BetterFy", "Segoe UI", Arial, sans-serif;
-        letter-spacing: -.045em;
-        background: linear-gradient(160deg, #ffffff 24%, #e4ccff 58%, #9d4dff 100%);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-      }
-
-      .sidebar-qr {
-        position: absolute;
-        left: 50%;
-        bottom: 12px;
-        width: 118px;
-        height: 118px;
-        transform: translateX(-50%);
-        background: #000;
-        border-radius: 8px;
-      }
-
-      .sidebar-qr img { display: block; width: 100%; height: 100%; }
 
       .header-art {
         position: relative;
@@ -133,12 +82,13 @@
         background: linear-gradient(90deg, #7e25ce, #d157ff 64%, rgba(209,87,255,0));
       }
 
-      .header-art .wordmark {
+      .header-wordmark-image {
         position: absolute;
-        left: 13px;
-        top: 14px;
-        transform: scale(.72);
-        transform-origin: left top;
+        left: 2px;
+        top: -24px;
+        width: 146px;
+        height: auto;
+        z-index: 1;
       }
 
       .header-kicker {
@@ -347,7 +297,7 @@
         border-color: #8e2cde;
         background: linear-gradient(115deg, #9c37e8, #ce57f4);
         color: #fff;
-        box-shadow: 0 7px 18px rgba(156,55,232,.22);
+        box-shadow: 0 7px 18px rgba(0,0,0,.18);
       }
 
       .dark .native-body { background: #0a0a0f; }
@@ -390,13 +340,10 @@
   <body>
     <div class="asset-bank" aria-hidden="true">
       <div id="sidebar-image" class="sidebar-art">
-        <div class="wordmark"><span class="wordmark-better">Better</span><span class="wordmark-fy">Fy</span></div>
-        <div class="sidebar-join">Join<br />Our<br />Telegram</div>
-        <div class="sidebar-qr"><img src="installer-assets/telegram-qr.png" alt="" /></div>
+        <img class="sidebar-banner" src="installer-assets/telegram-sidebar-banner.jpg" alt="" />
       </div>
       <div id="header-image" class="header-art">
-        <div class="wordmark"><span class="wordmark-better">Better</span><span class="wordmark-fy">Fy</span></div>
-        <span class="header-kicker">WINDOWS</span>
+        <img class="header-wordmark-image" src="installer-assets/betterfy-wordmark.png" alt="" />
       </div>
     </div>
 
@@ -421,8 +368,7 @@
           <div class="installer-header">
             <div class="installer-header-copy"><strong>Установка BetterFy</strong><span>Копируем файлы приложения</span></div>
             <div class="header-art">
-              <div class="wordmark"><span class="wordmark-better">Better</span><span class="wordmark-fy">Fy</span></div>
-              <span class="header-kicker">WINDOWS</span>
+              <img class="header-wordmark-image" src="installer-assets/betterfy-wordmark.png" alt="" />
             </div>
           </div>
           <div class="native-content">

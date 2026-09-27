@@ -995,6 +995,16 @@ async fn start_steam_after_profile(
     .map_err(|_| "runtime_worker_failed".to_string())?
 }
 
+#[tauri::command]
+async fn start_steam_after_restore(request: SteamStartRequest) -> Result<RuntimeState, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        require_patch_ready_runtime()?;
+        runtime_control::start_steam(request)
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(AuthState::default())
@@ -1036,6 +1046,7 @@ fn main() {
             rollback_game_deployment,
             recover_game_deployments,
             start_steam_after_profile,
+            start_steam_after_restore,
             list_presets,
             save_preset,
             delete_preset,

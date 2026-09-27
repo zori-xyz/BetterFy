@@ -38,11 +38,19 @@ const requiredTemplateContracts = [
   "Function BetterFyInstFilesShow",
   "Function BetterFyFinishShow",
   "!define MUI_BGCOLOR 0A0A0F",
+  "BrandingText \"${PRODUCTNAME}\"",
 ];
 
 for (const contract of requiredTemplateContracts) {
   if (!template.includes(contract)) {
     throw new Error(`installer.nsi is missing required contract: ${contract}`);
+  }
+}
+
+const artwork = readFileSync(path.join(projectRoot, "scripts", "installer-preview.html"), "utf8");
+for (const asset of ["telegram-sidebar-banner.jpg", "betterfy-wordmark.png"]) {
+  if (!artwork.includes(asset)) {
+    throw new Error(`installer artwork does not use founder-approved asset: ${asset}`);
   }
 }
 

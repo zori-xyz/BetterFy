@@ -248,13 +248,19 @@ export default function TreePilot({ ids, installation, preview }: { ids: string[
       setPlan(null);
       setSelectedLanguage("");
       setSteamStarted(false);
-      setSteamRestarted(false);
-      setSteamRecoveryRequired(false);
-      if (!steamOperationId) {
+      try {
+        const restarted = await engineBridge.startSteamAfterRestore();
+        setSteamRestarted(restarted.steamRunning);
         setRecoveryMessage(isRu
-          ? "Файл восстановлен. Если язык задавался в Steam раньше или вручную, проверь параметры запуска Dota 2 отдельно."
-          : "The game file was restored. If a language option was set earlier or manually, check Dota 2 launch options separately.");
+          ? "Сборка и параметры Steam восстановлены. Steam снова запущен."
+          : "The build and Steam launch options were restored. Steam is running again.");
+      } catch {
+        setSteamRestarted(false);
+        setRecoveryMessage(isRu
+          ? "Сборка восстановлена, но Steam не удалось запустить автоматически. Запусти его вручную."
+          : "The build was restored, but Steam could not be started automatically. Start it manually.");
       }
+      setSteamRecoveryRequired(false);
     } catch (cause) { setError(codeOf(cause)); }
     finally { setPhase("idle"); }
   }

@@ -1549,7 +1549,7 @@ mod tests {
             )
             .err()
             .as_deref(),
-            Some("launch_option_conflict")
+            Some("steam_activation_not_ready")
         );
         rollback_operation(
             &app_data,
