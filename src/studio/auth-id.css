@@ -235,3 +235,40 @@
 :root[data-theme=light] .auth-stage-login .auth-login-card { background: #fffafdf5; border-color: #d7c3dc; box-shadow: 0 25px 65px #5832601c; }
 @media (prefers-reduced-motion: reduce) { .auth-id-ambient { opacity: .55; } }
 .motion-disabled .auth-id-ambient { opacity: .55; }
+
+/* Telegram approval is the primary desktop path; BetterFy ID is a quieter
+   alternative so the two choices no longer compete for attention. */
+.auth-choice-actions > .auth-id-choice {
+  background: transparent;
+  border-color: var(--s-line) !important;
+  box-shadow: none;
+  color: var(--s-text);
+}
+.auth-choice-actions > .auth-id-choice:hover:not(:disabled) { border-color: #694875 !important; background: #ffffff06; }
+
+.challenge-match {
+  display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 14px; row-gap: 4px;
+  margin-top: 22px; padding: 14px 16px; border: 1px solid var(--s-line); border-radius: 12px; background: var(--s-panel);
+}
+.challenge-match > span { grid-column: 2; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--s-muted); }
+.challenge-match > strong { grid-row: 1 / span 2; font-size: 34px; line-height: 1; letter-spacing: .04em; font-variant-numeric: tabular-nums; color: var(--s-text); }
+.challenge-match > small { grid-column: 2; font-size: 12px; line-height: 1.5; color: var(--s-quiet); }
+:root[data-theme=light] .auth-choice-actions > .auth-id-choice { background: transparent; color: var(--s-text); }
+:root[data-theme=light] .auth-choice-actions > .auth-id-choice .auth-choice-icon { background: #7835a914; color: #7835a9; }
+
+/* The first screen must fit the default 1180x760 window: the layout, footer
+   included, fills exactly the space below the header instead of adding to it. */
+.auth-stage .auth-login-layout { box-sizing: border-box; min-height: calc(100dvh - 120px); padding-top: 24px; grid-template-rows: 1fr auto; }
+.auth-stage .auth-login-footer { margin-top: 12px; padding-top: 14px; }
+@media (max-height: 800px) {
+  .auth-stage .auth-header { min-height: 72px; }
+  .auth-stage .auth-login-layout { min-height: calc(100dvh - 97px); padding-top: 14px; }
+  .auth-stage .auth-login-card { padding: 26px 28px 24px; }
+  .auth-stage .auth-id-heading { margin-bottom: 16px; }
+  .auth-choice-actions { margin-top: 20px; }
+  .auth-choice-actions > button { min-height: 66px; }
+}
+@media (max-height: 700px) {
+  .auth-stage { padding-bottom: 8px; }
+  .auth-stage .auth-login-layout { min-height: calc(100dvh - 80px); }
+}

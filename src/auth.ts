@@ -25,6 +25,7 @@ export type DeviceChallengeStart = {
   deepLink: string;
   expiresAt: number;
   pollAfterSeconds: number;
+  matchCode?: string | null;
 };
 
 export type DeviceChallengePoll = {
@@ -38,12 +39,22 @@ const isNativeDesktop = () => "__TAURI_INTERNALS__" in window;
 
 export const supportsDeviceChallenge = () => isNativeDesktop();
 
+// Tauri rejects `invoke` with the command's error string, while fetch paths
+// throw an Error. Both carry the same stable code.
+export function authErrorCode(cause: unknown): string {
+  if (typeof cause === "string") return cause;
+  return cause instanceof Error ? cause.message : "";
+}
+
 async function idRequest(path: string, payload: object): Promise<unknown> {
   const response = await fetch(emailEndpoint(path), {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify(payload), credentials: "omit",
   });
-  if (!response.ok) throw new Error(response.status === 401 ? "auth_id_invalid_credentials" : "auth_id_unavailable");
+  if (!response.ok) {
+    const code = { 401: "auth_id_invalid_credentials", 409: "auth_id_username_taken", 429: "auth_rate_limited" }[response.status];
+    throw new Error(code ?? "auth_id_unavailable");
+  }
   return response.json();
 }
 
@@ -251,7 +262,8 @@ export async function beginTelegramDeviceChallenge(): Promise<DeviceChallengeSta
     || typeof payload.expiresAt !== "number"
     || typeof payload.pollAfterSeconds !== "number"
     || payload.pollAfterSeconds < 1
-    || payload.pollAfterSeconds > 10) {
+    || payload.pollAfterSeconds > 10
+    || (payload.matchCode !== undefined && payload.matchCode !== null && !/^\d{2}$/.test(payload.matchCode))) {
     throw new Error("auth_response_invalid");
   }
   return payload;

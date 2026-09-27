@@ -20,6 +20,7 @@ import AccentTitle from "./AccentTitle";
 import AuthAmbient from "./studio/AuthAmbient";
 import {
   authMode,
+  authErrorCode,
   beginIdRegistration,
   beginEmailSignIn,
   beginTelegramDeviceChallenge,
@@ -99,6 +100,8 @@ const copy = {
     idExisting: "Уже есть BetterFy ID?",
     idForgot: "Забыл пароль? Получить код на почту",
     idInvalid: "Проверь данные и попробуй ещё раз.",
+    idUsernameTaken: "Этот никнейм уже занят. Выбери другой.",
+    idRateLimited: "Слишком много попыток. Подожди 10 минут и попробуй снова.",
     idUnavailable: "BetterFy ID сейчас недоступен. Попробуй позже или войди через Telegram.",
     idRegistrationCode: "Подтверди почту",
     idRegistrationCodeText: "Введи код из письма, чтобы закончить создание BetterFy ID.",
@@ -149,7 +152,11 @@ const copy = {
     codeLabel: "Одноразовый код",
     back: "Назад",
     confirm: "Подтвердить",
-    resend: "Запросить новый код",
+    resend: "Получить новый код в боте",
+    hidePassword: "Скрыть пароль",
+    showPassword: "Показать пароль",
+    matchLabel: "Число для сверки",
+    matchHint: "В сообщении бота должно быть то же число. Если оно другое — нажми «Отклонить».",
     demo: "Демо-режим: подойдёт любой шестизначный код, кроме 000000.",
     codeHint: "Код действует 10 минут и срабатывает один раз.",
     wrong: "Код недействителен или уже использован.",
@@ -157,7 +164,7 @@ const copy = {
     checkingText: "BetterFy сверяет одноразовый код и готовит защищённую сессию этого устройства.",
     verifiedStep: "Telegram подтвердил запрос",
     confirmed: "Код подтверждён",
-    confirmedText: "Доступ BetterFy открыт. Переходим к подключению Dota 2.",
+    confirmedText: "Доступ BetterFy открыт. Открываем приложение.",
   },
   en: {
     brandLine: "DOTA 2 · MOD PLATFORM",
@@ -189,6 +196,8 @@ const copy = {
     idExisting: "Already have BetterFy ID?",
     idForgot: "Forgot password? Get an email code",
     idInvalid: "Check your details and try again.",
+    idUsernameTaken: "This username is already taken. Choose another one.",
+    idRateLimited: "Too many attempts. Wait 10 minutes and try again.",
     idUnavailable: "BetterFy ID is unavailable right now. Try later or use Telegram.",
     idRegistrationCode: "Verify your email",
     idRegistrationCodeText: "Enter the code from your email to finish creating BetterFy ID.",
@@ -239,7 +248,11 @@ const copy = {
     codeLabel: "One-time code",
     back: "Back",
     confirm: "Confirm",
-    resend: "Request a new code",
+    resend: "Get a new code in the bot",
+    hidePassword: "Hide password",
+    showPassword: "Show password",
+    matchLabel: "Match number",
+    matchHint: "The bot message must show the same number. If it differs, tap Deny.",
     demo: "Demo mode: any six-digit code except 000000 works.",
     codeHint: "The code lasts 10 minutes and works once.",
     wrong: "The code is invalid or has already been used.",
@@ -247,7 +260,7 @@ const copy = {
     checkingText: "BetterFy verifies the one-time code and prepares this device session.",
     verifiedStep: "Telegram approved the request",
     confirmed: "Code confirmed",
-    confirmedText: "BetterFy access is ready. Moving on to connect Dota 2.",
+    confirmedText: "BetterFy access is ready. Opening the app.",
   },
 } satisfies Record<Language, any>;
 
@@ -265,6 +278,7 @@ export default function AuthFlow({
   const [error, setError] = useState(false);
   const [startingChallenge, setStartingChallenge] = useState(false);
   const [challengeLink, setChallengeLink] = useState<string | null>(null);
+  const [challengeMatch, setChallengeMatch] = useState<string | null>(null);
   const [challengePollMs, setChallengePollMs] = useState(2000);
   const [challengeExpiresAt, setChallengeExpiresAt] = useState(0);
   const [challengeMessage, setChallengeMessage] = useState<string | null>(null);
@@ -293,10 +307,13 @@ export default function AuthFlow({
     try {
       await finishId(await signInWithId(identifier, password));
     } catch (cause) {
+      const code = authErrorCode(cause);
       setIdMessage(
-        cause instanceof Error && cause.message === "auth_id_invalid_credentials"
+        code === "auth_id_invalid_credentials"
           ? t.idInvalid
-          : t.idUnavailable,
+          : code === "auth_rate_limited"
+            ? t.idRateLimited
+            : t.idUnavailable,
       );
     } finally {
       setIdBusy(false);
@@ -311,8 +328,15 @@ export default function AuthFlow({
       setPassword("");
       setEmailCode("");
       setStage("id-register-code");
-    } catch {
-      setIdMessage(t.idUnavailable);
+    } catch (cause) {
+      const code = authErrorCode(cause);
+      setIdMessage(
+        code === "auth_id_username_taken"
+          ? t.idUsernameTaken
+          : code === "auth_rate_limited"
+            ? t.idRateLimited
+            : t.idUnavailable,
+      );
     } finally {
       setIdBusy(false);
     }
@@ -380,6 +404,7 @@ export default function AuthFlow({
     try {
       const challenge = await beginTelegramDeviceChallenge();
       setChallengeLink(challenge.deepLink);
+      setChallengeMatch(challenge.matchCode ?? null);
       setChallengePollMs(challenge.pollAfterSeconds * 1000);
       setChallengeExpiresAt(challenge.expiresAt);
       await openUrl(challenge.deepLink);
@@ -526,6 +551,21 @@ export default function AuthFlow({
               <div className="auth-choice-actions">
                 <button
                   type="button"
+                  className="auth-telegram-choice"
+                  onClick={startTelegram}
+                  disabled={startingChallenge}
+                >
+                  <span className="auth-choice-icon">
+                    {startingChallenge ? <LoaderCircle className="spin" /> : <Send />}
+                  </span>
+                  <span className="auth-choice-label">
+                    <strong>{t.telegramTitle}</strong>
+                    <small>{t.telegramNote}</small>
+                  </span>
+                  <ArrowRight />
+                </button>
+                <button
+                  type="button"
                   className="auth-id-choice"
                   onClick={() => {
                     setIdMessage(null);
@@ -538,21 +578,6 @@ export default function AuthFlow({
                   <span className="auth-choice-label">
                     <strong>{t.idTitle}</strong>
                     <small>{t.idNote}</small>
-                  </span>
-                  <ArrowRight />
-                </button>
-                <button
-                  type="button"
-                  className="auth-telegram-choice"
-                  onClick={startTelegram}
-                  disabled={startingChallenge}
-                >
-                  <span className="auth-choice-icon">
-                    {startingChallenge ? <LoaderCircle className="spin" /> : <Send />}
-                  </span>
-                  <span className="auth-choice-label">
-                    <strong>{t.telegramTitle}</strong>
-                    <small>{t.telegramNote}</small>
                   </span>
                   <ArrowRight />
                 </button>
@@ -622,7 +647,7 @@ export default function AuthFlow({
               <button
                 type="button"
                 onClick={() => setShowPassword((value) => !value)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? t.hidePassword : t.showPassword}
               >
                 {showPassword ? <EyeOff /> : <Eye />}
               </button>
@@ -642,7 +667,11 @@ export default function AuthFlow({
                 {idMessage}
               </p>
             )}
-            <button className="auth-email-submit" type="submit" disabled={idBusy}>
+            <button
+              className="auth-email-submit"
+              type="submit"
+              disabled={idBusy || !identifier.trim() || password.length < 12}
+            >
               {idBusy ? <LoaderCircle className="spin" /> : <LockKeyhole />}
               {t.idLoginAction}
               <ArrowRight />
@@ -720,7 +749,7 @@ export default function AuthFlow({
               <button
                 type="button"
                 onClick={() => setShowPassword((value) => !value)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? t.hidePassword : t.showPassword}
               >
                 {showPassword ? <EyeOff /> : <Eye />}
               </button>
@@ -910,6 +939,13 @@ export default function AuthFlow({
               <AccentTitle text={t.awaiting} />
             </h1>
             <p>{t.awaitingText}</p>
+            {challengeMatch && (
+              <div className="challenge-match">
+                <span>{t.matchLabel}</span>
+                <strong>{challengeMatch}</strong>
+                <small>{t.matchHint}</small>
+              </div>
+            )}
             <div className="challenge-wait-status">
               <LoaderCircle className="spin" />
               <span>{t.awaitingStatus}</span>
@@ -1002,6 +1038,8 @@ export default function AuthFlow({
               onClick={() => {
                 setCode("");
                 setError(false);
+                if (supportsDeviceChallenge()) void openUrl("https://t.me/BeterFyBot");
+                else window.open("https://t.me/BeterFyBot", "_blank", "noopener,noreferrer");
               }}
             >
               <RefreshCcw />

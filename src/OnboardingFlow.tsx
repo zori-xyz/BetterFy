@@ -53,9 +53,19 @@ const copy = {
     errorText: "Нужна папка «dota 2 beta» с игровыми файлами. Проверь путь и попробуй снова.",
     community: "Нужна помощь с установкой?",
     communityAction: "Написать в @BeterFyBot",
-    demoBadge: "PROTOTYPE",
-    previewAction: "Продолжить в preview-режиме",
-    artLabel: "DOTA COMPANIONS / CONNECTION",
+    setupLabel: "НАСТРОЙКА ИГРЫ",
+    setupStep: "ШАГ 01",
+    appId: "STEAM · ID 570",
+    mapVerified: "ПУТЬ ПРОВЕРЕН",
+    mapLocal: "ПОИСК НА ДИСКЕ",
+    stateDone: "ГОТОВО",
+    stateChecking: "ПРОВЕРЯЕМ",
+    stateWaiting: "ОЖИДАНИЕ",
+    scanLabel: "ПОИСК",
+    manualLabel: "ПУТЬ ВРУЧНУЮ",
+    checkLabel: "ПРОВЕРКА",
+    demoBadge: "ПРОТОТИП",
+    previewAction: "Продолжить в режиме просмотра",
   },
   en: {
     kicker: "GAME CONNECTION",
@@ -89,9 +99,19 @@ const copy = {
     errorText: "Choose a “dota 2 beta” folder containing the game files, then try again.",
     community: "Need help with setup?",
     communityAction: "Message @BeterFyBot",
+    setupLabel: "GAME SETUP",
+    setupStep: "STEP 01",
+    appId: "STEAM · APP 570",
+    mapVerified: "PATH VERIFIED",
+    mapLocal: "LOCAL DISCOVERY",
+    stateDone: "OK",
+    stateChecking: "CHECKING",
+    stateWaiting: "WAITING",
+    scanLabel: "SCAN",
+    manualLabel: "MANUAL PATH",
+    checkLabel: "CHECK",
     demoBadge: "PROTOTYPE",
     previewAction: "Continue in preview mode",
-    artLabel: "DOTA COMPANIONS / CONNECTION",
   },
 };
 
@@ -138,7 +158,9 @@ export default function OnboardingFlow({
     setStage("scanning");
     setStep(1);
     try {
-      const installation = await engineBridge.validateGamePath(path);
+      // Explorer's "Copy as path" wraps the folder in double quotes.
+      const cleaned = path.trim().replace(/^"(.*)"$/, "$1").trim();
+      const installation = await engineBridge.validateGamePath(cleaned);
       if (!mounted.current) return;
       setGame(installation);
       setStage("found");
@@ -164,23 +186,23 @@ export default function OnboardingFlow({
       <header className="setup-header" data-tauri-drag-region>
         <div className="setup-brand">
           <BetterFyWordmark compact />
-          <small>GAME SETUP</small>
+          <small>{t.setupLabel}</small>
         </div>
-        <span>SETUP · 01</span>
+        <span>{t.setupStep}</span>
       </header>
 
       <section className="setup-scene" aria-hidden="true">
         <div className="setup-map">
-          <span>STEAM / APP 570</span>
+          <span>{t.appId}</span>
           <div className="setup-map-head">
             <Gamepad2 />
-            <div><strong>Dota 2</strong><small>{stage === "found" ? "PATH VERIFIED" : "LOCAL DISCOVERY"}</small></div>
+            <div><strong>Dota 2</strong><small>{stage === "found" ? t.mapVerified : t.mapLocal}</small></div>
           </div>
           <ol>
             {t.steps.map((item, index) => (
               <li className={stage === "found" || index < step ? "done" : index === step && stage === "scanning" ? "active" : ""} key={item}>
                 <i>{stage === "found" || index < step ? <Check /> : index + 1}</i>
-                <span><strong>{item}</strong><small>{stage === "found" || index < step ? "OK" : index === step && stage === "scanning" ? "CHECKING" : "WAITING"}</small></span>
+                <span><strong>{item}</strong><small>{stage === "found" || index < step ? t.stateDone : index === step && stage === "scanning" ? t.stateChecking : t.stateWaiting}</small></span>
               </li>
             ))}
           </ol>
@@ -192,7 +214,7 @@ export default function OnboardingFlow({
             </span>
             <span className="machine-trace"><i /><i /><i /></span>
           </div>
-          <p>STEAM · APP 570</p>
+          <p>{t.appId}</p>
         </div>
         <div className="setup-community">
           <MessageCircle />
@@ -222,7 +244,7 @@ export default function OnboardingFlow({
 
         {stage === "scanning" && (
           <div className="setup-copy setup-enter" role="status" aria-live="polite">
-            <span>SCAN / 570</span>
+            <span>{t.scanLabel}</span>
             <h1 className="accent-title"><AccentTitle text={t.scanning} /></h1>
             <p>{t.scanningText}</p>
             <div className="scan-stack">
@@ -230,7 +252,7 @@ export default function OnboardingFlow({
                 <div className={index < step ? "done" : index === step ? "active" : ""} key={item}>
                   <span>{index < step ? <Check /> : <LoaderCircle />}</span>
                   <strong>{item}</strong>
-                  <small>{index < step ? "OK" : index === step ? "…" : "WAIT"}</small>
+                  <small>{index < step ? t.stateDone : index === step ? "…" : t.stateWaiting}</small>
                 </div>
               ))}
             </div>
@@ -242,7 +264,7 @@ export default function OnboardingFlow({
             <button type="button" className="setup-back" onClick={() => setStage("intro")}>
               <ArrowLeft />{t.back}
             </button>
-            <span>MANUAL / PATH</span>
+            <span>{t.manualLabel}</span>
             <h1 className="accent-title"><AccentTitle text={t.manualTitle} /></h1>
             <p>{t.manualText}</p>
             <label className="setup-path-field">
@@ -286,7 +308,7 @@ export default function OnboardingFlow({
 
         {(stage === "not-found" || stage === "error") && (
           <div className="setup-copy setup-enter">
-            <span className="warning">CHECK / 570</span>
+            <span className="warning">{t.checkLabel}</span>
             <div className="setup-error-title">
               <h1 className="accent-title">
                 <AccentTitle
