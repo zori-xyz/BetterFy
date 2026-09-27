@@ -37,9 +37,12 @@ This document is the durable visual authority for BetterFy. Read
 - The BetterFy wordmark uses `Days One` for “Better” and `Mrs Sheppards` for
   “Fy”. Keep “Fy” in its handwritten form, magenta-violet, slightly lifted and
   optically joined to “Better”; never typeset the whole name in the body font.
-- The wordmark is the primary logo on boot, authentication, onboarding and the
-  persistent top bar. The three-capsule mark is secondary and must not occupy a
-  competing corner in the main shell.
+- The wordmark remains the identity on boot, authentication, onboarding and the
+  persistent application shell. The founder-approved `B` symbol is the compact
+  identity for application/package icons, Telegram avatars and GitHub. Do not
+  insert that symbol into application screens until a separate screen-level
+  decision is approved. The archived three-capsule exploration is not product
+  identity and must not return to new surfaces.
 - Violet is the brand atmosphere and may own large fields. It is not a status
   color. Lime means verified ready, selected, or confirmed. Coral means
   conflict, failure, or destructive action. Telegram blue is reserved for the
@@ -204,7 +207,10 @@ design-system decision.
 
 | Asset | Role | Medium |
 | --- | --- | --- |
-| `src/BetterFyMark.tsx` | Brand and readiness signal | Semantic SVG |
+| `brand/betterfy-symbol-dark.jpg` | Canonical compact identity for the Telegram bot, application icon and GitHub | Founder-authored and founder-approved; release-ready |
+| `brand/betterfy-symbol-light.jpg` | Canonical compact identity for the Telegram channel and community chat | Founder-authored and founder-approved; release-ready |
+| `brand/betterfy-symbol-dark-on-light.jpg` | Alternate dark tile on a light safety field | Founder-authored and founder-approved; auxiliary export, not the default |
+| `src/BetterFyMark.tsx` | Archived three-capsule exploration; not rendered as BetterFy identity | Semantic SVG |
 | `src/BetterFyWordmark.tsx` | Canonical Better/Fy typography | Semantic HTML + vendored fonts |
 | `src/assets/dota-spirits-setup.png` | Dota connection companions | Founder-approved prototype screenshot; temporary and prohibited from release |
 | `src/assets/witch-doctor-auth.png` | Authentication scene anchor | Founder-approved prototype screenshot; temporary and prohibited from release |
@@ -217,7 +223,7 @@ design-system decision.
 | `website/public/bot/message-master.png` | Telegram bot welcome card | Founder-owned and founder-approved master; composition must remain unchanged |
 | `website/public/bot/code-ru.png` / `code-en.png` | One-time-code message cards | Approved variants of the founder master; only the central headline changes |
 | `website/public/bot/approved-ru.png` / `approved-en.png` | Successful sign-in message cards | Approved variants of the founder master; only the central headline changes |
-| `src-tauri/icons/icon.svg` | Temporary application-icon master | Black BetterFy wordmark placeholder; replace with the final brand icon before release |
+| `src-tauri/icons/icon-source.png` | Canonical application-icon master generated from the approved dark `B` symbol | Founder-authored and founder-approved; release-ready |
 | `src-tauri/windows/installer/sidebar.bmp` | NSIS welcome/finish brand panel | Newly authored BetterFy-only wordmark/signature art; release-ready |
 | `src-tauri/windows/installer/header.bmp` | NSIS install/uninstall page banner | Newly authored BetterFy-only installer art; release-ready |
 | Lucide icons | Controls and status cues | Existing icon library |

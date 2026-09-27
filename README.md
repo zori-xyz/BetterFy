@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="src-tauri/icons/icon-source.png" width="132" alt="BetterFy application icon" />
+  <img src="brand/betterfy-github-social.png" width="800" alt="BetterFy — Dota 2 mod platform for Windows" />
 </p>
-
-<h1 align="center">BetterFy</h1>
 
 <p align="center">
   A Windows-first desktop workspace for building a custom Dota 2 setup.<br />
