@@ -80,7 +80,12 @@ by IP and hashed email address; codes expire after ten minutes and can be used
 only once. Delivery, linked-account continuity, and Windows credential-vault
 behavior still require staged end-to-end testing before public release.
 
-The public bot cards are served from `/bot` on the BetterFy GitHub Pages site.
+The bot ships five localized visual states from the Worker's static asset
+binding: main menu, Premium access, sign-in confirmation, approved sign-in and
+one-time code. Each state has an explicit Russian and English 1280×720 JPEG in
+`../../website/public/bot`; the mapping in `src/index.mjs` is the canonical
+contract. New filenames are required when a card is replaced so Telegram does
+not reuse a previously cached image URL.
 
 ## Client routes
 

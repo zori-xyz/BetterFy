@@ -41,7 +41,7 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - Preserve the Home, Mods, Skin Library, Settings, and Profile workflows.
 - Preserve Russian and English localization.
 - Mod selection must communicate added, removed, conflicting, building, ready, and error states unambiguously.
-- Only the pinned Tree Mod, Show Net Worth, and Unit Query HUD internal Windows pilots may request a game-directory write, individually or as one ordered bundle. The founder has observed the intended Tree Mod result in Dota with the Dutch language slot and then completed the visible BetterFy rollback, after which the game returned to its normal state. The HUD pilots, other languages, interruption recovery, exact-byte restoration evidence, and general compatibility remain unverified; general catalog deployment remains unavailable.
+- Only the pinned Tree Mod, Show Net Worth, and Unit Query HUD internal Windows pilots may request a game-directory write, individually or as one ordered bundle. The founder has observed all three intended results in Dota through the Dutch language slot, completed the visible BetterFy rollback, and reported the internal before/after-publish recovery controls passing. Other languages, a retained exact-byte report, a second machine, and general compatibility remain unverified; general catalog deployment remains unavailable.
 - Original game files must be described as protected only where the prototype already presents that intended capability.
 - Avoid dependencies on Dota-owned artwork for core product identity. Dota-inspired assets should be transformed into a distinct BetterFy production language.
 - The repository is intended to be open source.
@@ -68,13 +68,21 @@ BetterFy turns fragmented community content into one curated, understandable, an
 - A versioned fixture-package contract, cancellable HTTPS fixture acquisition,
   immutable SHA-256 content store, and ZIP metadata preflight. A deterministic
   VPK builder plus an ownership-scoped deployment/recovery transaction pass
-  synthetic tests. The pinned Tree Mod / Show Net Worth internal pilot connects verified intake,
-  staging, guarded Windows deployment, Steam restart, and rollback. A founder-run
-  Windows pass proved the intended Dutch-slot tree change and visible restoration;
-  the broader recovery and compatibility matrix remains open.
+  synthetic tests. The pinned Tree Mod / Show Net Worth / Unit Query HUD pilot
+  connects verified intake, staging, guarded Windows deployment, Steam restart,
+  and rollback. A founder-run Windows pass proved the three intended Dutch-slot
+  changes and visible restoration; a retained report, other languages and the
+  broader compatibility matrix remain open.
 - A real local config manager backed by validated, atomic app-data storage,
   plus three built-in BetterFy Workshop presets resolved against the same
   Minify catalog IDs as the selection UI.
+- BetterFy Setup EA.18 is the founder-verified Windows Early Access baseline:
+  the branded installer installed, recognized and updated an existing install,
+  exposed working uninstall/reinstall actions, launched the application, and
+  preserved the separately stored account/session boundary. CI built the same
+  tagged artifact and published a matching SHA-256 sidecar. The pass is recorded
+  in `docs/EA18_WINDOWS_BASELINE.md`; signing, signed-updater compatibility and
+  repeatable second-machine evidence remain release gates.
 - The deployed BetterFy auth Worker supports challenge-bound Telegram approval,
   a six-digit fallback, avatar proxying, entitlement facts, and privacy-safe
   session revocation. Web keeps its twelve-hour opaque session in

@@ -14,6 +14,8 @@ disagreement as a bug and verify the behavior before changing either side.
    that every screen must preserve.
 4. [Roadmap](ROADMAP.md) — completed foundations, the active engine milestone,
    and the release gates ahead.
+5. [EA.18 Windows baseline](EA18_WINDOWS_BASELINE.md) — immutable release
+   identity, CI evidence, founder-observed Windows behavior, and retained gaps.
 
 ## Engine
 

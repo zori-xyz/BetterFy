@@ -182,8 +182,9 @@ Before installer/update checks, run one multi-mod pass:
   the packages do not collide;
 - restore and confirm normal trees/HUD and the previous exact target bytes.
 
-Show Net Worth and Repopulate Unit Query HUD stay internal unverified pilots
-until this pass succeeds.
+The founder observed all three changes and restoration during the EA.18 Windows
+baseline. They remain pinned internal pilots—not general catalog packages—until
+provenance/signature gates and a retained repeatable compatibility report pass.
 
 - Install the same internal version over the existing installation and confirm
   that settings survive.
@@ -193,8 +194,12 @@ until this pass succeeds.
 
 ## 9. BetterFy Setup (the branded installer)
 
-`installer/` has not run on Windows at all before this pass. Nothing here may
-be assumed to work; run every step.
+EA.18 completed the first founder-run Windows pass for this section. The
+immutable artifact and retained evidence boundary are recorded in
+[`EA18_WINDOWS_BASELINE.md`](EA18_WINDOWS_BASELINE.md). Keep this checklist for
+new installer behavior, signed-updater compatibility, regressions, and a
+retained second-machine report; do not describe the current installer as
+Windows-untested.
 
 1. Uninstall any existing BetterFy install first (Settings → Apps, or the
    Windows 8 uninstall flow) so this starts from a clean machine.
@@ -255,3 +260,13 @@ be assumed to work; run every step.
 - the installed BetterFy version and Windows version.
 
 Do not send personal Steam files, Telegram codes, or full filesystem paths.
+
+### EA.18 retained result
+
+The founder reported the application and Setup pass complete on Windows on
+2026-09-27. CI run `36337097018` built the corresponding tagged artifact and its
+published SHA-256 verifies. Install, existing-install update, uninstall/reinstall,
+launch and the application/pinned-pilot journey were observed working. No safe
+readiness report, Windows build metadata, or test-report JSON was retained, so
+those details remain required for the next evidence-bearing matrix rather than
+being reconstructed from memory.

@@ -49,6 +49,20 @@ const AVATAR_REFRESH_SECONDS = 24 * 60 * 60;
 const AVATAR_RETRY_SECONDS = 5 * 60;
 const EMAIL_TTL_SECONDS = 10 * 60;
 
+export const BOT_CARD_FILES = Object.freeze({
+  mainMenu: Object.freeze({ en: "main-menu-en.jpg", ru: "main-menu-ru.jpg" }),
+  premium: Object.freeze({ en: "premium-en.jpg", ru: "premium-ru.jpg" }),
+  loginConfirm: Object.freeze({ en: "login-confirm-en.jpg", ru: "login-confirm-ru.jpg" }),
+  loginApproved: Object.freeze({ en: "login-approved-en.jpg", ru: "login-approved-ru.jpg" }),
+  accessCode: Object.freeze({ en: "access-code-en.jpg", ru: "access-code-ru.jpg" }),
+});
+
+export function botCardFile(card, language) {
+  const localized = BOT_CARD_FILES[card];
+  if (!localized) throw new Error("unknown_bot_card");
+  return localized[language === "ru" ? "ru" : "en"];
+}
+
 export function normalizeEmail(value) {
   if (typeof value !== "string" || value.length > 254 || value !== value.trim()) return null;
   const email = value.toLowerCase();
@@ -688,9 +702,10 @@ function plansKeyboard(language) {
 }
 
 async function sendPlans(env, chatId, language) {
-  await telegram(env, "sendMessage", {
+  await telegram(env, "sendPhoto", {
     chat_id: chatId,
-    text: COPY[language].choosePlan,
+    photo: cardUrl(env, botCardFile("premium", language)),
+    caption: COPY[language].choosePlan,
     reply_markup: plansKeyboard(language),
   });
 }
@@ -738,7 +753,7 @@ async function getLanguage(env, from) {
 async function sendWelcome(env, chatId, language) {
   await telegram(env, "sendPhoto", {
     chat_id: chatId,
-    photo: cardUrl(env, "message-master.png"),
+    photo: cardUrl(env, botCardFile("mainMenu", language)),
     caption: COPY[language].welcome,
     reply_markup: welcomeKeyboard(language),
   });
@@ -816,7 +831,7 @@ async function sendDeviceChallenge(env, message, language, token, now) {
   const matchCode = challenge.client_version ? await deviceMatchCode(token, env.AUTH_CODE_PEPPER) : null;
   return telegram(env, "sendPhoto", {
     chat_id: message.chat.id,
-    photo: cardUrl(env, "message-master.png"),
+    photo: cardUrl(env, botCardFile("loginConfirm", language)),
     caption: deviceRequestCaption(language, challenge, matchCode),
     reply_markup: deviceDecisionKeyboard(language, token),
     protect_content: true,
@@ -850,7 +865,7 @@ async function decideDeviceChallenge(env, callback, language, token, approved, n
   }
   return telegram(env, "sendPhoto", {
     chat_id: chatId,
-    photo: cardUrl(env, language === "ru" ? "approved-ru.png" : "approved-en.png"),
+    photo: cardUrl(env, botCardFile("loginApproved", language)),
     caption: COPY[language].deviceApproved,
     protect_content: true,
   });
@@ -887,7 +902,7 @@ async function issueCode(env, chatId, from, language, now) {
 
   await telegram(env, "sendPhoto", {
     chat_id: chatId,
-    photo: cardUrl(env, language === "ru" ? "code-ru.png" : "code-en.png"),
+    photo: cardUrl(env, botCardFile("accessCode", language)),
     parse_mode: "HTML",
     caption: `<b>${COPY[language].codeTitle}</b>\n\n<code>${formatCode(code)}</code>\n\n${COPY[language].codeBody}`,
     protect_content: true,
@@ -920,9 +935,10 @@ async function sendSubscriptionStatus(env, chatId, from, language, now) {
   const userId = await upsertUser(env, from, language, now);
   const subscription = await subscriptionRecord(env, userId);
   if (!isEntitlementActive(subscription, now)) {
-    await telegram(env, "sendMessage", {
+    await telegram(env, "sendPhoto", {
       chat_id: chatId,
-      text: COPY[language].subscriptionInactive,
+      photo: cardUrl(env, botCardFile("premium", language)),
+      caption: COPY[language].subscriptionInactive,
       reply_markup: { inline_keyboard: [[{ text: `⭐ ${COPY[language].subscribe}`, callback_data: "plans" }]] },
     });
     return false;
@@ -932,9 +948,10 @@ async function sendSubscriptionStatus(env, chatId, from, language, now) {
   const buttons = recurring && recurring.canceled_at == null
     ? [[{ text: COPY[language].subscriptionCancel, callback_data: "cancel_subscription" }]]
     : [];
-  await telegram(env, "sendMessage", {
+  await telegram(env, "sendPhoto", {
     chat_id: chatId,
-    text: `${COPY[language].subscriptionActive} ${formatExpiry(subscription.active_until, language)}.`,
+    photo: cardUrl(env, botCardFile("premium", language)),
+    caption: `${COPY[language].subscriptionActive} ${formatExpiry(subscription.active_until, language)}.`,
     reply_markup: { inline_keyboard: buttons },
   });
   return true;
@@ -966,7 +983,9 @@ async function sendAccessInvoice(env, chatId, from, language, now, planId) {
     currency: "XTR",
     prices: [{ label: COPY[language].plans[plan.id].title, amount }],
     start_parameter: `premium_${plan.id}_${orderId}`,
-    photo_url: cardUrl(env, "message-master.png"),
+    photo_url: cardUrl(env, botCardFile("premium", language)),
+    photo_width: 1280,
+    photo_height: 720,
     protect_content: true,
   };
   if (plan.recurring) invoice.subscription_period = plan.durationSeconds;
@@ -1369,8 +1388,8 @@ async function verifyCode(request, env, origin) {
   const entitlement = await subscriptionRecord(env, user.user_id);
   const plan = planBySku(entitlement?.sku);
 
-  const approvedCard = user.language === "ru" ? "approved-ru.png" : "approved-en.png";
-  const copy = COPY[user.language === "ru" ? "ru" : "en"];
+  const language = user.language === "ru" ? "ru" : "en";
+  const copy = COPY[language];
   const clientKind = normalizeClientKind(payload?.clientKind);
   const rotatingDesktop = supportsRotatingDesktopCredentials(payload);
   const session = rotatingDesktop
@@ -1379,7 +1398,7 @@ async function verifyCode(request, env, origin) {
   try {
     await telegram(env, "sendPhoto", {
       chat_id: user.telegram_user_id,
-      photo: cardUrl(env, approvedCard),
+      photo: cardUrl(env, botCardFile("loginApproved", language)),
       caption: copy.approved,
       protect_content: true,
     });

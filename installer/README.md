@@ -17,12 +17,14 @@ from Tauri's own NSIS template rather than chosen independently — see
 
 ## Current status
 
-A real Windows CI pass now succeeds through the build step (see
-`windows-build.yml`), and a full release build has produced a working
-`BetterFy-Setup.exe` with the real app embedded. It is still not a release
-candidate: the install/uninstall/update behavior itself has not been run by
-a person on Windows yet, only compiled and (for the UI) previewed in a
-browser.
+EA.18 is the verified Windows Early Access baseline. Native Windows CI built
+the real embedded application and the founder subsequently completed the
+Setup and application pass on Windows: install, existing-install detection,
+update, uninstall/reinstall, launch, sign-in, and the pinned three-package
+pilot path were observed working. The immutable artifact identity, exact scope
+of the human evidence, and retained limitations are recorded in
+[`docs/EA18_WINDOWS_BASELINE.md`](../docs/EA18_WINDOWS_BASELINE.md). This is an
+Early Access baseline, not a signed Stable release.
 
 Implemented:
 
@@ -129,12 +131,12 @@ the install directory, the binary name's case, and the Start Menu layout
 wrong before this was checked against Tauri's actual template source; get
 this table wrong again and it will happen silently, not as a build error.
 
-## Known gaps, and why they're gaps rather than bugs waiting to happen
+## Known gaps after the EA.18 Windows pass
 
-- **No native Windows pass yet.** Compilation, linting, and a full release
-  build are confirmed on real Windows CI; actually installing, updating over
-  an existing install, and uninstalling have not been run by a person yet.
-  Unverified until `docs/WINDOWS_TEST_CHECKLIST.md` §9 passes.
+- **The evidence is one founder-run Windows pass.** EA.18 install, update,
+  uninstall/reinstall and launch behavior is confirmed, but the machine
+  metadata and a machine-readable report were not retained. A second machine
+  and a saved repeatable report remain open before Stable.
 - **No self-delete after uninstall.** `run_uninstall` removes the app,
   shortcuts, and registry entry, but the running `uninstall.exe` cannot
   delete its own open file, so it is left behind in an otherwise-empty

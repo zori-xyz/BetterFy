@@ -17,6 +17,12 @@ signature format and silently re-runs it to apply updates, so it remains the
 release's internal update mechanism even though it is no longer the download
 a person runs first.
 
+EA.18 is the current founder-verified unsigned Windows baseline. Its commit,
+artifact size, SHA-256, CI run, observed Windows behavior, and limitations are
+recorded in [EA18_WINDOWS_BASELINE.md](EA18_WINDOWS_BASELINE.md). A later
+prerelease produced by the same workflow is not automatically human-verified;
+record a new manual observation when its installer behavior changes.
+
 ## One-time repository setup
 
 The updater public key is committed in `src-tauri/tauri.conf.json`. Its private

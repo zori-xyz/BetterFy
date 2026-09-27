@@ -114,12 +114,11 @@ two-stage build in `early-access-release.yml` and `windows-build.yml`.
 
 ## Release boundary
 
-An unsigned CI artifact is for internal testing only. Public distribution still
-requires a Windows code-signing certificate, signed updater configuration,
-hash publication, dependency/license review, and real Steam/Dota integration
-tests on Windows. BetterFy Setup additionally still needs: a native Windows
-verification pass of install, uninstall, and update-in-place behavior (nothing
-in `installer/` has run on Windows yet); WebView2 provisioning beyond
-detection (it currently points a user at Microsoft's download page rather
-than installing the runtime itself); and its own code-signing certificate,
-since it is now the first executable a new user runs.
+An unsigned CI artifact remains an Early Access test release, not a signed
+Stable release. BetterFy Setup EA.18 completed a founder-run native Windows
+pass covering direct install, existing-install update, uninstall/reinstall and
+launch; see [`EA18_WINDOWS_BASELINE.md`](EA18_WINDOWS_BASELINE.md). Stable still
+requires a retained second-machine report, a real signed-updater-in-place pass,
+WebView2 provisioning beyond detection if the link-only fallback proves
+insufficient, dependency/license review, and a code-signing certificate for the
+first executable a new user runs.

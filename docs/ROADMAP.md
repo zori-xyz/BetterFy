@@ -21,11 +21,12 @@ Completed:
   desktop credentials, primary-consistent one-time redemption, avatar proxying,
   and per-device revocation;
 
-## Active milestone: one real patch, end to end
+## Completed Early Access baseline: one real patch, end to end
 
-The next engine slice is deliberately narrow: package the pinned Minify Tree Mod,
-deploy it to one selected, allowlisted language slot, prove it in Dota on Windows, and
-restore the previous state exactly. No Workshop or community layer starts first.
+The completed pilot slice was deliberately narrow: package the pinned Minify
+Tree Mod, deploy it to one selected allowlisted language slot, prove it in Dota
+on Windows, and restore the previous state. It established the boundary now
+being generalized by the active package-engine milestone below.
 
 Implemented foundation:
 
@@ -101,22 +102,23 @@ report, and transactional boundaries otherwise remain covered synthetically.
 Exit condition: Tree Mod is visibly active after a confirmed patch, Steam alone
 restarts, and every tested interruption returns to an explainable recoverable state.
 
-## Remaining pilot integration
+## Remaining gates around the pinned pilot
 
 - complete provenance, redistribution, and signed-manifest review for the
   pinned resources;
 - verify the per-resource cancellation and progress UI under slow and broken
   network conditions on Windows;
-- validate the connected Steam-profile activation and interrupted-operation
-  recovery actions on Windows. The user still starts Dota manually;
+- retain a machine-readable Windows report for the connected Steam-profile and
+  interrupted-operation recovery paths. The founder observed these paths in the
+  EA.18 baseline, and the user still starts Dota manually;
 - expose factual progress and recovery states without presenting success before
   the final installed-byte verification;
-- record the native Windows evidence in the test checklist.
+- repeat the matrix on another Windows installation and retain its safe report.
 
 Exit condition: an interrupted Tree Mod operation can always be explained and
 recovered without relying on interface state.
 
-## BetterFy Setup (branded installer)
+## Completed Early Access baseline: BetterFy Setup
 
 `installer/` is a standalone Tauri application that replaces the NSIS wizard
 as the installer a new user downloads and runs. It exists because NSIS's
@@ -125,9 +127,9 @@ cannot be recolored without unverified low-level window subclassing; this
 installer's UI is plain HTML and CSS instead. NSIS is not retired — the signed
 auto-updater depends on its artifact format and keeps using it internally.
 
-Implemented, confirmed on a real `windows-latest` CI runner through the build
-step (fmt, clippy, and a full `npx tauri build` with the real app embedded),
-but not yet run as an installer by a person on Windows:
+Implemented, confirmed on a real `windows-latest` CI runner, and exercised by
+the founder on Windows as EA.18. The retained artifact identity and evidence
+boundary are recorded in [`EA18_WINDOWS_BASELINE.md`](EA18_WINDOWS_BASELINE.md):
 
 - copy the embedded main-app payload into `$LOCALAPPDATA\BetterFy`, matching
   Tauri's own NSIS `currentUser` install path exactly, so the auto-updater's
@@ -172,12 +174,12 @@ commands this crate defines are not gated the same way, which is why
 installation itself worked while the close buttons did not — see
 `installer/README.md`'s "Why capabilities matter".
 
-Still required before this can replace NSIS as the public download:
+EA.18 is accepted as the unsigned Early Access public-download baseline. Still
+required before a signed Stable release:
 
-- a native Windows install/uninstall/update pass by a person — nothing in
-  `installer/` has been run as an installer on Windows yet, only compiled
-  there;
-- an actual update-in-place test: install with BetterFy Setup, then let the
+- a retained second-machine report and machine metadata for the installer
+  matrix, rather than relying only on one founder-observed pass;
+- an actual signed update-in-place test: install with BetterFy Setup, then let the
   signed updater's NSIS pass run against that install and confirm it updates
   rather than duplicates;
 - WebView2 provisioning beyond detection, if pointing users at Microsoft's
@@ -189,9 +191,38 @@ Still required before this can replace NSIS as the public download:
 - its own code-signing certificate, since it is now the first executable a
   new user runs.
 
-Exit condition: a native Windows pass installs, updates in place through the
-existing signed updater, and uninstalls cleanly, matching every registry and
-path detail NSIS itself would have used.
+Early Access exit condition: completed by EA.18 for direct Setup install,
+existing-install update, uninstall/reinstall and launch. Stable exit condition:
+a signed updater pass updates the same installation in place, a second-machine
+report is retained, and the first executable is code-signed.
+
+## Active milestone: generic package engine
+
+The verified installer and three-package pilot are now foundations, not the
+next product milestone. The next engine slice removes package-specific live
+deployment wiring without opening arbitrary catalog writes.
+
+Planned in order:
+
+- define `PackageManifest v1` as the single versioned contract for identity,
+  localized metadata, provenance, permission, artifact hash/size, dependencies,
+  incompatibilities, variants, recipe version, compatibility and trust state;
+- express the three pinned packages through validated declarative recipes, with
+  no package scripts or shell interpolation;
+- produce one immutable installation plan containing ordered inputs, hashes,
+  conflicts, outputs, owned targets, required space and rollback intent;
+- persist an installed profile containing package versions, selected language,
+  priority order, plan ID, output hash, Steam-profile token and journal links;
+- route the current Studio pilot through the typed engine bridge instead of a
+  separate package-specific invocation path;
+- prove the abstraction by adding a fourth permission-reviewed data-only mod
+  through a manifest and recipe without changing resolver or deployment code;
+- only after that proof, add signed catalog indexes, key rotation and production
+  artifact delivery.
+
+Exit condition: the existing three-package output remains deterministic and
+recoverable through the generic path, and a fourth package can be installed,
+removed and restored without an ID-specific Rust branch.
 
 ## Later milestones
 

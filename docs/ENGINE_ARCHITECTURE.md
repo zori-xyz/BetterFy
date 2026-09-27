@@ -192,8 +192,11 @@ verified-build pilot now stages and re-verifies an ordered Tree Mod / Show Net
 Worth / Repopulate Unit Query HUD bundle before calling the deployment transaction. The deployment ownership
 record and journal persist both the complete bundle-plan identity and ordered
 package IDs, so restart detection and rollback cannot mistake two builds that
-produce a different selected composition. Native Windows evidence exists only
-for Tree Mod through Dutch; the multi-package path still requires Windows proof.
+produce a different selected composition. The founder has observed the ordered
+three-package path through the Dutch slot on Windows, including the visible
+results in Dota and the recovery controls described in `TREE_MOD_PILOT.md`.
+This remains one founder-observed machine without a retained report JSON, not
+general compatibility evidence.
 
 The normal release build and the internal stress build share the same transaction
 code. Only the CI `windows-build` artifact enables the `internal-stress-test`
@@ -249,14 +252,15 @@ embedded data entries. Paths are lowercase relative ASCII, traversal and case-fo
 collisions are rejected, CRC32 is recorded per entry, and the finished archive is
 opened and checked again. External archive parts are not accepted.
 
-The next multi-package layer now merges verified embedded resources into one
+The multi-package layer now merges verified embedded resources into one
 BetterFy-owned VPK. Selected package order is explicit: the first package has
 priority when different bytes target the same resource path. Identical resources
 are deduplicated, differing collisions are recorded as overrides, and all inputs —
 including shadowed bytes — are bound into the reviewed SHA-256 plan identity. The
-same ordered package list is persisted in the staging journal. This foundation is
-covered synthetically; it does not open general catalog deployment and has not yet
-been exercised with the complete three-package bundle on Windows. Each package's
+same ordered package list is persisted in the staging journal. The deterministic
+merge remains covered synthetically and the complete three-package bundle has
+also been observed on one Windows machine through the pinned pilot. This does not
+open general catalog deployment. Each package's
 input, effective, deduplicated, and shadowed resource counts are included in the
 reviewed plan so a selected package cannot silently contribute zero effective
 resources.
