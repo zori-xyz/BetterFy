@@ -98,7 +98,7 @@ jobs:
           # `shasum -c` on macOS/Linux accepts this file without stripping
           # CRLF first; PowerShell's Get-FileHash-based verification is fine
           # with a lone LF too.
-          Set-Content -Encoding ascii -NoNewline "release-assets/BetterFy-Setup.exe.sha256" "$hash  BetterFy-Setup.exe`n"
+          Set-Content -Path "release-assets/BetterFy-Setup.exe.sha256" -Value "$hash  BetterFy-Setup.exe`n" -Encoding ascii -NoNewline
           $version = node -p "require('./package.json').version"
           "tag=v$version-ea.${{ github.run_number }}" >> $env:GITHUB_OUTPUT
           "title=BetterFy v$version · Early Access ${{ github.run_number }}" >> $env:GITHUB_OUTPUT
