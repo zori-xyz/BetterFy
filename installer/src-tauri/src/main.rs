@@ -81,6 +81,10 @@ struct InstallOptions {
 struct InstallReport {
     install_dir: String,
     main_binary: String,
+    // The install itself is committed before the launch is attempted, so a
+    // failed launch is reported alongside success rather than as an error
+    // (an error screen would offer Retry, which reinstalls for nothing).
+    launch_failed: bool,
 }
 
 fn install_dir() -> Result<PathBuf, String> {
@@ -198,7 +202,11 @@ fn check_webview2() -> bool {
 // `installer/README.md`. Failing closed here (rather than "installing" an
 // empty directory) matches the rest of this repository's engine commands.
 #[cfg(windows)]
-#[tauri::command]
+// Install and uninstall write many files. A sync command runs on the main
+// thread, which would stop the event loop for the whole operation: the window
+// could be reported as "Not responding" and the CloseRequested guard below
+// could never run. `async` moves the work to the async runtime.
+#[tauri::command(async)]
 fn run_install(
     options: InstallOptions,
     busy: tauri::State<'_, BusyState>,
@@ -280,15 +288,13 @@ fn run_install(
         Ok(())
     })?;
 
-    if options.launch_after {
-        std::process::Command::new(&main_binary)
-            .spawn()
-            .map_err(|_| "launch_failed".to_string())?;
-    }
+    let launch_failed =
+        options.launch_after && std::process::Command::new(&main_binary).spawn().is_err();
 
     Ok(InstallReport {
         install_dir: target.display().to_string(),
         main_binary: main_binary.display().to_string(),
+        launch_failed,
     })
 }
 
@@ -392,7 +398,7 @@ fn create_shortcuts(main_binary: &std::path::Path, desktop: bool) -> Result<(), 
 }
 
 #[cfg(windows)]
-#[tauri::command]
+#[tauri::command(async)]
 fn run_uninstall(busy: tauri::State<'_, BusyState>) -> Result<(), String> {
     let _guard = BusyGuard::new(&busy.0);
     perform_uninstall()
@@ -419,6 +425,12 @@ fn perform_uninstall() -> Result<(), String> {
     let start_menu = start_menu_shortcut()?;
     let desktop = desktop_shortcut()?;
     let _ = std::fs::remove_file(&start_menu);
+    // The shortcut lives in its own "BetterFy" Start Menu folder; remove it
+    // too. `remove_dir` only succeeds on an empty folder, so anything else a
+    // user put there is left alone.
+    if let Some(folder) = start_menu.parent() {
+        let _ = std::fs::remove_dir(folder);
+    }
     let _ = std::fs::remove_file(&desktop);
 
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);

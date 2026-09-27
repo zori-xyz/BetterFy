@@ -3,10 +3,13 @@ const hasTauri = Boolean(tauri && tauri.core);
 const WEBVIEW2_DOWNLOAD_URL =
   "https://developer.microsoft.com/microsoft-edge/webview2#download-the-webview2-runtime";
 const HELP_URL = "https://t.me/BeterFyBot";
+const CHANNEL_URL = "https://t.me/iBetterFy";
 const FALLBACK_PATH = "%LOCALAPPDATA%\\BetterFy";
 
 const STRINGS = {
   ru: {
+    "side.join": "Вступай\nв наш\nTelegram",
+    "side.channel": "Открыть Telegram-канал BetterFy",
     "welcome.eyebrow": "BETTERFY · WINDOWS",
     "welcome.title": "Установка BetterFy",
     "welcome.titleUpdate": "Обновление BetterFy",
@@ -27,17 +30,18 @@ const STRINGS = {
     "confirmUninstall.confirm": "Да, удалить",
     "webview2.body": "Не найден Microsoft Edge WebView2 Runtime — без него BetterFy не запустится. Установите его с официальной страницы Microsoft и повторите установку.",
     "webview2.button": "Скачать WebView2",
-    "installing.eyebrow": "INSTALL",
+    "installing.eyebrow": "УСТАНОВКА",
     "installing.title": "Устанавливаем BetterFy",
     "installing.body": "Это займёт несколько секунд.",
     "installing.stepFiles": "Копируем файлы приложения",
     "installing.stepShortcuts": "Создаём ярлыки",
     "installing.stepRegistry": "Регистрируем в Windows",
-    "finish.eyebrow": "READY",
+    "finish.eyebrow": "ГОТОВО",
     "finish.title": "BetterFy установлен",
     "finish.body": "Приложение готово к запуску.",
     "finish.pathLabel": "Путь: ",
     "finish.done": "Готово",
+    "finish.launchFailed": "BetterFy установлен, но запустить его автоматически не удалось. Откройте приложение из меню «Пуск» или ярлыка.",
     "uninstalling.eyebrow": "УДАЛЕНИЕ",
     "uninstalling.title": "Удаляем BetterFy",
     "uninstalling.body": "Убираем ярлыки, запись в реестре и файлы приложения.",
@@ -60,6 +64,8 @@ const STRINGS = {
     "error.help": "Написать в поддержку",
   },
   en: {
+    "side.join": "Join\nOur\nTelegram",
+    "side.channel": "Open the BetterFy Telegram channel",
     "welcome.eyebrow": "BETTERFY · WINDOWS",
     "welcome.title": "Install BetterFy",
     "welcome.titleUpdate": "Update BetterFy",
@@ -91,6 +97,7 @@ const STRINGS = {
     "finish.body": "The app is ready to open.",
     "finish.pathLabel": "Path: ",
     "finish.done": "Finish",
+    "finish.launchFailed": "BetterFy is installed, but it could not be started automatically. Open it from the Start menu or a shortcut.",
     "uninstalling.eyebrow": "UNINSTALLING",
     "uninstalling.title": "Uninstalling BetterFy",
     "uninstalling.body": "Removing shortcuts, the registry entry, and app files.",
@@ -136,6 +143,7 @@ function applyTranslations() {
     el.textContent = t(key);
     children.forEach((child) => el.appendChild(child));
   });
+  document.getElementById("btn-channel").setAttribute("aria-label", t("side.channel"));
   document.querySelectorAll(".lang-switch button").forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.lang === lang);
   });
@@ -226,6 +234,14 @@ async function openWebview2Download() {
   }
 }
 
+async function openChannel() {
+  try {
+    await invoke("open_url", { url: CHANNEL_URL });
+  } catch (err) {
+    // Nothing more to do without a working bridge.
+  }
+}
+
 async function openHelp() {
   try {
     await invoke("open_url", { url: HELP_URL });
@@ -263,6 +279,7 @@ async function runInstall() {
     const report = await invoke("run_install", { options });
     markSteps(true);
     document.getElementById("finish-path").textContent = report.installDir;
+    document.getElementById("finish-launch-note").hidden = !report.launchFailed;
     showScreen("finish");
   } catch (err) {
     showInstallError(err);
@@ -313,6 +330,7 @@ document.getElementById("btn-uninstalled-reinstall").addEventListener("click", g
 document.getElementById("btn-close-error").addEventListener("click", closeWindow);
 document.getElementById("btn-error-retry").addEventListener("click", retryLastAction);
 document.getElementById("btn-error-help").addEventListener("click", openHelp);
+document.getElementById("btn-channel").addEventListener("click", openChannel);
 document.getElementById("btn-webview2").addEventListener("click", openWebview2Download);
 document.getElementById("btn-uninstall").addEventListener("click", askUninstallConfirmation);
 document.getElementById("btn-uninstall-cancel").addEventListener("click", () => showScreen("welcome"));

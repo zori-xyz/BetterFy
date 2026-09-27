@@ -10,8 +10,8 @@
     <div class="shell">
       <aside class="side">
         <div class="wordmark"><span class="better">Better</span><span class="fy">Fy</span></div>
-        <div class="join">Join<br />Our<br />Telegram</div>
-        <div class="qr"><img src="assets/telegram-qr.png" alt="" /></div>
+        <div class="join" data-i18n="side.join"></div>
+        <button type="button" class="qr" id="btn-channel"><img src="assets/telegram-qr.png" alt="" /></button>
       </aside>
 
       <main class="content">
@@ -57,7 +57,7 @@
           <p class="body" data-i18n="confirmUninstall.body"></p>
           <div class="actions">
             <button class="btn" id="btn-uninstall-cancel" data-i18n="confirmUninstall.cancel"></button>
-            <button class="btn btn-primary" id="btn-uninstall-confirm" data-i18n="confirmUninstall.confirm"></button>
+            <button class="btn btn-danger" id="btn-uninstall-confirm" data-i18n="confirmUninstall.confirm"></button>
           </div>
         </section>
 
@@ -77,6 +77,7 @@
           <h1 data-i18n="finish.title"></h1>
           <p class="body" data-i18n="finish.body"></p>
           <p class="body" data-i18n="finish.pathLabel"><span id="finish-path"></span></p>
+          <p class="body launch-note" id="finish-launch-note" data-i18n="finish.launchFailed" hidden></p>
           <div class="actions">
             <button class="btn btn-primary" id="btn-done" data-i18n="finish.done"></button>
           </div>

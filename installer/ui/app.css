@@ -10,6 +10,54 @@
   font-display: block;
 }
 
+@font-face {
+  font-family: "Manrope";
+  font-weight: 400;
+  src: url("assets/fonts/manrope-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Manrope";
+  font-weight: 400;
+  src: url("assets/fonts/manrope-cyrillic-400-normal.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Manrope";
+  font-weight: 600;
+  src: url("assets/fonts/manrope-latin-600-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Manrope";
+  font-weight: 600;
+  src: url("assets/fonts/manrope-cyrillic-600-normal.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Manrope";
+  font-weight: 700;
+  src: url("assets/fonts/manrope-latin-700-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Manrope";
+  font-weight: 700;
+  src: url("assets/fonts/manrope-cyrillic-700-normal.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+  font-display: swap;
+}
+
 :root {
   --accent: #b45cef;
   --accent-hover: #c778fa;
@@ -54,7 +102,7 @@ body {
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font: 400 13px/1.6 "Segoe UI", Arial, sans-serif;
+  font: 400 13px/1.6 Manrope, "Segoe UI", Arial, sans-serif;
 }
 
 .shell {
@@ -101,7 +149,8 @@ body {
   right: 0;
   bottom: 142px;
   text-align: center;
-  font: 800 27px/0.94 "Segoe UI", Arial, sans-serif;
+  font: 700 27px/0.94 Manrope, "Segoe UI", Arial, sans-serif;
+  white-space: pre-line;
   letter-spacing: -0.03em;
   background: linear-gradient(160deg, #ffffff 24%, #e4ccff 58%, #9d4dff 100%);
   -webkit-background-clip: text;
@@ -119,6 +168,18 @@ body {
   background: #000;
   border-radius: 8px;
   overflow: hidden;
+}
+
+button.qr {
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+button.qr:hover {
+  transform: translateX(-50%) scale(1.03);
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .qr img {
@@ -150,7 +211,7 @@ body {
   border: 0;
   background: transparent;
   color: var(--muted);
-  font: 700 10px/1 "Segoe UI", Arial, sans-serif;
+  font: 700 10px/1 Manrope, "Segoe UI", Arial, sans-serif;
   letter-spacing: 0.04em;
   cursor: pointer;
 }
@@ -340,7 +401,7 @@ code {
   border-radius: 6px;
   background: var(--panel);
   color: var(--text);
-  font: 600 12px/1 "Segoe UI", Arial, sans-serif;
+  font: 600 12px/1 Manrope, "Segoe UI", Arial, sans-serif;
   cursor: pointer;
 }
 
@@ -362,4 +423,19 @@ code {
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Destructive confirmation must not look like the default "continue" action. */
+.btn-danger {
+  border-color: var(--danger);
+  background: transparent;
+  color: var(--danger);
+}
+
+.btn-danger:hover {
+  background: rgba(255, 154, 148, 0.12);
+}
+
+.launch-note {
+  color: var(--text);
 }
