@@ -19,8 +19,10 @@ const MAIN_BINARY_NAME: &str = "betterfy.exe";
 const UNINSTALLER_NAME: &str = "uninstall.exe";
 const WEBSITE_URL: &str = "https://zori-xyz.github.io/BetterFy/";
 const HELP_URL: &str = "https://t.me/BeterFyBot";
-const WEBVIEW2_DOWNLOAD_URL: &str =
-    "https://developer.microsoft.com/microsoft-edge/webview2#download-the-webview2-runtime";
+// The WebView2 download URL itself lives in installer/ui/app.js, which is
+// the only place `open_url` needs it; `open_url` validates any https:// URL
+// generically rather than special-casing this one.
+//
 // The documented Microsoft Edge WebView2 Runtime identity, checked the way
 // Microsoft's own distribution guide checks it: a non-empty, non-zero `pv`
 // value under either registry hive. NSIS provisions this at install time for
