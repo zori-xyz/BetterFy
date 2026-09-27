@@ -137,6 +137,11 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
   !define MUI_WELCOMEFINISHPAGE_BITMAP "${SIDEBARIMAGE}"
 !endif
 
+; Dark theme for the surfaces Modern UI 2 colors natively: header, welcome and finish pages.
+!define MUI_BGCOLOR 0A0A0F
+!define MUI_TEXTCOLOR F7F5FB
+!define MUI_INSTFILESPAGE_COLORS "CFCBD8 111116"
+
 ; Enable header images for installer and uninstaller pages when either image is configured.
 !if "${HEADERIMAGE}" != ""
   !define MUI_HEADERIMAGE
@@ -433,10 +438,12 @@ Var BetterFyGithubButton
 Function BetterFyInstFilesShow
   FindWindow $0 "#32770" "" $HWNDPARENT
   GetDlgItem $1 $0 1004
-  SendMessage $1 ${PBM_SETBARCOLOR} 0 0x00F457CE
+  ; Visual styles ignore PBM_SETBARCOLOR, so the bar is detached from the theme first.
+  System::Call 'uxtheme::SetWindowTheme(p r1, w "", w "")'
+  SendMessage $1 ${PBM_SETBARCOLOR} 0 0x00EF5CB4
   SendMessage $1 ${PBM_SETBKCOLOR} 0 0x00E8E1EA
   GetDlgItem $1 $0 1016
-  SetCtlColors $1 0x514958 0xF8F6FA
+  SetCtlColors $1 0xCFCBD8 0x111116
 FunctionEnd
 
 Function BetterFyFinishShow

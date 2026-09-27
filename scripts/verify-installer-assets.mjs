@@ -37,6 +37,7 @@ const requiredTemplateContracts = [
   "https://github.com/zori-xyz",
   "Function BetterFyInstFilesShow",
   "Function BetterFyFinishShow",
+  "!define MUI_BGCOLOR 0A0A0F",
 ];
 
 for (const contract of requiredTemplateContracts) {
