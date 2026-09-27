@@ -198,11 +198,12 @@ be assumed to work; run every step.
 
 1. Uninstall any existing BetterFy install first (Settings → Apps, or the
    Windows 8 uninstall flow) so this starts from a clean machine.
-2. Run `BetterFy-Setup.exe`. Confirm the sidebar shows the real Telegram
-   banner image (not a placeholder), switch RU ↔ EN with the top-right toggle
-   and confirm every screen's text changes, and confirm **Cancel** actually
-   closes the window — this exact button silently did nothing in the first
-   real build until a missing capability grant was found and fixed.
+2. Run `BetterFy-Setup.exe`. Confirm the sidebar renders the wordmark,
+   "Join Our Telegram", and the QR (not broken/missing), switch RU ↔ EN with
+   the top-right toggle and confirm every screen's text changes, and confirm
+   **Cancel** actually closes the window — this exact button silently did
+   nothing in the first real build until a missing capability grant was
+   found and fixed.
 3. Confirm the install path reads `%LOCALAPPDATA%\BetterFy`, and — only if
    this machine genuinely lacks WebView2 — the WebView2 warning appears and
    its button opens Microsoft's official download page.
@@ -228,11 +229,17 @@ be assumed to work; run every step.
    `ROADMAP.md`: the updater silently reruns the NSIS installer, and it must
    recognize this installation as the one to replace.
 8. Uninstall BetterFy from the installer's own **Uninstall BetterFy** button
-   (not just Apps & Features). Confirm the Start Menu and Desktop shortcuts
-   and the registry entry are gone, and that BetterFy's own account/session
-   data under `%APPDATA%\app.betterfy.desktop\` is untouched. A leftover
+   (not just Apps & Features). Confirm clicking it shows a styled confirmation
+   screen (not a native OS dialog — an earlier build's native `confirm()` was
+   silently suppressed in this WebView2 environment, so the button appeared
+   to do nothing), and that **Cancel** on that screen returns to Update
+   without uninstalling. Confirm the Start Menu and Desktop shortcuts and the
+   registry entry are gone, and that BetterFy's own account/session data
+   under `%APPDATA%\app.betterfy.desktop\` is untouched. A leftover
    `uninstall.exe` in an otherwise-empty `%LOCALAPPDATA%\BetterFy` folder is
    a known, accepted gap — record it, do not treat it as a new finding.
+   Confirm **Install again** on this screen returns to a working, fresh
+   welcome screen (not the stale "Update" framing).
 9. Force an error deliberately (for example, rename `payload/` before
    building so `run_install` returns `payload_not_embedded`, or simply pull
    the network/deny a file permission) and confirm the error screen shows a

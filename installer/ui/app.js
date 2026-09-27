@@ -20,7 +20,11 @@ const STRINGS = {
     "welcome.update": "Обновить",
     "welcome.existingNotice": "Уже установлена версия {version}.",
     "welcome.uninstallLink": "Удалить BetterFy",
-    "welcome.confirmUninstall": "Удалить BetterFy? Приложение и ярлыки будут удалены. Аккаунт и настройки, сохранённые отдельно, не пострадают.",
+    "confirmUninstall.eyebrow": "УДАЛЕНИЕ",
+    "confirmUninstall.title": "Удалить BetterFy?",
+    "confirmUninstall.body": "Приложение и его ярлыки будут удалены. Аккаунт, сессии и настройки хранятся отдельно и не пострадают.",
+    "confirmUninstall.cancel": "Отмена",
+    "confirmUninstall.confirm": "Да, удалить",
     "webview2.body": "Не найден Microsoft Edge WebView2 Runtime — без него BetterFy не запустится. Установите его с официальной страницы Microsoft и повторите установку.",
     "webview2.button": "Скачать WebView2",
     "installing.eyebrow": "INSTALL",
@@ -41,6 +45,7 @@ const STRINGS = {
     "uninstalled.title": "BetterFy удалён",
     "uninstalled.body": "Приложение, ярлыки и запись в реестре удалены.",
     "uninstalled.done": "Закрыть",
+    "uninstalled.reinstall": "Установить заново",
     "error.eyebrow": "ОШИБКА",
     "error.title": "Не получилось",
     "error.body": "Что-то помешало завершить операцию. Можно попробовать ещё раз или написать в поддержку — код ниже пригодится.",
@@ -68,7 +73,11 @@ const STRINGS = {
     "welcome.update": "Update",
     "welcome.existingNotice": "Version {version} is already installed.",
     "welcome.uninstallLink": "Uninstall BetterFy",
-    "welcome.confirmUninstall": "Uninstall BetterFy? The app and its shortcuts will be removed. Your account and settings, stored separately, are not affected.",
+    "confirmUninstall.eyebrow": "UNINSTALL",
+    "confirmUninstall.title": "Uninstall BetterFy?",
+    "confirmUninstall.body": "The app and its shortcuts will be removed. Your account, sessions and settings are stored separately and are not affected.",
+    "confirmUninstall.cancel": "Cancel",
+    "confirmUninstall.confirm": "Yes, uninstall",
     "webview2.body": "Microsoft Edge WebView2 Runtime was not found — BetterFy will not start without it. Install it from Microsoft's official page and run this installer again.",
     "webview2.button": "Download WebView2",
     "installing.eyebrow": "INSTALL",
@@ -89,6 +98,7 @@ const STRINGS = {
     "uninstalled.title": "BetterFy is uninstalled",
     "uninstalled.body": "The app, its shortcuts, and the registry entry have been removed.",
     "uninstalled.done": "Close",
+    "uninstalled.reinstall": "Install again",
     "error.eyebrow": "ERROR",
     "error.title": "That didn't work",
     "error.body": "Something stopped this from finishing. You can try again, or contact support — the code below will help.",
@@ -259,10 +269,11 @@ async function runInstall() {
   }
 }
 
+function askUninstallConfirmation() {
+  showScreen("confirm-uninstall");
+}
+
 async function runUninstall() {
-  if (!window.confirm(t("welcome.confirmUninstall"))) {
-    return;
-  }
   lastAction = "uninstall";
   showScreen("uninstalling");
   try {
@@ -271,6 +282,16 @@ async function runUninstall() {
   } catch (err) {
     showInstallError(err);
   }
+}
+
+async function goToReinstall() {
+  try {
+    existing = hasTauri ? await invoke("existing_install") : null;
+  } catch (err) {
+    existing = null;
+  }
+  updateWelcomeForExistingInstall();
+  showScreen("welcome");
 }
 
 function retryLastAction() {
@@ -288,10 +309,13 @@ document.getElementById("btn-cancel").addEventListener("click", closeWindow);
 document.getElementById("btn-install").addEventListener("click", runInstall);
 document.getElementById("btn-done").addEventListener("click", closeWindow);
 document.getElementById("btn-uninstalled-done").addEventListener("click", closeWindow);
+document.getElementById("btn-uninstalled-reinstall").addEventListener("click", goToReinstall);
 document.getElementById("btn-close-error").addEventListener("click", closeWindow);
 document.getElementById("btn-error-retry").addEventListener("click", retryLastAction);
 document.getElementById("btn-error-help").addEventListener("click", openHelp);
 document.getElementById("btn-webview2").addEventListener("click", openWebview2Download);
-document.getElementById("btn-uninstall").addEventListener("click", runUninstall);
+document.getElementById("btn-uninstall").addEventListener("click", askUninstallConfirmation);
+document.getElementById("btn-uninstall-cancel").addEventListener("click", () => showScreen("welcome"));
+document.getElementById("btn-uninstall-confirm").addEventListener("click", runUninstall);
 
 init();

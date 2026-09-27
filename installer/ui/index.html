@@ -9,7 +9,9 @@
   <body>
     <div class="shell">
       <aside class="side">
-        <img class="side-banner" src="assets/telegram-sidebar-banner.jpg" alt="" />
+        <div class="wordmark"><span class="better">Better</span><span class="fy">Fy</span></div>
+        <div class="join">Join<br />Our<br />Telegram</div>
+        <div class="qr"><img src="assets/telegram-qr.png" alt="" /></div>
       </aside>
 
       <main class="content">
@@ -49,6 +51,16 @@
           </div>
         </section>
 
+        <section class="screen" data-screen="confirm-uninstall" hidden>
+          <p class="eyebrow error-eyebrow" data-i18n="confirmUninstall.eyebrow"></p>
+          <h1 data-i18n="confirmUninstall.title"></h1>
+          <p class="body" data-i18n="confirmUninstall.body"></p>
+          <div class="actions">
+            <button class="btn" id="btn-uninstall-cancel" data-i18n="confirmUninstall.cancel"></button>
+            <button class="btn btn-primary" id="btn-uninstall-confirm" data-i18n="confirmUninstall.confirm"></button>
+          </div>
+        </section>
+
         <section class="screen" data-screen="installing" hidden>
           <p class="eyebrow" data-i18n="installing.eyebrow"></p>
           <h1 data-i18n="installing.title"></h1>
@@ -81,7 +93,8 @@
           <h1 data-i18n="uninstalled.title"></h1>
           <p class="body" data-i18n="uninstalled.body"></p>
           <div class="actions">
-            <button class="btn btn-primary" id="btn-uninstalled-done" data-i18n="uninstalled.done"></button>
+            <button class="btn" id="btn-uninstalled-done" data-i18n="uninstalled.done"></button>
+            <button class="btn btn-primary" id="btn-uninstalled-reinstall" data-i18n="uninstalled.reinstall"></button>
           </div>
         </section>
 

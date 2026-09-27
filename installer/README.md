@@ -26,15 +26,19 @@ browser.
 
 Implemented:
 
-- a seven-screen UI (welcome, installing, finish, uninstalling, uninstalled,
-  error, plus an inline WebView2 warning) in the BetterFy dark theme, in
-  Russian and English with a visible switcher; the sidebar uses the same
-  approved Telegram banner image as the reference design, not a
-  separately-authored CSS reproduction of it;
+- an eight-screen UI (welcome, confirm-uninstall, installing, finish,
+  uninstalling, uninstalled, error, plus an inline WebView2 warning) in the
+  BetterFy dark theme, in Russian and English with a visible switcher; the
+  sidebar is a live CSS/HTML build of the reference design (wordmark, the
+  "Join Our Telegram" gradient text positioned near the QR, per direct
+  founder feedback on where it should sit) rather than a static export of it;
 - detects an existing installation (binary present on disk, version read
   from the registry) and switches the welcome screen to an Update framing,
   offering an in-app Uninstall button next to it — reachable without going
-  through Windows' own Apps & Features;
+  through Windows' own Apps & Features; confirming goes to a real, styled
+  screen rather than a native `confirm()` dialog (see "Why there is no
+  `window.confirm()` anywhere" below), and the uninstalled screen offers an
+  "Install again" button back to a fresh welcome screen;
 - `run_install` refuses to overwrite a running `betterfy.exe` (detected via
   an open-for-write probe, not process enumeration) and reports
   `app_running` rather than failing into a half-overwritten install;
@@ -91,6 +95,18 @@ without opening the webview's devtools the window just looks unresponsive.
 `src-tauri/capabilities/default.json` grants exactly `core:window:allow-close`
 to the `main` window (which the window config now labels explicitly, rather
 than relying on Tauri's default label matching); nothing broader.
+
+## Why there is no `window.confirm()` anywhere
+
+An early build asked "Uninstall BetterFy?" via the browser's native
+`confirm()`. In the actual WebView2 environment this runs in, that dialog was
+silently answered `false` with no dialog ever shown, so clicking Uninstall
+did nothing visible at all — a category of embedded-browser dialog
+suppression later reproduced directly during preview testing, confirming the
+mechanism rather than just guessing at it. Confirmation is now its own
+screen (`confirm-uninstall`), styled and worded like the rest of the app,
+with explicit Yes/Cancel buttons wired to real click handlers, not a native
+dialog whose availability this installer cannot rely on.
 
 ## Why the exact paths matter
 

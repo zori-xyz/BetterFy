@@ -151,8 +151,13 @@ but not yet run as an installer by a person on Windows:
   instead of an indeterminate looping progress bar; `prefers-reduced-motion`
   honored; error screens with a plain-language explanation plus Retry and
   Contact-support actions, not just a raw code;
-- the sidebar uses the same approved Telegram banner image as the reference
-  design, not a separate CSS reproduction of it;
+- the sidebar is a live CSS/HTML build of the reference design, with the
+  "Join Our Telegram" text positioned near the QR per direct founder
+  feedback on an earlier draft;
+- confirming Uninstall uses a real, styled screen rather than the browser's
+  native `confirm()`, after that dialog was found to be silently suppressed
+  in this app's actual WebView2 environment — clicking Uninstall did nothing
+  visible at all, which is exactly what a founder test run reported;
 - a Microsoft-documented WebView2 Runtime presence check that points a user at
   Microsoft's official download page when missing, rather than fetching and
   running a binary itself;
