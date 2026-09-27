@@ -57,6 +57,9 @@ jobs:
       - name: Lint installer
         run: cargo clippy --locked --manifest-path installer/src-tauri/Cargo.toml -- -D warnings
 
+      - name: Test installer
+        run: cargo test --locked --manifest-path installer/src-tauri/Cargo.toml
+
       - name: Install installer dependencies
         working-directory: installer
         run: npm ci

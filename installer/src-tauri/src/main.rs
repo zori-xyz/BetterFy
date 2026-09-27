@@ -3,6 +3,7 @@
 use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use tauri::Manager;
 
 #[derive(RustEmbed)]
 #[folder = "payload"]
@@ -40,6 +41,34 @@ const WEBVIEW2_CLIENT_KEY: &str =
 // source, not assumed: see `installer/README.md`.
 const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\BetterFy";
 
+// Backs the window's CloseRequested handler: while true, the OS title bar's
+// own close button is refused, so a person cannot close the window mid-write
+// and leave the install directory in whatever state the swap/registry/
+// shortcut sequence happened to be in. Commands hold this only around their
+// actual commit phase, not for the whole command (network-free file and
+// registry operations are fast; there is no reason to block close any longer
+// than that).
+struct BusyState(std::sync::Mutex<bool>);
+
+struct BusyGuard<'a>(&'a std::sync::Mutex<bool>);
+
+impl<'a> BusyGuard<'a> {
+    fn new(flag: &'a std::sync::Mutex<bool>) -> Self {
+        if let Ok(mut guard) = flag.lock() {
+            *guard = true;
+        }
+        BusyGuard(flag)
+    }
+}
+
+impl Drop for BusyGuard<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut guard) = self.0.lock() {
+            *guard = false;
+        }
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct InstallOptions {
@@ -63,6 +92,37 @@ fn install_dir() -> Result<PathBuf, String> {
 #[tauri::command]
 fn default_install_dir() -> Result<String, String> {
     install_dir().map(|p| p.display().to_string())
+}
+
+// Runs `finish` (registering the uninstaller, registry entry, and shortcuts)
+// and, if it fails after an update, restores `main_binary` from
+// `backup_binary` before returning the original error, rather than leaving
+// an install that is neither the old working version nor a registered new
+// one. On success the backup is removed. `backup_binary` existing is what
+// distinguishes an update from a fresh install (see `run_install`, which
+// only creates it when there was something to back up). Deliberately plain
+// std::fs plus a generic closure — no Windows-only API — so this is testable
+// without a Windows machine; see the tests below.
+fn commit_or_rollback(
+    backup_binary: &std::path::Path,
+    main_binary: &std::path::Path,
+    finish: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let is_update = backup_binary.exists();
+    match finish() {
+        Ok(()) => {
+            if is_update {
+                let _ = std::fs::remove_file(backup_binary);
+            }
+            Ok(())
+        }
+        Err(err) => {
+            if is_update {
+                let _ = std::fs::rename(backup_binary, main_binary);
+            }
+            Err(err)
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -139,10 +199,14 @@ fn check_webview2() -> bool {
 // empty directory) matches the rest of this repository's engine commands.
 #[cfg(windows)]
 #[tauri::command]
-fn run_install(options: InstallOptions) -> Result<InstallReport, String> {
+fn run_install(
+    options: InstallOptions,
+    busy: tauri::State<'_, BusyState>,
+) -> Result<InstallReport, String> {
     if Payload::iter().next().is_none() {
         return Err("payload_not_embedded".to_string());
     }
+    let _guard = BusyGuard::new(&busy.0);
 
     let target = install_dir()?;
     std::fs::create_dir_all(&target).map_err(|_| "install_dir_failed".to_string())?;
@@ -151,11 +215,23 @@ fn run_install(options: InstallOptions) -> Result<InstallReport, String> {
     // open, locked executable. Detected the same way Windows itself reports
     // it — a sharing-violation on open — rather than enumerating processes.
     let existing_binary = target.join(MAIN_BINARY_NAME);
-    if existing_binary.is_file() {
+    let is_update = existing_binary.is_file();
+    if is_update {
         std::fs::OpenOptions::new()
             .write(true)
             .open(&existing_binary)
             .map_err(|_| "app_running".to_string())?;
+    }
+
+    // Keep the previous binary around until every later step (uninstaller
+    // stub, registry, shortcuts) has actually succeeded. The payload rename
+    // below is already safe on its own; this covers the remaining gap where
+    // an update could swap in a new exe and then fail to register it,
+    // leaving neither a clean old install nor a working new one.
+    let backup_binary = target.join(format!("{MAIN_BINARY_NAME}.bak"));
+    if is_update {
+        std::fs::copy(&existing_binary, &backup_binary)
+            .map_err(|_| "install_dir_failed".to_string())?;
     }
 
     // Two-phase write: stage every payload file under a sibling `.new` name
@@ -197,9 +273,12 @@ fn run_install(options: InstallOptions) -> Result<InstallReport, String> {
     }
 
     let main_binary = target.join(MAIN_BINARY_NAME);
-    install_uninstaller(&target)?;
-    write_uninstall_registry(&target, &main_binary, installed_bytes)?;
-    create_shortcuts(&main_binary, options.create_desktop_shortcut)?;
+    commit_or_rollback(&backup_binary, &main_binary, || {
+        install_uninstaller(&target)?;
+        write_uninstall_registry(&target, &main_binary, installed_bytes)?;
+        create_shortcuts(&main_binary, options.create_desktop_shortcut)?;
+        Ok(())
+    })?;
 
     if options.launch_after {
         std::process::Command::new(&main_binary)
@@ -314,7 +393,8 @@ fn create_shortcuts(main_binary: &std::path::Path, desktop: bool) -> Result<(), 
 
 #[cfg(windows)]
 #[tauri::command]
-fn run_uninstall() -> Result<(), String> {
+fn run_uninstall(busy: tauri::State<'_, BusyState>) -> Result<(), String> {
+    let _guard = BusyGuard::new(&busy.0);
     perform_uninstall()
 }
 
@@ -366,13 +446,14 @@ fn perform_uninstall() -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(windows)]
-fn remove_dir_all_except_self(target: &std::path::Path) -> Result<(), String> {
-    let current = std::env::current_exe().map_err(|_| "uninstall_failed".to_string())?;
+// Plain std::fs, no Windows-only API, parametrized on the path to keep
+// rather than reading `std::env::current_exe()` itself — so this is testable
+// directly; see the tests below.
+fn remove_dir_all_except(target: &std::path::Path, keep: &std::path::Path) -> Result<(), String> {
     for entry in std::fs::read_dir(target).map_err(|_| "uninstall_failed".to_string())? {
         let entry = entry.map_err(|_| "uninstall_failed".to_string())?;
         let path = entry.path();
-        if path == current {
+        if path == keep {
             continue;
         }
         if path.is_dir() {
@@ -382,6 +463,12 @@ fn remove_dir_all_except_self(target: &std::path::Path) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(windows)]
+fn remove_dir_all_except_self(target: &std::path::Path) -> Result<(), String> {
+    let current = std::env::current_exe().map_err(|_| "uninstall_failed".to_string())?;
+    remove_dir_all_except(target, &current)
 }
 
 #[cfg(not(windows))]
@@ -431,6 +518,16 @@ fn open_url(_url: String) -> Result<(), String> {
 
 fn run_app() {
     tauri::Builder::default()
+        .manage(BusyState(std::sync::Mutex::new(false)))
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let busy = window.app_handle().state::<BusyState>();
+                let is_busy = busy.0.lock().map(|guard| *guard).unwrap_or(false);
+                if is_busy {
+                    api.prevent_close();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             default_install_dir,
             existing_install,
@@ -441,4 +538,86 @@ fn run_app() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running the BetterFy installer");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn scratch_dir(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("betterfy-installer-test-{label}"));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn commit_or_rollback_leaves_a_fresh_install_alone_on_failure() {
+        let dir = scratch_dir("fresh-install");
+        let backup = dir.join("betterfy.exe.bak");
+        let main_binary = dir.join("betterfy.exe");
+        fs::write(&main_binary, b"new build").unwrap();
+
+        // No backup exists, so this is a fresh install, not an update: there
+        // is nothing to roll back to, and the binary that was just written
+        // must be left exactly as it is.
+        let result = commit_or_rollback(&backup, &main_binary, || Err("boom".to_string()));
+
+        assert_eq!(result, Err("boom".to_string()));
+        assert_eq!(fs::read(&main_binary).unwrap(), b"new build");
+    }
+
+    #[test]
+    fn commit_or_rollback_restores_the_previous_binary_on_failure() {
+        let dir = scratch_dir("rollback-on-failure");
+        let backup = dir.join("betterfy.exe.bak");
+        let main_binary = dir.join("betterfy.exe");
+        fs::write(&backup, b"old build").unwrap();
+        fs::write(&main_binary, b"new build").unwrap();
+
+        let result = commit_or_rollback(&backup, &main_binary, || {
+            Err("registry_write_failed".to_string())
+        });
+
+        assert_eq!(result, Err("registry_write_failed".to_string()));
+        assert_eq!(fs::read(&main_binary).unwrap(), b"old build");
+        assert!(
+            !backup.exists(),
+            "the backup should be consumed by the restore"
+        );
+    }
+
+    #[test]
+    fn commit_or_rollback_removes_the_backup_on_success() {
+        let dir = scratch_dir("commit-on-success");
+        let backup = dir.join("betterfy.exe.bak");
+        let main_binary = dir.join("betterfy.exe");
+        fs::write(&backup, b"old build").unwrap();
+        fs::write(&main_binary, b"new build").unwrap();
+
+        let result = commit_or_rollback(&backup, &main_binary, || Ok(()));
+
+        assert_eq!(result, Ok(()));
+        assert_eq!(fs::read(&main_binary).unwrap(), b"new build");
+        assert!(!backup.exists());
+    }
+
+    #[test]
+    fn remove_dir_all_except_keeps_only_the_named_path() {
+        let dir = scratch_dir("remove-except");
+        let keep = dir.join("uninstall.exe");
+        let other_file = dir.join("betterfy.exe");
+        let other_dir = dir.join("some-subdir");
+        fs::write(&keep, b"keep me").unwrap();
+        fs::write(&other_file, b"delete me").unwrap();
+        fs::create_dir_all(&other_dir).unwrap();
+        fs::write(other_dir.join("nested.txt"), b"delete me too").unwrap();
+
+        remove_dir_all_except(&dir, &keep).unwrap();
+
+        assert!(keep.exists());
+        assert!(!other_file.exists());
+        assert!(!other_dir.exists());
+    }
 }

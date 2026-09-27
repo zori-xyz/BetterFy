@@ -62,6 +62,9 @@ jobs:
       - name: Lint installer
         run: cargo clippy --locked --manifest-path installer/src-tauri/Cargo.toml -- -D warnings
 
+      - name: Test installer
+        run: cargo test --locked --manifest-path installer/src-tauri/Cargo.toml
+
       # NSIS remains the updater's own artifact format: the signed
       # tauri-plugin-updater config expects a `.nsis.zip`/`.sig` pair, and it
       # runs this exact installer, in passive mode, to apply updates. This
@@ -116,5 +119,5 @@ jobs:
             --repo "${{ github.repository }}" `
             --target "${{ github.sha }}" `
             --title "$env:RELEASE_TITLE" `
-            --notes "Unsigned Early Access installer for Windows testing. BetterFy Setup replaces the NSIS wizard as the user-facing installer; the NSIS artifact remains internal to the signed auto-updater. Windows may show an unknown publisher warning. Live Dota deployment is limited to the pinned internal pilot packages documented in the repository. This build has not yet had its own native Windows verification pass; see installer/README.md." `
+            --notes "Unsigned Early Access installer for Windows testing. BetterFy Setup replaces the NSIS wizard as the user-facing installer; the NSIS artifact remains internal to the signed auto-updater. Windows may show an unknown publisher warning. Live Dota deployment is limited to the pinned internal pilot packages documented in the repository. EA.18 is the retained founder-verified Windows baseline; a newer artifact is not automatically human-verified when installer behavior changes. See docs/EA18_WINDOWS_BASELINE.md and installer/README.md." `
             --prerelease
