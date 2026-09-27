@@ -40,15 +40,19 @@ Implemented:
   Microsoft's own distribution guide documents, surfaced as a warning with a
   link to Microsoft's official download page — this installer does not fetch
   or run an external binary itself;
-- `cargo fmt` / `cargo clippy` clean both natively (macOS, where Windows-only
-  code compiles to a `windows_only` stub) and cross-checked against the real
-  `x86_64-pc-windows-msvc` target (`rustup target add` + `cargo check
-  --target x86_64-pc-windows-msvc`); the dependency graph — including
-  `winreg` and `mslnk` — type-checks against that target. The crate's own
-  `cargo check --target x86_64-pc-windows-msvc` could not finish locally
-  because this Mac has no Windows resource compiler (`llvm-rc`) for the icon
-  embedding step; that step only exists on Windows anyway, so the real gate
-  is CI's `windows-latest` runner, not this machine.
+- `cargo fmt` / `cargo clippy` clean on macOS (where Windows-only code
+  compiles to a `windows_only` stub), and confirmed on a real
+  `windows-latest` GitHub Actions runner via `windows-build.yml`: `cargo
+  clippy -- -D warnings` and `npx tauri build --debug` both succeed there.
+  That real run is also what caught two mistakes this section used to gloss
+  over — a genuinely dead `WEBVIEW2_DOWNLOAD_URL` constant, and a hard
+  `tauri build` failure (not just a warning, as `tauri dev` suggested) from
+  the Rust `tauri` crate's minor version not matching the root project's
+  older-pinned `@tauri-apps/api`, fixed by giving this directory its own
+  `package.json`. This Mac has no Windows resource compiler (`llvm-rc`), so a
+  full local cross-build for the icon-embedding step still isn't possible
+  here — CI's Windows runner remains the actual gate, and it now passes
+  through the build step, though not yet an actual install/run.
 
 ## Why the exact paths matter
 
@@ -103,8 +107,15 @@ this table wrong again and it will happen silently, not as a build error.
 
 ## Run it locally
 
+This directory has its own `package.json`, pinning `@tauri-apps/api` and
+`@tauri-apps/cli` to match the Rust `tauri` crate version. Without it,
+`tauri build` (though not `tauri dev`) fails hard on a version-mismatch check
+against the root project's own, older-pinned `@tauri-apps/api` — the exact
+failure a real Windows CI run caught before this was added.
+
 ```bash
 cd installer
+npm install
 npx tauri dev
 ```
 

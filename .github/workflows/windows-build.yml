@@ -57,6 +57,10 @@ jobs:
       - name: Lint installer
         run: cargo clippy --locked --manifest-path installer/src-tauri/Cargo.toml -- -D warnings
 
+      - name: Install installer dependencies
+        working-directory: installer
+        run: npm ci
+
       - name: Build installer (empty payload; verifies the Rust code compiles on Windows)
         working-directory: installer
         run: npx tauri build --debug

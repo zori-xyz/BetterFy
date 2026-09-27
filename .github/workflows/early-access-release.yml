@@ -78,6 +78,10 @@ jobs:
           $binary = Get-ChildItem "src-tauri/target/release/betterfy.exe" -ErrorAction Stop
           Copy-Item $binary.FullName "installer/src-tauri/payload/betterfy.exe"
 
+      - name: Install installer dependencies
+        working-directory: installer
+        run: npm ci
+
       - name: Build BetterFy Setup (the branded installer)
         working-directory: installer
         run: npx tauri build
