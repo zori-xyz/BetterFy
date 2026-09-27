@@ -6,6 +6,24 @@ export const DESKTOP_SESSION_TTL_SECONDS = 15 * 60;
 export const REFRESH_FAMILY_TTL_SECONDS = 30 * 24 * 60 * 60;
 export const DEVICE_CHALLENGE_TTL_SECONDS = 10 * 60;
 
+// One IPv6 subscriber usually controls a whole /64, so a per-address bucket
+// would give a single attacker billions of independent rate limits.
+export function rateLimitSubject(address) {
+  if (typeof address !== "string" || address.length === 0 || address.length > 64) return "unknown";
+  if (!address.includes(":")) return address;
+  if (address.includes(".")) return address.slice(address.lastIndexOf(":") + 1);
+  const [head, tail = ""] = address.toLowerCase().split("::");
+  const left = head ? head.split(":") : [];
+  const right = tail ? tail.split(":") : [];
+  if (address.includes("::")) {
+    const missing = 8 - left.length - right.length;
+    if (missing < 0) return "unknown";
+    left.push(...Array(missing).fill("0"), ...right);
+  }
+  if (left.length !== 8 || left.some((group) => !/^[0-9a-f]{1,4}$/.test(group))) return "unknown";
+  return `${left.slice(0, 4).map((group) => group.replace(/^0+(?=.)/, "")).join(":")}::/64`;
+}
+
 export function normalizeDeviceId(value) {
   return typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value) ? value : null;
 }

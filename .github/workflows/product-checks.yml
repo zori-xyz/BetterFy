@@ -36,5 +36,7 @@ jobs:
         run: npm run site:build
       - name: Check website journeys
         run: npm run site:check:ci
+      - name: Install auth worker dependencies
+        run: npm ci --prefix services/auth-worker
       - name: Test auth worker
         run: npm run bot:test
