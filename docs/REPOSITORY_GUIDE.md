@@ -51,6 +51,7 @@ add generated signatures, assistant credits, or promotional filler.
 
 | Path | Responsibility |
 | --- | --- |
+| `brand/` | founder-approved compact identity masters and reproducible GitHub presentation assets |
 | `src/` | React views, state, localization, visual components, and the typed Tauri bridge |
 | `src-tauri/src/` | privileged filesystem, process, Steam, Dota, preset, and transaction logic |
 | `src-tauri/fixtures/` | safe inputs for deterministic engine and recovery tests |

@@ -97,7 +97,7 @@ function markBounds(png) {
     }
   }
 
-  if (maxX < minX || maxY < minY) throw new Error("No readable BetterFy mark found");
+  if (maxX < minX || maxY < minY) throw new Error("No readable BetterFy symbol found");
   return {
     widthRatio: (maxX - minX + 1) / png.width,
     heightRatio: (maxY - minY + 1) / png.height,
@@ -109,11 +109,11 @@ const compact = decodePng(await readFile(resolve(root, "src-tauri/icons/32x32.pn
 const sourceBounds = markBounds(source);
 const compactBounds = markBounds(compact);
 
-if (sourceBounds.widthRatio < 0.72 || sourceBounds.heightRatio < 0.18) {
-  throw new Error(`Source wordmark is too small: ${JSON.stringify(sourceBounds)}`);
+if (sourceBounds.widthRatio < 0.48 || sourceBounds.heightRatio < 0.5) {
+  throw new Error(`Source symbol is too small: ${JSON.stringify(sourceBounds)}`);
 }
-if (compactBounds.widthRatio < 0.65 || compactBounds.heightRatio < 0.16) {
-  throw new Error(`32px wordmark is too small: ${JSON.stringify(compactBounds)}`);
+if (compactBounds.widthRatio < 0.45 || compactBounds.heightRatio < 0.47) {
+  throw new Error(`32px symbol is too small: ${JSON.stringify(compactBounds)}`);
 }
 
 const ico = await readFile(resolve(root, "src-tauri/icons/icon.ico"));
@@ -129,6 +129,6 @@ for (const requiredSize of [16, 24, 32, 48, 64, 256]) {
 }
 
 console.log(
-  `BetterFy Windows icon verified: source ${(sourceBounds.widthRatio * 100).toFixed(1)}%, ` +
+  `BetterFy Windows symbol verified: source ${(sourceBounds.widthRatio * 100).toFixed(1)}%, ` +
   `32px ${(compactBounds.widthRatio * 100).toFixed(1)}%, ICO ${[...sizes].sort((a, b) => a - b).join("/")}px`,
 );

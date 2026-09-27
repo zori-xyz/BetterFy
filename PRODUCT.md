@@ -49,9 +49,11 @@ BetterFy turns fragmented community content into one curated, understandable, an
 ## Brand Commitments
 
 - Product name: BetterFy.
-- The BetterFy logo is the text wordmark: `Days One` for “Better” and
-  handwritten `Mrs Sheppards` for “Fy”. The archived three-capsule exploration
-  is not a BetterFy logo and must not appear as product identity.
+- BetterFy has two approved brand assets. The text wordmark uses `Days One` for
+  “Better” and handwritten `Mrs Sheppards` for “Fy”; it remains the in-product
+  identity. The founder-approved `B` symbol is reserved for compact platform
+  surfaces: the application icon, Telegram identities, repository avatar and
+  social preview. The archived three-capsule exploration is not a BetterFy logo.
 - The brand is dark, premium, energetic, and precise without becoming a monochrome purple interface.
 - Violet is the identity color, not the only interface color.
 - The product voice is direct, friendly, author-led, and available in Russian and English.

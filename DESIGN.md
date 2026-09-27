@@ -46,9 +46,12 @@ This document is the durable visual authority for BetterFy. Read
 - The BetterFy wordmark uses `Days One` for “Better” and `Mrs Sheppards` for
   “Fy”. Keep “Fy” in its handwritten form, magenta-violet, slightly lifted and
   optically joined to “Better”; never typeset the whole name in the body font.
-- The wordmark is the BetterFy logo on boot, authentication, onboarding, the
-  persistent top bar, and community surfaces. The archived three-capsule
-  exploration is not product identity and must not return to new surfaces.
+- The wordmark remains the identity on boot, authentication, onboarding and the
+  persistent application shell. The founder-approved `B` symbol is the compact
+  identity for application/package icons, Telegram avatars and GitHub. Do not
+  insert that symbol into application screens until a separate screen-level
+  decision is approved. The archived three-capsule exploration is not product
+  identity and must not return to new surfaces.
 - Violet is the brand atmosphere and may own large fields. It is not a status
   color. Lime means verified ready, selected, or confirmed. Coral means
   conflict, failure, or destructive action. Telegram blue is reserved for the
@@ -213,6 +216,9 @@ design-system decision.
 
 | Asset | Role | Medium |
 | --- | --- | --- |
+| `brand/betterfy-symbol-dark.jpg` | Canonical compact identity for the Telegram bot, application icon and GitHub | Founder-authored and founder-approved; release-ready |
+| `brand/betterfy-symbol-light.jpg` | Canonical compact identity for the Telegram channel and community chat | Founder-authored and founder-approved; release-ready |
+| `brand/betterfy-symbol-dark-on-light.jpg` | Alternate dark tile on a light safety field | Founder-authored and founder-approved; auxiliary export, not the default |
 | `src/BetterFyMark.tsx` | Archived three-capsule exploration; not rendered as BetterFy identity | Semantic SVG |
 | `src/BetterFyWordmark.tsx` | Canonical Better/Fy typography | Semantic HTML + vendored fonts |
 | `src/assets/scenes/betterfy-access-ribbon-v1.jpg` | Boot background with the violet BetterFy ribbon | Founder-supplied and founder-approved prototype background; currently rendered, release status requires the founder's source/provenance confirmation |
@@ -239,7 +245,7 @@ design-system decision.
 | `website/public/poster-wardrobe.webp` / `poster-wardrobe-ru-dark.webp` / `poster-wardrobe-en-light.webp` / `poster-wardrobe-en-dark.webp` | Website Wardrobe product scene across language and surface variants | Founder-authored BetterFy website composition; approved for the prototype direction, but embedded Dota-derived imagery remains prohibited from release pending redistribution review |
 | `website/public/og.webp` | Website social preview | Founder-authored BetterFy website composition; prototype-only because it includes the same Dota-derived scene used by the website |
 | `website/public/betterfy-icon.webp` | Website touch icon | BetterFy-only branded raster; release-ready once the final brand-icon decision is approved |
-| `src-tauri/icons/icon.svg` | Temporary application-icon master | Black BetterFy wordmark placeholder; replace with the final brand icon before release |
+| `src-tauri/icons/icon-source.png` | Canonical application-icon master generated from the approved dark `B` symbol | Founder-authored and founder-approved; release-ready |
 | `src-tauri/windows/installer/sidebar.bmp` | NSIS welcome/finish brand panel | Newly authored BetterFy-only wordmark/signature art; release-ready |
 | `src-tauri/windows/installer/header.bmp` | NSIS install/uninstall page banner | Newly authored BetterFy-only installer art; release-ready |
 | Lucide icons | Controls and status cues | Existing icon library |
