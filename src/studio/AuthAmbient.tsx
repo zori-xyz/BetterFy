@@ -29,7 +29,10 @@ export default function AuthAmbient() {
     let pointerY = 0;
     let active = false;
 
-    const shouldAnimate = () => !motion.matches && !document.documentElement.classList.contains("motion-disabled") && !document.hidden;
+    const shouldAnimate = () =>
+      !motion.matches &&
+      !document.documentElement.classList.contains("motion-disabled") &&
+      !document.hidden;
     const paint = (time: number) => {
       context.clearRect(0, 0, width, height);
       const moving = shouldAnimate();
@@ -41,7 +44,10 @@ export default function AuthAmbient() {
       const light = document.documentElement.dataset.theme === "light";
       for (const speck of specks) {
         const x = speck.x * width + driftX * speck.depth * 19;
-        const y = ((speck.y * height + seconds * (2.5 + speck.depth * 4)) % (height + 20)) - 10 + driftY * speck.depth * 13;
+        const y =
+          ((speck.y * height + seconds * (2.5 + speck.depth * 4)) % (height + 20)) -
+          10 +
+          driftY * speck.depth * 13;
         const alpha = (light ? 0.16 : 0.19) + (Math.sin(seconds * 0.7 + speck.phase) + 1) * 0.055;
         context.fillStyle = light ? `rgba(78, 38, 103, ${alpha})` : `rgba(217, 187, 239, ${alpha})`;
         context.beginPath();
@@ -78,13 +84,16 @@ export default function AuthAmbient() {
     };
     const onPointer = (event: PointerEvent) => {
       if (event.pointerType === "touch") return;
-      pointerX = event.clientX / Math.max(window.innerWidth, 1) * 2 - 1;
-      pointerY = event.clientY / Math.max(window.innerHeight, 1) * 2 - 1;
+      pointerX = (event.clientX / Math.max(window.innerWidth, 1)) * 2 - 1;
+      pointerY = (event.clientY / Math.max(window.innerHeight, 1)) * 2 - 1;
     };
     const observer = new ResizeObserver(resize);
     const classObserver = new MutationObserver(sync);
     observer.observe(host);
-    classObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme"] });
+    classObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "data-theme"],
+    });
     window.addEventListener("pointermove", onPointer, { passive: true });
     document.addEventListener("visibilitychange", sync);
     motion.addEventListener("change", sync);

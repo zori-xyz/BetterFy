@@ -20,13 +20,20 @@ export function deliveryLabel(status: "pilot" | "preview", language: Language) {
 }
 
 export function isPilotSelection(ids: string[]) {
-  return ids.length > 0 && ids.length <= pilotModIds.size && new Set(ids).size === ids.length && ids.every(isPilotMod);
+  return (
+    ids.length > 0 &&
+    ids.length <= pilotModIds.size &&
+    new Set(ids).size === ids.length &&
+    ids.every(isPilotMod)
+  );
 }
 
 export function getSelectionDelivery(ids: string[]) {
-  const known = ids.flatMap(id => modById.has(id) ? [modById.get(id)!] : []);
-  const gameIds = known.filter(mod => mod.domain === "game").map(mod => mod.id);
-  const previewCount = known.filter(mod => mod.domain === "wardrobe" || !isPilotMod(mod.id)).length;
+  const known = ids.flatMap((id) => (modById.has(id) ? [modById.get(id)!] : []));
+  const gameIds = known.filter((mod) => mod.domain === "game").map((mod) => mod.id);
+  const previewCount = known.filter(
+    (mod) => mod.domain === "wardrobe" || !isPilotMod(mod.id),
+  ).length;
   return {
     gameIds,
     pilotReady: isPilotSelection(gameIds),
@@ -50,44 +57,109 @@ export type StudioMod = {
   variants: { name: string; image: string | null; color: string }[];
   slot: string | null;
 };
-type RawItem = { id?: string; group?: string | null; category?: string; styles?: { label?: string; preview?: string; color?: string }[] };
-const rawById = new Map((rawCatalog.items as RawItem[]).map(item => [item.id, item]));
+type RawItem = {
+  id?: string;
+  group?: string | null;
+  category?: string;
+  styles?: { label?: string; preview?: string; color?: string }[];
+};
+const rawById = new Map((rawCatalog.items as RawItem[]).map((item) => [item.id, item]));
 const previewRoot = "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/previews/";
-const singleSlots = new Set(["terrains", "river", "trees", "cursors", "huds", "fonts", "announcers", "music", "ranks", "roshan", "ancient", "towers"]);
+const singleSlots = new Set([
+  "terrains",
+  "river",
+  "trees",
+  "cursors",
+  "huds",
+  "fonts",
+  "announcers",
+  "music",
+  "ranks",
+  "roshan",
+  "ancient",
+  "towers",
+]);
 
 export const mods: StudioMod[] = [
   ...wardrobeCatalogItems.map((item): StudioMod => {
     const raw = rawById.get(item.id);
     return {
-      id: item.id, domain: "wardrobe", name: { ru: item.metadata.name, en: item.metadata.name },
-      category: item.metadata.category, categoryName: item.metadata.categoryLabel,
-      group: item.metadata.group, description: item.presentation.description,
-      image: item.presentation.previewUrl, author: item.provenance.author ?? item.provenance.sourceName,
-      source: item.provenance.sourceUrl, date: item.verification.updatedAt ?? 0, tags: item.metadata.tags,
-      variants: (raw?.styles ?? []).map(style => ({ name: style.label ?? "Style", color: style.color ?? "#b3a6a0", image: style.preview ? `${previewRoot}${item.metadata.category}/${encodeURIComponent(style.preview)}` : item.presentation.previewUrl })),
-      slot: singleSlots.has(item.metadata.category) ? item.metadata.category : raw?.group ? `${item.metadata.category}:${raw.group}` : null,
+      id: item.id,
+      domain: "wardrobe",
+      name: { ru: item.metadata.name, en: item.metadata.name },
+      category: item.metadata.category,
+      categoryName: item.metadata.categoryLabel,
+      group: item.metadata.group,
+      description: item.presentation.description,
+      image: item.presentation.previewUrl,
+      author: item.provenance.author ?? item.provenance.sourceName,
+      source: item.provenance.sourceUrl,
+      date: item.verification.updatedAt ?? 0,
+      tags: item.metadata.tags,
+      variants: (raw?.styles ?? []).map((style) => ({
+        name: style.label ?? "Style",
+        color: style.color ?? "#b3a6a0",
+        image: style.preview
+          ? `${previewRoot}${item.metadata.category}/${encodeURIComponent(style.preview)}`
+          : item.presentation.previewUrl,
+      })),
+      slot: singleSlots.has(item.metadata.category)
+        ? item.metadata.category
+        : raw?.group
+          ? `${item.metadata.category}:${raw.group}`
+          : null,
     };
   }),
-  ...minifyMods.map((item): StudioMod => ({
-    id: item.id, domain: "game", name: item.name, category: item.category,
-    categoryName: minifyCategoryLabels[item.category], group: item.category,
-    description: item.description, image: minifyPreviewUrl(item.preview), author: item.author,
-    source: `${minifySource.url}/tree/${minifySource.commit}/${encodeURI(item.sourcePath)}`,
-    date: 0, tags: [], variants: [], slot: null,
-  })),
+  ...minifyMods.map(
+    (item): StudioMod => ({
+      id: item.id,
+      domain: "game",
+      name: item.name,
+      category: item.category,
+      categoryName: minifyCategoryLabels[item.category],
+      group: item.category,
+      description: item.description,
+      image: minifyPreviewUrl(item.preview),
+      author: item.author,
+      source: `${minifySource.url}/tree/${minifySource.commit}/${encodeURI(item.sourcePath)}`,
+      date: 0,
+      tags: [],
+      variants: [],
+      slot: null,
+    }),
+  ),
 ];
-export const modById = new Map(mods.map(mod => [mod.id, mod]));
+export const modById = new Map(mods.map((mod) => [mod.id, mod]));
 export const wardrobeGroups = [
-  { id: "all", ru: "Всё", en: "All" }, { id: "characters", ru: "Герои", en: "Heroes" },
-  { id: "world", ru: "Мир", en: "World" }, { id: "effects", ru: "Эффекты", en: "Effects" },
-  { id: "interface", ru: "Интерфейс", en: "Interface" }, { id: "audio", ru: "Звук", en: "Audio" },
+  { id: "all", ru: "Всё", en: "All" },
+  { id: "characters", ru: "Герои", en: "Heroes" },
+  { id: "world", ru: "Мир", en: "World" },
+  { id: "effects", ru: "Эффекты", en: "Effects" },
+  { id: "interface", ru: "Интерфейс", en: "Interface" },
+  { id: "audio", ru: "Звук", en: "Audio" },
 ];
-export const gameGroups = Object.entries(minifyCategoryLabels).map(([id, labels]) => ({ id, ...labels }));
-export const categoryLabel = (id: string, language: Language) => wardrobeCategoryLabels[id]?.[language] ?? id;
-export const featuredIds = ["heroes-juggernaut-arcana-purple", "heroes-shadow-fiend-white", "heroes-lina-crystal-empress", "terrains-ti6-immortal-gardens", "heroes-ice-phoenix", "couriers-onibi"];
-export const featuredMods = featuredIds.flatMap(id => modById.has(id) ? [modById.get(id)!] : []);
+export const gameGroups = Object.entries(minifyCategoryLabels).map(([id, labels]) => ({
+  id,
+  ...labels,
+}));
+export const categoryLabel = (id: string, language: Language) =>
+  wardrobeCategoryLabels[id]?.[language] ?? id;
+export const featuredIds = [
+  "heroes-juggernaut-arcana-purple",
+  "heroes-shadow-fiend-white",
+  "heroes-lina-crystal-empress",
+  "terrains-ti6-immortal-gardens",
+  "heroes-ice-phoenix",
+  "couriers-onibi",
+];
+export const featuredMods = featuredIds.flatMap((id) =>
+  modById.has(id) ? [modById.get(id)!] : [],
+);
 export function getConflicts(ids: string[]) {
   const slots = new Map<string, StudioMod[]>();
-  ids.forEach(id => { const mod = modById.get(id); if (mod?.slot) slots.set(mod.slot, [...(slots.get(mod.slot) ?? []), mod]); });
-  return [...slots.values()].filter(items => items.length > 1);
+  ids.forEach((id) => {
+    const mod = modById.get(id);
+    if (mod?.slot) slots.set(mod.slot, [...(slots.get(mod.slot) ?? []), mod]);
+  });
+  return [...slots.values()].filter((items) => items.length > 1);
 }
