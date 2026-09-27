@@ -198,29 +198,46 @@ be assumed to work; run every step.
 
 1. Uninstall any existing BetterFy install first (Settings → Apps, or the
    Windows 8 uninstall flow) so this starts from a clean machine.
-2. Run `BetterFy-Setup.exe`. Confirm the dark/violet welcome screen renders,
-   the install path reads `%LOCALAPPDATA%\BetterFy`, and — only if this
-   machine genuinely lacks WebView2 — the WebView2 warning appears and its
-   button opens Microsoft's official download page.
-3. Install with both checkboxes on. Confirm BetterFy launches, a Start Menu
-   shortcut exists under a `BetterFy` folder, and a Desktop shortcut exists.
-4. Open **Settings → Apps → Installed apps** and confirm BetterFy is listed
-   with the correct version, publisher, and size, and that its uninstall
-   entry works.
-5. **Update-in-place, the one compatibility check that matters most:** with
-   this BetterFy Setup install still in place, trigger a signed update (a
-   newer signed release, applied the normal way through the in-app updater).
-   Confirm the existing installation is updated — same folder, same
-   shortcuts, same registry entry — and that a second, orphaned copy is not
-   created anywhere. This is the specific risk documented in `ROADMAP.md`:
-   the updater silently reruns the NSIS installer, and it must recognize this
-   installation as the one to replace.
-6. Uninstall BetterFy. Confirm the Start Menu and Desktop shortcuts and the
-   registry entry are gone. A leftover `uninstall.exe` in an otherwise-empty
-   `%LOCALAPPDATA%\BetterFy` folder is a known, accepted gap — record it, do
-   not treat it as a new finding.
-7. Repeat step 2–3 over an existing installation (reinstall/repair path) and
-   confirm it does not fail or duplicate shortcuts.
+2. Run `BetterFy-Setup.exe`. Confirm the sidebar shows the real Telegram
+   banner image (not a placeholder), switch RU ↔ EN with the top-right toggle
+   and confirm every screen's text changes, and confirm **Cancel** actually
+   closes the window — this exact button silently did nothing in the first
+   real build until a missing capability grant was found and fixed.
+3. Confirm the install path reads `%LOCALAPPDATA%\BetterFy`, and — only if
+   this machine genuinely lacks WebView2 — the WebView2 warning appears and
+   its button opens Microsoft's official download page.
+4. Install with both checkboxes on. Confirm BetterFy launches, a Start Menu
+   shortcut exists under a `BetterFy` folder, and a Desktop shortcut exists
+   at the real Desktop location — this matters specifically if this machine's
+   Desktop has been relocated by OneDrive.
+5. Open **Settings → Apps → Installed apps** and confirm BetterFy is listed
+   with the correct version, publisher, and size.
+6. **Run `BetterFy-Setup.exe` again over the existing install.** Confirm the
+   welcome screen now reads "Update" (not "Install"), shows the installed
+   version, and offers an **Uninstall BetterFy** link inline — this is the
+   in-app path, separate from Windows' own Apps & Features. With BetterFy
+   itself running, attempt the update and confirm it reports `app_running`
+   with a plain-language message rather than corrupting the install; close
+   BetterFy and confirm Retry then succeeds.
+7. **Update-in-place through the real updater, the compatibility check that
+   matters most:** with this BetterFy Setup install still in place, trigger a
+   signed update (a newer signed release, applied the normal way through the
+   in-app updater). Confirm the existing installation is updated — same
+   folder, same shortcuts, same registry entry — and that a second, orphaned
+   copy is not created anywhere. This is the specific risk documented in
+   `ROADMAP.md`: the updater silently reruns the NSIS installer, and it must
+   recognize this installation as the one to replace.
+8. Uninstall BetterFy from the installer's own **Uninstall BetterFy** button
+   (not just Apps & Features). Confirm the Start Menu and Desktop shortcuts
+   and the registry entry are gone, and that BetterFy's own account/session
+   data under `%APPDATA%\app.betterfy.desktop\` is untouched. A leftover
+   `uninstall.exe` in an otherwise-empty `%LOCALAPPDATA%\BetterFy` folder is
+   a known, accepted gap — record it, do not treat it as a new finding.
+9. Force an error deliberately (for example, rename `payload/` before
+   building so `run_install` returns `payload_not_embedded`, or simply pull
+   the network/deny a file permission) and confirm the error screen shows a
+   plain-language explanation plus working Retry and Contact-support
+   buttons, not just a bare code.
 
 ## Send back after the pass
 

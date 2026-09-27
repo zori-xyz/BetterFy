@@ -17,42 +17,67 @@ from Tauri's own NSIS template rather than chosen independently — see
 
 ## Current status
 
-This is a working scaffold with the update-compatibility details reasoned
-through carefully. It is not a release candidate: nothing in this directory
-has executed on a real Windows machine yet.
+A real Windows CI pass now succeeds through the build step (see
+`windows-build.yml`), and a full release build has produced a working
+`BetterFy-Setup.exe` with the real app embedded. It is still not a release
+candidate: the install/uninstall/update behavior itself has not been run by
+a person on Windows yet, only compiled and (for the UI) previewed in a
+browser.
 
 Implemented:
 
-- a five-screen UI (welcome, installing, finish, error, plus an inline
-  WebView2 warning) in the BetterFy dark theme, reusing the product's
-  wordmark, fonts, and the Telegram QR banner; the primary button is a real
-  `<button>` colored in CSS, not a recolored native control;
+- a seven-screen UI (welcome, installing, finish, uninstalling, uninstalled,
+  error, plus an inline WebView2 warning) in the BetterFy dark theme, in
+  Russian and English with a visible switcher; the sidebar uses the same
+  approved Telegram banner image as the reference design, not a
+  separately-authored CSS reproduction of it;
+- detects an existing installation (binary present on disk, version read
+  from the registry) and switches the welcome screen to an Update framing,
+  offering an in-app Uninstall button next to it — reachable without going
+  through Windows' own Apps & Features;
+- `run_install` refuses to overwrite a running `betterfy.exe` (detected via
+  an open-for-write probe, not process enumeration) and reports
+  `app_running` rather than failing into a half-overwritten install;
+- installing shows three named, finite steps (files, shortcuts, registry)
+  marked done together when the single `run_install` call returns, rather
+  than an indeterminate looping bar implying unmeasured ongoing work;
+  `prefers-reduced-motion: reduce` is honored globally;
+- errors show a plain-language explanation and Retry/Contact-support actions
+  next to the raw code, instead of only the code;
 - Rust commands, gated to Windows, that: copy the embedded payload into
   `%LOCALAPPDATA%\BetterFy`, write a Start Menu shortcut under a `BetterFy`
-  folder and an optional Desktop shortcut, register an uninstall entry under
+  folder and an optional Desktop shortcut (resolved via `dirs::desktop_dir()`
+  against the real `FOLDERID_Desktop` known folder, so a OneDrive-relocated
+  Desktop is still found), register an uninstall entry under
   `HKCU\...\Uninstall\BetterFy` with the same fields Tauri's NSIS template
-  writes (name, version, publisher, location, icon, estimated size,
-  uninstall command, about/help links), and optionally launch the app;
-- `run_uninstall`, reachable by relaunching this same binary with
-  `--uninstall` (the registry's `UninstallString` does exactly that — no
-  second build target to maintain);
+  writes, and optionally launch the app;
+- `run_uninstall`, reachable from the welcome screen's Uninstall button or by
+  relaunching this same binary with `--uninstall` (the registry's
+  `UninstallString` does exactly that — no second build target to maintain);
+- a `core:window:allow-close` capability grant, without which the page's own
+  Cancel/Finish/Close buttons silently do nothing — see "Why capabilities
+  matter" below;
 - a WebView2 Runtime presence check against the exact registry keys
   Microsoft's own distribution guide documents, surfaced as a warning with a
   link to Microsoft's official download page — this installer does not fetch
   or run an external binary itself;
-- `cargo fmt` / `cargo clippy` clean on macOS (where Windows-only code
-  compiles to a `windows_only` stub), and confirmed on a real
-  `windows-latest` GitHub Actions runner via `windows-build.yml`: `cargo
-  clippy -- -D warnings` and `npx tauri build --debug` both succeed there.
-  That real run is also what caught two mistakes this section used to gloss
-  over — a genuinely dead `WEBVIEW2_DOWNLOAD_URL` constant, and a hard
-  `tauri build` failure (not just a warning, as `tauri dev` suggested) from
-  the Rust `tauri` crate's minor version not matching the root project's
-  older-pinned `@tauri-apps/api`, fixed by giving this directory its own
-  `package.json`. This Mac has no Windows resource compiler (`llvm-rc`), so a
-  full local cross-build for the icon-embedding step still isn't possible
-  here — CI's Windows runner remains the actual gate, and it now passes
-  through the build step, though not yet an actual install/run.
+- `cargo fmt` / `cargo clippy -D warnings` and `npx tauri build` all succeed
+  on a real `windows-latest` GitHub Actions runner, and a full
+  `early-access-release.yml` run has produced a working `BetterFy-Setup.exe`
+  with the real app payload embedded.
+
+## Why capabilities matter
+
+Tauri v2 gates built-in core commands — including closing a window — behind
+a capability grant; commands this crate defines itself
+(`run_install`, `existing_install`, ...) are not gated the same way, which is
+why installation worked in the first real test while every button that only
+closed the window (Cancel, Finish, the error screen's Close) did not. The
+failure mode is silent: the JS promise rejects, nothing throws visibly, and
+without opening the webview's devtools the window just looks unresponsive.
+`src-tauri/capabilities/default.json` grants exactly `core:window:allow-close`
+to the `main` window (which the window config now labels explicitly, rather
+than relying on Tauri's default label matching); nothing broader.
 
 ## Why the exact paths matter
 
@@ -65,7 +90,7 @@ assumed:
 | Install directory | `$LOCALAPPDATA\BetterFy` | same |
 | Uninstall registry key | `HKCU\...\Uninstall\BetterFy` | same |
 | Start Menu shortcut | `Start Menu\Programs\BetterFy\BetterFy.lnk` | same |
-| Desktop shortcut | `Desktop\BetterFy.lnk` | same |
+| Desktop shortcut | resolved known folder `\BetterFy.lnk` | same |
 | Main binary name | `betterfy.exe` (the Cargo package name; no `mainBinaryName` override is set) | same |
 
 If these ever drifted, the signed updater's silent NSIS pass would not
@@ -77,18 +102,10 @@ this table wrong again and it will happen silently, not as a build error.
 
 ## Known gaps, and why they're gaps rather than bugs waiting to happen
 
-- **The payload is populated by CI, not committed.** `src-tauri/payload/` is
-  embedded into the binary at compile time via `rust-embed`. CI builds the
-  main app first and copies `betterfy.exe` in before compiling this
-  installer (see `.github/workflows/early-access-release.yml` and
-  `windows-build.yml`). `run_install` fails closed with
-  `payload_not_embedded` if that step is skipped, rather than "installing"
-  an empty directory.
-- **No native Windows pass yet.** Every claim above about shortcuts,
-  registry values, and paths is verified against documentation and, where
-  possible, cross-target type-checking — not against a real run. Treat it
-  the way this repository treats any engine change: unverified until
-  `docs/WINDOWS_TEST_CHECKLIST.md` §9 passes.
+- **No native Windows pass yet.** Compilation, linting, and a full release
+  build are confirmed on real Windows CI; actually installing, updating over
+  an existing install, and uninstalling have not been run by a person yet.
+  Unverified until `docs/WINDOWS_TEST_CHECKLIST.md` §9 passes.
 - **No self-delete after uninstall.** `run_uninstall` removes the app,
   shortcuts, and registry entry, but the running `uninstall.exe` cannot
   delete its own open file, so it is left behind in an otherwise-empty
@@ -110,8 +127,8 @@ this table wrong again and it will happen silently, not as a build error.
 This directory has its own `package.json`, pinning `@tauri-apps/api` and
 `@tauri-apps/cli` to match the Rust `tauri` crate version. Without it,
 `tauri build` (though not `tauri dev`) fails hard on a version-mismatch check
-against the root project's own, older-pinned `@tauri-apps/api` — the exact
-failure a real Windows CI run caught before this was added.
+against the root project's own, older-pinned `@tauri-apps/api` — a failure a
+real Windows CI run caught before this was added.
 
 ```bash
 cd installer

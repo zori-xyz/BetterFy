@@ -125,30 +125,53 @@ cannot be recolored without unverified low-level window subclassing; this
 installer's UI is plain HTML and CSS instead. NSIS is not retired — the signed
 auto-updater depends on its artifact format and keeps using it internally.
 
-Implemented, verified by API documentation and macOS/target cross-checks, not
-by running on Windows:
+Implemented, confirmed on a real `windows-latest` CI runner through the build
+step (fmt, clippy, and a full `npx tauri build` with the real app embedded),
+but not yet run as an installer by a person on Windows:
 
 - copy the embedded main-app payload into `$LOCALAPPDATA\BetterFy`, matching
   Tauri's own NSIS `currentUser` install path exactly, so the auto-updater's
   NSIS pass finds and updates this installation rather than creating a second,
   orphaned one;
-- a Start Menu shortcut under a `BetterFy` folder and an optional Desktop
-  shortcut, matching the NSIS template's own layout;
+- refuse to overwrite a running `betterfy.exe`, reporting `app_running`
+  instead of a half-overwritten install;
+- detect an existing installation (binary on disk plus registry version) and
+  switch the welcome screen to an Update framing with an in-app Uninstall
+  button, rather than presenting every run as a first install;
+- a Start Menu shortcut under a `BetterFy` folder and a Desktop shortcut
+  resolved via the real `FOLDERID_Desktop` known folder (not a hardcoded
+  `%USERPROFILE%\Desktop` guess, which misses a OneDrive-relocated Desktop),
+  matching the NSIS template's own layout;
 - an `HKCU\...\Uninstall\BetterFy` registry entry (name, version, publisher,
   install location, icon, size, uninstall command, help and about links)
   matching every value Tauri's own NSIS template writes;
-- a `run_uninstall` command reachable via `--uninstall`, reusing the same
-  binary as its own uninstaller;
+- a `run_uninstall` command reachable from the welcome screen's own button or
+  via `--uninstall`, reusing the same binary as its own uninstaller;
+- Russian and English, switchable in the UI; finite, named install steps
+  instead of an indeterminate looping progress bar; `prefers-reduced-motion`
+  honored; error screens with a plain-language explanation plus Retry and
+  Contact-support actions, not just a raw code;
+- the sidebar uses the same approved Telegram banner image as the reference
+  design, not a separate CSS reproduction of it;
 - a Microsoft-documented WebView2 Runtime presence check that points a user at
   Microsoft's official download page when missing, rather than fetching and
   running a binary itself;
-- `cargo fmt`/`cargo clippy` clean on both the native target and
-  `x86_64-pc-windows-msvc`.
+- `cargo fmt`/`cargo clippy -D warnings` clean on both the native target and
+  `x86_64-pc-windows-msvc`, confirmed for real on CI's Windows runner.
+
+A capability-permission bug was found and fixed along the way: closing the
+window from the page's own Cancel/Finish/Close buttons silently did nothing
+in the first real build, because Tauri v2 gates the built-in window-close
+command behind a capability grant that this project never declared. Custom
+commands this crate defines are not gated the same way, which is why
+installation itself worked while the close buttons did not — see
+`installer/README.md`'s "Why capabilities matter".
 
 Still required before this can replace NSIS as the public download:
 
-- a native Windows install/uninstall pass — nothing in `installer/` has
-  executed on Windows yet;
+- a native Windows install/uninstall/update pass by a person — nothing in
+  `installer/` has been run as an installer on Windows yet, only compiled
+  there;
 - an actual update-in-place test: install with BetterFy Setup, then let the
   signed updater's NSIS pass run against that install and confirm it updates
   rather than duplicates;

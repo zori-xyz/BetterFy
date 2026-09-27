@@ -65,6 +65,39 @@ fn default_install_dir() -> Result<String, String> {
     install_dir().map(|p| p.display().to_string())
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExistingInstall {
+    version: String,
+}
+
+// Checked two ways, not just the registry: a stale uninstall entry left over
+// from a prior failed uninstall would otherwise report "already installed"
+// for an app that no longer exists on disk, matching the caution this
+// repository's own engine takes with stale journal state.
+#[cfg(windows)]
+#[tauri::command]
+fn existing_install() -> Option<ExistingInstall> {
+    use winreg::enums::*;
+    use winreg::RegKey;
+
+    let target = install_dir().ok()?;
+    if !target.join(MAIN_BINARY_NAME).is_file() {
+        return None;
+    }
+    let version = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey(UNINSTALL_KEY)
+        .and_then(|key| key.get_value::<String, _>("DisplayVersion"))
+        .unwrap_or_else(|_| "?".to_string());
+    Some(ExistingInstall { version })
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn existing_install() -> Option<ExistingInstall> {
+    None
+}
+
 #[cfg(windows)]
 fn webview2_installed() -> bool {
     use winreg::enums::*;
@@ -113,6 +146,17 @@ fn run_install(options: InstallOptions) -> Result<InstallReport, String> {
 
     let target = install_dir()?;
     std::fs::create_dir_all(&target).map_err(|_| "install_dir_failed".to_string())?;
+
+    // Reinstalling/updating over a running BetterFy would try to overwrite an
+    // open, locked executable. Detected the same way Windows itself reports
+    // it — a sharing-violation on open — rather than enumerating processes.
+    let existing_binary = target.join(MAIN_BINARY_NAME);
+    if existing_binary.is_file() {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&existing_binary)
+            .map_err(|_| "app_running".to_string())?;
+    }
 
     let mut installed_bytes: u64 = 0;
     for file in Payload::iter() {
@@ -211,11 +255,12 @@ fn start_menu_shortcut() -> Result<PathBuf, String> {
         .join(format!("{APP_NAME}.lnk")))
 }
 
+// `dirs::desktop_dir()` resolves the real FOLDERID_Desktop known folder
+// rather than assuming `%USERPROFILE%\Desktop`, so it still finds the right
+// place when OneDrive's Known Folder Move has relocated Desktop.
 fn desktop_shortcut() -> Result<PathBuf, String> {
-    Ok(std::env::var_os("USERPROFILE")
-        .map(PathBuf::from)
-        .ok_or_else(|| "missing_userprofile".to_string())?
-        .join("Desktop")
+    Ok(dirs::desktop_dir()
+        .ok_or_else(|| "missing_desktop_dir".to_string())?
         .join(format!("{APP_NAME}.lnk")))
 }
 
@@ -337,6 +382,7 @@ fn run_app() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             default_install_dir,
+            existing_install,
             check_webview2,
             run_install,
             run_uninstall,

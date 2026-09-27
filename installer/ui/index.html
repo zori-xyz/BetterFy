@@ -9,69 +9,91 @@
   <body>
     <div class="shell">
       <aside class="side">
-        <div class="wordmark"><span class="better">Better</span><span class="fy">Fy</span></div>
-        <div class="join">Join<br />Our<br />Telegram</div>
-        <div class="qr"><img src="assets/telegram-qr.png" alt="" /></div>
+        <img class="side-banner" src="assets/telegram-sidebar-banner.jpg" alt="" />
       </aside>
 
       <main class="content">
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button type="button" data-lang="ru">RU</button>
+          <button type="button" data-lang="en">EN</button>
+        </div>
+
         <section class="screen" data-screen="welcome">
-          <p class="eyebrow">BETTERFY &middot; WINDOWS</p>
-          <h1>Установка BetterFy</h1>
-          <p class="body">
-            Мастер установит приложение для текущего пользователя. Права
-            администратора не понадобятся.
-          </p>
-          <p class="body">Путь установки: <code id="install-path">…</code></p>
+          <p class="eyebrow" data-i18n="welcome.eyebrow"></p>
+          <h1 data-i18n="welcome.title"></h1>
+          <p class="body" data-i18n="welcome.body1"></p>
+          <p class="body" data-i18n="welcome.pathLabel"><span id="install-path">…</span></p>
+
+          <div class="notice" id="existing-notice" hidden>
+            <p class="body" id="existing-notice-text"></p>
+            <button class="btn btn-text" id="btn-uninstall" data-i18n="welcome.uninstallLink"></button>
+          </div>
 
           <div class="warning" id="webview2-warning" hidden>
-            <p class="body">
-              Не найден Microsoft Edge WebView2 Runtime — без него BetterFy не
-              запустится. Установите его с официальной страницы Microsoft и
-              повторите установку.
-            </p>
-            <button class="btn" id="btn-webview2">Скачать WebView2</button>
+            <p class="body" data-i18n="webview2.body"></p>
+            <button class="btn" id="btn-webview2" data-i18n="webview2.button"></button>
           </div>
 
           <label class="option">
             <input type="checkbox" id="opt-desktop" checked />
-            <span>Создать ярлык на рабочем столе</span>
+            <span data-i18n="welcome.optDesktop"></span>
           </label>
           <label class="option">
             <input type="checkbox" id="opt-launch" checked />
-            <span>Запустить BetterFy после установки</span>
+            <span data-i18n="welcome.optLaunch"></span>
           </label>
 
           <div class="actions">
-            <button class="btn" id="btn-cancel">Отмена</button>
-            <button class="btn btn-primary" id="btn-install">Установить</button>
+            <button class="btn" id="btn-cancel" data-i18n="welcome.cancel"></button>
+            <button class="btn btn-primary" id="btn-install" data-i18n="welcome.install"></button>
           </div>
         </section>
 
         <section class="screen" data-screen="installing" hidden>
-          <p class="eyebrow">INSTALL</p>
-          <h1>Устанавливаем BetterFy</h1>
-          <p class="body">Копируем файлы приложения и настраиваем ярлыки.</p>
-          <div class="progress"><i></i></div>
+          <p class="eyebrow" data-i18n="installing.eyebrow"></p>
+          <h1 data-i18n="installing.title"></h1>
+          <p class="body" data-i18n="installing.body"></p>
+          <ul class="steps" id="install-steps">
+            <li data-i18n="installing.stepFiles"></li>
+            <li data-i18n="installing.stepShortcuts"></li>
+            <li data-i18n="installing.stepRegistry"></li>
+          </ul>
         </section>
 
         <section class="screen" data-screen="finish" hidden>
-          <p class="eyebrow">READY</p>
-          <h1>BetterFy установлен</h1>
-          <p class="body">Приложение готово к запуску.</p>
-          <p class="body">Путь: <code id="finish-path"></code></p>
+          <p class="eyebrow" data-i18n="finish.eyebrow"></p>
+          <h1 data-i18n="finish.title"></h1>
+          <p class="body" data-i18n="finish.body"></p>
+          <p class="body" data-i18n="finish.pathLabel"><span id="finish-path"></span></p>
           <div class="actions">
-            <button class="btn btn-primary" id="btn-done">Готово</button>
+            <button class="btn btn-primary" id="btn-done" data-i18n="finish.done"></button>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="uninstalling" hidden>
+          <p class="eyebrow" data-i18n="uninstalling.eyebrow"></p>
+          <h1 data-i18n="uninstalling.title"></h1>
+          <p class="body" data-i18n="uninstalling.body"></p>
+        </section>
+
+        <section class="screen" data-screen="uninstalled" hidden>
+          <p class="eyebrow" data-i18n="uninstalled.eyebrow"></p>
+          <h1 data-i18n="uninstalled.title"></h1>
+          <p class="body" data-i18n="uninstalled.body"></p>
+          <div class="actions">
+            <button class="btn btn-primary" id="btn-uninstalled-done" data-i18n="uninstalled.done"></button>
           </div>
         </section>
 
         <section class="screen" data-screen="error" hidden>
-          <p class="eyebrow error-eyebrow">ОШИБКА</p>
-          <h1>Установка не выполнена</h1>
-          <p class="body">Мастер не смог завершить установку.</p>
-          <p class="body">Код: <code id="error-code"></code></p>
+          <p class="eyebrow error-eyebrow" data-i18n="error.eyebrow"></p>
+          <h1 data-i18n="error.title"></h1>
+          <p class="body" id="error-body" data-i18n="error.body"></p>
+          <p class="body" data-i18n="error.codeLabel"><code id="error-code"></code></p>
           <div class="actions">
-            <button class="btn btn-primary" id="btn-close-error">Закрыть</button>
+            <button class="btn" id="btn-error-help" data-i18n="error.help"></button>
+            <button class="btn" id="btn-close-error" data-i18n="error.close"></button>
+            <button class="btn btn-primary" id="btn-error-retry" data-i18n="error.retry"></button>
           </div>
         </section>
       </main>
