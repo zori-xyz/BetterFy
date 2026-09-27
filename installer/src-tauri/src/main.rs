@@ -158,7 +158,17 @@ fn run_install(options: InstallOptions) -> Result<InstallReport, String> {
             .map_err(|_| "app_running".to_string())?;
     }
 
+    // Two-phase write: stage every payload file under a sibling `.new` name
+    // and verify its bytes on disk before touching any real destination.
+    // Each `rename` below is then atomic on the same volume (Windows
+    // MoveFileEx with replace-existing), so a failure here can only ever
+    // leave the previous, working files in place — never a half-written
+    // `betterfy.exe`. (With today's single-file payload this is fully
+    // transactional; if the payload grows to multiple files, a failure
+    // partway through the rename loop could still leave some files updated
+    // and others not — real per-file atomicity, not yet a whole-payload one.)
     let mut installed_bytes: u64 = 0;
+    let mut staged: Vec<(PathBuf, PathBuf)> = Vec::new();
     for file in Payload::iter() {
         let asset = Payload::get(&file).ok_or_else(|| "payload_read_failed".to_string())?;
         installed_bytes += asset.data.len() as u64;
@@ -166,8 +176,24 @@ fn run_install(options: InstallOptions) -> Result<InstallReport, String> {
         if let Some(parent) = dest.parent() {
             std::fs::create_dir_all(parent).map_err(|_| "install_dir_failed".to_string())?;
         }
-        std::fs::write(&dest, asset.data.as_ref())
+        let temp_name = format!(
+            "{}.new",
+            dest.file_name()
+                .ok_or_else(|| "payload_write_failed".to_string())?
+                .to_string_lossy()
+        );
+        let temp = dest.with_file_name(temp_name);
+        std::fs::write(&temp, asset.data.as_ref())
             .map_err(|_| "payload_write_failed".to_string())?;
+        let written = std::fs::read(&temp).map_err(|_| "payload_write_failed".to_string())?;
+        if written != asset.data.as_ref() {
+            let _ = std::fs::remove_file(&temp);
+            return Err("payload_verify_failed".to_string());
+        }
+        staged.push((temp, dest));
+    }
+    for (temp, dest) in &staged {
+        std::fs::rename(temp, dest).map_err(|_| "payload_write_failed".to_string())?;
     }
 
     let main_binary = target.join(MAIN_BINARY_NAME);
@@ -223,7 +249,7 @@ fn write_uninstall_registry(
     let estimated_size_kb = (installed_bytes / 1024).max(1) as u32;
     let fail = |_| "registry_write_failed".to_string();
     key.set_value("DisplayName", &APP_NAME).map_err(fail)?;
-    key.set_value("DisplayVersion", &env!("CARGO_PKG_VERSION"))
+    key.set_value("DisplayVersion", &env!("BETTERFY_APP_VERSION"))
         .map_err(fail)?;
     key.set_value("Publisher", &"BetterFy").map_err(fail)?;
     key.set_value("MainBinaryName", &MAIN_BINARY_NAME)
@@ -298,21 +324,46 @@ fn perform_uninstall() -> Result<(), String> {
     use winreg::RegKey;
 
     let target = install_dir()?;
-    let _ = std::fs::remove_file(start_menu_shortcut()?);
-    let _ = std::fs::remove_file(desktop_shortcut()?);
+    let main_binary = target.join(MAIN_BINARY_NAME);
+
+    // Refuse up front if BetterFy is running, the same way run_install does.
+    // Without this, the shortcuts and registry entry would disappear while
+    // the locked exe survived, and the "uninstalled" screen would be lying.
+    if main_binary.is_file() {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&main_binary)
+            .map_err(|_| "app_running".to_string())?;
+    }
+
+    let start_menu = start_menu_shortcut()?;
+    let desktop = desktop_shortcut()?;
+    let _ = std::fs::remove_file(&start_menu);
+    let _ = std::fs::remove_file(&desktop);
 
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let _ = hkcu.delete_subkey_all(UNINSTALL_KEY);
 
+    remove_dir_all_except_self(&target)?;
+
+    // This repository's rule for any privileged operation: verify the result
+    // actually happened rather than trusting that each step above returned
+    // without erroring. Only the running uninstall.exe itself is allowed to
+    // remain (see the doc comment below).
+    let registry_gone = hkcu.open_subkey(UNINSTALL_KEY).is_err();
+    if main_binary.exists() || start_menu.exists() || desktop.exists() || !registry_gone {
+        return Err("uninstall_incomplete".to_string());
+    }
+
     // The running process is `uninstall.exe` inside `target`. Windows will
-    // not let it delete its own open executable, so everything else is
-    // removed and the now near-empty folder (just `uninstall.exe`) is left
-    // behind. A batch-script self-delete trick could clear it too, but that
+    // not let it delete its own open executable, so it is deliberately
+    // excluded from the checks above and left behind in the now near-empty
+    // folder. A batch-script self-delete trick could clear it too, but that
     // needs correct cmd.exe quoting around a path that may contain spaces
     // (a username with a space is common), which cannot be verified without
     // a Windows run — left as a known, cosmetic limitation instead of
     // shipping unverified quoting logic. See `installer/README.md`.
-    remove_dir_all_except_self(&target)
+    Ok(())
 }
 
 #[cfg(windows)]

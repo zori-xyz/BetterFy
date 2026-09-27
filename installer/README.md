@@ -38,10 +38,23 @@ Implemented:
 - `run_install` refuses to overwrite a running `betterfy.exe` (detected via
   an open-for-write probe, not process enumeration) and reports
   `app_running` rather than failing into a half-overwritten install;
+- the payload is staged to a sibling `.new` file per entry, read back and
+  compared byte-for-byte, and only then renamed over the real destination —
+  each rename is atomic on the same volume, so a failure can only ever leave
+  the previous working files in place, never a half-written `betterfy.exe`;
+- `run_uninstall` checks the app isn't running before touching anything, then
+  verifies afterward that the binary, both shortcuts, and the registry key
+  are actually gone before reporting success — it does not just trust that
+  each removal call returned without erroring;
+- the embedded app's own version (read from the root `package.json` at
+  compile time, not this installer's own Cargo.toml version) is what's
+  written to the registry and shown in the "already installed" text — these
+  are two different version numbers and conflating them was an earlier bug;
 - installing shows three named, finite steps (files, shortcuts, registry)
   marked done together when the single `run_install` call returns, rather
   than an indeterminate looping bar implying unmeasured ongoing work;
-  `prefers-reduced-motion: reduce` is honored globally;
+  `prefers-reduced-motion: reduce` is honored globally, and every button and
+  checkbox has a visible `:focus-visible` ring;
 - errors show a plain-language explanation and Retry/Contact-support actions
   next to the raw code, instead of only the code;
 - Rust commands, gated to Windows, that: copy the embedded payload into
@@ -118,6 +131,13 @@ this table wrong again and it will happen silently, not as a build error.
   and links to Microsoft's official download page; it does not download and
   run the bootstrapper itself. Revisit if this proves insufficient in
   practice for the Early Access audience.
+- **Install progress is reported in one batch, not live per step.** The three
+  steps are all marked done together when `run_install` returns, because
+  reporting them as they actually happen needs Tauri's event system, and its
+  `core:event:allow-emit`/`allow-listen` permissions have open community
+  reports of being inconsistently recognized — not a risk worth taking for a
+  cosmetic improvement given the `core:window:allow-close` lesson above.
+  Worth revisiting if a verified recipe turns up.
 - **No per-machine (admin) install mode, no code signing for this binary
   itself.** Both are real requirements before a public, non-Early-Access
   release; see `docs/ROADMAP.md`.
