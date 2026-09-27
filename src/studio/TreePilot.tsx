@@ -192,8 +192,11 @@ export default function TreePilot({
     ids.length <= 3 &&
     ids.every((id) => supportedIds.includes(id)) &&
     new Set(ids).size === ids.length;
-  const bundleName =
-    ids.length > 1
+  const bundleName = !ids.length
+    ? isRu
+      ? "Установленная сборка"
+      : "Installed build"
+    : ids.length > 1
       ? isRu
         ? `Сборка · ${ids.length} мода`
         : `Build · ${ids.length} mods`
@@ -204,7 +207,11 @@ export default function TreePilot({
           : "Tree Mod";
   const windows = /Windows/i.test(navigator.userAgent);
   const desktop = "__TAURI_INTERNALS__" in window;
-  const canInstall = desktop && windows && !preview && installation.verified && supportedBundle;
+  // Managing an existing installation (restore, Steam, recovery, evidence)
+  // must not depend on what is currently selected: changing the selection
+  // after installing would otherwise hide the only way back.
+  const canManage = desktop && windows && !preview && installation.verified;
+  const canInstall = canManage && supportedBundle;
   function applyDownloadStatus(status: TreePilotDownloadStatus | null) {
     if (!status) return;
     setVerifiedResources(status.verifiedResources);
@@ -298,7 +305,7 @@ export default function TreePilot({
     };
   }, [desktop, windows, preview, installation.verified, installation.path]);
   useEffect(() => {
-    if (!canInstall) return;
+    if (!canManage) return;
     let active = true;
     engineBridge
       .listSteamProfiles()
@@ -319,9 +326,9 @@ export default function TreePilot({
     return () => {
       active = false;
     };
-  }, [canInstall]);
+  }, [canManage]);
   useEffect(() => {
-    if (!canInstall) return;
+    if (!canManage) return;
     let active = true;
     engineBridge
       .treePilotStressCapabilities()
@@ -340,7 +347,7 @@ export default function TreePilot({
     return () => {
       active = false;
     };
-  }, [canInstall, installation.path]);
+  }, [canManage, installation.path]);
 
   async function prepare() {
     if (!desktop || phase !== "idle") return;
@@ -432,7 +439,7 @@ export default function TreePilot({
   }
 
   async function restore() {
-    if (!operationId || !canInstall || phase !== "idle") return;
+    if (!operationId || !canManage || phase !== "idle") return;
     setError("");
     setPhase("restore");
     try {
@@ -482,7 +489,7 @@ export default function TreePilot({
     if (
       !operationId ||
       !installedLanguage ||
-      !canInstall ||
+      !canManage ||
       !selectedProfile ||
       !packageVerified ||
       steamRecoveryRequired ||
@@ -540,7 +547,7 @@ export default function TreePilot({
   }
 
   async function restoreSteam() {
-    if (!steamOperationId || !canInstall || phase !== "idle") return;
+    if (!steamOperationId || !canManage || phase !== "idle") return;
     setPhase("restore");
     setError("");
     try {
@@ -569,7 +576,7 @@ export default function TreePilot({
   }
 
   async function recover() {
-    if (!canInstall || phase !== "idle" || recovering) return;
+    if (!canManage || phase !== "idle" || recovering) return;
     setError("");
     setRecoveryMessage("");
     setRecovering(true);
@@ -606,7 +613,7 @@ export default function TreePilot({
   }
 
   async function refreshEvidence(copy = false) {
-    if (!canInstall) return;
+    if (!canManage) return;
     try {
       const report = await engineBridge.collectTreePilotEvidence(installation.path);
       setEvidence(report);
@@ -739,6 +746,9 @@ export default function TreePilot({
     }
   }
 
+  // Mounted even without pilot mods selected so an existing installation can
+  // still be found and restored; renders nothing when there is none.
+  if (!ids.length && !operationId && !steamOperationId && !steamRecoveryRequired) return null;
   return (
     <section className="s-tree-pilot" aria-labelledby="tree-pilot-title">
       <div className="s-tree-pilot-head">
@@ -772,7 +782,7 @@ export default function TreePilot({
           04 <b>{isRu ? "Проверить в Dota 2" : "Check in Dota 2"}</b>
         </span>
       </div>
-      {!canInstall && (
+      {(!canManage || (ids.length > 0 && !supportedBundle)) && (
         <div className="s-inline-note warning">
           <TriangleAlert />
           <p>
@@ -975,7 +985,7 @@ export default function TreePilot({
           </span>
           <button
             className="s-btn"
-            disabled={phase !== "idle" || !canInstall || steamRecoveryRequired}
+            disabled={phase !== "idle" || !canManage || steamRecoveryRequired}
             onClick={() => void restore()}
           >
             {phase === "restore" ? <LoaderCircle className="s-spin" /> : <RotateCcw />}
@@ -1095,7 +1105,7 @@ export default function TreePilot({
               {copied ? (isRu ? "Скопировано" : "Copied") : isRu ? "Копировать" : "Copy"}
             </button>
           </div>
-          {canInstall && !steamStarted && packageVerified && (
+          {canManage && !steamStarted && packageVerified && (
             <>
               <select
                 aria-label={isRu ? "Steam-профиль" : "Steam profile"}
@@ -1136,13 +1146,13 @@ export default function TreePilot({
           )}
         </div>
       )}
-      {!operationId && steamOperationId && canInstall && (
+      {!operationId && steamOperationId && canManage && (
         <button className="s-btn" disabled={phase !== "idle"} onClick={() => void restoreSteam()}>
           <RotateCcw />
           {isRu ? "Восстановить параметры Steam" : "Restore Steam settings"}
         </button>
       )}
-      {canInstall && (
+      {canManage && (
         <div className="s-tree-pilot-recovery">
           {steamRecoveryRequired && (
             <span role="alert">
@@ -1168,7 +1178,7 @@ export default function TreePilot({
           {recoveryMessage && <span role="status">{recoveryMessage}</span>}
         </div>
       )}
-      {canInstall && (
+      {canManage && (
         <details className="s-tree-pilot-evidence">
           <summary>
             <FileCheck2 />

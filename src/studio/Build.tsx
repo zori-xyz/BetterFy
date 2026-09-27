@@ -80,6 +80,9 @@ export default function Build({
   const conflicts = getConflicts(ids);
   const gameIds = chosen.filter((mod) => mod.domain === "game").map((mod) => mod.id);
   const verifiedPilotSelected = isPilotSelection(gameIds);
+  // The pilot subset is installable even when other game mods are selected;
+  // those stay preview-only and are listed in the note below.
+  const pilotIds = gameIds.filter(isPilotMod);
   const previewItems = chosen.filter((mod) => mod.domain === "wardrobe" || !isPilotMod(mod.id));
   const busy = state.phase === "preparing" || state.phase === "restoring";
   const ready = state.phase === "ready";
@@ -102,6 +105,7 @@ export default function Build({
           action={isRu ? "Открыть каталог" : "Open catalog"}
           onAction={onCatalog}
         />
+        <TreePilot ids={[]} installation={installation} preview={preview} />
       </>
     );
   return (
@@ -134,9 +138,7 @@ export default function Build({
           {isRu ? "Сохранить набор" : "Save build"}
         </button>
       </PageHead>
-      {verifiedPilotSelected && (
-        <TreePilot ids={gameIds} installation={installation} preview={preview} />
-      )}
+      <TreePilot ids={pilotIds} installation={installation} preview={preview} />
       {previewItems.length > 0 && (
         <div className="s-inline-note s-build-delivery-note">
           <TriangleAlert />
