@@ -58,7 +58,7 @@ enabled in small, recoverable slices.
 | Catalog and wardrobe | Product preview | Navigation, filtering, provenance fields, and local selection work; content download is not enabled. |
 | Presets | Implemented locally | Configurations are validated and stored atomically; JSON import and export are available. |
 | Authentication | Deployed Early Access boundary | Native desktop sign-in uses a ten-minute device-bound Telegram approve/deny challenge. A six-digit code remains the website and cross-device fallback. Web receives a revocable twelve-hour session; Rust keeps a fifteen-minute access token in memory and rotates a single-use refresh credential stored in Credential Manager or Keychain. Profile, avatar, entitlement, session listing, and revocation are implemented. Secure browser cookies, account deletion/retention, and a complete human-driven Windows auth pass remain release gates. |
-| Dota file deployment | Internal three-package pilot | Rust verifies pinned Tree Mod, Show Net Worth, and Unit Query HUD resources, merges the selected packages in visible priority order into one deterministic VPK, and uses an ownership-scoped backup/deploy/recover/rollback transaction. The founder observed Tree Mod through `dota_dutch` on Windows and completed the visible rollback. The HUD mods, combined path, other languages, interruption recovery, and exact-byte restoration still need native testing. General catalog deployment remains closed. |
+| Dota file deployment | Internal three-package pilot | Rust verifies pinned Tree Mod, Show Net Worth, and Unit Query HUD resources, merges the selected packages in visible priority order into one deterministic VPK, and uses an ownership-scoped backup/deploy/recover/rollback transaction. The founder installed the ordered three-package bundle on Windows and visually confirmed the result in Dota, then completed the internal stress artifact's controlled recovery pass (interrupt before/after publish, Steam before/after publish) with every check reporting `PASS`. This single Windows session was visual confirmation, not a recorded evidence report: the Windows test report JSON was not saved, and other languages, other machines, and exact-byte comparison against a saved report remain open. General catalog deployment remains closed. |
 | Public updates | Prepared, not released | Signed updater infrastructure exists; public releases require signing secrets and release approval. |
 
 No current build claims VAC safety, ban immunity, universal compatibility, or
@@ -131,11 +131,31 @@ On Windows 10 or 11 with Microsoft C++ Build Tools installed:
 .\scripts\build-windows.ps1
 ```
 
-The unsigned internal installer is written to:
+The unsigned internal NSIS artifact is written to:
 
 ```text
 src-tauri\target\release\bundle\nsis\
 ```
+
+The installer a user actually downloads and runs is **BetterFy Setup**, a
+separate, plain-HTML/CSS Tauri application in [`installer/`](installer/) that
+replaces NSIS's wizard so the product's own dark/violet identity — including
+a real violet primary button — can be used without recoloring native Windows
+controls. NSIS keeps building on every release: the signed auto-updater is
+tied to its artifact format and silently reruns it, in passive mode, to apply
+updates, so it remains the release's internal update mechanism. Build it after
+the main app (`.\scripts\build-windows.ps1`) with:
+
+```powershell
+Copy-Item src-tauri\target\release\betterfy.exe installer\src-tauri\payload\betterfy.exe
+cd installer
+npx tauri build
+```
+
+Nothing in `installer/` has had a native Windows verification pass yet; see
+[`installer/README.md`](installer/README.md) for exactly what is implemented
+and what still needs proving, in the same style as the engine status table
+above.
 
 Every push to `main` and every pull request produces a native Windows check.
 Unsigned artifacts are for internal testing; signed public releases use a
@@ -153,6 +173,7 @@ separate tag-driven workflow.
 | [`src/`](src/) | React interface, product routes, localization, catalogs, and the typed engine bridge |
 | [`src-tauri/src/`](src-tauri/src/) | Rust commands, Dota discovery, staging, journals, Steam configuration, presets, and runtime control |
 | [`src-tauri/fixtures/`](src-tauri/fixtures/) | Repository-owned engine fixtures used to prove planning and recovery safely |
+| [`installer/`](installer/) | BetterFy Setup: the standalone, branded Tauri installer that replaces the NSIS wizard for end users |
 | [`scripts/`](scripts/) | Windows builds, catalog checks, icon verification, and visual journey audits |
 | [`docs/`](docs/) | Architecture, product rules, Minify research, Windows builds, releases, and roadmap |
 | [`.github/`](.github/) | Native Windows CI, signed releases, ownership, and contribution templates |

@@ -4,6 +4,10 @@ artifacts/installer-preview/
 dist-site/
 src-tauri/target/
 src-tauri/gen/
+installer/src-tauri/target/
+installer/src-tauri/gen/
+installer/src-tauri/payload/*
+!installer/src-tauri/payload/.gitkeep
 .impeccable/
 .DS_Store
 *.log

@@ -70,8 +70,11 @@ Still required before public enablement (the fixed internal UI path is now wired
 - exercise the cancellable per-resource intake worker on Windows and confirm
   that an interrupted download resumes from the verified cache;
 - validate the confirmed staging/deployment and post-restart recovery journey on
-  Windows; Dutch install and the visible rollback have founder evidence, while
-  exact-byte comparison, post-restart discovery, and interruption recovery remain open;
+  Windows; the founder has run the ordered three-package install, the visible
+  rollback, and the internal stress artifact's controlled recovery pass
+  (interrupt before/after publish, Steam before/after publish, all `PASS`) as a
+  single visually confirmed session; a recorded Windows test report and
+  exact-byte comparison against it remain open;
 - repeat containment and output limits if an archive/extraction package is added;
 - add manifest signature and key-rotation policy;
 - pass the native Windows matrix, including interrupted deploy and rollback.
@@ -87,10 +90,13 @@ Implemented locally as the foundation for the next slice:
 - reviewed plan identities and staging journals bound to the complete ordered
   input set, including resources shadowed by higher-priority packages.
 
-The three-package path remains unverified in Dota until a native Windows
-multi-package pass exists. Its deterministic merge, priority accounting,
-per-package effective-resource report, and transactional boundaries are covered
-synthetically.
+The founder has run a native Windows multi-package pass: the ordered
+three-package bundle installed and was visually confirmed in Dota, and the
+internal stress artifact's controlled recovery pass reported `PASS` on every
+check. This is one visually confirmed session on one machine, without a saved
+Windows test report; a recorded, repeatable result is still open. The
+deterministic merge, priority accounting, per-package effective-resource
+report, and transactional boundaries otherwise remain covered synthetically.
 
 Exit condition: Tree Mod is visibly active after a confirmed patch, Steam alone
 restarts, and every tested interruption returns to an explainable recoverable state.
@@ -109,6 +115,55 @@ restarts, and every tested interruption returns to an explainable recoverable st
 
 Exit condition: an interrupted Tree Mod operation can always be explained and
 recovered without relying on interface state.
+
+## BetterFy Setup (branded installer)
+
+`installer/` is a standalone Tauri application that replaces the NSIS wizard
+as the installer a new user downloads and runs. It exists because NSIS's
+Back/Next/Cancel/Finish buttons belong to the outer Windows dialog frame and
+cannot be recolored without unverified low-level window subclassing; this
+installer's UI is plain HTML and CSS instead. NSIS is not retired — the signed
+auto-updater depends on its artifact format and keeps using it internally.
+
+Implemented, verified by API documentation and macOS/target cross-checks, not
+by running on Windows:
+
+- copy the embedded main-app payload into `$LOCALAPPDATA\BetterFy`, matching
+  Tauri's own NSIS `currentUser` install path exactly, so the auto-updater's
+  NSIS pass finds and updates this installation rather than creating a second,
+  orphaned one;
+- a Start Menu shortcut under a `BetterFy` folder and an optional Desktop
+  shortcut, matching the NSIS template's own layout;
+- an `HKCU\...\Uninstall\BetterFy` registry entry (name, version, publisher,
+  install location, icon, size, uninstall command, help and about links)
+  matching every value Tauri's own NSIS template writes;
+- a `run_uninstall` command reachable via `--uninstall`, reusing the same
+  binary as its own uninstaller;
+- a Microsoft-documented WebView2 Runtime presence check that points a user at
+  Microsoft's official download page when missing, rather than fetching and
+  running a binary itself;
+- `cargo fmt`/`cargo clippy` clean on both the native target and
+  `x86_64-pc-windows-msvc`.
+
+Still required before this can replace NSIS as the public download:
+
+- a native Windows install/uninstall pass — nothing in `installer/` has
+  executed on Windows yet;
+- an actual update-in-place test: install with BetterFy Setup, then let the
+  signed updater's NSIS pass run against that install and confirm it updates
+  rather than duplicates;
+- WebView2 provisioning beyond detection, if pointing users at Microsoft's
+  page proves insufficient in practice;
+- the self-delete-after-uninstall step is intentionally not implemented (the
+  reliable version needs cmd.exe quoting around a path that may contain
+  spaces, which cannot be verified without Windows); accepted for now as one
+  leftover file in an otherwise-empty folder;
+- its own code-signing certificate, since it is now the first executable a
+  new user runs.
+
+Exit condition: a native Windows pass installs, updates in place through the
+existing signed updater, and uninstalls cleanly, matching every registry and
+path detail NSIS itself would have used.
 
 ## Later milestones
 

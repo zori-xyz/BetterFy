@@ -191,6 +191,37 @@ until this pass succeeds.
   signed updater manifest are published. Unsigned workflow artifacts do not
   activate the public updater.
 
+## 9. BetterFy Setup (the branded installer)
+
+`installer/` has not run on Windows at all before this pass. Nothing here may
+be assumed to work; run every step.
+
+1. Uninstall any existing BetterFy install first (Settings → Apps, or the
+   Windows 8 uninstall flow) so this starts from a clean machine.
+2. Run `BetterFy-Setup.exe`. Confirm the dark/violet welcome screen renders,
+   the install path reads `%LOCALAPPDATA%\BetterFy`, and — only if this
+   machine genuinely lacks WebView2 — the WebView2 warning appears and its
+   button opens Microsoft's official download page.
+3. Install with both checkboxes on. Confirm BetterFy launches, a Start Menu
+   shortcut exists under a `BetterFy` folder, and a Desktop shortcut exists.
+4. Open **Settings → Apps → Installed apps** and confirm BetterFy is listed
+   with the correct version, publisher, and size, and that its uninstall
+   entry works.
+5. **Update-in-place, the one compatibility check that matters most:** with
+   this BetterFy Setup install still in place, trigger a signed update (a
+   newer signed release, applied the normal way through the in-app updater).
+   Confirm the existing installation is updated — same folder, same
+   shortcuts, same registry entry — and that a second, orphaned copy is not
+   created anywhere. This is the specific risk documented in `ROADMAP.md`:
+   the updater silently reruns the NSIS installer, and it must recognize this
+   installation as the one to replace.
+6. Uninstall BetterFy. Confirm the Start Menu and Desktop shortcuts and the
+   registry entry are gone. A leftover `uninstall.exe` in an otherwise-empty
+   `%LOCALAPPDATA%\BetterFy` folder is a known, accepted gap — record it, do
+   not treat it as a new finding.
+7. Repeat step 2–3 over an existing installation (reinstall/repair path) and
+   confirm it does not fail or duplicate shortcuts.
+
 ## Send back after the pass
 
 - the copied safe readiness report;

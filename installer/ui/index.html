@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BetterFy Setup</title>
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="side">
+        <div class="wordmark"><span class="better">Better</span><span class="fy">Fy</span></div>
+        <div class="join">Join<br />Our<br />Telegram</div>
+        <div class="qr"><img src="assets/telegram-qr.png" alt="" /></div>
+      </aside>
+
+      <main class="content">
+        <section class="screen" data-screen="welcome">
+          <p class="eyebrow">BETTERFY &middot; WINDOWS</p>
+          <h1>Установка BetterFy</h1>
+          <p class="body">
+            Мастер установит приложение для текущего пользователя. Права
+            администратора не понадобятся.
+          </p>
+          <p class="body">Путь установки: <code id="install-path">…</code></p>
+
+          <div class="warning" id="webview2-warning" hidden>
+            <p class="body">
+              Не найден Microsoft Edge WebView2 Runtime — без него BetterFy не
+              запустится. Установите его с официальной страницы Microsoft и
+              повторите установку.
+            </p>
+            <button class="btn" id="btn-webview2">Скачать WebView2</button>
+          </div>
+
+          <label class="option">
+            <input type="checkbox" id="opt-desktop" checked />
+            <span>Создать ярлык на рабочем столе</span>
+          </label>
+          <label class="option">
+            <input type="checkbox" id="opt-launch" checked />
+            <span>Запустить BetterFy после установки</span>
+          </label>
+
+          <div class="actions">
+            <button class="btn" id="btn-cancel">Отмена</button>
+            <button class="btn btn-primary" id="btn-install">Установить</button>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="installing" hidden>
+          <p class="eyebrow">INSTALL</p>
+          <h1>Устанавливаем BetterFy</h1>
+          <p class="body">Копируем файлы приложения и настраиваем ярлыки.</p>
+          <div class="progress"><i></i></div>
+        </section>
+
+        <section class="screen" data-screen="finish" hidden>
+          <p class="eyebrow">READY</p>
+          <h1>BetterFy установлен</h1>
+          <p class="body">Приложение готово к запуску.</p>
+          <p class="body">Путь: <code id="finish-path"></code></p>
+          <div class="actions">
+            <button class="btn btn-primary" id="btn-done">Готово</button>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="error" hidden>
+          <p class="eyebrow error-eyebrow">ОШИБКА</p>
+          <h1>Установка не выполнена</h1>
+          <p class="body">Мастер не смог завершить установку.</p>
+          <p class="body">Код: <code id="error-code"></code></p>
+          <div class="actions">
+            <button class="btn btn-primary" id="btn-close-error">Закрыть</button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

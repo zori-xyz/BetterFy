@@ -25,9 +25,10 @@ paths, sizes, and hashes below were not changed.
 ## Second pinned pilot package: Show Net Worth
 
 The internal pilot may now build Tree Mod, Show Net Worth, or both in the exact
-order selected by the user. Show Net Worth is not yet Windows-verified and must
-not be described as compatible until its HUD change is observed in Dota 2 and
-rollback is checked.
+order selected by the user. The founder observed the Show Net Worth HUD change
+in Dota 2 on Windows and checked rollback in the same session (see the
+Windows evidence section below); this remains a single visually confirmed
+session, not a recorded compatibility result.
 
 - Package ID: `minify.show-networth`
 - Same pinned repository and commit as Tree Mod
@@ -107,7 +108,9 @@ is shadowed.
 | `panorama/styles/hud/dota_hud_str_agi_int_overrides.vcss_c` | 1470 | `a6e25ccb69a40c145c75e590da8d5c19ac8a50224c2c54d09ffe4e8de8603871` |
 | `panorama/styles/hud/tooltip_unit_damage_armor_overrides.vcss_c` | 1458 | `55efe3ff6bee15030c4016f6b18580d5d0877bfc8fbdcb3550beef4f23b70730` |
 
-This third package is also unverified in Dota on Windows until the release pass.
+The founder observed this third package's HUD change in Dota 2 on Windows in
+the same session as Tree Mod and Show Net Worth (see the Windows evidence
+section below); a recorded compatibility result is still open.
 - The internal pilot exposes only the pinned Tree Mod, Show Net Worth, and
   Repopulate Unit Query HUD paths. Generic staged-VPK
   deployment remains debug-only. The fixed pilot command rechecks the exact
@@ -116,9 +119,15 @@ This third package is also unverified in Dota on Windows until the release pass.
   tests cover all four allowlisted destination folders, foreign-file isolation,
   rollback, and interrupted Russian-folder recovery; these are not in-game
   compatibility evidence.
-- macOS does not permit game deployment. The founder reports a Windows installer
-  run in which Tree Mod changed the trees as intended through `dota_dutch`.
-  The same run completed the visible BetterFy rollback and the game returned to
-  its normal tree state. Exact previous-byte comparison, interruption recovery,
-  and the three newly selectable language folders remain unverified on Windows.
-  English has no separate game language folder.
+- macOS does not permit game deployment. The founder installed the ordered
+  three-package bundle (Tree Mod, Show Net Worth, and Repopulate Unit Query
+  HUD) on a Windows installer run and visually confirmed all three changes in
+  Dota, then ran the internal stress artifact's controlled recovery pass —
+  interrupt before publish, interrupt after publish, Steam before publish, and
+  Steam after publish — with every check reporting `PASS`, including the
+  visible BetterFy rollback returning the game to its normal state.
+  This pass was observed visually in the installer and in Dota; the Windows
+  test report JSON was not saved from this run, so exact previous-byte
+  comparison against a recorded report, the three newly selectable language
+  folders, and a second machine remain unverified. English has no separate
+  game language folder.
