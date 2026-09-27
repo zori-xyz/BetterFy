@@ -4,6 +4,7 @@ use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::time::Duration;
+use tauri::{AppHandle, Manager};
 
 const AUTH_ORIGIN: &str = "https://betterfy-auth.zori-xyz.workers.dev";
 const CREDENTIAL_SERVICE: &str = "app.betterfy.desktop";
@@ -61,6 +62,7 @@ struct DeviceChallengeResponse {
     deep_link: String,
     expires_at: i64,
     poll_after_seconds: u64,
+    match_code: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -69,6 +71,7 @@ pub struct DeviceChallengeStart {
     deep_link: String,
     expires_at: i64,
     poll_after_seconds: u64,
+    match_code: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -328,8 +331,7 @@ fn authenticated_email_request(
     send(&access_token(state)?)
 }
 
-#[tauri::command]
-pub fn auth_begin_email(email: String, language: String) -> Result<(), String> {
+fn auth_begin_email_blocking(email: String, language: String) -> Result<(), String> {
     if !valid_email(&email) || !matches!(language.as_str(), "ru" | "en") {
         return Err("auth_email_invalid".to_string());
     }
@@ -343,11 +345,10 @@ pub fn auth_begin_email(email: String, language: String) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-pub fn auth_verify_email(
+fn auth_verify_email_blocking(
     email: String,
     code: String,
-    state: tauri::State<'_, AuthState>,
+    state: &AuthState,
 ) -> Result<AuthProfile, String> {
     if !valid_email(&email) || code.len() != 6 || !code.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err("auth_code_invalid".to_string());
@@ -365,7 +366,7 @@ pub fn auth_verify_email(
     let credentials = response
         .json::<CredentialResponse>()
         .map_err(|_| "auth_response_invalid".to_string())?;
-    commit_credentials(&state, credentials)
+    commit_credentials(state, credentials)
 }
 
 fn valid_id_username(value: &str) -> bool {
@@ -381,11 +382,11 @@ fn valid_id_password(value: &str) -> bool {
 }
 
 fn id_credential_response(response: Response, state: &AuthState) -> Result<AuthProfile, String> {
-    if response.status().as_u16() == 401 {
-        return Err("auth_id_invalid_credentials".to_string());
-    }
-    if !response.status().is_success() {
-        return Err("auth_id_unavailable".to_string());
+    match response.status().as_u16() {
+        200..=299 => {}
+        401 => return Err("auth_id_invalid_credentials".to_string()),
+        429 => return Err("auth_rate_limited".to_string()),
+        _ => return Err("auth_id_unavailable".to_string()),
     }
     let credentials = response
         .json::<CredentialResponse>()
@@ -393,11 +394,10 @@ fn id_credential_response(response: Response, state: &AuthState) -> Result<AuthP
     commit_credentials(state, credentials)
 }
 
-#[tauri::command]
-pub fn auth_id_login(
+fn auth_id_login_blocking(
     identifier: String,
     password: String,
-    state: tauri::State<'_, AuthState>,
+    state: &AuthState,
 ) -> Result<AuthProfile, String> {
     if !(valid_email(&identifier) || valid_id_username(&identifier))
         || !valid_id_password(&password)
@@ -408,11 +408,10 @@ pub fn auth_id_login(
         "/v1/auth/id/login",
         serde_json::json!({ "identifier": identifier, "password": password, "clientKind": "desktop", "credentialMode": "rotating-v1" }),
     )?;
-    id_credential_response(response, &state)
+    id_credential_response(response, state)
 }
 
-#[tauri::command]
-pub fn auth_id_register_start(
+fn auth_id_register_start_blocking(
     username: String,
     email: String,
     password: String,
@@ -429,17 +428,18 @@ pub fn auth_id_register_start(
         "/v1/auth/id/register/start",
         serde_json::json!({ "username": username, "email": email, "password": password, "language": language }),
     )?;
-    if !response.status().is_success() {
-        return Err("auth_id_unavailable".to_string());
+    match response.status().as_u16() {
+        200..=299 => Ok(()),
+        409 => Err("auth_id_username_taken".to_string()),
+        429 => Err("auth_rate_limited".to_string()),
+        _ => Err("auth_id_unavailable".to_string()),
     }
-    Ok(())
 }
 
-#[tauri::command]
-pub fn auth_id_register_verify(
+fn auth_id_register_verify_blocking(
     email: String,
     code: String,
-    state: tauri::State<'_, AuthState>,
+    state: &AuthState,
 ) -> Result<AuthProfile, String> {
     if !valid_email(&email) || code.len() != 6 || !code.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err("auth_code_invalid".to_string());
@@ -448,20 +448,19 @@ pub fn auth_id_register_verify(
         "/v1/auth/id/register/verify",
         serde_json::json!({ "email": email, "code": code, "clientKind": "desktop", "credentialMode": "rotating-v1" }),
     )?;
-    id_credential_response(response, &state)
+    id_credential_response(response, state)
 }
 
-#[tauri::command]
-pub fn auth_link_email_start(
+fn auth_link_email_start_blocking(
     email: String,
     language: String,
-    state: tauri::State<'_, AuthState>,
+    state: &AuthState,
 ) -> Result<(), String> {
     if !valid_email(&email) || !matches!(language.as_str(), "ru" | "en") {
         return Err("auth_email_invalid".to_string());
     }
     let response = authenticated_email_request(
-        &state,
+        state,
         "/v1/session/email/start",
         serde_json::json!({ "email": email, "language": language }),
     )?;
@@ -471,17 +470,16 @@ pub fn auth_link_email_start(
     Ok(())
 }
 
-#[tauri::command]
-pub fn auth_link_email_verify(
+fn auth_link_email_verify_blocking(
     email: String,
     code: String,
-    state: tauri::State<'_, AuthState>,
+    state: &AuthState,
 ) -> Result<String, String> {
     if !valid_email(&email) || code.len() != 6 || !code.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err("auth_code_invalid".to_string());
     }
     let response = authenticated_email_request(
-        &state,
+        state,
         "/v1/session/email/verify",
         serde_json::json!({ "email": email, "code": code }),
     )?;
@@ -497,11 +495,8 @@ pub fn auth_link_email_verify(
         .ok_or_else(|| "auth_response_invalid".to_string())
 }
 
-#[tauri::command]
-pub fn auth_email_identity(
-    state: tauri::State<'_, AuthState>,
-) -> Result<serde_json::Value, String> {
-    let response = authenticated_request(&state, reqwest::Method::GET, "/v1/session/email")?;
+fn auth_email_identity_blocking(state: &AuthState) -> Result<serde_json::Value, String> {
+    let response = authenticated_request(state, reqwest::Method::GET, "/v1/session/email")?;
     if !response.status().is_success() {
         return Err("auth_service_unavailable".to_string());
     }
@@ -510,11 +505,7 @@ pub fn auth_email_identity(
         .map_err(|_| "auth_response_invalid".to_string())
 }
 
-#[tauri::command]
-pub fn auth_verify_code(
-    code: String,
-    state: tauri::State<'_, AuthState>,
-) -> Result<AuthProfile, String> {
+fn auth_verify_code_blocking(code: String, state: &AuthState) -> Result<AuthProfile, String> {
     if code.len() != 6 || !code.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err("auth_code_invalid".to_string());
     }
@@ -536,20 +527,29 @@ pub fn auth_verify_code(
     let credentials = response
         .json::<CredentialResponse>()
         .map_err(|_| "auth_response_invalid".to_string())?;
-    commit_credentials(&state, credentials)
+    commit_credentials(state, credentials)
 }
 
-#[tauri::command]
-pub fn auth_begin_device_challenge(
-    state: tauri::State<'_, AuthState>,
+fn auth_begin_device_challenge_blocking(
+    state: &AuthState,
+    app_version: &str,
 ) -> Result<DeviceChallengeStart, String> {
     let existing_device_id = read_device_id()?;
+    let platform = if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "linux"
+    };
     let response = client()?
         .post(format!("{AUTH_ORIGIN}/v1/auth/device/challenges"))
         .json(&serde_json::json!({
             "deviceId": existing_device_id.as_deref(),
             "clientKind": "desktop",
-            "credentialMode": "rotating-v1"
+            "credentialMode": "rotating-v1",
+            "platform": platform,
+            "appVersion": app_version
         }))
         .send()
         .map_err(|_| "auth_service_unavailable".to_string())?;
@@ -589,6 +589,13 @@ pub fn auth_begin_device_challenge(
     if challenge.deep_link != expected_link {
         return Err("auth_response_invalid".to_string());
     }
+    if challenge
+        .match_code
+        .as_deref()
+        .is_some_and(|code| code.len() != 2 || !code.bytes().all(|byte| byte.is_ascii_digit()))
+    {
+        return Err("auth_response_invalid".to_string());
+    }
     *state
         .pending_challenge
         .lock()
@@ -600,13 +607,11 @@ pub fn auth_begin_device_challenge(
         deep_link: challenge.deep_link,
         expires_at: challenge.expires_at,
         poll_after_seconds: challenge.poll_after_seconds,
+        match_code: challenge.match_code,
     })
 }
 
-#[tauri::command]
-pub fn auth_poll_device_challenge(
-    state: tauri::State<'_, AuthState>,
-) -> Result<DeviceChallengePoll, String> {
+fn auth_poll_device_challenge_blocking(state: &AuthState) -> Result<DeviceChallengePoll, String> {
     let pending = state
         .pending_challenge
         .lock()
@@ -626,7 +631,7 @@ pub fn auth_poll_device_challenge(
             let credentials = response
                 .json::<CredentialResponse>()
                 .map_err(|_| "auth_response_invalid".to_string())?;
-            let profile = commit_credentials(&state, credentials)?;
+            let profile = commit_credentials(state, credentials)?;
             *state
                 .pending_challenge
                 .lock()
@@ -664,8 +669,7 @@ pub fn auth_poll_device_challenge(
     }
 }
 
-#[tauri::command]
-pub fn auth_cancel_device_challenge(state: tauri::State<'_, AuthState>) -> Result<(), String> {
+fn auth_cancel_device_challenge_blocking(state: &AuthState) -> Result<(), String> {
     *state
         .pending_challenge
         .lock()
@@ -673,10 +677,7 @@ pub fn auth_cancel_device_challenge(state: tauri::State<'_, AuthState>) -> Resul
     Ok(())
 }
 
-#[tauri::command]
-pub fn auth_restore_session(
-    state: tauri::State<'_, AuthState>,
-) -> Result<Option<AuthProfile>, String> {
+fn auth_restore_session_blocking(state: &AuthState) -> Result<Option<AuthProfile>, String> {
     if let Some(session) = state
         .session
         .lock()
@@ -685,14 +686,11 @@ pub fn auth_restore_session(
     {
         return Ok(Some(session.profile));
     }
-    refresh_from_vault(&state, None)
+    refresh_from_vault(state, None)
 }
 
-#[tauri::command]
-pub fn auth_fetch_avatar(
-    state: tauri::State<'_, AuthState>,
-) -> Result<Option<AvatarPayload>, String> {
-    let response = authenticated_request(&state, reqwest::Method::GET, "/v1/session/avatar")?;
+fn auth_fetch_avatar_blocking(state: &AuthState) -> Result<Option<AvatarPayload>, String> {
+    let response = authenticated_request(state, reqwest::Method::GET, "/v1/session/avatar")?;
     if response.status().as_u16() == 404 {
         return Ok(None);
     }
@@ -718,11 +716,8 @@ pub fn auth_fetch_avatar(
     }))
 }
 
-#[tauri::command]
-pub fn auth_list_sessions(
-    state: tauri::State<'_, AuthState>,
-) -> Result<Vec<DeviceSession>, String> {
-    let response = authenticated_request(&state, reqwest::Method::GET, "/v1/session/devices")?;
+fn auth_list_sessions_blocking(state: &AuthState) -> Result<Vec<DeviceSession>, String> {
+    let response = authenticated_request(state, reqwest::Method::GET, "/v1/session/devices")?;
     if !response.status().is_success() {
         return Err("auth_sessions_unavailable".to_string());
     }
@@ -732,11 +727,7 @@ pub fn auth_list_sessions(
     Ok(payload.sessions)
 }
 
-#[tauri::command]
-pub fn auth_revoke_device(
-    session_id: String,
-    state: tauri::State<'_, AuthState>,
-) -> Result<bool, String> {
+fn auth_revoke_device_blocking(session_id: String, state: &AuthState) -> Result<bool, String> {
     if session_id.len() < 32
         || session_id.len() > 36
         || !session_id
@@ -745,7 +736,7 @@ pub fn auth_revoke_device(
     {
         return Err("auth_session_invalid".to_string());
     }
-    let token = access_token(&state)?;
+    let token = access_token(state)?;
     let response = client()?
         .post(format!("{AUTH_ORIGIN}/v1/session/devices/revoke"))
         .header(AUTHORIZATION, format!("Bearer {token}"))
@@ -762,8 +753,7 @@ pub fn auth_revoke_device(
         .unwrap_or(false))
 }
 
-#[tauri::command]
-pub fn auth_logout(state: tauri::State<'_, AuthState>) -> Result<(), String> {
+fn auth_logout_blocking(state: &AuthState) -> Result<(), String> {
     let token = state
         .session
         .lock()
@@ -786,6 +776,159 @@ pub fn auth_logout(state: tauri::State<'_, AuthState>) -> Result<(), String> {
         .lock()
         .map_err(|_| "auth_state_unavailable".to_string())? = None;
     Ok(())
+}
+
+// Every auth command performs network and credential-vault I/O. Tauri runs
+// synchronous commands on the main thread, which would freeze the window for
+// up to the client timeout, so each one runs on a blocking worker instead.
+async fn run_blocking<T, F>(app: AppHandle, task: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce(&AuthState) -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(move || task(&app.state::<AuthState>()))
+        .await
+        .map_err(|_| "auth_worker_failed".to_string())?
+}
+
+#[tauri::command]
+pub async fn auth_begin_email(
+    app: AppHandle,
+    email: String,
+    language: String,
+) -> Result<(), String> {
+    run_blocking(app, move |_| auth_begin_email_blocking(email, language)).await
+}
+
+#[tauri::command]
+pub async fn auth_verify_email(
+    app: AppHandle,
+    email: String,
+    code: String,
+) -> Result<AuthProfile, String> {
+    run_blocking(app, move |state| {
+        auth_verify_email_blocking(email, code, state)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn auth_id_login(
+    app: AppHandle,
+    identifier: String,
+    password: String,
+) -> Result<AuthProfile, String> {
+    run_blocking(app, move |state| {
+        auth_id_login_blocking(identifier, password, state)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn auth_id_register_start(
+    app: AppHandle,
+    username: String,
+    email: String,
+    password: String,
+    language: String,
+) -> Result<(), String> {
+    run_blocking(app, move |_| {
+        auth_id_register_start_blocking(username, email, password, language)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn auth_id_register_verify(
+    app: AppHandle,
+    email: String,
+    code: String,
+) -> Result<AuthProfile, String> {
+    run_blocking(app, move |state| {
+        auth_id_register_verify_blocking(email, code, state)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn auth_link_email_start(
+    app: AppHandle,
+    email: String,
+    language: String,
+) -> Result<(), String> {
+    run_blocking(app, move |state| {
+        auth_link_email_start_blocking(email, language, state)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn auth_link_email_verify(
+    app: AppHandle,
+    email: String,
+    code: String,
+) -> Result<String, String> {
+    run_blocking(app, move |state| {
+        auth_link_email_verify_blocking(email, code, state)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn auth_email_identity(app: AppHandle) -> Result<serde_json::Value, String> {
+    run_blocking(app, auth_email_identity_blocking).await
+}
+
+#[tauri::command]
+pub async fn auth_verify_code(app: AppHandle, code: String) -> Result<AuthProfile, String> {
+    run_blocking(app, move |state| auth_verify_code_blocking(code, state)).await
+}
+
+#[tauri::command]
+pub async fn auth_begin_device_challenge(app: AppHandle) -> Result<DeviceChallengeStart, String> {
+    let version = app.package_info().version.to_string();
+    run_blocking(app, move |state| {
+        auth_begin_device_challenge_blocking(state, &version)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn auth_poll_device_challenge(app: AppHandle) -> Result<DeviceChallengePoll, String> {
+    run_blocking(app, auth_poll_device_challenge_blocking).await
+}
+
+#[tauri::command]
+pub async fn auth_cancel_device_challenge(app: AppHandle) -> Result<(), String> {
+    run_blocking(app, auth_cancel_device_challenge_blocking).await
+}
+
+#[tauri::command]
+pub async fn auth_restore_session(app: AppHandle) -> Result<Option<AuthProfile>, String> {
+    run_blocking(app, auth_restore_session_blocking).await
+}
+
+#[tauri::command]
+pub async fn auth_fetch_avatar(app: AppHandle) -> Result<Option<AvatarPayload>, String> {
+    run_blocking(app, auth_fetch_avatar_blocking).await
+}
+
+#[tauri::command]
+pub async fn auth_list_sessions(app: AppHandle) -> Result<Vec<DeviceSession>, String> {
+    run_blocking(app, auth_list_sessions_blocking).await
+}
+
+#[tauri::command]
+pub async fn auth_revoke_device(app: AppHandle, session_id: String) -> Result<bool, String> {
+    run_blocking(app, move |state| {
+        auth_revoke_device_blocking(session_id, state)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn auth_logout(app: AppHandle) -> Result<(), String> {
+    run_blocking(app, auth_logout_blocking).await
 }
 
 #[cfg(test)]
@@ -842,10 +985,12 @@ mod tests {
             deep_link: "https://t.me/BeterFyBot?start=auth_opaque".into(),
             expires_at: 123,
             poll_after_seconds: 2,
+            match_code: Some("42".into()),
         };
         let serialized = serde_json::to_string(&challenge).expect("challenge json");
         assert!(!serialized.contains("deviceId"));
         assert!(!serialized.contains("challengeToken"));
         assert!(!serialized.contains("refreshToken"));
+        assert!(serialized.contains("\"matchCode\":\"42\""));
     }
 }

@@ -145,10 +145,36 @@ struct GameInstallation {
     verified: bool,
 }
 
+/// `canonicalize` on Windows returns extended-length paths (`\\?\C:\...`).
+/// They are valid for the OS but confusing in the interface, and some tools
+/// reject them. Short drive and UNC paths are shown in their ordinary form.
+/// The deployment code canonicalizes again, so its identities are unaffected.
+fn simplified_path(path: PathBuf) -> PathBuf {
+    let text = path.to_string_lossy();
+    if text.len() >= 260 {
+        return path;
+    }
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    if let Some(rest) = text.strip_prefix(r"\\?\") {
+        let bytes = rest.as_bytes();
+        if bytes.len() >= 3
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1] == b':'
+            && bytes[2] == b'\\'
+        {
+            return PathBuf::from(rest);
+        }
+    }
+    path
+}
+
 fn validate_candidate(path: &Path, source: &'static str) -> Result<GameInstallation, String> {
-    let canonical = path
-        .canonicalize()
-        .map_err(|_| "game_not_found".to_string())?;
+    let canonical = simplified_path(
+        path.canonicalize()
+            .map_err(|_| "game_not_found".to_string())?,
+    );
     if !canonical.is_dir() {
         return Err("invalid_game_path".to_string());
     }
@@ -296,21 +322,37 @@ fn parse_library_paths(contents: &str) -> Vec<PathBuf> {
         .collect()
 }
 
+// Discovery and diagnostics read the registry, Steam library files and the
+// process list. Synchronous Tauri commands run on the main thread, so these
+// run on a blocking worker to keep the window responsive.
 #[tauri::command]
-fn discover_game() -> Vec<GameInstallation> {
-    discovery_candidates()
-        .iter()
-        .filter_map(|path| validate_candidate(path, "auto").ok())
-        .collect()
+async fn discover_game() -> Result<Vec<GameInstallation>, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        discovery_candidates()
+            .iter()
+            .filter_map(|path| validate_candidate(path, "auto").ok())
+            .collect()
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn validate_game_path(path: String) -> Result<GameInstallation, String> {
     validate_candidate(Path::new(&path), "manual")
 }
 
 #[tauri::command]
-fn collect_system_diagnostics(app: AppHandle, game_path: Option<String>) -> SystemDiagnosticReport {
+async fn collect_system_diagnostics(
+    app: AppHandle,
+    game_path: Option<String>,
+) -> Result<SystemDiagnosticReport, String> {
+    tauri::async_runtime::spawn_blocking(move || system_diagnostics_report(&app, game_path))
+        .await
+        .map_err(|_| "runtime_worker_failed".to_string())
+}
+
+fn system_diagnostics_report(app: &AppHandle, game_path: Option<String>) -> SystemDiagnosticReport {
     let stored_game_verified = game_path
         .as_deref()
         .filter(|path| !path.trim().is_empty())
@@ -385,7 +427,7 @@ fn plan_build(request: BuildPlanRequest) -> Result<BuildPlan, String> {
     create_build_plan(request)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn execute_build(app: AppHandle, request: ExecuteBuildRequest) -> Result<BuildReceipt, String> {
     let app_data = app
         .path()
@@ -394,7 +436,7 @@ fn execute_build(app: AppHandle, request: ExecuteBuildRequest) -> Result<BuildRe
     execute_staged_build(&app_data, request)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn inspect_runtime() -> Result<RuntimeState, String> {
     runtime_control::inspect_runtime()
 }
@@ -408,7 +450,7 @@ async fn prepare_runtime_for_patch(request: RuntimePrepareRequest) -> Result<Run
     .map_err(|_| "runtime_worker_failed".to_string())?
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_engine_operations(app: AppHandle) -> Result<Vec<OperationSummary>, String> {
     let app_data = app
         .path()
@@ -417,7 +459,7 @@ fn list_engine_operations(app: AppHandle) -> Result<Vec<OperationSummary>, Strin
     list_staged_operations(&app_data)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn rollback_engine_operation(
     app: AppHandle,
     operation_id: String,
@@ -1077,6 +1119,21 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extended_length_prefixes_are_hidden_from_the_interface() {
+        let drive = simplified_path(PathBuf::from(r"\\?\C:\Steam\steamapps\common\dota 2 beta"));
+        assert_eq!(
+            drive,
+            PathBuf::from(r"C:\Steam\steamapps\common\dota 2 beta")
+        );
+        let unc = simplified_path(PathBuf::from(r"\\?\UNC\server\games\dota 2 beta"));
+        assert_eq!(unc, PathBuf::from(r"\\server\games\dota 2 beta"));
+        let device = PathBuf::from(r"\\?\Volume{0}\dota 2 beta");
+        assert_eq!(simplified_path(device.clone()), device);
+        let long = PathBuf::from(format!(r"\\?\C:\{}", "a".repeat(300)));
+        assert_eq!(simplified_path(long.clone()), long);
+    }
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn unique_temp(name: &str) -> PathBuf {
