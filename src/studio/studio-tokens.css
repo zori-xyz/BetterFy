@@ -18,7 +18,23 @@
   --s-ready:#a5cdb1;
   --s-danger:#ff9a94;
   --s-shadow:0 18px 70px #0007;
-  --s-radius:10px;
+  /* Radius scale (DESIGN.md: 10px controls, 14px actions/cards, 20px
+     grouped panels). hair/tag keep thin bars and small labels crisp; inner
+     sits inside a 10px control with a 3px inset. */
+  --s-radius-hair:3px;
+  --s-radius-tag:5px;
+  --s-radius-inner:7px;
+  --s-radius-control:10px;
+  --s-radius-card:14px;
+  --s-radius-panel:20px;
+  /* Small-text scale for labels, metadata and body copy. 9px is the floor:
+     8px labels were below comfortable reading size on Windows at 100%. */
+  --s-text-2xs:9px;
+  --s-text-xs:10px;
+  --s-text-sm:11px;
+  --s-text-md:12px;
+  --s-text-base:13px;
+  --s-text-lg:14px;
   --s-hero-accent:#f29678;
   --s-hero-accent-text:#241710;
   --s-status-font-size:10px;

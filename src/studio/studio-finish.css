@@ -22,7 +22,7 @@
   position:absolute;
   inset:12px;
   border:1px solid #d5adea22;
-  border-radius:4px;
+  border-radius:var(--s-radius-tag);
 }
 .s-media-pending-mark {
   position:relative;
@@ -43,7 +43,7 @@
 }
 .s-media-pending small {
   position:relative;
-  font-size:10px;
+  font-size:var(--s-text-xs);
   font-weight:600;
   letter-spacing:.08em;
   text-transform:uppercase;
@@ -55,7 +55,7 @@
 .s-showcase-look>img.s-media-loaded,
 .s-detail-media>img.s-media-loaded {opacity:1;transition:opacity .32s ease,transform .35s cubic-bezier(.2,.7,.3,1)}
 .s-showcase-look>.s-media-pending {padding:18px;background:linear-gradient(155deg,#27212b,#121117)}
-.s-showcase-look>.s-media-pending small {font-size:9px;line-height:1.3}
+.s-showcase-look>.s-media-pending small {font-size:var(--s-text-2xs);line-height:1.3}
 .s-mod-image>.s-media-fallback,
 .s-showcase-look>.s-media-fallback,
 .s-detail-media>.s-media-fallback {background:var(--s-input);color:var(--s-muted)}
@@ -76,7 +76,7 @@
 .s-page-build>.s-empty h2,
 .s-page-library .s-empty h2 {max-width:550px;font-size:clamp(25px,2.8vw,37px)}
 .s-page-build>.s-empty>p,
-.s-page-library .s-empty>p {max-width:490px;font-size:13px;line-height:1.7}
+.s-page-library .s-empty>p {max-width:490px;font-size:var(--s-text-base);line-height:1.7}
 .s-page-build>.s-empty>.s-btn,
 .s-page-library .s-empty>.s-btn {margin-top:25px;min-height:42px}
 
@@ -101,17 +101,17 @@
 .s-avatar>svg {width:34px;height:34px;color:var(--s-accent)}
 
 @media (min-width:1181px) {
-  .s-sidebar nav button,.s-sidebar nav a {font-size:13px}
-  .s-sidebar-profile strong,.s-top-search,.s-breadcrumb,.s-settings-nav button {font-size:12px}
-  .s-sidebar-profile small,.s-nav-label,.s-game-switch small,.s-page-footer {font-size:10px}
-  .s-page-head p,.s-setting-row strong,.s-profile-access p {font-size:13px}
-  .s-setting-row p,.s-segment>button,.s-profile-person p,.s-profile-devices>p {font-size:11px}
-  .s-mod-name,.s-mod-bottom>span,.s-category-tabs>button,.s-filter-button {font-size:12px}
-  .s-mod-category,.s-results-head,.s-preset-content p {font-size:10px}
+  .s-sidebar nav button,.s-sidebar nav a {font-size:var(--s-text-base)}
+  .s-sidebar-profile strong,.s-top-search,.s-breadcrumb,.s-settings-nav button {font-size:var(--s-text-md)}
+  .s-sidebar-profile small,.s-nav-label,.s-game-switch small,.s-page-footer {font-size:var(--s-text-xs)}
+  .s-page-head p,.s-setting-row strong,.s-profile-access p {font-size:var(--s-text-base)}
+  .s-setting-row p,.s-segment>button,.s-profile-person p,.s-profile-devices>p {font-size:var(--s-text-sm)}
+  .s-mod-name,.s-mod-bottom>span,.s-category-tabs>button,.s-filter-button {font-size:var(--s-text-md)}
+  .s-mod-category,.s-results-head,.s-preset-content p {font-size:var(--s-text-xs)}
 }
 @media (max-width:760px) {
   .s-page-build>.s-empty,.s-page-library .s-empty {padding:25px 0 35px;margin-top:8px}
-  .s-page-build>.s-empty>p,.s-page-library .s-empty>p {font-size:12px}
+  .s-page-build>.s-empty>p,.s-page-library .s-empty>p {font-size:var(--s-text-md)}
   .s-theme-mini>.wordmark {transform:scale(.66)}
 }
 @media (prefers-reduced-motion:reduce) {
