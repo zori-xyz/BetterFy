@@ -6,6 +6,7 @@ import {
   deviceChallengeContext,
   deviceMatchCode,
   deviceRequestCaption,
+  isTelegramIdentity,
   refreshReuseAllowed,
   verifyGlobalFailureLimit,
 } from "../src/index.mjs";
@@ -65,4 +66,10 @@ test("cleanup never touches payment or identity records", () => {
   for (const statement of CLEANUP_STATEMENTS) {
     assert.doesNotMatch(statement, /payment|entitlement|betterfy_users|identities|credentials/);
   }
+});
+
+test("only numeric Telegram ids count as a linked Telegram account", () => {
+  assert.equal(isTelegramIdentity("123456789"), true);
+  assert.equal(isTelegramIdentity("id:2f1c0e5a-0000-4000-8000-000000000000"), false);
+  assert.equal(isTelegramIdentity(undefined), false);
 });

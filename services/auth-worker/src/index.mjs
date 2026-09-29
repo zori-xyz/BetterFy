@@ -181,6 +181,13 @@ async function refreshAvatar(env, telegramUserId, now, force = false) {
   }
 }
 
+// Standalone BetterFy ID accounts store "id:<uuid>" in the legacy Telegram
+// column. Premium is bought in the bot and lands on the Telegram account, so
+// the app needs to know whether this account has one.
+export function isTelegramIdentity(value) {
+  return /^[0-9]+$/.test(String(value ?? ""));
+}
+
 export function normalizeClientKind(value) {
   return value === "web" || value === "desktop" ? value : "unknown";
 }
@@ -360,6 +367,7 @@ async function sessionProfile(request, env, origin) {
     username: user.username ?? undefined,
     accessTier: isEntitlementActive(entitlement, now) ? "premium" : "early-access",
     avatarAvailable: Boolean(avatarFileId),
+    telegramLinked: isTelegramIdentity(user.telegram_user_id),
     accessExpiresAt: isEntitlementActive(entitlement, now) ? entitlement.active_until : undefined,
     accessPlan: isEntitlementActive(entitlement, now) ? plan?.id : undefined,
     accessRecurring: isEntitlementActive(entitlement, now) ? Boolean(plan?.recurring && entitlement.canceled_at == null) : false,
@@ -463,6 +471,7 @@ function authPayload(user, entitlement, plan, session, extra = {}) {
     sessionToken: session.token,
     sessionId: session.sessionId,
     avatarAvailable: Boolean(user.avatar_file_id),
+    telegramLinked: isTelegramIdentity(user.telegram_user_id),
     accessExpiresAt: active ? entitlement.active_until : undefined,
     accessPlan: active ? plan?.id : undefined,
     accessRecurring: active ? Boolean(plan?.recurring && entitlement.canceled_at == null) : false,

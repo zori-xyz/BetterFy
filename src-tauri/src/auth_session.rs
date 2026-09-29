@@ -24,6 +24,7 @@ pub struct AuthProfile {
     pub access_recurring: Option<bool>,
     pub session_id: Option<String>,
     pub avatar_available: Option<bool>,
+    pub telegram_linked: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -689,6 +690,32 @@ fn auth_restore_session_blocking(state: &AuthState) -> Result<Option<AuthProfile
     refresh_from_vault(state, None)
 }
 
+/// Re-reads the profile (entitlement, expiry) so a purchase made in the bot
+/// shows up without restarting the app.
+fn auth_profile_blocking(state: &AuthState) -> Result<AuthProfile, String> {
+    let response = authenticated_request(state, reqwest::Method::GET, "/v1/session/profile")?;
+    if !response.status().is_success() {
+        return Err("auth_service_unavailable".to_string());
+    }
+    let profile = response
+        .json::<AuthProfile>()
+        .map_err(|_| "auth_response_invalid".to_string())?;
+    if profile.user_id.is_empty() || profile.display_name.is_empty() {
+        return Err("auth_response_invalid".to_string());
+    }
+    let mut session = state
+        .session
+        .lock()
+        .map_err(|_| "auth_state_unavailable".to_string())?;
+    match session.as_mut() {
+        Some(active) if active.profile.user_id == profile.user_id => {
+            active.profile = profile.clone();
+            Ok(profile)
+        }
+        _ => Err("auth_session_unavailable".to_string()),
+    }
+}
+
 fn auth_fetch_avatar_blocking(state: &AuthState) -> Result<Option<AvatarPayload>, String> {
     let response = authenticated_request(state, reqwest::Method::GET, "/v1/session/avatar")?;
     if response.status().as_u16() == 404 {
@@ -736,13 +763,13 @@ fn auth_revoke_device_blocking(session_id: String, state: &AuthState) -> Result<
     {
         return Err("auth_session_invalid".to_string());
     }
-    let token = access_token(state)?;
-    let response = client()?
-        .post(format!("{AUTH_ORIGIN}/v1/session/devices/revoke"))
-        .header(AUTHORIZATION, format!("Bearer {token}"))
-        .json(&serde_json::json!({ "sessionId": session_id }))
-        .send()
-        .map_err(|_| "auth_service_unavailable".to_string())?;
+    // The access token lives 15 minutes; a Profile screen left open longer
+    // must refresh it instead of failing the revoke.
+    let response = authenticated_email_request(
+        state,
+        "/v1/session/devices/revoke",
+        serde_json::json!({ "sessionId": session_id }),
+    )?;
     if !response.status().is_success() {
         return Err("auth_session_revoke_failed".to_string());
     }
@@ -909,6 +936,11 @@ pub async fn auth_restore_session(app: AppHandle) -> Result<Option<AuthProfile>,
 }
 
 #[tauri::command]
+pub async fn auth_profile(app: AppHandle) -> Result<AuthProfile, String> {
+    run_blocking(app, auth_profile_blocking).await
+}
+
+#[tauri::command]
 pub async fn auth_fetch_avatar(app: AppHandle) -> Result<Option<AvatarPayload>, String> {
     run_blocking(app, auth_fetch_avatar_blocking).await
 }
@@ -948,6 +980,7 @@ mod tests {
             access_recurring: None,
             session_id: None,
             avatar_available: None,
+            telegram_linked: None,
         };
         *state.session.lock().expect("session lock") = Some(ActiveSession {
             profile: profile.clone(),
@@ -973,6 +1006,7 @@ mod tests {
             access_recurring: Some(false),
             session_id: Some("11111111-1111-4111-8111-111111111111".into()),
             avatar_available: Some(true),
+            telegram_linked: Some(true),
         };
         let serialized = serde_json::to_string(&profile).expect("profile json");
         assert!(!serialized.contains("token"));

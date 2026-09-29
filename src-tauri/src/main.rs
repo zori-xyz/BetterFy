@@ -20,8 +20,8 @@ use auth_session::{
     auth_begin_device_challenge, auth_begin_email, auth_cancel_device_challenge,
     auth_email_identity, auth_fetch_avatar, auth_id_login, auth_id_register_start,
     auth_id_register_verify, auth_link_email_start, auth_link_email_verify, auth_list_sessions,
-    auth_logout, auth_poll_device_challenge, auth_restore_session, auth_revoke_device,
-    auth_verify_code, auth_verify_email, AuthState,
+    auth_logout, auth_poll_device_challenge, auth_profile, auth_restore_session,
+    auth_revoke_device, auth_verify_code, auth_verify_email, AuthState,
 };
 use build_engine::{
     create_build_plan, execute_build as execute_staged_build,
@@ -1108,6 +1108,7 @@ fn main() {
             auth_cancel_device_challenge,
             auth_restore_session,
             auth_fetch_avatar,
+            auth_profile,
             auth_list_sessions,
             auth_revoke_device,
             auth_logout
