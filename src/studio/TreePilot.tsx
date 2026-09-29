@@ -25,6 +25,12 @@ import {
 import { useLocale } from "../i18n";
 import { deliveryLabel, modById } from "./model";
 import { setEngineActive } from "./engineActivity";
+import { getStorageItem, setStorageItem } from "../storage";
+
+// Dota build number seen when a BetterFy build was installed, per operation.
+// Informational only: it lets the app say "Dota was updated since you
+// installed this" — a patch can break an older HUD mod.
+const buildKey = (operationId: string) => `betterfy:deployed-dota-build:${operationId}`;
 
 const codeOf = (error: unknown) =>
   error instanceof EngineFault
@@ -175,6 +181,7 @@ export default function TreePilot({
   const [evidence, setEvidence] = useState<DeploymentEvidenceReport | null>(null);
   const [reportCopied, setReportCopied] = useState(false);
   const [error, setError] = useState("");
+  const [dotaPatched, setDotaPatched] = useState(false);
   // Only work that touches game files or Steam blocks the rest of the app.
   // Set on start and cleared in each operation's `finally`, so leaving this
   // screen mid-operation cannot clear it early.
@@ -310,6 +317,24 @@ export default function TreePilot({
     };
   }, [desktop, windows, preview, installation.verified, installation.path]);
   useEffect(() => {
+    setDotaPatched(false);
+    if (!operationId || !canManage) return;
+    let active = true;
+    engineBridge
+      .dotaBuild(installation.path)
+      .then((current) => {
+        if (!active || !current) return;
+        const recorded = getStorageItem(buildKey(operationId));
+        // Installs made before this check existed get today's build as baseline.
+        if (!recorded) setStorageItem(buildKey(operationId), current);
+        else setDotaPatched(recorded !== current);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [operationId, canManage, installation.path]);
+  useEffect(() => {
     if (!canManage) return;
     let active = true;
     engineBridge
@@ -395,6 +420,12 @@ export default function TreePilot({
         selectedLanguage,
       );
       if (!receipt.committed || !receipt.backupVerified) throw new Error("deployment_unverified");
+      await engineBridge
+        .dotaBuild(installation.path)
+        .then((build) => {
+          if (build) setStorageItem(buildKey(receipt.operationId), build);
+        })
+        .catch(() => undefined);
       setOperationId(receipt.operationId);
       setInstalledLanguage(receipt.language);
       setInstalledPackageIds(receipt.packageIds);
@@ -977,6 +1008,16 @@ export default function TreePilot({
               </option>
             ))}
           </select>
+        </div>
+      )}
+      {operationId && dotaPatched && (
+        <div className="s-inline-note warning" role="alert">
+          <TriangleAlert />
+          <p>
+            {isRu
+              ? "Dota 2 обновилась после установки этой сборки. Проверь игру: если интерфейс выглядит сломанным, откати сборку — BetterFy вернёт исходные файлы."
+              : "Dota 2 was updated after this build was installed. Check the game: if the interface looks broken, restore the build and BetterFy will put the original files back."}
+          </p>
         </div>
       )}
       {operationId ? (

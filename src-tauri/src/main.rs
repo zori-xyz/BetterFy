@@ -223,6 +223,39 @@ fn validate_candidate(path: &Path, source: &'static str) -> Result<GameInstallat
     })
 }
 
+/// Steam's build number for the installed Dota 2, from the library's
+/// `appmanifest_570.acf`. Read-only; used to notice that the game was patched
+/// after a build was installed, because a patch can break an older HUD mod.
+fn dota_build_id(game_root: &Path) -> Option<String> {
+    let manifest = game_root.parent()?.parent()?.join("appmanifest_570.acf");
+    if fs::metadata(&manifest).ok()?.len() > 256 * 1024 {
+        return None;
+    }
+    parse_build_id(&fs::read_to_string(manifest).ok()?)
+}
+
+fn parse_build_id(contents: &str) -> Option<String> {
+    contents.lines().find_map(|line| {
+        let quoted: Vec<&str> = line.split('"').skip(1).step_by(2).collect();
+        match quoted.as_slice() {
+            ["buildid", value]
+                if !value.is_empty()
+                    && value.len() <= 12
+                    && value.bytes().all(|byte| byte.is_ascii_digit()) =>
+            {
+                Some((*value).to_string())
+            }
+            _ => None,
+        }
+    })
+}
+
+#[tauri::command(async)]
+fn dota_build(game_path: String) -> Result<Option<String>, String> {
+    let installation = validate_candidate(Path::new(&game_path), "manual")?;
+    Ok(dota_build_id(Path::new(&installation.path)))
+}
+
 fn discovery_candidates() -> Vec<PathBuf> {
     let mut steam_roots = Vec::new();
 
@@ -1055,6 +1088,7 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             discover_game,
+            dota_build,
             validate_game_path,
             collect_system_diagnostics,
             intake_fixture_content,
@@ -1120,6 +1154,25 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dota_build_id_is_read_from_the_app_manifest() {
+        let manifest = "\"AppState\"\n{\n\t\"appid\"\t\t\"570\"\n\t\"buildid\"\t\t\"20512345\"\n\t\"UserConfig\"\n\t{\n\t\t\"language\"\t\t\"russian\"\n\t}\n}\n";
+        assert_eq!(parse_build_id(manifest).as_deref(), Some("20512345"));
+        assert_eq!(parse_build_id("\"buildid\"\t\t\"12a\""), None);
+        assert_eq!(parse_build_id("\"TargetBuildID\"\t\t\"1\""), None);
+
+        let library = unique_temp("dota-build");
+        let game = library.join("steamapps").join("common").join("dota 2 beta");
+        fs::create_dir_all(&game).expect("game dir");
+        fs::write(
+            library.join("steamapps").join("appmanifest_570.acf"),
+            manifest,
+        )
+        .expect("manifest");
+        assert_eq!(dota_build_id(&game).as_deref(), Some("20512345"));
+        let _ = fs::remove_dir_all(&library);
+    }
 
     #[test]
     fn extended_length_prefixes_are_hidden_from_the_interface() {

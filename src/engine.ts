@@ -315,6 +315,7 @@ export interface EngineBridge {
     language: GameLanguage,
   ): Promise<GameDeploymentReceipt>;
   currentTreePilot(gamePath: string): Promise<TreePilotCurrentState | null>;
+  dotaBuild(gamePath: string): Promise<string | null>;
   applyTreeSteamLaunchOptions(request: TreeSteamActivationRequest): Promise<SteamConfigReceipt>;
   applyTreeSteamLaunchOptionsStress(
     request: TreeSteamActivationRequest,
@@ -581,6 +582,9 @@ export const mockEngine: EngineBridge = {
     throw new EngineFault("desktop_runtime_required", "install_tree_pilot");
   },
   async currentTreePilot() {
+    return null;
+  },
+  async dotaBuild() {
     return null;
   },
   async applyTreeSteamLaunchOptions() {
@@ -942,6 +946,15 @@ export const engineBridge: EngineBridge = {
       "current_tree_pilot",
       invoke<TreePilotCurrentState | null>("current_tree_pilot", { gamePath }),
       30_000,
+    );
+  },
+  async dotaBuild(gamePath) {
+    if (!isTauriRuntime()) return mockEngine.dotaBuild(gamePath);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "dota_build",
+      invoke<string | null>("dota_build", { gamePath }),
+      15_000,
     );
   },
   async applyTreeSteamLaunchOptions(request) {
