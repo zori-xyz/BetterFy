@@ -26,8 +26,8 @@ export default class AppErrorBoundary extends Component<{ children: ReactNode },
           <h1>{isRu ? "Перезапустим интерфейс BetterFy" : "Restart the BetterFy interface"}</h1>
           <p>
             {isRu
-              ? "Произошла ошибка интерфейса. Игровые файлы не затронуты — перезапусти оболочку и продолжай."
-              : "The interface encountered an error. Game files are untouched — restart the shell and continue."}
+              ? "Произошла ошибка интерфейса. Установки и откаты выполняются отдельно от интерфейса и ведут журнал — после перезапуска проверь состояние сборки на экране «Моя сборка»."
+              : "The interface encountered an error. Installs and restores run separately from the interface and are journaled — after restarting, check your build on the My build screen."}
           </p>
           <button onClick={() => window.location.reload()}>
             {isRu ? "Перезапустить BetterFy" : "Restart BetterFy"}

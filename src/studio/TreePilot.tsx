@@ -23,7 +23,8 @@ import {
   type TreePilotPlan,
 } from "../engine";
 import { useLocale } from "../i18n";
-import { deliveryLabel } from "./model";
+import { deliveryLabel, modById } from "./model";
+import { setEngineActive } from "./engineActivity";
 
 const codeOf = (error: unknown) =>
   error instanceof EngineFault
@@ -63,16 +64,16 @@ const explainError = (code: string, isRu: boolean) => {
       "A resource could not be downloaded. Retry; verified files are kept.",
     ],
     build_plan_stale: [
-      "План устарел. Подготовь Tree Mod заново.",
-      "The plan is stale. Prepare Tree Mod again.",
+      "План устарел. Подготовь сборку заново.",
+      "The plan is stale. Prepare the build again.",
     ],
     deployment_target_foreign: [
       "Целевой файл занят другой модификацией. BetterFy не будет его заменять.",
       "Another modification owns the target. BetterFy will not overwrite it.",
     ],
     deployment_language_change_requires_restore: [
-      "Сначала откати установленный Tree Mod, затем выбери другой язык.",
-      "Restore the installed Tree Mod before choosing another language.",
+      "Сначала откати установленную сборку, затем выбери другой язык.",
+      "Restore the installed build before choosing another language.",
     ],
     language_folder_unavailable: [
       "В установке Dota нет папки выбранного языка с gameinfo.gi. Выбери другой язык или восстанови файлы игры через Steam.",
@@ -174,11 +175,19 @@ export default function TreePilot({
   const [evidence, setEvidence] = useState<DeploymentEvidenceReport | null>(null);
   const [reportCopied, setReportCopied] = useState(false);
   const [error, setError] = useState("");
+  // Only work that touches game files or Steam blocks the rest of the app.
+  // Set on start and cleared in each operation's `finally`, so leaving this
+  // screen mid-operation cannot clear it early.
+  useEffect(() => {
+    if (phase === "install" || phase === "steam" || phase === "restore" || recovering)
+      setEngineActive(true);
+  }, [phase, recovering]);
   const supportedIds = [
     "minify-tree-mod",
     "minify-show-networth",
     "minify-repopulate-unit-query-hud",
   ];
+  const catalogName = (id: string) => modById.get(id)?.name[language];
   const packageLabel = (id: string) =>
     id.includes("tree-mod")
       ? "Tree Mod"
@@ -200,11 +209,7 @@ export default function TreePilot({
       ? isRu
         ? `Сборка · ${ids.length} мода`
         : `Build · ${ids.length} mods`
-      : ids[0] === "minify-show-networth"
-        ? "Show Net Worth"
-        : ids[0] === "minify-repopulate-unit-query-hud"
-          ? "Unit Query HUD"
-          : "Tree Mod";
+      : (catalogName(ids[0]) ?? "Tree Mod");
   const windows = /Windows/i.test(navigator.userAgent);
   const desktop = "__TAURI_INTERNALS__" in window;
   // Managing an existing installation (restore, Steam, recovery, evidence)
@@ -434,6 +439,7 @@ export default function TreePilot({
     } catch (cause) {
       setError(codeOf(cause));
     } finally {
+      setEngineActive(false);
       setPhase("idle");
     }
   }
@@ -481,6 +487,7 @@ export default function TreePilot({
     } catch (cause) {
       setError(codeOf(cause));
     } finally {
+      setEngineActive(false);
       setPhase("idle");
     }
   }
@@ -542,6 +549,7 @@ export default function TreePilot({
     } catch (cause) {
       setError(codeOf(cause));
     } finally {
+      setEngineActive(false);
       setPhase("idle");
     }
   }
@@ -560,6 +568,7 @@ export default function TreePilot({
     } catch (cause) {
       setError(codeOf(cause));
     } finally {
+      setEngineActive(false);
       setPhase("idle");
     }
   }
@@ -608,6 +617,7 @@ export default function TreePilot({
     } catch (cause) {
       setError(codeOf(cause));
     } finally {
+      setEngineActive(false);
       setRecovering(false);
     }
   }
@@ -641,6 +651,7 @@ export default function TreePilot({
     setError("");
     setStressMessage("");
     setStressPhase(failurePoint);
+    setEngineActive(true);
     try {
       const runtime = await engineBridge.prepareRuntimeForPatch();
       if (!runtime.patchReady) throw new Error("runtime_busy");
@@ -675,6 +686,7 @@ export default function TreePilot({
     } catch (cause) {
       setError(codeOf(cause));
     } finally {
+      setEngineActive(false);
       setStressPhase(null);
     }
   }
@@ -695,6 +707,7 @@ export default function TreePilot({
     setError("");
     setStressMessage("");
     setStressPhase(failurePoint);
+    setEngineActive(true);
     try {
       const profile = profiles.find((item) => item.profileToken === selectedProfile);
       if (!profile || !["ready", "already_managed"].includes(profile.status))
@@ -742,6 +755,7 @@ export default function TreePilot({
     } catch (cause) {
       setError(codeOf(cause));
     } finally {
+      setEngineActive(false);
       setStressPhase(null);
     }
   }
@@ -765,8 +779,8 @@ export default function TreePilot({
       </div>
       <p>
         {isRu
-          ? "BetterFy скачивает только закреплённые ресурсы, сверяет каждый файл и собирает один VPK в выбранном тобой порядке. Первый мод имеет приоритет при совпадении ресурсов."
-          : "BetterFy downloads only pinned resources, verifies every file, and assembles one VPK in your chosen order. The first mod wins when resources overlap."}
+          ? "BetterFy скачивает только проверенные файлы модов, сверяет каждый и собирает из них один файл в выбранном тобой порядке. Если два мода меняют одно и то же, побеждает верхний."
+          : "BetterFy downloads only verified mod files, checks each one and combines them into a single file in your chosen order. If two mods change the same thing, the higher one wins."}
       </p>
       <div className="s-tree-pilot-steps">
         <span className={plan ? "done" : ""}>
@@ -816,8 +830,8 @@ export default function TreePilot({
             </strong>
             <p>
               {isRu
-                ? "Сборка будет записана в папку выбранного языка. Dutch проверен с Tree Mod на Windows; Show Net Worth и остальные языки требуют проверки."
-                : "The build goes into the selected language folder. Dutch was verified with Tree Mod on Windows; Show Net Worth and the other languages still need testing."}
+                ? "Моды подключаются через языковую папку Dota: игра будет запускаться с выбранным языком интерфейса. Нидерландский проверен на Windows со всеми тремя модами; остальные языки ещё не проверены."
+                : "Mods are loaded through a Dota language folder: the game will start with the chosen interface language. Dutch was verified on Windows with all three mods; the other languages have not been tested yet."}
             </p>
           </div>
           <select
@@ -835,9 +849,7 @@ export default function TreePilot({
             <option value="schinese">
               {isRu ? "Китайский · проверка нужна" : "Chinese · needs testing"}
             </option>
-            <option value="dutch">
-              {isRu ? "Нидерландский · Tree Mod проверен" : "Dutch · Tree Mod verified"}
-            </option>
+            <option value="dutch">{isRu ? "Нидерландский · проверен" : "Dutch · verified"}</option>
           </select>
         </div>
       )}
@@ -848,7 +860,7 @@ export default function TreePilot({
             aria-label={isRu ? "Порядок приоритета модов" : "Mod priority order"}
           >
             <div>
-              <strong>{isRu ? "Порядок внутри VPK" : "Order inside the VPK"}</strong>
+              <strong>{isRu ? "Порядок модов" : "Mod order"}</strong>
               <p>
                 {isRu
                   ? "Если два мода меняют один ресурс, верхний остаётся в итоговой сборке."
@@ -861,8 +873,8 @@ export default function TreePilot({
                   key={item.packageId}
                   title={
                     isRu
-                      ? `${item.effectiveResources} из ${item.inputResources} ресурсов войдут в VPK`
-                      : `${item.effectiveResources} of ${item.inputResources} resources remain in the VPK`
+                      ? `${item.effectiveResources} из ${item.inputResources} файлов мода войдут в сборку`
+                      : `${item.effectiveResources} of ${item.inputResources} mod files remain in the build`
                   }
                 >
                   <span>{String(index + 1).padStart(2, "0")}</span>
@@ -890,7 +902,7 @@ export default function TreePilot({
               {plan.duplicateResources + plan.overriddenResources || (isRu ? "Нет" : "None")}
             </span>
             <span>
-              <b>{isRu ? "Размер VPK" : "VPK size"}</b>
+              <b>{isRu ? "Размер файла" : "File size"}</b>
               {(plan.vpkBytes / 1024).toFixed(1)} KB
             </span>
             <span>
@@ -1020,7 +1032,7 @@ export default function TreePilot({
             <>
               <span>
                 <Check />
-                {isRu ? "Ресурсы и VPK проверены" : "Resources and VPK verified"}
+                {isRu ? "Файлы модов и сборка проверены" : "Mod files and build verified"}
               </span>
               <button
                 className="s-btn s-btn-primary"
@@ -1283,8 +1295,8 @@ export default function TreePilot({
       )}
       <small className="s-tree-pilot-foot">
         {isRu
-          ? "Источник: Egezenn/dota2-minify · Tree Mod: robbyz512. Tree Mod проверен в игре только с Dutch; Show Net Worth и Unit Query HUD требуют Windows-проверки. Параметр -language меняет язык текста и может повлиять на озвучку. BetterFy мягко закрывает Dota 2 и Steam; после отката Steam останется закрытым."
-          : "Source: Egezenn/dota2-minify · Tree Mod: robbyz512. Tree Mod was verified in game only with Dutch; Show Net Worth and Unit Query HUD still require Windows verification. The -language option changes text language and may affect audio. BetterFy closes Dota 2 and Steam gracefully; Steam stays closed after restore."}
+          ? "Источник: Egezenn/dota2-minify · Tree Mod: robbyz512. Все три мода проверены в игре на одном Windows-компьютере с нидерландским языком; другие языки и компьютеры не проверены. Параметр -language меняет язык текста и может повлиять на озвучку. BetterFy мягко закрывает Dota 2 и Steam и после установки или отката снова запускает Steam."
+          : "Source: Egezenn/dota2-minify · Tree Mod: robbyz512. All three mods were verified in game on one Windows computer with Dutch; other languages and computers are untested. The -language option changes text language and may affect audio. BetterFy closes Dota 2 and Steam gracefully and starts Steam again after install or restore."}
       </small>
     </section>
   );

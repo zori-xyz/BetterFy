@@ -3,6 +3,7 @@ import { ArrowDownToLine, Check, RefreshCw, ShieldCheck, X } from "lucide-react"
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { useLocale } from "./i18n";
+import { useEngineActive } from "./studio/engineActivity";
 
 type UpdateState = "idle" | "available" | "downloading" | "installed";
 
@@ -16,6 +17,7 @@ const copy = {
     install: "Обновить сейчас",
     restart: "Перезапустить BetterFy",
     later: "Позже",
+    waitEngine: "Обновление станет доступно, когда BetterFy закончит работу с файлами игры.",
   },
   en: {
     eyebrow: "SIGNED UPDATE",
@@ -26,6 +28,7 @@ const copy = {
     install: "Update now",
     restart: "Restart BetterFy",
     later: "Later",
+    waitEngine: "The update will be available once BetterFy finishes working on game files.",
   },
 } as const;
 
@@ -40,6 +43,10 @@ export default function AppUpdater() {
   const [state, setState] = useState<UpdateState>("idle");
   const [version, setVersion] = useState("");
   const [progress, setProgress] = useState(0);
+  // On Windows the updater exits the process before running the installer.
+  // Doing that mid-install or mid-restore would interrupt a game-file
+  // transaction, so it waits for the engine to go idle.
+  const engineActive = useEngineActive();
 
   useEffect(() => {
     if (!isTauriRuntime()) return;
@@ -64,7 +71,7 @@ export default function AppUpdater() {
 
   const install = async () => {
     const update = pending.current;
-    if (!update || state === "downloading") return;
+    if (!update || state === "downloading" || engineActive) return;
     setState("downloading");
     setProgress(0);
     let downloaded = 0;
@@ -99,10 +106,10 @@ export default function AppUpdater() {
       <div className="app-update-copy">
         <span><ShieldCheck />{t.eyebrow}</span>
         <strong>{state === "installed" ? t.ready : t.available}</strong>
-        <small>{state === "downloading" ? t.progress(progress) : t.detail(version)}</small>
+        <small>{state === "downloading" ? t.progress(progress) : engineActive ? t.waitEngine : t.detail(version)}</small>
         {state === "downloading" && <div className="app-update-progress"><i style={{ width: `${progress}%` }} /></div>}
       </div>
-      <button className="app-update-action" onClick={state === "installed" ? () => void relaunch() : install} disabled={state === "downloading"}>
+      <button className="app-update-action" onClick={state === "installed" ? () => void relaunch() : install} disabled={state === "downloading" || engineActive}>
         {state === "installed" ? t.restart : state === "downloading" ? `${progress}%` : t.install}
       </button>
       {state === "available" && (

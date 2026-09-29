@@ -2,8 +2,6 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import {
   ArrowDownToLine,
   ArrowRight,
-  Check,
-  Copy,
   FileJson,
   FolderOpen,
   Layers3,

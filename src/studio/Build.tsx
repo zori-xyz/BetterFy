@@ -2,16 +2,10 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
-  CheckCheck,
-  ChevronRight,
-  CircleCheck,
   Gamepad2,
   Layers3,
-  LoaderCircle,
   Plus,
-  RotateCcw,
   Save,
-  ShieldCheck,
   Trash2,
   TriangleAlert,
 } from "lucide-react";
@@ -26,53 +20,33 @@ import {
 } from "./model";
 import { Empty, PageHead } from "./ui";
 import TreePilot from "./TreePilot";
+import { useEngineActive } from "./engineActivity";
 import type { GameInstallation } from "../engine";
 
-export type BuildPhase = "review" | "preparing" | "ready" | "restoring";
-export type BuildState = {
-  phase: BuildPhase;
-  progress: number;
-  completedIds: string[];
-  startedAt: number | null;
-};
-export const initialBuild: BuildState = {
-  phase: "review",
-  progress: 0,
-  completedIds: [],
-  startedAt: null,
-};
 export default function Build({
   ids,
   variants,
-  state,
   installation,
   preview,
   onRemove,
   onMove,
   onOpen,
   onCatalog,
-  onStart,
-  onCancel,
   onSave,
-  onReset,
   onResolve,
-  onPlay,
+  onRemoveMissing,
 }: {
   ids: string[];
   variants: Record<string, number>;
-  state: BuildState;
   installation: GameInstallation;
   preview: boolean;
   onRemove: (mod: StudioMod) => void;
   onMove: (id: string, direction: -1 | 1) => void;
   onOpen: (mod: StudioMod) => void;
   onCatalog: () => void;
-  onStart: () => void;
-  onCancel: () => void;
   onSave: () => void;
-  onReset: () => void;
   onResolve: (keep: StudioMod, alternatives: StudioMod[]) => void;
-  onPlay: () => void;
+  onRemoveMissing: () => void;
 }) {
   const { language, isRu } = useLocale();
   const chosen = ids.flatMap((id) => (modById.has(id) ? [modById.get(id)!] : []));
@@ -84,12 +58,7 @@ export default function Build({
   // those stay preview-only and are listed in the note below.
   const pilotIds = gameIds.filter(isPilotMod);
   const previewItems = chosen.filter((mod) => mod.domain === "wardrobe" || !isPilotMod(mod.id));
-  const busy = state.phase === "preparing" || state.phase === "restoring";
-  const ready = state.phase === "ready";
-  const stages = isRu
-    ? ["Проверяем состав", "Готовим моды", "Собираем профиль", "Завершаем подготовку"]
-    : ["Reviewing selection", "Preparing mods", "Assembling profile", "Finishing up"];
-  const step = Math.min(3, Math.floor(state.progress / 25));
+  const busy = useEngineActive();
   if (!chosen.length && !missing.length)
     return (
       <>
@@ -111,26 +80,12 @@ export default function Build({
   return (
     <div className="s-build">
       <PageHead
-        eyebrow={
-          ready
-            ? isRu
-              ? "ПРЕДПРОСМОТР ЗАВЕРШЁН"
-              : "PREVIEW COMPLETE"
-            : isRu
-              ? "ТВОИ ИЗМЕНЕНИЯ"
-              : "YOUR CHANGES"
-        }
-        title={
-          ready ? (isRu ? "Выбор сохранён" : "Selection saved") : isRu ? "Моя сборка" : "My build"
-        }
+        eyebrow={isRu ? "ТВОИ ИЗМЕНЕНИЯ" : "YOUR CHANGES"}
+        title={isRu ? "Моя сборка" : "My build"}
         description={
-          ready
-            ? isRu
-              ? "Сценарий подготовки завершён. Файлы Dota 2 не изменялись."
-              : "Preparation preview finished. Dota 2 files were not changed."
-            : isRu
-              ? "Выбранные облики и настройки. Проверь состав или добавь ещё."
-              : "Your selected looks and settings. Review them or add more."
+          isRu
+            ? "Выбранные облики и настройки. Проверь состав или добавь ещё."
+            : "Your selected looks and settings. Review them or add more."
         }
       >
         <button className="s-btn" onClick={onSave} disabled={busy}>
@@ -238,18 +193,9 @@ export default function Build({
                     >
                       {deliveryLabel(isPilotMod(mod.id) ? "pilot" : "preview", language)}
                     </span>
-                    <span className={`s-item-state ${ready ? "ready" : ""}`}>
-                      {ready ? (
-                        <>
-                          <Check />
-                          {isRu ? "В наборе" : "Included"}
-                        </>
-                      ) : (
-                        <>
-                          <Plus />
-                          {isRu ? "Добавлен" : "Added"}
-                        </>
-                      )}
+                    <span className="s-item-state">
+                      <Check />
+                      {isRu ? "В наборе" : "Included"}
                     </span>
                     <button
                       className="s-icon"
@@ -269,9 +215,13 @@ export default function Build({
               <TriangleAlert />
               <p>
                 {isRu
-                  ? "Некоторые сохранённые моды отсутствуют в текущем каталоге. Обнови состав перед продолжением."
-                  : "Some saved mods are missing from this catalog. Update your selection before continuing."}
+                  ? `${modCount(missing.length, language)} из сохранённого выбора больше нет в каталоге.`
+                  : `${modCount(missing.length, language)} from your saved selection ${missing.length === 1 ? "is" : "are"} no longer in the catalog.`}
               </p>
+              <button className="s-btn" disabled={busy} onClick={onRemoveMissing}>
+                <Trash2 />
+                {isRu ? "Убрать отсутствующие" : "Remove missing"}
+              </button>
             </div>
           )}
           {conflicts.map((items, index) => (
@@ -295,111 +245,30 @@ export default function Build({
           ))}
         </section>
         {!verifiedPilotSelected && (
-          <aside className={`s-build-summary ${ready ? "is-ready" : ""}`}>
+          <aside className="s-build-summary">
             <span className="s-summary-icon">
-              {busy ? <LoaderCircle className="s-spin" /> : ready ? <CheckCheck /> : <Layers3 />}
+              <Layers3 />
             </span>
-            <h2>
-              {busy
-                ? state.phase === "restoring"
-                  ? isRu
-                    ? "Возвращаемся к выбору"
-                    : "Returning to your selection"
-                  : stages[step]
-                : ready
-                  ? isRu
-                    ? "Предпросмотр завершён"
-                    : "Preview complete"
-                  : isRu
-                    ? "Проверить набор"
-                    : "Review your build"}
-            </h2>
+            <h2>{isRu ? "Установка пока недоступна" : "Installation not available yet"}</h2>
             <p>
-              {busy
-                ? isRu
-                  ? "Выбор сохранён. Подготовку можно отменить."
-                  : "Your selection is saved. You can cancel preparation."
-                : ready
-                  ? isRu
-                    ? "Выбранные облики и настройки сохранены на этом устройстве."
-                    : "Your selected looks and settings are saved on this device."
-                  : isRu
-                    ? "Посмотри сценарий подготовки. Это демонстрация: файлы игры не изменятся."
-                    : "Preview the preparation flow. This is a demonstration: game files will not change."}
+              {isRu
+                ? "Сейчас BetterFy записывает в Dota 2 только три пилотных мода и только на Windows. Остальной выбор хранится на этом устройстве — сохрани его в библиотеку, чтобы вернуться, когда установка откроется."
+                : "Right now BetterFy writes only the three pilot mods to Dota 2, and only on Windows. The rest of your selection stays on this device — save it to your library to come back when installation opens."}
             </p>
-            {busy && (
-              <div
-                className="s-build-progress"
-                role="progressbar"
-                aria-valuenow={state.progress}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label={isRu ? "Подготовка сборки" : "Build preparation"}
-              >
-                <div>
-                  <i style={{ width: `${state.progress}%` }} />
-                </div>
-                <span>{state.progress}%</span>
-              </div>
-            )}
-            <ol className="s-build-checklist">
-              {stages.map((stage, index) => (
-                <li
-                  className={
-                    ready || (busy && index < step)
-                      ? "done"
-                      : busy && index === step
-                        ? "current"
-                        : ""
-                  }
-                  key={stage}
-                >
-                  <span>{ready || (busy && index < step) ? <Check /> : index + 1}</span>
-                  {stage}
-                </li>
-              ))}
-            </ol>
-            {busy ? (
-              <button className="s-btn s-btn-full" onClick={onCancel}>
-                {isRu ? "Отменить подготовку" : "Cancel preparation"}
-              </button>
-            ) : ready ? (
-              <>
-                <button className="s-btn s-btn-primary s-btn-full" onClick={onPlay}>
-                  <Gamepad2 />
-                  {isRu ? "Посмотреть запуск" : "Preview launch"}
-                </button>
-                <button className="s-text-button s-center" onClick={onReset}>
-                  <RotateCcw />
-                  {isRu ? "Вернуться к настройке" : "Return to editing"}
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  className="s-btn s-btn-primary s-btn-full"
-                  disabled={conflicts.length > 0 || missing.length > 0}
-                  onClick={onStart}
-                >
-                  {isRu ? "Посмотреть подготовку" : "Preview preparation"}
-                  <ChevronRight />
-                </button>
-                <small className="s-summary-hint">
-                  {conflicts.length
-                    ? isRu
-                      ? "Сначала реши конфликты слотов"
-                      : "Resolve slot conflicts first"
-                    : isRu
-                      ? "Без установки в Dota 2"
-                      : "Without installing into Dota 2"}
-                </small>
-              </>
+            <button className="s-btn s-btn-primary s-btn-full" disabled={busy} onClick={onSave}>
+              <Save />
+              {isRu ? "Сохранить в библиотеку" : "Save to library"}
+            </button>
+            {conflicts.length > 0 && (
+              <small className="s-summary-hint">
+                {isRu ? "Реши конфликты слотов выше" : "Resolve the slot conflicts above"}
+              </small>
             )}
             <div className="s-summary-game">
               <Gamepad2 />
               <div>
                 <strong>Dota 2</strong>
-                <small>{isRu ? "Текущий игровой профиль" : "Current game profile"}</small>
+                <small>{isRu ? "Файлы игры не изменены" : "Game files unchanged"}</small>
               </div>
             </div>
           </aside>

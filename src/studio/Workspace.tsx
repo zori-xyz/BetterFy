@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  ArrowLeft,
   ArrowRight,
   ArrowUpRight,
   Check,
@@ -12,7 +11,6 @@ import {
   Gamepad2,
   Layers3,
   LoaderCircle,
-  Plus,
   Search,
   Send,
   Settings,
@@ -21,56 +19,23 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
-import AuthFlow from "../AuthFlow";
-import OnboardingFlow from "../OnboardingFlow";
-import AppUpdater from "../AppUpdater";
 import BetterFyWordmark from "../BetterFyWordmark";
-import {
-  fetchTelegramAvatar,
-  restoreDesktopSession,
-  revokeAuthSession,
-  type AuthSession,
-} from "../auth";
+import { fetchTelegramAvatar, type AuthSession } from "../auth";
 import type { GameInstallation } from "../engine";
 import { useLocale, modCount } from "../i18n";
 import { getStorageItem, getStoredStringArray, setStorageItem } from "../storage";
 import { presetBridge, type BetterFyPreset } from "../presets";
 import Catalog, { initialFilters, ModDetails, type CatalogFilters } from "./Catalog";
 import Home from "./Home";
-import Build, { initialBuild, type BuildState } from "./Build";
+import Build from "./Build";
+import { useEngineActive } from "./engineActivity";
 import Library from "./Library";
 import { Preferences, Profile } from "./Preferences";
 import { deliveryLabel, getSelectionDelivery, modById, type Domain, type StudioMod } from "./model";
 import { Media, Modal } from "./ui";
 
 type Route = "home" | "catalog" | "build" | "library" | "settings" | "profile";
-type Stage = "loading" | "auth" | "setup" | "workspace";
 type Theme = "dark" | "light";
-const installationKey = "betterfy:game-installation";
-const previewSession: AuthSession = {
-  userId: "betterfy-preview",
-  displayName: "Preview",
-  accessTier: "preview",
-  source: "demo",
-};
-const previewInstallation: GameInstallation = {
-  path: "Preview / Dota 2",
-  executablePath: "Preview only",
-  steamLibrary: "BetterFy interface preview",
-  client: "Prototype preview",
-  source: "demo",
-  verified: false,
-};
-function storedInstallation(): GameInstallation | null {
-  try {
-    const item = JSON.parse(getStorageItem(installationKey) ?? "null");
-    return item && typeof item.path === "string" && typeof item.verified === "boolean"
-      ? item
-      : null;
-  } catch {
-    return null;
-  }
-}
 function storedVariants(): Record<string, number> {
   try {
     const value = JSON.parse(getStorageItem("betterfy:studio-variants") ?? "{}");
@@ -101,7 +66,7 @@ export default function Workspace({
   motion: boolean;
   setMotion: (motion: boolean) => void;
   onReconnect: () => void;
-  onSignOut: () => void;
+  onSignOut: () => Promise<boolean>;
 }) {
   const { isRu, language } = useLocale();
   const [route, setRoute] = useState<Route>("home");
@@ -128,16 +93,13 @@ export default function Workspace({
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [libraryRevision, setLibraryRevision] = useState(0);
-  const [build, setBuild] = useState<BuildState>(initialBuild);
   const [toast, setToast] = useState<{ text: string; key: number } | null>(null);
-  const [launchNotice, setLaunchNotice] = useState(false);
   const [storageError, setStorageError] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollPositions = useRef<Partial<Record<Route, number>>>({});
   const currentRoute = useRef(route);
-  const buildTimer = useRef<number | null>(null);
-  const busy = build.phase === "preparing" || build.phase === "restoring";
+  const busy = useEngineActive();
   const preview = !session || session.source === "demo";
   const delivery = getSelectionDelivery(selected);
   useEffect(() => {
@@ -174,12 +136,6 @@ export default function Workspace({
   useEffect(() => {
     setToast(null);
   }, [language]);
-  useEffect(
-    () => () => {
-      if (buildTimer.current !== null) window.clearInterval(buildTimer.current);
-    },
-    [],
-  );
   useLayoutEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollPositions.current[route] ?? 0;
     currentRoute.current = route;
@@ -217,7 +173,6 @@ export default function Workspace({
   }, []);
   const saveSelection = (ids: string[]) => {
     setSelected(ids);
-    setBuild(initialBuild);
     const game = ids.filter((id) => id.startsWith("minify-"));
     const wardrobe = ids.filter((id) => !id.startsWith("minify-"));
     const first = setStorageItem("betterfy:selected-minify-mods", JSON.stringify(game));
@@ -228,8 +183,8 @@ export default function Workspace({
     if (busy) {
       notify(
         isRu
-          ? "Дождись завершения или отмени подготовку"
-          : "Wait for preparation to finish or cancel it",
+          ? "Дождись, пока BetterFy закончит работу с файлами игры"
+          : "Wait until BetterFy finishes working on game files",
       );
       return;
     }
@@ -270,7 +225,6 @@ export default function Workspace({
     const next = { ...variants, [mod.id]: value };
     setVariants(next);
     if (!setStorageItem("betterfy:studio-variants", JSON.stringify(next))) setStorageError(true);
-    if (selected.includes(mod.id)) setBuild(initialBuild);
   };
   const toggleFavorite = (mod: StudioMod) => {
     const next = favorites.includes(mod.id)
@@ -306,30 +260,6 @@ export default function Workspace({
     } finally {
       setSaveBusy(false);
     }
-  };
-  const startBuild = () => {
-    if (busy || !selected.length) return;
-    const startedAt = Date.now();
-    setBuild({ phase: "preparing", progress: 0, completedIds: [], startedAt });
-    buildTimer.current = window.setInterval(() => {
-      const progress = Math.min(100, Math.floor((Date.now() - startedAt) / 65));
-      if (progress >= 100) {
-        if (buildTimer.current !== null) window.clearInterval(buildTimer.current);
-        buildTimer.current = null;
-        setBuild({ phase: "ready", progress: 100, completedIds: [...selected], startedAt });
-        notify(isRu ? "Предпросмотр сборки завершён" : "Build preview complete");
-      } else setBuild((previous) => ({ ...previous, progress }));
-    }, 100);
-  };
-  const cancelBuild = () => {
-    if (buildTimer.current !== null) window.clearInterval(buildTimer.current);
-    buildTimer.current = null;
-    setBuild(initialBuild);
-    notify(
-      isRu
-        ? "Подготовка отменена. Твой выбор сохранён."
-        : "Preparation cancelled. Your selection is saved.",
-    );
   };
   return (
     <main className="s-app">
@@ -376,19 +306,18 @@ export default function Workspace({
             <button className="s-sidebar-build" onClick={() => navigate("build")}>
               <span>
                 {busy ? <LoaderCircle className="s-spin" /> : <Layers3 />}
-                <strong>{busy ? `${build.progress}%` : modCount(selected.length, language)}</strong>
+                <strong>{modCount(selected.length, language)}</strong>
                 <ChevronRight />
               </span>
               <small>
                 {busy
                   ? isRu
-                    ? "Готовим твою сборку"
-                    : "Preparing your build"
+                    ? "Идёт работа с файлами игры"
+                    : "Working on game files"
                   : isRu
                     ? "Продолжить настройку"
                     : "Continue your build"}
               </small>
-              {busy && <i style={{ width: `${build.progress}%` }} />}
             </button>
           )}
           <nav>
@@ -505,17 +434,14 @@ export default function Workspace({
               <Build
                 ids={selected}
                 variants={variants}
-                state={build}
                 installation={installation}
                 preview={preview}
                 onRemove={toggle}
                 onMove={moveGameMod}
                 onOpen={setDetails}
                 onCatalog={() => openCatalog()}
-                onStart={startBuild}
-                onCancel={cancelBuild}
                 onSave={openSave}
-                onReset={() => setBuild(initialBuild)}
+                onRemoveMissing={() => saveSelection(selected.filter((id) => modById.has(id)))}
                 onResolve={(keep, alternatives) =>
                   saveSelection(
                     selected.filter(
@@ -523,7 +449,6 @@ export default function Workspace({
                     ),
                   )
                 }
-                onPlay={() => setLaunchNotice(true)}
               />
             )}
             {route === "library" && (
@@ -542,7 +467,15 @@ export default function Workspace({
                 motion={motion}
                 setMotion={setMotion}
                 installation={installation}
-                onReconnect={onReconnect}
+                onReconnect={() => {
+                  if (busy)
+                    notify(
+                      isRu
+                        ? "Дождись, пока BetterFy закончит работу с файлами игры"
+                        : "Wait until BetterFy finishes working on game files",
+                    );
+                  else onReconnect();
+                }}
               />
             )}
             {route === "profile" && (
@@ -723,34 +656,6 @@ export default function Workspace({
               {isRu ? "Сохранить в библиотеку" : "Save to library"}
             </button>
           </form>
-        </Modal>
-      )}
-      {launchNotice && (
-        <Modal
-          title={isRu ? "Твой набор готов к игре" : "Your build is ready to play"}
-          onClose={() => setLaunchNotice(false)}
-        >
-          <div className="s-dialog-body">
-            <div className="s-launch-game">
-              <Gamepad2 />
-              <strong>Dota 2</strong>
-            </div>
-            <p>
-              {isRu
-                ? "Ты прошёл полный сценарий новой оболочки. Запуск игры и установка модов подключаются следующим этапом; сейчас файлы Dota не изменены."
-                : "You've completed the new interface flow. Game launch and mod installation will be connected next; Dota files have not been changed."}
-            </p>
-            <button
-              className="s-btn s-btn-primary s-btn-full"
-              onClick={() => {
-                setLaunchNotice(false);
-                navigate("home");
-              }}
-            >
-              {isRu ? "Вернуться на главную" : "Back to overview"}
-              <ArrowRight />
-            </button>
-          </div>
         </Modal>
       )}
     </main>

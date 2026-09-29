@@ -1,6 +1,5 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import {
-  ArrowLeft,
   ArrowRight,
   Check,
   CheckCheck,

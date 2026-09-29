@@ -9,7 +9,11 @@ export type AuthSession = {
   sessionId?: string | null;
   sessionToken?: string | null;
   avatarAvailable?: boolean | null;
-  source: "demo" | "server";
+  // false for standalone BetterFy ID accounts, which cannot buy Premium yet.
+  telegramLinked?: boolean | null;
+  // "offline": credentials are stored on this device but the auth service
+  // could not be reached at startup. Local features keep working.
+  source: "demo" | "server" | "offline";
 };
 
 export type DeviceSession = {
@@ -164,6 +168,7 @@ const isAuthSession = (value: unknown): value is Omit<AuthSession, "source"> => 
     && (record.accessRecurring == null || typeof record.accessRecurring === "boolean")
     && (record.sessionId == null || typeof record.sessionId === "string")
     && (record.sessionToken == null || typeof record.sessionToken === "string")
+    && (record.telegramLinked == null || typeof record.telegramLinked === "boolean")
     && (record.avatarAvailable == null || typeof record.avatarAvailable === "boolean")
   );
 };
@@ -249,6 +254,13 @@ export async function restoreDesktopSession(): Promise<AuthSession | null> {
   if (!isNativeDesktop()) return null;
   const payload = await invoke<Omit<AuthSession, "source"> | null>("auth_restore_session");
   if (!payload) return null;
+  if (!isAuthSession(payload)) throw new Error("auth_response_invalid");
+  return { ...payload, source: "server" };
+}
+
+export async function refreshDesktopProfile(): Promise<AuthSession | null> {
+  if (!isNativeDesktop()) return null;
+  const payload = await invoke<Omit<AuthSession, "source">>("auth_profile");
   if (!isAuthSession(payload)) throw new Error("auth_response_invalid");
   return { ...payload, source: "server" };
 }

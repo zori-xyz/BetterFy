@@ -2,25 +2,20 @@ import { useEffect, useState } from "react";
 import {
   ArrowUpRight,
   Check,
-  ChevronRight,
   CircleUserRound,
   ExternalLink,
   FolderOpen,
   Gamepad2,
   Globe2,
-  HardDrive,
   HelpCircle,
   Laptop,
   LoaderCircle,
   LogOut,
-  Monitor,
   Moon,
   Paintbrush,
   Send,
   Shield,
-  Smartphone,
   Sun,
-  TriangleAlert,
 } from "lucide-react";
 import { useLocale } from "../i18n";
 import { engineBridge, type GameInstallation, type SystemDiagnosticReport } from "../engine";
@@ -260,13 +255,13 @@ export function Preferences({
                   : "A mod and cosmetic manager for Dota 2."}
               </p>
               <div className="s-about-version">
-                <span>0.1.0</span>
-                <small>{isRu ? "Интерактивный прототип" : "Interactive prototype"}</small>
+                <span>{__APP_VERSION__}</span>
+                <small>{isRu ? "Ранний доступ" : "Early access"}</small>
               </div>
               <div className="s-about-note">
                 {isRu
-                  ? "Здесь можно собрать, сохранить и проверить сценарий применения своего набора. Игровые файлы в этом прототипе не изменяются."
-                  : "Compose and save your build, then preview the complete apply flow. This prototype does not change game files."}
+                  ? "Собирай и сохраняй наборы модов и обликов. На Windows BetterFy уже устанавливает три пилотных мода с резервной копией и откатом; остальной каталог пока доступен только для просмотра."
+                  : "Build and save sets of mods and looks. On Windows, BetterFy already installs three pilot mods with a backup and restore; the rest of the catalog is preview-only for now."}
               </div>
               <a
                 className="s-settings-link"
@@ -303,18 +298,28 @@ export function Profile({
 }: {
   session: AuthSession | null;
   avatarUrl: string | null;
-  onSignOut: () => void;
+  onSignOut: () => Promise<boolean>;
 }) {
   const { isRu, language } = useLocale();
   const [devices, setDevices] = useState<DeviceSession[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
+  const [revokeError, setRevokeError] = useState(false);
+  const [signOutError, setSignOutError] = useState(false);
   const preview = !session || session.source === "demo";
+  const offline = session?.source === "offline";
+  // Premium is bought in the Telegram bot and attaches to the Telegram
+  // account; a standalone BetterFy ID would pay for a different account.
+  const noTelegram = session?.telegramLinked === false;
+  const signOut = async () => {
+    setSignOutError(false);
+    if (!(await onSignOut())) setSignOutError(true);
+  };
   useEffect(() => {
     setDevices([]);
     setError(false);
-    if (preview || !session) return;
+    if (preview || offline || !session) return;
     let active = true;
     setLoading(true);
     fetchDeviceSessions(session)
@@ -330,7 +335,7 @@ export function Profile({
     return () => {
       active = false;
     };
-  }, [session, preview]);
+  }, [session, preview, offline]);
   return (
     <div className="s-profile">
       <PageHead
@@ -360,7 +365,17 @@ export function Profile({
             </p>
           </div>
           <span className="s-chip">
-            {preview ? (isRu ? "Без входа" : "Not signed in") : isRu ? "Подключён" : "Connected"}
+            {preview
+              ? isRu
+                ? "Без входа"
+                : "Not signed in"
+              : offline
+                ? isRu
+                  ? "Нет связи"
+                  : "Offline"
+                : isRu
+                  ? "Подключён"
+                  : "Connected"}
           </span>
         </div>
         <div className="s-profile-access">
@@ -382,19 +397,31 @@ export function Profile({
                 ? isRu
                   ? "Сейчас ты смотришь интерфейс без входа. Выбери BetterFy ID или Telegram, чтобы войти."
                   : "You are exploring without signing in. Choose BetterFy ID or Telegram to continue."
-                : session.accessExpiresAt
-                  ? `${isRu ? "Действует до" : "Active until"} ${new Intl.DateTimeFormat(language === "ru" ? "ru-RU" : "en-GB", { dateStyle: "medium" }).format(new Date(session.accessExpiresAt * 1000))}`
-                  : isRu
-                    ? "Управляй доступом через BetterFy Bot."
-                    : "Manage access through BetterFy Bot."}
+                : offline
+                  ? isRu
+                    ? "Сервер BetterFy сейчас недоступен. Вход сохранён; статус доступа обновится после перезапуска с сетью."
+                    : "The BetterFy server is unreachable. Your sign-in is saved; access status updates after a restart with a connection."
+                  : noTelegram
+                    ? isRu
+                      ? "Premium оформляется в Telegram-боте и пока привязывается к Telegram-аккаунту, а не к BetterFy ID. Связка аккаунтов появится позже."
+                      : "Premium is purchased in the Telegram bot and currently attaches to a Telegram account, not to a BetterFy ID. Account linking is coming later."
+                    : session.accessExpiresAt
+                      ? `${isRu ? "Действует до" : "Active until"} ${new Intl.DateTimeFormat(language === "ru" ? "ru-RU" : "en-GB", { dateStyle: "medium" }).format(new Date(session.accessExpiresAt * 1000))}`
+                      : isRu
+                        ? "Управляй доступом через BetterFy Bot."
+                        : "Manage access through BetterFy Bot."}
             </p>
           </div>
           {preview ? (
-            <button className="s-btn s-btn-primary" onClick={onSignOut}>
+            <button className="s-btn s-btn-primary" onClick={() => void signOut()}>
               <CircleUserRound />
               {isRu ? "Выбрать способ входа" : "Choose sign-in"}
             </button>
-          ) : (
+          ) : offline ? (
+            <button className="s-btn" onClick={() => window.location.reload()}>
+              {isRu ? "Повторить подключение" : "Reconnect"}
+            </button>
+          ) : noTelegram ? null : (
             <a className="s-btn" href="https://t.me/BeterFyBot" target="_blank" rel="noreferrer">
               {isRu ? "Управлять доступом" : "Manage access"}
               <ArrowUpRight />
@@ -402,7 +429,7 @@ export function Profile({
           )}
         </div>
       </section>
-      {!preview && (
+      {!preview && !offline && (
         <section className="s-profile-devices">
           <h2>{isRu ? "Устройства" : "Devices"}</h2>
           {loading ? (
@@ -443,13 +470,16 @@ export function Profile({
                     disabled={revoking === device.sessionId}
                     onClick={async () => {
                       setRevoking(device.sessionId);
+                      setRevokeError(false);
                       try {
-                        await revokeDeviceSession(session, device.sessionId);
+                        // ok:false means the session was not ended; keep it listed.
+                        if (!(await revokeDeviceSession(session, device.sessionId)))
+                          throw new Error("auth_session_revoke_failed");
                         setDevices((items) =>
                           items.filter((item) => item.sessionId !== device.sessionId),
                         );
                       } catch {
-                        setError(true);
+                        setRevokeError(true);
                       } finally {
                         setRevoking(null);
                       }
@@ -463,13 +493,27 @@ export function Profile({
           ) : (
             <p>{isRu ? "Других активных входов нет" : "No other active sessions"}</p>
           )}
-          <button className="s-text-button s-signout" onClick={onSignOut}>
+          {revokeError && (
+            <p className="s-form-error" role="alert">
+              {isRu
+                ? "Не удалось завершить этот вход. Попробуй ещё раз."
+                : "Could not end that session. Please try again."}
+            </p>
+          )}
+          <button className="s-text-button s-signout" onClick={() => void signOut()}>
             <LogOut />
             {isRu ? "Выйти из аккаунта" : "Sign out"}
           </button>
+          {signOutError && (
+            <p className="s-form-error" role="alert">
+              {isRu
+                ? "Не удалось выйти. Проверь подключение и попробуй ещё раз."
+                : "Could not sign out. Check your connection and try again."}
+            </p>
+          )}
         </section>
       )}
-      {!preview && session && <EmailIdentity session={session} />}
+      {!preview && !offline && session && <EmailIdentity session={session} />}
     </div>
   );
 }
