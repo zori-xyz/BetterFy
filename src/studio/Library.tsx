@@ -12,7 +12,7 @@ import {
   Upload,
 } from "lucide-react";
 import { modCount, useLocale } from "../i18n";
-import { presetBridge, type BetterFyPreset } from "../presets";
+import { presetBridge, presetTitle, type BetterFyPreset } from "../presets";
 import { modById } from "./model";
 import { Empty, Media, Modal, PageHead } from "./ui";
 
@@ -79,7 +79,8 @@ export default function Library({
   }, [reload, revision]);
   const items = presets.filter(
     (preset) =>
-      preset.source === tab && preset.name.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
+      preset.source === tab &&
+      presetTitle(preset, language).toLocaleLowerCase().includes(query.toLocaleLowerCase()),
   );
   const exportPreset = async (preset: BetterFyPreset) => {
     try {
@@ -204,7 +205,7 @@ export default function Library({
                 <button
                   className="s-preset-art"
                   onClick={() => onApply(preset)}
-                  aria-label={`${isRu ? "Открыть набор" : "Open build"}: ${preset.name}`}
+                  aria-label={`${isRu ? "Открыть набор" : "Open build"}: ${presetTitle(preset, language)}`}
                 >
                   {previews.length ? (
                     previews.map((mod) => (
@@ -216,7 +217,7 @@ export default function Library({
                   <span>{modCount(ids.length, language)}</span>
                 </button>
                 <div className="s-preset-content">
-                  <h2>{preset.name}</h2>
+                  <h2>{presetTitle(preset, language)}</h2>
                   <p>{presetDateLabel(preset.updatedAt, language)}</p>
                   <footer>
                     <button className="s-btn" onClick={() => onApply(preset)}>
@@ -225,7 +226,7 @@ export default function Library({
                     </button>
                     <button
                       className="s-icon"
-                      aria-label={`${isRu ? "Экспортировать" : "Export"}: ${preset.name}`}
+                      aria-label={`${isRu ? "Экспортировать" : "Export"}: ${presetTitle(preset, language)}`}
                       onClick={() => void exportPreset(preset)}
                     >
                       <ArrowDownToLine />

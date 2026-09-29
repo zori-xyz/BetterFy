@@ -161,20 +161,20 @@ export function ModCard({
           showPending
           pendingLabel={mod.categoryName[language]}
         />
-        <span
-          className={`s-delivery-flag ${pilot ? "is-pilot" : "is-preview"}`}
-          title={
-            pilot
-              ? isRu
+        {/* Preview is the default and is explained once above the grid; only
+            the installable pilot mods carry a badge. */}
+        {pilot && (
+          <span
+            className="s-delivery-flag is-pilot"
+            title={
+              isRu
                 ? "Доступно для проверяемой установки в Windows-пилоте"
                 : "Available for verifiable installation in the Windows pilot"
-              : isRu
-                ? "Карточка доступна для просмотра и сохранения; установка ещё не включена"
-                : "Available to preview and save; installation is not enabled yet"
-          }
-        >
-          {deliveryLabel(pilot ? "pilot" : "preview", language)}
-        </span>
+            }
+          >
+            {deliveryLabel("pilot", language)}
+          </span>
+        )}
         {selected && (
           <span className="s-selected-flag">
             <Check />

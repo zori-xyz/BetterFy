@@ -272,3 +272,4 @@
   .auth-stage { padding-bottom: 8px; }
   .auth-stage .auth-login-layout { min-height: calc(100dvh - 80px); }
 }
+.s-id-connect-actions { display: flex; gap: 18px; margin-top: 10px; }

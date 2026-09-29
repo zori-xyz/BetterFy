@@ -33,6 +33,18 @@ const uniqueIds = (ids: string[]) =>
 
 const now = () => new Date().toISOString();
 
+// Built-in collections are stored and exported with one fixed name; the
+// interface shows them in the current language.
+const workshopTitles: Record<string, { ru: string; en: string }> = {
+  "betterfy.focus-performance": { ru: "Фокус и производительность", en: "Focus / Performance" },
+  "betterfy.clean-interface": { ru: "Чистый интерфейс", en: "Clean Interface" },
+  "betterfy.quiet-match": { ru: "Тихий матч", en: "Quiet Match" },
+};
+
+export function presetTitle(preset: BetterFyPreset, language: "ru" | "en") {
+  return preset.source === "betterfy" ? (workshopTitles[preset.id]?.[language] ?? preset.name) : preset.name;
+}
+
 export const workshopPresets: BetterFyPreset[] = [
   {
     schemaVersion: 1,

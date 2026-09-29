@@ -103,7 +103,8 @@ export default function Catalog({
           ? a.name[language].localeCompare(b.name[language])
           : filters.sort === "new"
             ? b.date - a.date
-            : Number(b.image !== null) - Number(a.image !== null),
+            : Number(isPilotMod(b.id)) - Number(isPilotMod(a.id)) ||
+              Number(b.image !== null) - Number(a.image !== null),
       );
   }, [source, filters, selected, favorites, language]);
   const countInDomain = source.filter((mod) => selected.includes(mod.id)).length;
@@ -256,7 +257,7 @@ export default function Catalog({
             value={filters.sort}
             onChange={(event) => update({ sort: event.target.value })}
           >
-            <option value="featured">{isRu ? "Сначала с превью" : "Previews first"}</option>
+            <option value="featured">{isRu ? "Рекомендуемые" : "Featured"}</option>
             <option value="new">{isRu ? "Сначала новые" : "Newest first"}</option>
             <option value="name">{isRu ? "По названию" : "Name A–Z"}</option>
           </select>

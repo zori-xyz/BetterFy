@@ -24,7 +24,7 @@ import { fetchTelegramAvatar, type AuthSession } from "../auth";
 import type { GameInstallation } from "../engine";
 import { useLocale, modCount } from "../i18n";
 import { getStorageItem, getStoredStringArray, setStorageItem } from "../storage";
-import { presetBridge, type BetterFyPreset } from "../presets";
+import { presetBridge, presetTitle, type BetterFyPreset } from "../presets";
 import Catalog, { initialFilters, ModDetails, type CatalogFilters } from "./Catalog";
 import Home from "./Home";
 import Build from "./Build";
@@ -563,7 +563,7 @@ export default function Workspace({
         </Modal>
       )}
       {collection && (
-        <Modal title={collection.preset.name} onClose={() => setCollection(null)}>
+        <Modal title={presetTitle(collection.preset, language)} onClose={() => setCollection(null)}>
           <div className="s-dialog-body">
             <p>
               {collection.replace

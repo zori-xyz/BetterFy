@@ -118,3 +118,14 @@
   .s-theme-option,.s-mod-image>img.s-media-loaded,.s-showcase-look>img.s-media-loaded,.s-detail-media>img.s-media-loaded {transition:none}
 }
 .motion-disabled .s-theme-option,.motion-disabled .s-mod-image>img.s-media-loaded,.motion-disabled .s-showcase-look>img.s-media-loaded,.motion-disabled .s-detail-media>img.s-media-loaded {transition:none}
+
+/* At the 980x660 minimum window the sidebar is taller than the viewport and
+   the profile / sign-out entry was unreachable. It scrolls, and short
+   windows tighten its spacing so it usually does not need to. */
+.s-sidebar { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.s-sidebar::-webkit-scrollbar { display: none; }
+@media (max-height: 760px) {
+  .s-sidebar .s-brand { min-height: 64px; }
+  .s-sidebar nav button, .s-sidebar nav a { min-height: 34px; }
+  .s-sidebar .s-sidebar-build { padding-top: 8px; padding-bottom: 8px; }
+}

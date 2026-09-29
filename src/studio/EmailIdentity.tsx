@@ -1,6 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ArrowRight, Check, Mail } from "lucide-react";
-import { beginEmailLink, fetchEmailIdentity, verifyEmailLink, type AuthSession } from "../auth";
+import {
+  authErrorCode,
+  beginEmailLink,
+  fetchEmailIdentity,
+  verifyEmailLink,
+  type AuthSession,
+} from "../auth";
 import { useLocale } from "../i18n";
 
 export default function EmailIdentity({ session }: { session: AuthSession }) {
@@ -31,18 +37,34 @@ export default function EmailIdentity({ session }: { session: AuthSession }) {
     };
   }, [session]);
 
-  const start = async (event: FormEvent) => {
-    event.preventDefault();
+  const failure = (cause: unknown, fallback: string) => {
+    const code = authErrorCode(cause);
+    if (code === "auth_email_already_linked")
+      return ru
+        ? "Эта почта уже привязана к аккаунту BetterFy."
+        : "This email is already linked to a BetterFy account.";
+    if (code === "auth_rate_limited")
+      return ru
+        ? "Слишком много попыток. Подожди 10 минут."
+        : "Too many attempts. Wait 10 minutes.";
+    return fallback;
+  };
+
+  const start = async (event?: FormEvent) => {
+    event?.preventDefault();
     setBusy(true);
     setError("");
     try {
       await beginEmailLink(session, email, language);
       setPhase("code");
-    } catch {
+    } catch (cause) {
       setError(
-        ru
-          ? "Не удалось отправить код. Почта уже привязана или сервис недоступен."
-          : "Could not send a code. The email may be linked or the service is unavailable.",
+        failure(
+          cause,
+          ru
+            ? "Не удалось отправить код. Попробуй позже."
+            : "Could not send a code. Try again later.",
+        ),
       );
     } finally {
       setBusy(false);
@@ -56,8 +78,13 @@ export default function EmailIdentity({ session }: { session: AuthSession }) {
     try {
       setHint(await verifyEmailLink(session, email, code));
       setPhase("linked");
-    } catch {
-      setError(ru ? "Код не подошёл или уже использован." : "The code is invalid or already used.");
+    } catch (cause) {
+      setError(
+        failure(
+          cause,
+          ru ? "Код не подошёл или уже использован." : "The code is invalid or already used.",
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -135,6 +162,31 @@ export default function EmailIdentity({ session }: { session: AuthSession }) {
             <button type="submit" disabled={busy || code.length !== 6}>
               {ru ? "Подтвердить" : "Confirm"}
               <ArrowRight />
+            </button>
+          </div>
+          <div className="s-id-connect-actions">
+            <button
+              type="button"
+              className="s-text-button"
+              disabled={busy}
+              onClick={() => {
+                setCode("");
+                setError("");
+                setPhase("ready");
+              }}
+            >
+              {ru ? "Изменить адрес" : "Change address"}
+            </button>
+            <button
+              type="button"
+              className="s-text-button"
+              disabled={busy}
+              onClick={() => {
+                setCode("");
+                void start();
+              }}
+            >
+              {ru ? "Отправить код снова" : "Send the code again"}
             </button>
           </div>
         </form>

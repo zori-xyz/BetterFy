@@ -92,7 +92,9 @@ export const mods: StudioMod[] = [
       group: item.metadata.group,
       description: item.presentation.description,
       image: item.presentation.previewUrl,
-      author: item.provenance.author ?? item.provenance.sourceName,
+      // Cards without a named author show the catalog's public name; the
+      // upstream project stays in provenance and behind "Open source".
+      author: item.provenance.author ?? "BetterFy Web",
       source: item.provenance.sourceUrl,
       date: item.verification.updatedAt ?? 0,
       tags: item.metadata.tags,

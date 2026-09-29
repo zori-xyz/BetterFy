@@ -465,10 +465,12 @@ fn auth_link_email_start_blocking(
         "/v1/session/email/start",
         serde_json::json!({ "email": email, "language": language }),
     )?;
-    if !response.status().is_success() {
-        return Err("auth_email_unavailable".to_string());
+    match response.status().as_u16() {
+        200..=299 => Ok(()),
+        409 => Err("auth_email_already_linked".to_string()),
+        429 => Err("auth_rate_limited".to_string()),
+        _ => Err("auth_email_unavailable".to_string()),
     }
-    Ok(())
 }
 
 fn auth_link_email_verify_blocking(
@@ -484,8 +486,11 @@ fn auth_link_email_verify_blocking(
         "/v1/session/email/verify",
         serde_json::json!({ "email": email, "code": code }),
     )?;
-    if !response.status().is_success() {
-        return Err("auth_code_invalid".to_string());
+    match response.status().as_u16() {
+        200..=299 => {}
+        409 => return Err("auth_email_already_linked".to_string()),
+        429 => return Err("auth_rate_limited".to_string()),
+        _ => return Err("auth_code_invalid".to_string()),
     }
     let result = response
         .json::<serde_json::Value>()
