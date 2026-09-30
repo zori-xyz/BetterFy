@@ -136,6 +136,7 @@ pub(crate) fn pinned_url(package_id: &str, resource: &Resource) -> Result<String
         expected.path == resource.path
             && expected.bytes == resource.bytes
             && expected.sha256 == resource.sha256
+            && expected.from == resource.from
     }) {
         return Err("download_contract_invalid".to_string());
     }
@@ -174,6 +175,12 @@ fn acquire_verified_resources_with_progress(
         for resource in &manifest.resources {
             if cancelled.load(Ordering::Relaxed) {
                 return Err("download_cancelled".to_string());
+            }
+            // Zero-length resources are fully described by the manifest.
+            if resource.is_empty() {
+                index += 1;
+                progress(index);
+                continue;
             }
             if crate::content_store::read_pinned_resource(
                 app_data_root,
@@ -337,6 +344,9 @@ pub(crate) fn build_from_verified_store(
                 .resources
                 .iter()
                 .map(|resource| {
+                    if resource.is_empty() {
+                        return Ok((resource.path.clone(), Vec::new()));
+                    }
                     crate::content_store::read_pinned_resource(
                         app_data_root,
                         resource.bytes,
@@ -552,6 +562,7 @@ mod tests {
             path: "models/props_tree/tree_oak_01.vmdl_c".to_string(),
             bytes: 4,
             sha256: "dc9c5edb8b2d479e697b4b0b8ab874f32b325138598ce9e7b759eb8292110622".to_string(),
+            from: None,
         }];
         let mut resources = BTreeMap::from([(contract[0].path.clone(), b"tree".to_vec())]);
         assert!(verify_resources(&contract, &resources).is_ok());

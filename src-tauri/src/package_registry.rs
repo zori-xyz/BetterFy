@@ -15,6 +15,7 @@ const MANIFESTS: &[&str] = &[
     include_str!("../packages/minify-tree-mod.json"),
     include_str!("../packages/minify-show-networth.json"),
     include_str!("../packages/minify-repopulate-unit-query-hud.json"),
+    include_str!("../packages/minify-remove-river.json"),
 ];
 
 /// Only this repository is trusted as a source, and only through
@@ -43,9 +44,26 @@ pub struct PackageSource {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Resource {
+    /// Where the file goes inside the built VPK.
     pub path: String,
     pub bytes: usize,
     pub sha256: String,
+    /// Repository path to fetch the bytes from, when it is not
+    /// `<directory>/<path>`. This is how a Minify `blacklist.txt` line is
+    /// expressed: the listed game path receives the matching
+    /// `Minify/bin/blank-files/blank.<ext>` placeholder.
+    #[serde(default)]
+    pub from: Option<String>,
+}
+
+/// SHA-256 of zero bytes. Empty resources are valid (Minify silences sounds
+/// with zero-length files) and never need a download.
+pub const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+impl Resource {
+    pub fn is_empty(&self) -> bool {
+        self.bytes == 0
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -83,12 +101,17 @@ impl PackageManifest {
     /// `https://raw.githubusercontent.com/<repository>/<commit>/<directory>/<path>`,
     /// with spaces in the directory percent-encoded exactly as before.
     pub fn resource_url(&self, resource: &Resource) -> String {
+        let location = match &resource.from {
+            Some(from) => from.replace(' ', "%20"),
+            None => format!(
+                "{}/{}",
+                self.source.directory.replace(' ', "%20"),
+                resource.path
+            ),
+        };
         format!(
-            "https://raw.githubusercontent.com/{}/{}/{}/{}",
-            self.source.repository,
-            self.source.commit,
-            self.source.directory.replace(' ', "%20"),
-            resource.path
+            "https://raw.githubusercontent.com/{}/{}/{location}",
+            self.source.repository, self.source.commit
         )
     }
 
@@ -142,6 +165,26 @@ fn valid_resource_path(path: &str) -> bool {
         })
 }
 
+fn valid_repository_path(path: &str) -> bool {
+    !path.is_empty()
+        && path.len() <= 240
+        && path.split('/').all(|segment| {
+            !segment.is_empty()
+                && segment != "."
+                && segment != ".."
+                && segment.bytes().all(|byte| {
+                    byte.is_ascii_alphanumeric() || matches!(byte, b' ' | b'_' | b'-' | b'.')
+                })
+        })
+}
+
+fn extension(path: &str) -> Option<&str> {
+    path.rsplit('/')
+        .next()?
+        .rsplit_once('.')
+        .map(|(_, extension)| extension)
+}
+
 fn validate(manifest: &PackageManifest) -> Result<(), String> {
     let invalid = |reason: &str| Err(format!("package_manifest_invalid:{}:{reason}", manifest.id));
     if manifest.schema_version != 1 {
@@ -157,15 +200,7 @@ fn validate(manifest: &PackageManifest) -> Result<(), String> {
     if source.repository != TRUSTED_REPOSITORY
         || source.commit.len() != 40
         || !source.commit.bytes().all(|byte| byte.is_ascii_hexdigit())
-        || source.directory.is_empty()
-        || source.directory.split('/').any(|segment| {
-            segment.is_empty()
-                || segment == "."
-                || segment == ".."
-                || !segment.bytes().all(|byte| {
-                    byte.is_ascii_alphanumeric() || matches!(byte, b' ' | b'_' | b'-' | b'.')
-                })
-        })
+        || !valid_repository_path(&source.directory)
     {
         return invalid("source");
     }
@@ -181,8 +216,20 @@ fn validate(manifest: &PackageManifest) -> Result<(), String> {
         if !valid_resource_path(&resource.path) || !paths.insert(resource.path.as_str()) {
             return invalid("resource_path");
         }
-        if resource.bytes == 0 || resource.bytes > MAX_RESOURCE_BYTES {
+        if resource.bytes > MAX_RESOURCE_BYTES
+            || (resource.is_empty() && resource.sha256 != EMPTY_SHA256)
+        {
             return invalid("resource_size");
+        }
+        if let Some(from) = &resource.from {
+            // A placeholder must be the same kind of compiled file as the
+            // game path it stands in for.
+            if !valid_repository_path(from)
+                || resource.is_empty()
+                || extension(from) != extension(&resource.path)
+            {
+                return invalid("resource_from");
+            }
         }
         if resource.sha256.len() != 64
             || !resource
@@ -260,7 +307,16 @@ mod tests {
     #[test]
     fn embedded_manifests_reproduce_the_original_pilot_contracts() {
         let mut lines = String::new();
-        for manifest in packages().expect("registry") {
+        let originals = [
+            "minify.tree-mod",
+            "minify.show-networth",
+            "minify.repopulate-unit-query-hud",
+        ];
+        for manifest in packages()
+            .expect("registry")
+            .iter()
+            .filter(|manifest| originals.contains(&manifest.id.as_str()))
+        {
             let folder = manifest
                 .source
                 .directory
@@ -308,6 +364,26 @@ mod tests {
     }
 
     #[test]
+    fn blacklist_lines_become_placeholder_resources() {
+        let river = find("minify-remove-river").expect("remove river");
+        let empty = river.resources.iter().filter(|r| r.is_empty()).count();
+        let placeholders = river
+            .resources
+            .iter()
+            .filter(|r| r.from.is_some())
+            .collect::<Vec<_>>();
+        assert_eq!(river.resources.len(), 23);
+        assert_eq!(empty, 5);
+        assert_eq!(placeholders.len(), 9);
+        assert!(river
+            .resource_url(placeholders[0])
+            .ends_with("/Minify/bin/blank-files/blank.vmat_c"));
+        assert!(river
+            .resource_url(&river.resources[0])
+            .contains("/Minify/mods/Remove%20River/files/materials/water/"));
+    }
+
+    #[test]
     fn hostile_or_malformed_manifests_are_rejected() {
         let cases = [
             manifest_with(|v| v["source"]["repository"] = "attacker/mods".into()),
@@ -317,6 +393,10 @@ mod tests {
             manifest_with(|v| v["resources"][0]["path"] = "Panorama/Upper.vxml_c".into()),
             manifest_with(|v| v["resources"][0]["sha256"] = "00".into()),
             manifest_with(|v| v["resources"][0]["bytes"] = 0.into()),
+            manifest_with(|v| v["resources"][0]["from"] = "Minify/../secrets.vxml_c".into()),
+            manifest_with(|v| {
+                v["resources"][0]["from"] = "Minify/bin/blank-files/blank.vmat_c".into()
+            }),
             manifest_with(|v| v["resources"] = serde_json::json!([])),
             manifest_with(|v| v["id"] = "no-namespace".into()),
             manifest_with(|v| v["distribution"] = "public".into()),

@@ -388,6 +388,20 @@ packages all come from the registry; there is no per-package branch in Rust.
 The interface imports the same files, so its list of installable mods cannot
 drift from the engine's.
 
+A resource may name a different repository path in `from`. That is how a Minify
+`blacklist.txt` line is represented: the listed game path receives the matching
+`Minify/bin/blank-files/blank.<ext>` placeholder, fetched and hash-checked like any
+other file. The placeholder must have the same extension as the target. Only literal
+blacklist lines can be expressed; Minify's `**` and `>>` patterns expand against the
+installed game's file list and are not supported. Zero-length resources are allowed
+when their hash is the SHA-256 of empty input; they need no download and are written
+as zero-length VPK entries, which is how Minify silences sounds.
+
+`minify.remove-river` is the first package added only as data: 9 files, 5 zero-length
+sounds and 9 blacklist placeholders from the same pinned commit. The engine
+downloaded and verified all 23 resources and built a four-package VPK. It has not been
+checked in Dota yet, and its manifest records no verified language.
+
 The three pilot packages were moved from Rust constants into manifests without
 changing any path, size or hash. A test pins a fingerprint of the contracts, and
 building the ordered three-package bundle from the real pinned resources gave the

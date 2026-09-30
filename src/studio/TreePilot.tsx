@@ -215,6 +215,8 @@ export default function TreePilot({
   // after installing would otherwise hide the only way back.
   const canManage = desktop && windows && !preview && installation.verified;
   const canInstall = canManage && supportedBundle;
+  // Packages whose manifest records no in-game verification yet.
+  const unverified = ids.filter((id) => !findPackage(id)?.verifiedLanguages?.length);
   function applyDownloadStatus(status: TreePilotDownloadStatus | null) {
     if (!status) return;
     setVerifiedResources(status.verifiedResources);
@@ -868,6 +870,16 @@ export default function TreePilot({
           </p>
         </div>
       )}
+      {unverified.length > 0 && !operationId && (
+        <div className="s-inline-note warning">
+          <TriangleAlert />
+          <p>
+            {isRu
+              ? `Ещё не проверено в игре: ${unverified.map(packageLabel).join(", ")}. Поставь, проверь в Dota и при проблеме откати.`
+              : `Not verified in game yet: ${unverified.map(packageLabel).join(", ")}. Install, check in Dota and restore if something is wrong.`}
+          </p>
+        </div>
+      )}
       {plan && !operationId && (
         <div className="s-tree-pilot-language">
           <div>
@@ -876,8 +888,8 @@ export default function TreePilot({
             </strong>
             <p>
               {isRu
-                ? "Моды подключаются через языковую папку Dota: игра будет запускаться с выбранным языком интерфейса. Нидерландский проверен на Windows со всеми тремя модами; остальные языки ещё не проверены."
-                : "Mods are loaded through a Dota language folder: the game will start with the chosen interface language. Dutch was verified on Windows with all three mods; the other languages have not been tested yet."}
+                ? "Моды подключаются через языковую папку Dota: игра будет запускаться с выбранным языком интерфейса. Нидерландский проверен на Windows для модов с отметкой о проверке; остальные языки ещё не проверены."
+                : "Mods are loaded through a Dota language folder: the game will start with the chosen interface language. Dutch was verified on Windows for the mods marked as verified; the other languages have not been tested yet."}
             </p>
           </div>
           <select
@@ -1369,8 +1381,8 @@ export default function TreePilot({
       )}
       <small className="s-tree-pilot-foot">
         {isRu
-          ? "Источник: Egezenn/dota2-minify · Tree Mod: robbyz512. Все три мода проверены в игре на одном Windows-компьютере с нидерландским языком; другие языки и компьютеры не проверены. Параметр -language меняет язык текста и может повлиять на озвучку. BetterFy мягко закрывает Dota 2 и Steam и после установки или отката снова запускает Steam."
-          : "Source: Egezenn/dota2-minify · Tree Mod: robbyz512. All three mods were verified in game on one Windows computer with Dutch; other languages and computers are untested. The -language option changes text language and may affect audio. BetterFy closes Dota 2 and Steam gracefully and starts Steam again after install or restore."}
+          ? "Источник: Egezenn/dota2-minify. Tree Mod, Show NetWorth и Unit Query HUD проверены в игре на одном Windows-компьютере с нидерландским языком; другие языки и компьютеры не проверены. Параметр -language меняет язык текста и может повлиять на озвучку. BetterFy мягко закрывает Dota 2 и Steam и после установки или отката снова запускает Steam."
+          : "Source: Egezenn/dota2-minify. Tree Mod, Show NetWorth and Unit Query HUD were verified in game on one Windows computer with Dutch; other languages and computers are untested. The -language option changes text language and may affect audio. BetterFy closes Dota 2 and Steam gracefully and starts Steam again after install or restore."}
       </small>
     </section>
   );

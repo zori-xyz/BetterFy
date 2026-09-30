@@ -155,9 +155,6 @@ pub(crate) fn build(packages: Vec<BundlePackage>) -> Result<VerifiedBundle, Stri
 
         for (path, bytes) in package.resources {
             vpk::validate_path(&path)?;
-            if bytes.is_empty() {
-                return Err("bundle_resource_invalid".to_string());
-            }
             input_count = input_count
                 .checked_add(1)
                 .ok_or_else(|| "bundle_limit_exceeded".to_string())?;

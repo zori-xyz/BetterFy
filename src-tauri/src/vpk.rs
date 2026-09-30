@@ -61,7 +61,9 @@ pub(crate) fn validate_path(value: &str) -> Result<(), String> {
 
 fn normalize_input<'a>(input: VpkInput<'a>) -> Result<NormalizedInput<'a>, String> {
     validate_path(input.path)?;
-    if input.bytes.is_empty() || input.bytes.len() > MAX_VPK_BYTES {
+    // Zero-length entries are valid VPK v1 entries and are how Minify ships
+    // silenced sounds; only the upper bound is enforced.
+    if input.bytes.len() > MAX_VPK_BYTES {
         return Err("vpk_payload_invalid".to_string());
     }
     let path = Path::new(input.path);
@@ -351,6 +353,30 @@ mod tests {
                 bytes: b"schema=1\nmod=tree-mod\n",
             },
         ]
+    }
+
+    #[test]
+    fn zero_length_entries_round_trip() {
+        let inputs = || {
+            vec![
+                VpkInput {
+                    path: "sounds/physics/footsteps/common/wade5.vsnd_c",
+                    bytes: b"",
+                },
+                VpkInput {
+                    path: "materials/water/water_generic_000.vmat_c",
+                    bytes: b"compiled-material",
+                },
+            ]
+        };
+        let first = build(inputs()).expect("build with an empty entry");
+        assert_eq!(first, build(inputs()).expect("deterministic"));
+        let resources = extract_embedded(&first).expect("reopen");
+        assert_eq!(
+            resources["sounds/physics/footsteps/common/wade5.vsnd_c"],
+            Vec::<u8>::new()
+        );
+        assert_eq!(inspect(&first).expect("inspect").entries, 2);
     }
 
     #[test]
