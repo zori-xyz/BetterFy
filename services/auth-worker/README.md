@@ -118,4 +118,5 @@ not reuse a previously cached image URL.
   authenticated client. GitHub releases remain public; this route gates the
   BetterFy website flow, not direct GitHub access. A stable release is preferred;
   until signing is configured, the route falls back to the newest immutable
-  Early Access prerelease containing `BetterFy-Windows-x64-setup.exe`.
+  Early Access prerelease. `BetterFy-Setup.exe` is preferred over the older NSIS
+  name `BetterFy-Windows-x64-setup.exe` within a release.

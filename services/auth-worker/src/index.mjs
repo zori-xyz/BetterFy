@@ -600,16 +600,25 @@ function allowedReleaseUrl(value) {
   }
 }
 
+// BetterFy Setup replaced the NSIS wizard as the download from EA.14 on; the
+// NSIS name is still what the signed stable release workflow publishes.
+const WINDOWS_INSTALLER_NAMES = ["BetterFy-Setup.exe", "BetterFy-Windows-x64-setup.exe"];
+
+function windowsInstallerAsset(release) {
+  if (!Array.isArray(release?.assets)) return null;
+  for (const name of WINDOWS_INSTALLER_NAMES) {
+    const asset = release.assets.find((candidate) => candidate?.name === name);
+    if (asset) return asset;
+  }
+  return null;
+}
+
 export function selectWindowsInstallerRelease(releases) {
   if (!Array.isArray(releases)) return null;
   const available = releases.filter((candidate) => candidate && candidate.draft !== true);
-  const hasInstaller = (candidate) => Array.isArray(candidate?.assets)
-    && candidate.assets.some((asset) => asset?.name === "BetterFy-Windows-x64-setup.exe");
-  const release = available.find((candidate) => candidate.prerelease !== true && hasInstaller(candidate))
-    ?? available.find((candidate) => candidate.prerelease === true && hasInstaller(candidate));
-  if (!release) return null;
-  const asset = release.assets.find((candidate) => candidate?.name === "BetterFy-Windows-x64-setup.exe");
-  return asset ? { release, asset } : null;
+  const release = available.find((candidate) => candidate.prerelease !== true && windowsInstallerAsset(candidate))
+    ?? available.find((candidate) => candidate.prerelease === true && windowsInstallerAsset(candidate));
+  return release ? { release, asset: windowsInstallerAsset(release) } : null;
 }
 
 // Unauthenticated GitHub API calls share a 60-per-hour budget per egress IP,
