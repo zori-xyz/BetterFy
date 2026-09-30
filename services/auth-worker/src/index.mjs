@@ -16,7 +16,13 @@ import {
   rateLimitSubject,
 } from "./security.mjs";
 import { COPY } from "./copy.mjs";
-import { hashIdPassword, normalizeIdUsername, validIdPassword, verifyIdPassword } from "./id-password.mjs";
+import {
+  ITERATIONS as ID_PASSWORD_ITERATIONS,
+  hashIdPassword,
+  normalizeIdUsername,
+  validIdPassword,
+  verifyIdPassword,
+} from "./id-password.mjs";
 import {
   ACCESS_PLANS,
   PREMIUM_ENTITLEMENT,
@@ -1656,7 +1662,7 @@ async function signInWithId(request, env, origin) {
      LEFT JOIN betterfy_email_identities e ON e.user_id = c.user_id
      WHERE c.username_key = ? OR e.email_hash = ? LIMIT 1`,
   ).bind(principal, emailHash).first();
-  const dummyHash = "pbkdf2-sha256$600000$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000";
+  const dummyHash = `pbkdf2-sha256$${ID_PASSWORD_ITERATIONS}$${"0".repeat(32)}$${"0".repeat(64)}`;
   const correct = await verifyIdPassword(payload.password, env.AUTH_PASSWORD_PEPPER, user?.password_hash ?? dummyHash);
   if (!user || !correct) return json({ error: "invalid_credentials" }, 401, headers);
   const rotatingDesktop = supportsRotatingDesktopCredentials(payload);

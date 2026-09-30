@@ -1,4 +1,11 @@
-const ITERATIONS = 600_000;
+// New hashes use ITERATIONS. The Workers Free plan allows about 10 ms of CPU
+// per request, and 600k PBKDF2-SHA256 rounds take far longer, so the count is
+// sized to fit. The secret pepper (an HMAC key outside the database) is what
+// keeps a leaked database from being cracked offline. The count is stored in
+// each hash, so it can be raised later without invalidating existing ones.
+export const ITERATIONS = 20_000;
+const MIN_ITERATIONS = 20_000;
+const MAX_ITERATIONS = 1_000_000;
 const encoder = new TextEncoder();
 
 export function normalizeIdUsername(value) {
@@ -21,21 +28,21 @@ async function pepperPassword(password, pepper) {
   return new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(password)));
 }
 
-export async function hashIdPassword(password, pepper, saltHex = null) {
+export async function hashIdPassword(password, pepper, saltHex = null, iterations = ITERATIONS) {
   if (!validIdPassword(password)) throw new Error("invalid_password");
   const salt = saltHex ? fromHex(saltHex) : crypto.getRandomValues(new Uint8Array(16));
   if (salt.length !== 16) throw new Error("invalid_salt");
   const input = await pepperPassword(password, pepper);
   const key = await crypto.subtle.importKey("raw", input, "PBKDF2", false, ["deriveBits"]);
-  const digest = new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: ITERATIONS }, key, 256));
-  return `pbkdf2-sha256$${ITERATIONS}$${toHex(salt)}$${toHex(digest)}`;
+  const digest = new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, key, 256));
+  return `pbkdf2-sha256$${iterations}$${toHex(salt)}$${toHex(digest)}`;
 }
 
 export async function verifyIdPassword(password, pepper, encoded) {
   const parts = typeof encoded === "string" ? encoded.split("$") : [];
-  if (parts.length !== 4 || parts[0] !== "pbkdf2-sha256" || parts[1] !== String(ITERATIONS)
+  if (parts.length !== 4 || parts[0] !== "pbkdf2-sha256" || !/^[0-9]{1,7}$/.test(parts[1]) || Number(parts[1]) < MIN_ITERATIONS || Number(parts[1]) > MAX_ITERATIONS
     || !/^[0-9a-f]{32}$/.test(parts[2]) || !/^[0-9a-f]{64}$/.test(parts[3]) || !validIdPassword(password)) return false;
-  const candidate = await hashIdPassword(password, pepper, parts[2]);
+  const candidate = await hashIdPassword(password, pepper, parts[2], Number(parts[1]));
   const actual = fromHex(parts[3]);
   const expected = fromHex(candidate.split("$")[3]);
   if (actual.length !== expected.length) return false;

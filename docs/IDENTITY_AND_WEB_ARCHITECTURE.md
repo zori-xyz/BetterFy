@@ -78,7 +78,7 @@ not a claim that the account is Telegram-backed. A production migration and
 account-linking/recovery review are required before general availability.
 
 Passwords are never stored as plaintext. The Worker applies a separate
-server-side pepper and salted PBKDF2-HMAC-SHA256 with 600,000 iterations, then
+server-side pepper and salted PBKDF2-HMAC-SHA256 with 20,000 iterations (sized for the Workers Free plan's ~10 ms CPU budget; the pepper, not the round count, is what protects a leaked database, and the count is stored per hash so it can be raised later), then
 stores only the encoded verifier. Sign-in is rate-limited by requester and keyed
 principal; missing accounts take the same password-verification path. The
 password pepper, email delivery key, and sender remain deployment secrets.
