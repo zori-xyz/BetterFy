@@ -7,6 +7,7 @@ mod content_store;
 mod evidence_reports;
 mod game_deployment;
 mod game_language;
+mod installed_profile;
 mod mod_bundle;
 mod package_registry;
 mod presets;
@@ -93,6 +94,10 @@ struct TreeCurrentState {
     steam_operation_id: Option<String>,
     steam_profile_token: Option<String>,
     steam_recovery_required: bool,
+    /// Derived record of the install; absent when missing or stale.
+    profile: Option<installed_profile::InstalledProfile>,
+    /// Steam's Dota build differs from the one recorded at install time.
+    dota_patched: bool,
 }
 
 #[derive(Serialize)]
@@ -262,6 +267,26 @@ fn list_installable_packages() -> Result<Vec<package_registry::PackageSummary>, 
 fn dota_build(game_path: String) -> Result<Option<String>, String> {
     let installation = validate_candidate(Path::new(&game_path), "manual")?;
     Ok(dota_build_id(Path::new(&installation.path)))
+}
+
+/// Best-effort Dota build lookup for the installed profile.
+fn current_dota_build(game_path: &str) -> Option<String> {
+    let installation = validate_candidate(Path::new(game_path), "manual").ok()?;
+    dota_build_id(Path::new(&installation.path))
+}
+
+/// Attach a committed Tree pilot Steam operation to the installed profile.
+/// Never changes the Steam result.
+fn record_tree_steam_operation(
+    app_data: &Path,
+    deployment_id: Option<&str>,
+    result: &Result<SteamConfigReceipt, String>,
+) {
+    if let (Some(deployment_id), Ok(receipt)) = (deployment_id, result) {
+        if let Some(steam_operation_id) = receipt.committed_operation_id() {
+            installed_profile::record_steam_operation(app_data, deployment_id, steam_operation_id);
+        }
+    }
 }
 
 fn discovery_candidates() -> Vec<PathBuf> {
@@ -572,7 +597,15 @@ async fn rollback_steam_launch_options(
         .map_err(|_| "rollback_failed".to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
         require_patch_ready_runtime()?;
-        steam_accounts::rollback_platform_operation(&app_data, request)
+        let result = steam_accounts::rollback_platform_operation(&app_data, request);
+        if let Some(operation_id) = result
+            .as_ref()
+            .ok()
+            .and_then(|receipt| receipt.rolled_back_operation_id())
+        {
+            installed_profile::forget_steam_operation(&app_data, operation_id);
+        }
+        result
     })
     .await
     .map_err(|_| "runtime_worker_failed".to_string())?
@@ -693,9 +726,10 @@ async fn install_tree_pilot(
         .path()
         .app_data_dir()
         .map_err(|_| "deployment_failed".to_string())?;
+    let app_version = app.package_info().version.to_string();
     tauri::async_runtime::spawn_blocking(move || {
         let verified = build_verified_tree_pilot(&app_data, &request)?;
-        game_deployment::deploy_verified_bundle_for_language(
+        let result = game_deployment::deploy_verified_bundle_for_language(
             &app_data,
             Path::new(&request.game_path),
             verified.bytes(),
@@ -705,6 +739,13 @@ async fn install_tree_pilot(
                 plan_id: Some(verified.plan_id().to_string()),
                 package_ids: verified.bundle_plan().package_ids.clone(),
             },
+        );
+        installed_profile::record_install(
+            &app_data,
+            result,
+            || current_dota_build(&request.game_path),
+            &app_version,
+            std::time::SystemTime::now(),
         )
     })
     .await
@@ -731,6 +772,7 @@ async fn install_tree_pilot_stress(
         .path()
         .app_data_dir()
         .map_err(|_| "deployment_failed".to_string())?;
+    let app_version = app.package_info().version.to_string();
     tauri::async_runtime::spawn_blocking(move || {
         let install = InstallTreePilotRequest {
             game_path: request.game_path,
@@ -740,7 +782,7 @@ async fn install_tree_pilot_stress(
             confirmed: request.confirmed,
         };
         let verified = build_verified_tree_pilot(&app_data, &install)?;
-        game_deployment::deploy_verified_bundle_for_language_stress(
+        let result = game_deployment::deploy_verified_bundle_for_language_stress(
             &app_data,
             Path::new(&install.game_path),
             verified.bytes(),
@@ -751,6 +793,13 @@ async fn install_tree_pilot_stress(
                 package_ids: verified.bundle_plan().package_ids.clone(),
             },
             request.failure_point,
+        );
+        installed_profile::record_install(
+            &app_data,
+            result,
+            || current_dota_build(&install.game_path),
+            &app_version,
+            std::time::SystemTime::now(),
         )
     })
     .await
@@ -841,12 +890,19 @@ async fn current_tree_pilot(
         if !cfg!(target_os = "windows") {
             return Err("platform_not_supported".to_string());
         }
-        validate_candidate(Path::new(&game_path), "manual")?;
+        let installation = validate_candidate(Path::new(&game_path), "manual")?;
         let Some(receipt) =
             game_deployment::current_owned_deployment(&app_data, Path::new(&game_path))?
         else {
             return Ok(None);
         };
+        let profile = installed_profile::current_for(&app_data, &receipt);
+        let current_build = profile
+            .as_ref()
+            .and_then(|profile| profile.dota_build_at_install.as_ref())
+            .and_then(|_| dota_build_id(Path::new(&installation.path)));
+        let dota_patched =
+            installed_profile::dota_patched(profile.as_ref(), current_build.as_deref());
         let package_ids = if receipt.package_ids.is_empty() {
             vec![tree_pilot::PACKAGE_ID.to_string()]
         } else {
@@ -881,6 +937,8 @@ async fn current_tree_pilot(
                 .map(|operation| operation.operation_id.clone()),
             steam_profile_token: linked.map(|operation| operation.profile_token),
             steam_recovery_required,
+            profile,
+            dota_patched,
         }))
     })
     .await
@@ -901,7 +959,10 @@ async fn apply_tree_steam_launch_options(
         .map_err(|_| "backup_failed".to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
         let profile_request = validate_tree_steam_request(&app_data, request)?;
-        steam_accounts::apply_platform_profile(&app_data, profile_request)
+        let deployment_id = profile_request.linked_deployment_id.clone();
+        let result = steam_accounts::apply_platform_profile(&app_data, profile_request);
+        record_tree_steam_operation(&app_data, deployment_id.as_deref(), &result);
+        result
     })
     .await
     .map_err(|_| "runtime_worker_failed".to_string())?
@@ -969,7 +1030,14 @@ async fn apply_tree_steam_launch_options_stress(
                 confirmed: request.confirmed,
             },
         )?;
-        steam_accounts::apply_platform_profile_stress(&app_data, profile_request, failure_point)
+        let deployment_id = profile_request.linked_deployment_id.clone();
+        let result = steam_accounts::apply_platform_profile_stress(
+            &app_data,
+            profile_request,
+            failure_point,
+        );
+        record_tree_steam_operation(&app_data, deployment_id.as_deref(), &result);
+        result
     })
     .await
     .map_err(|_| "runtime_worker_failed".to_string())?
@@ -1069,11 +1137,12 @@ async fn rollback_game_deployment(
         .map_err(|_| "rollback_failed".to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
         require_patch_ready_runtime()?;
-        game_deployment::rollback(
+        let result = game_deployment::rollback(
             &app_data,
             Path::new(&request.game_path),
             &request.operation_id,
-        )
+        );
+        installed_profile::record_rollback(&app_data, result)
     })
     .await
     .map_err(|_| "runtime_worker_failed".to_string())?

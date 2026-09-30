@@ -26,12 +26,6 @@ import { useLocale } from "../i18n";
 import { deliveryLabel, modById } from "./model";
 import { engineIdFor, findPackage, installablePackages, packageName } from "./packages";
 import { setEngineActive } from "./engineActivity";
-import { getStorageItem, setStorageItem } from "../storage";
-
-// Dota build number seen when a BetterFy build was installed, per operation.
-// Informational only: it lets the app say "Dota was updated since you
-// installed this" — a patch can break an older HUD mod.
-const buildKey = (operationId: string) => `betterfy:deployed-dota-build:${operationId}`;
 
 const codeOf = (error: unknown) =>
   error instanceof EngineFault
@@ -293,6 +287,7 @@ export default function TreePilot({
         setSteamOperationId(receipt?.steamOperationId ?? null);
         if (receipt?.steamProfileToken) setSelectedProfile(receipt.steamProfileToken);
         setSteamRecoveryRequired(receipt?.steamRecoveryRequired ?? false);
+        setDotaPatched(receipt?.dotaPatched ?? false);
       })
       .catch((cause) => {
         if (active) setError(codeOf(cause));
@@ -301,24 +296,6 @@ export default function TreePilot({
       active = false;
     };
   }, [desktop, windows, preview, installation.verified, installation.path]);
-  useEffect(() => {
-    setDotaPatched(false);
-    if (!operationId || !canManage) return;
-    let active = true;
-    engineBridge
-      .dotaBuild(installation.path)
-      .then((current) => {
-        if (!active || !current) return;
-        const recorded = getStorageItem(buildKey(operationId));
-        // Installs made before this check existed get today's build as baseline.
-        if (!recorded) setStorageItem(buildKey(operationId), current);
-        else setDotaPatched(recorded !== current);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [operationId, canManage, installation.path]);
   useEffect(() => {
     if (!canManage) return;
     let active = true;
@@ -407,12 +384,7 @@ export default function TreePilot({
       );
       if (!receipt.committed || !receipt.backupVerified) throw new Error("deployment_unverified");
       installed = true;
-      await engineBridge
-        .dotaBuild(installation.path)
-        .then((build) => {
-          if (build) setStorageItem(buildKey(receipt.operationId), build);
-        })
-        .catch(() => undefined);
+      setDotaPatched(false);
       setOperationId(receipt.operationId);
       setInstalledLanguage(receipt.language);
       setInstalledPackageIds(receipt.packageIds);
@@ -634,6 +606,7 @@ export default function TreePilot({
       setSteamOperationId(current?.steamOperationId ?? null);
       if (current?.steamProfileToken) setSelectedProfile(current.steamProfileToken);
       setSteamRecoveryRequired(current?.steamRecoveryRequired ?? false);
+      setDotaPatched(current?.dotaPatched ?? false);
       saveEvidenceReport();
     } catch (cause) {
       setError(codeOf(cause));

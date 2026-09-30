@@ -220,6 +220,23 @@ export type TreePilotCurrentState = GameDeploymentReceipt & {
   steamOperationId: string | null;
   steamProfileToken: string | null;
   steamRecoveryRequired: boolean;
+  /** Rust-owned record of the install; null when absent or stale. */
+  profile: InstalledProfile | null;
+  /** Dota's Steam build differs from the one recorded at install time. */
+  dotaPatched: boolean;
+};
+
+export type InstalledProfile = {
+  schemaVersion: 1;
+  deploymentOperationId: string;
+  planId: string | null;
+  packageIds: string[];
+  language: GameLanguage;
+  installedSha256: string;
+  installedAt: string;
+  dotaBuildAtInstall: string | null;
+  steamOperationId: string | null;
+  appVersion: string;
 };
 
 export type TreeSteamActivationRequest = {

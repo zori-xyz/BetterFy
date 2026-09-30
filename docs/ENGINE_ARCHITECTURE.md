@@ -408,6 +408,32 @@ building the ordered three-package bundle from the real pinned resources gave th
 same plan ID and VPK SHA-256 before and after the move, so existing installations
 and their journals are still recognised.
 
+### Installed profile
+
+After a committed pilot install, Rust writes one derived record to
+`<app_data>/engine-v1/installed-profile.json` (schema version 1): deployment
+operation ID, plan ID, ordered package IDs, language, installed SHA-256, UTC
+install time, the Steam Dota build number seen at install time, the linked Steam
+operation ID once launch options are applied, and the app version. It holds no
+filesystem paths, Steam IDs or account names. The file is written to a synced
+temporary file in the same directory and renamed over the previous one;
+symlinked paths, unknown fields and malformed values are rejected.
+
+The profile is informational. Ownership record and journals remain the source of
+truth, and their schema and transaction steps are unchanged. A profile whose
+operation, hash, plan, language or package order differs from the current owned
+deployment is ignored as stale. A failed profile write or clear never fails or
+alters the install or rollback result. A successful rollback clears the profile,
+so a deployment restored from an earlier chain, or one installed before this
+record existed, has no profile until it is installed again.
+
+`current_tree_pilot` returns the matching profile and a `dotaPatched` flag,
+true only when both the recorded and the current build numbers are known and
+differ. This replaces the browser-storage build baseline the Tree Mod screen
+used before. The write, stale-profile, privacy and failed-write paths are covered
+by synthetic tests on macOS; the profile has not yet been observed on a Windows
+install.
+
 ## Definition of done for filesystem writes
 
 - Unit tests cover path validation, traversal attempts, conflicts, and journal

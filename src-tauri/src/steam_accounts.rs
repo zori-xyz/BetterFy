@@ -91,6 +91,20 @@ pub struct SteamConfigReceipt {
     rolled_back: bool,
 }
 
+impl SteamConfigReceipt {
+    /// The committed operation's ID, if this receipt committed a change.
+    pub(crate) fn committed_operation_id(&self) -> Option<&str> {
+        self.operation_id
+            .as_deref()
+            .filter(|_| self.committed && !self.rolled_back)
+    }
+
+    /// The operation's ID, if this receipt rolled a change back.
+    pub(crate) fn rolled_back_operation_id(&self) -> Option<&str> {
+        self.operation_id.as_deref().filter(|_| self.rolled_back)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 enum SteamConfigPhase {
