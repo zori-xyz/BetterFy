@@ -73,3 +73,15 @@ test("only numeric Telegram ids count as a linked Telegram account", () => {
   assert.equal(isTelegramIdentity("id:2f1c0e5a-0000-4000-8000-000000000000"), false);
   assert.equal(isTelegramIdentity(undefined), false);
 });
+
+test("sign-in emails carry the code in HTML and plain text, per language and purpose", async () => {
+  const { emailContent } = await import("../src/email.mjs");
+  const ru = emailContent("123456", "ru", "register");
+  assert.equal(ru.subject, "Подтверди почту для BetterFy ID");
+  assert.ok(ru.html.includes("123 456") && ru.text.includes("123 456"));
+  assert.ok(ru.html.includes('lang="ru"'));
+  const en = emailContent("654321", "en", "signin");
+  assert.equal(en.subject, "Your BetterFy ID sign-in code");
+  assert.ok(en.html.includes("654 321"));
+  assert.throws(() => emailContent("<b>1</b>", "en", "signin"));
+});

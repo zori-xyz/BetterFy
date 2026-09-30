@@ -59,7 +59,7 @@ test("ID registration verifies email, stores only a salted verifier, and signs i
   globalThis.fetch = async (url, options) => {
     assert.equal(url, "https://api.resend.com/emails");
     const mail = JSON.parse(options.body);
-    deliveredCode = /\b\d{6}\b/.exec(mail.text)?.[0] ?? "";
+    deliveredCode = (/\b(\d{3}) (\d{3})\b/.exec(mail.text)?.slice(1) ?? []).join("");
     return new Response("{}", { status: 200 });
   };
   try {

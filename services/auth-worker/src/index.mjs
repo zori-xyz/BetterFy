@@ -16,6 +16,7 @@ import {
   rateLimitSubject,
 } from "./security.mjs";
 import { COPY } from "./copy.mjs";
+import { emailContent } from "./email.mjs";
 import {
   ITERATIONS as ID_PASSWORD_ITERATIONS,
   hashIdPassword,
@@ -1427,19 +1428,18 @@ async function verifyCode(request, env, origin) {
   } : {}), 200, headers);
 }
 
-async function sendEmailCode(env, email, code, language) {
+async function sendEmailCode(env, email, code, language, purpose) {
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) throw new Error("email_not_configured");
-  const ru = language === "ru";
+  const content = emailContent(code, language, purpose);
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
     body: JSON.stringify({
       from: env.EMAIL_FROM,
       to: [email],
-      subject: ru ? "Код входа BetterFy ID" : "Your BetterFy ID sign-in code",
-      text: ru
-        ? `Код BetterFy ID: ${code}\nОн действует 10 минут. Если ты не запрашивал вход, игнорируй это письмо.`
-        : `BetterFy ID code: ${code}\nIt is valid for 10 minutes. If you did not request this, ignore this email.`,
+      subject: content.subject,
+      html: content.html,
+      text: content.text,
     }),
     signal: AbortSignal.timeout(8000),
   });
@@ -1482,7 +1482,7 @@ async function requestEmailCode(request, env, origin, purpose) {
     "INSERT INTO betterfy_email_codes (code_hash, email_hash, user_id, purpose, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
   ).bind(codeHash, emailHash, userId, purpose, now, now + EMAIL_TTL_SECONDS).run();
   try {
-    await sendEmailCode(env, email, code, payload?.language);
+    await sendEmailCode(env, email, code, payload?.language, purpose);
   } catch {
     await env.AUTH_DB.prepare("DELETE FROM betterfy_email_codes WHERE code_hash = ?").bind(codeHash).run();
     return json({ error: "email_unavailable" }, 503, headers);
@@ -1589,7 +1589,7 @@ async function startIdRegistration(request, env, origin) {
     return json({ error: "username_taken" }, 409, headers);
   }
   try {
-    await sendEmailCode(env, email, code, payload.language);
+    await sendEmailCode(env, email, code, payload.language, "register");
   } catch {
     await env.AUTH_DB.prepare("DELETE FROM betterfy_id_registrations WHERE email_hash = ? AND code_hash = ?").bind(emailHash, codeHash).run();
     return json({ error: "id_unavailable" }, 503, headers);
