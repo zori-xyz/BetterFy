@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "sequence": 2,
-  "issuedAt": "2026-09-30T17:28:01Z",
-  "expiresAt": "2027-03-29T17:28:01Z",
+  "sequence": 3,
+  "issuedAt": "2026-09-30T21:19:09Z",
+  "expiresAt": "2027-03-29T21:19:09Z",
   "packages": [
     {
       "schemaVersion": 1,
@@ -21,7 +21,8 @@
       },
       "distribution": "internal_pilot",
       "verifiedLanguages": [
-        "dutch"
+        "dutch",
+        "russian"
       ],
       "resources": [
         {
@@ -167,7 +168,8 @@
       },
       "distribution": "internal_pilot",
       "verifiedLanguages": [
-        "dutch"
+        "dutch",
+        "russian"
       ],
       "resources": [
         {
@@ -204,7 +206,8 @@
       },
       "distribution": "internal_pilot",
       "verifiedLanguages": [
-        "dutch"
+        "dutch",
+        "russian"
       ],
       "resources": [
         {
@@ -231,7 +234,8 @@
       },
       "distribution": "internal_pilot",
       "verifiedLanguages": [
-        "dutch"
+        "dutch",
+        "russian"
       ],
       "resources": [
         {

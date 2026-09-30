@@ -164,3 +164,21 @@ section below); a recorded compatibility result is still open.
 - Founder report: all of it was checked and works.
 - Not recorded with this report: the catalog `sequence` the device accepted and
   the contents of `contracts.json`.
+
+## 2026-09-30 Windows pass through the Russian slot
+
+- Build: BetterFy 0.1.4 on Windows, as recorded in the evidence file; the exact
+  CI artifact was not recorded with this report.
+- Evidence file `evidence-20260930T210552Z-2db4064f.json`, operation 3:
+  language `russian`, phase `committed`, `backupVerified: true`, no error code,
+  bundle `sha256:c3826d3c…d564574` with all four packages (`minify.tree-mod`,
+  `minify.show-networth`, `minify.repopulate-unit-query-hud`,
+  `minify.remove-river`). The matching Steam launch options entry is also
+  `committed` with a verified backup. Operation 2 (Dutch, three packages)
+  shows `rolled_back` with `rollbackVerified: true`.
+- Founder report: all four mods work in game, and BetterFy ID registration
+  works. All four manifests now record `russian` as verified in addition to
+  `dutch`.
+- Not recorded with this report: an evidence file after rolling back
+  operation 3, and which Unit Query HUD change was observed. `koreana` and
+  `schinese` remain unverified.

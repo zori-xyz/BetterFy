@@ -52,6 +52,20 @@ test("website downloads fall back to an immutable Early Access installer", () =>
   assert.equal(selectWindowsInstallerRelease(null), null);
 });
 
+test("website downloads use the BetterFy Setup installer of the newest Early Access build", () => {
+  const setup = {
+    name: "BetterFy-Setup.exe",
+    browser_download_url: "https://github.com/zori-xyz/BetterFy/releases/download/v0.1.4-ea.21/BetterFy-Setup.exe",
+  };
+  const current = { tag_name: "v0.1.4-ea.21", prerelease: true, draft: false, assets: [setup, { name: "BetterFy-Setup.exe.sha256" }] };
+  const legacy = { tag_name: "v0.1.4-ea.13", prerelease: true, draft: false, assets: [releaseAsset()] };
+  const selected = selectWindowsInstallerRelease([current, legacy]);
+  assert.equal(selected?.release, current);
+  assert.equal(selected?.asset, setup);
+  const both = { tag_name: "v0.2.0", prerelease: false, draft: false, assets: [releaseAsset(), setup] };
+  assert.equal(selectWindowsInstallerRelease([both])?.asset, setup);
+});
+
 test("avatar proxy identifies image bytes instead of trusting Telegram headers", () => {
   assert.equal(detectImageContentType(Uint8Array.from([0xff, 0xd8, 0xff, 0xe0])), "image/jpeg");
   assert.equal(detectImageContentType(Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])), "image/png");
