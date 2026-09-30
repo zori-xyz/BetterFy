@@ -26,4 +26,6 @@ installer/src-tauri/payload/*
 *.pem
 *.key
 *.sig
+# The signed package catalog's signature is a published, public artifact.
+!website/public/bot/catalog/index.json.sig
 .release-signing/
