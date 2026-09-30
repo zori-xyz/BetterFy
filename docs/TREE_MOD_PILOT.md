@@ -146,9 +146,8 @@ section below); a recorded compatibility result is still open.
   "Open reports folder" button.
 - Founder report, verbatim in substance: everything on that checklist was
   checked and works.
-- Not recorded with this report: the Dota language folder used, the saved
-  evidence JSON itself, and which Unit Query HUD change was observed. The
-  evidence files are now written automatically to
-  `%APPDATA%\app.betterfy.desktop\reports\`; attaching one would close the
-  first two gaps. Until the language is known, the Remove River manifest keeps
-  an empty `verifiedLanguages` list.
+- Language folder: the founder confirmed afterwards that the pass used
+  `dutch`; the Remove River manifest now records `dutch` as verified.
+- Not recorded with this report: the saved evidence JSON itself and which Unit
+  Query HUD change was observed. The evidence files are written automatically
+  to `%APPDATA%\app.betterfy.desktop\reports\`.
