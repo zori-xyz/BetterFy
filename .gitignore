@@ -4,6 +4,10 @@ artifacts/installer-preview/
 dist-site/
 src-tauri/target/
 src-tauri/gen/
+installer/src-tauri/target/
+installer/src-tauri/gen/
+installer/src-tauri/payload/*
+!installer/src-tauri/payload/.gitkeep
 .impeccable/
 .DS_Store
 *.log
@@ -22,4 +26,6 @@ src-tauri/gen/
 *.pem
 *.key
 *.sig
+# The signed package catalog's signature is a published, public artifact.
+!website/public/bot/catalog/index.json.sig
 .release-signing/

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BetterFy Setup</title>
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="side">
+        <div class="wordmark"><span class="better">Better</span><span class="fy">Fy</span></div>
+        <div class="join" data-i18n="side.join"></div>
+        <button type="button" class="qr" id="btn-channel"><img src="assets/telegram-qr.png" alt="" /></button>
+      </aside>
+
+      <main class="content">
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button type="button" data-lang="ru">RU</button>
+          <button type="button" data-lang="en">EN</button>
+        </div>
+
+        <section class="screen" data-screen="welcome">
+          <p class="eyebrow" data-i18n="welcome.eyebrow"></p>
+          <h1 data-i18n="welcome.title"></h1>
+          <p class="body" data-i18n="welcome.body1"></p>
+          <p class="body" data-i18n="welcome.pathLabel"><span id="install-path">…</span></p>
+
+          <div class="notice" id="existing-notice" hidden>
+            <p class="body" id="existing-notice-text"></p>
+            <button class="btn btn-text" id="btn-uninstall" data-i18n="welcome.uninstallLink"></button>
+          </div>
+
+          <div class="warning" id="webview2-warning" hidden>
+            <p class="body" data-i18n="webview2.body"></p>
+            <button class="btn" id="btn-webview2" data-i18n="webview2.button"></button>
+          </div>
+
+          <label class="option">
+            <input type="checkbox" id="opt-desktop" checked />
+            <span data-i18n="welcome.optDesktop"></span>
+          </label>
+          <label class="option">
+            <input type="checkbox" id="opt-launch" checked />
+            <span data-i18n="welcome.optLaunch"></span>
+          </label>
+
+          <div class="actions">
+            <button class="btn" id="btn-cancel" data-i18n="welcome.cancel"></button>
+            <button class="btn btn-primary" id="btn-install" data-i18n="welcome.install"></button>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="confirm-uninstall" hidden>
+          <p class="eyebrow error-eyebrow" data-i18n="confirmUninstall.eyebrow"></p>
+          <h1 data-i18n="confirmUninstall.title"></h1>
+          <p class="body" data-i18n="confirmUninstall.body"></p>
+          <div class="actions">
+            <button class="btn" id="btn-uninstall-cancel" data-i18n="confirmUninstall.cancel"></button>
+            <button class="btn btn-danger" id="btn-uninstall-confirm" data-i18n="confirmUninstall.confirm"></button>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="installing" hidden>
+          <p class="eyebrow" data-i18n="installing.eyebrow"></p>
+          <h1 data-i18n="installing.title"></h1>
+          <p class="body" data-i18n="installing.body"></p>
+          <ul class="steps" id="install-steps">
+            <li data-i18n="installing.stepFiles"></li>
+            <li data-i18n="installing.stepShortcuts"></li>
+            <li data-i18n="installing.stepRegistry"></li>
+          </ul>
+        </section>
+
+        <section class="screen" data-screen="finish" hidden>
+          <p class="eyebrow" data-i18n="finish.eyebrow"></p>
+          <h1 data-i18n="finish.title"></h1>
+          <p class="body" data-i18n="finish.body"></p>
+          <p class="body" data-i18n="finish.pathLabel"><span id="finish-path"></span></p>
+          <p class="body launch-note" id="finish-launch-note" data-i18n="finish.launchFailed" hidden></p>
+          <div class="actions">
+            <button class="btn btn-primary" id="btn-done" data-i18n="finish.done"></button>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="uninstalling" hidden>
+          <p class="eyebrow" data-i18n="uninstalling.eyebrow"></p>
+          <h1 data-i18n="uninstalling.title"></h1>
+          <p class="body" data-i18n="uninstalling.body"></p>
+        </section>
+
+        <section class="screen" data-screen="uninstalled" hidden>
+          <p class="eyebrow" data-i18n="uninstalled.eyebrow"></p>
+          <h1 data-i18n="uninstalled.title"></h1>
+          <p class="body" data-i18n="uninstalled.body"></p>
+          <div class="actions">
+            <button class="btn" id="btn-uninstalled-done" data-i18n="uninstalled.done"></button>
+            <button class="btn btn-primary" id="btn-uninstalled-reinstall" data-i18n="uninstalled.reinstall"></button>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="error" hidden>
+          <p class="eyebrow error-eyebrow" data-i18n="error.eyebrow"></p>
+          <h1 data-i18n="error.title"></h1>
+          <p class="body" id="error-body" data-i18n="error.body"></p>
+          <p class="body" data-i18n="error.codeLabel"><code id="error-code"></code></p>
+          <div class="actions">
+            <button class="btn" id="btn-error-help" data-i18n="error.help"></button>
+            <button class="btn" id="btn-close-error" data-i18n="error.close"></button>
+            <button class="btn btn-primary" id="btn-error-retry" data-i18n="error.retry"></button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

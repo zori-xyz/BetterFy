@@ -7,6 +7,9 @@ const cases = [
   { language: "en", width: 1180, height: 820 },
   { language: "ru", width: 390, height: 844 },
   { language: "en", width: 390, height: 844 },
+  { language: "ru", width: 768, height: 1024 },
+  { language: "en", width: 1920, height: 1080 },
+  { language: "ru", width: 2560, height: 1080 },
   { language: "ru", width: 320, height: 568 },
 ];
 const forbiddenCopy = [
@@ -25,12 +28,88 @@ async function assertStorageDeniedFallback() {
       configurable: true,
       get() { throw new DOMException("Storage denied", "SecurityError"); },
     });
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      get() { throw new DOMException("Storage denied", "SecurityError"); },
+    });
   });
   await page.goto(origin, { waitUntil: "networkidle" });
   if (!(await page.locator("h1").first().isVisible())) {
     throw new Error("Site did not render when localStorage was denied");
   }
   await page.close();
+}
+
+async function assertSuccessfulAuthWithoutSessionStorage() {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript(() => {
+    const original = window.sessionStorage;
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      get() {
+        return new Proxy(original, {
+          get(target, property) {
+            if (property === "setItem") return () => { throw new DOMException("Storage denied", "SecurityError"); };
+            const value = Reflect.get(target, property, target);
+            return typeof value === "function" ? value.bind(target) : value;
+          },
+        });
+      },
+    });
+  });
+  await page.route("**/v1/auth/telegram/code", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ userId: "test-user", displayName: "Test Player", accessTier: "early-access", avatarAvailable: false, sessionToken: "test-session" }),
+  }));
+  await page.route("**/v1/session/profile", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ userId: "test-user", displayName: "Test Player", accessTier: "early-access", avatarAvailable: false }),
+  }));
+  await page.goto(origin, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Профиль" }).first().click();
+  await page.getByRole("button", { name: "У меня уже есть код" }).click();
+  await page.getByLabel("Код подтверждения").fill("123456");
+  await page.getByRole("button", { name: "Войти", exact: true }).click();
+  await page.getByRole("heading", { name: "Test Player" }).waitFor();
+  await page.getByText(/только для этой вкладки/i).waitFor();
+  await page.close();
+}
+
+async function assertIdSignInFlow() {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.route("**/v1/auth/id/login", (route) => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: JSON.stringify({ userId: "test-user", displayName: "Test Player", accessTier: "early-access", avatarAvailable: false, sessionToken: "test-id-session" }),
+  }));
+  await page.route("**/v1/session/profile", (route) => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: JSON.stringify({ userId: "test-user", displayName: "Test Player", accessTier: "early-access", avatarAvailable: false }),
+  }));
+  await page.goto(origin, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Профиль" }).first().click();
+  await page.getByRole("button", { name: "Войти через BetterFy ID" }).click();
+  await page.getByRole("textbox", { name: "Почта или никнейм" }).fill("player_07");
+  await page.getByLabel("Пароль — от 12 символов").fill("test password 2026");
+  await page.getByRole("button", { name: "Войти", exact: true }).click();
+  await page.getByRole("heading", { name: "Test Player" }).waitFor();
+  await page.close();
+}
+
+async function assertReleaseStates() {
+  for (const state of ["missing", "unavailable"]) {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.route("https://api.github.com/repos/zori-xyz/BetterFy/releases/latest", (route) => state === "missing"
+      ? route.fulfill({ status: 404, contentType: "application/json", body: "{}" })
+      : route.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
+    await page.goto(origin, { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Проверить сборку Windows" }).click();
+    const expected = state === "missing" ? /ещё не выпущена/i : /не удалось связаться/i;
+    await page.getByRole("dialog").getByText(expected).waitFor();
+    if (state === "unavailable") await page.getByRole("button", { name: "Повторить" }).waitFor();
+    await page.close();
+  }
 }
 
 async function assertReducedMotionAndObserverFallback() {
@@ -88,6 +167,15 @@ try {
     await page.keyboard.press("ArrowRight");
     if (await journeyTabs.nth(1).getAttribute("aria-selected") !== "true") throw new Error(`${testCase.language} ${testCase.width}px journey tabs do not support arrow keys`);
 
+    if (testCase.width <= 1100) {
+      const menuButton = page.getByRole("button", { name: testCase.language === "ru" ? "Меню" : "Menu" });
+      await menuButton.click();
+      await page.locator("#mobile-navigation").waitFor();
+      await page.keyboard.press("Escape");
+      if (await page.locator("#mobile-navigation").count()) throw new Error(`${testCase.language} ${testCase.width}px mobile menu did not close with Escape`);
+      await menuButton.locator(":scope:focus").waitFor();
+    }
+
     const profileTrigger = page.getByRole("button", { name: testCase.language === "ru" ? "Профиль" : "Profile" }).first();
     await profileTrigger.click();
     const dialog = page.getByRole("dialog");
@@ -107,8 +195,11 @@ try {
     await page.close();
   }
   await assertStorageDeniedFallback();
+  await assertSuccessfulAuthWithoutSessionStorage();
+  await assertIdSignInFlow();
+  await assertReleaseStates();
   await assertReducedMotionAndObserverFallback();
-  console.log(`BetterFy website: ${cases.length} responsive checks, modal focus, journey keyboard controls, reduced motion, and fallbacks passed.`);
+  console.log(`BetterFy website: ${cases.length} responsive checks, mobile navigation, modal focus, auth/release failures, journey keyboard controls, reduced motion, and storage fallbacks passed.`);
 } finally {
   await browser.close();
 }

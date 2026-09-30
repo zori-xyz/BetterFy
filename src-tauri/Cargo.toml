@@ -1,6 +1,6 @@
 [package]
 name = "betterfy"
-version = "0.1.0"
+version = "0.1.4"
 description = "BetterFy desktop application"
 authors = ["BetterFy contributors"]
 edition = "2021"
@@ -17,6 +17,10 @@ crc32fast = "1"
 reqwest = { version = "=0.13.4", default-features = false, features = ["blocking", "rustls"] }
 keyring = { version = "=4.1.5", default-features = false, features = ["v1"] }
 zip = { version = "=4.6.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# Already in the tree through tauri-plugin-updater; used to verify the signed
+# package catalog with its own key.
+minisign-verify = "=0.2.5"
+base64 = "=0.22.1"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-opener = "2"
@@ -27,3 +31,4 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
+internal-stress-test = []

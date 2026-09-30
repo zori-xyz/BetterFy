@@ -41,8 +41,11 @@ region.
    user, payload, currency, amount, SKU, and order state match the stored order.
 5. Access is granted only after a `successful_payment` update. The Telegram
    charge ID is the idempotency key and is retained for support and refunds.
-6. Recurring access trusts Telegram's reported expiry. One-time passes extend
-   from the later of purchase time or the user's current active expiry.
+6. Access is one queue of paid periods, recomputed from the stored charges on
+   every payment and refund: each non-refunded charge adds its plan duration
+   (3, 15 or 30 days), starting at its payment time or when the previous
+   period ends, whichever is later. A monthly subscription bought while a pass
+   is active therefore starts after the pass instead of overlapping it.
 7. Renewals and additional passes extend the same entitlement. Replayed updates
    do not extend it twice.
 8. A refund marks the charge and recalculates access from non-refunded periods.

@@ -1,0 +1,44 @@
+name: Product checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: product-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-and-auth:
+    name: Website journeys and auth worker
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      VITE_BETTERFY_AUTH_URL: https://betterfy-auth.zori-xyz.workers.dev
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build website
+        run: npm run site:build
+      - name: Check website journeys
+        run: npm run site:check:ci
+      - name: Check the signed package catalog matches the manifests
+        run: npm run catalog:check
+      - name: Install auth worker dependencies
+        run: npm ci --prefix services/auth-worker
+      - name: Test auth worker
+        run: npm run bot:test

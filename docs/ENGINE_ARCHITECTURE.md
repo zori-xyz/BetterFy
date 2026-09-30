@@ -187,8 +187,24 @@ exists, but it accepts only a `Ready` journal containing exactly one verified
 `pak66_dir.vpk`; the current CSS fixtures cannot satisfy that contract. The
 confirmed activation step stops Dota and Steam, commits BetterFy's owned launch
 option, verifies the profile against its journal, and starts Steam only. The
-user-facing game-directory write remains closed until the Tree Mod package and
-native Windows evidence exist.
+generic game-directory write remains closed in release builds. The fixed Tree
+verified-build pilot now stages and re-verifies an ordered Tree Mod / Show Net
+Worth / Repopulate Unit Query HUD bundle before calling the deployment transaction. The deployment ownership
+record and journal persist both the complete bundle-plan identity and ordered
+package IDs, so restart detection and rollback cannot mistake two builds that
+produce a different selected composition. The founder has observed the ordered
+three-package path through the Dutch slot on Windows, including the visible
+results in Dota and the recovery controls described in `TREE_MOD_PILOT.md`.
+This remains one founder-observed machine without a retained report JSON, not
+general compatibility evidence.
+
+The normal release build and the internal stress build share the same transaction
+code. Only the CI `windows-build` artifact enables the `internal-stress-test`
+feature. That feature exposes two deterministic stop points on each game-file and
+Steam-profile transaction: after the verified temporary state is journaled, and
+immediately after the atomic replacement. Each control immediately invokes the
+normal recovery path and requires a matching recovery receipt. The Early Access
+release workflow does not enable these controls.
 
 The runtime preflight is now implemented behind typed Tauri commands. Windows
 process enumeration uses Tool Help APIs and recognizes the Steam client, Web
@@ -225,8 +241,9 @@ activation step. It lists profiles by neutral ordinal, requires explicit shutdow
 confirmation, applies the selected preview, verifies either the matching committed
 journal or an already-managed profile, then resolves `steam.exe` from the registry
 and starts Steam. Dota is never launched. A changed transaction exposes its exact
-rollback path. This transaction currently owns only BetterFy's `-language dutch`
-argument.
+rollback path. The internal verified-build pilot binds one selected, allowlisted
+`-language` value to the same language folder used for its VPK. Earlier Dutch
+operations remain readable and restorable.
 
 ### Implemented game-deployment transaction foundation
 
@@ -235,10 +252,30 @@ embedded data entries. Paths are lowercase relative ASCII, traversal and case-fo
 collisions are rejected, CRC32 is recorded per entry, and the finished archive is
 opened and checked again. External archive parts are not accepted.
 
+The multi-package layer now merges verified embedded resources into one
+BetterFy-owned VPK. Selected package order is explicit: the first package has
+priority when different bytes target the same resource path. Identical resources
+are deduplicated, differing collisions are recorded as overrides, and all inputs —
+including shadowed bytes — are bound into the reviewed SHA-256 plan identity. The
+same ordered package list is persisted in the staging journal. The deterministic
+merge remains covered synthetically and the complete three-package bundle has
+also been observed on one Windows machine through the pinned pilot. This does not
+open general catalog deployment. Each package's
+input, effective, deduplicated, and shadowed resource counts are included in the
+reviewed plan so a selected package cannot silently contribute zero effective
+resources.
+
+Verified embedded upstream VPKs can be reopened into their resource maps before
+the merge, so repeated upstream names such as `pak66_dir.vpk` do not become target
+filenames and do not require blind numeric renaming. External numbered archive
+parts remain unsupported and are rejected rather than partially copied.
+
 `deploy_staged_vpk` cannot receive a source or destination from the interface. It
 resolves a confirmed BetterFy staging journal, requires its exact reviewed plan ID,
 requires one verified `pak66_dir.vpk`, rehashes and reopens it, then targets only
-`game/dota_dutch/pak66_dir.vpk`. The runtime must already prove Steam and Dota are
+`game/dota_dutch/pak66_dir.vpk` for the generic debug path. The verified-build pilot
+instead chooses an allowlisted language folder before installation and records
+it in the journal and receipt. The runtime must already prove Steam and Dota are
 closed. An existing target is replaceable only when BetterFy's ownership record
 matches its current hash; an unknown target is a hard conflict.
 
@@ -249,8 +286,26 @@ the exact prior bytes and prior ownership chain, or removes an initial install. 
 refuses to overwrite a post-install external edit. Recovery distinguishes an
 interruption before publish from one after publish and either marks the untouched
 operation failed or rolls the published bytes back. Synthetic tests inject both
-failures. The Tree Mod resource package and native Windows validation are still
-gates; therefore no current catalog selection can invoke a live deploy.
+failures. Only pinned Tree Mod, Show Net Worth, and Repopulate Unit Query HUD selections can invoke the internal live-deploy
+path on Windows. No other catalog selection can invoke a live deploy, and no
+general Windows compatibility result is claimed. The founder has observed the
+intended Tree Mod result in Dota through the Dutch slot and completed the visible
+rollback, after which the game returned to its normal tree state.
+
+Installed-state discovery now reads the ownership record and committed journal,
+rehashes the on-disk target, and checks a required previous-version backup without
+depending on the resource cache or browser storage. The Tree Mod screen separately
+reports whether the installed hash still matches a VPK rebuilt from the pinned
+resources. If that second check is unavailable, file rollback remains discoverable
+but automatic Steam activation is not offered. This is synthetic recovery coverage,
+not proof of exact-byte Windows restoration or interruption recovery.
+
+The internal Tree Mod Steam write now carries the validated VPK deployment ID
+inside the Steam journal. On restart, Rust locates the matching committed Steam
+operation by that ID; React no longer relies on localStorage for either rollback
+identifier. An interrupted linked Steam journal blocks VPK rollback until Steam
+recovery runs, preventing an orphaned launch option. Legacy Steam changes that
+predate this link cannot be inferred safely and require a separate manual check.
 
 Preset persistence is implemented as a separate BetterFy-owned boundary. The
 backend validates the schema and identifiers, rejects symlinks and oversized
@@ -273,6 +328,15 @@ app-data roots and listing staging journals may finish an interrupted journal
 rename there; it does not modify Dota, Steam, launch options, or game content.
 Browser and unsupported platforms return an explicit unsupported state instead
 of imitating Windows readiness.
+
+`collect_tree_pilot_evidence` exports at most the latest 100 deployment journal
+records for the validated installation. It includes the app version, platform,
+language, package order, phases, timestamps, SHA-256 values, backup verification,
+and durable rollback verification. It deliberately omits filesystem paths,
+target identities, Steam profile tokens, account identifiers, and authentication
+data. A rollback is marked verified only after the restored target hashes to the
+recorded pre-install value, or after an initially absent target is confirmed
+absent again.
 
 ### Implemented trusted content foundation
 
@@ -306,9 +370,119 @@ operation ID and factual phases; URLs and paths stay inside Rust.
 A ZIP metadata preflight rejects traversal, links, ambiguous names, executable
 content, unsupported compression, and archive-bomb limits without extracting any
 entry. No ZIP package is enabled in the registry yet. Local imports, signatures,
-archive extraction, Tree Mod package wiring, and live Dota deployment remain
-disabled. The full threat model is documented in
+archive extraction, and generic live Dota deployment remain disabled. The fixed
+Tree Mod internal pilot is separate. The full threat model is documented in
 `docs/CONTENT_INTAKE_SECURITY.md`.
+
+### Package manifests (PackageManifest v1)
+
+Installable packages are declared, not coded. Each one is a JSON file in
+`src-tauri/packages/`: engine ID and catalog ID, Russian and English names,
+author, pinned source (repository, 40-character commit, directory, license),
+distribution state, verified languages, and the exact resource list (lowercase
+relative path, byte size, SHA-256). `package_registry.rs` embeds the files at
+build time and validates them on first use: trusted repository only, pinned
+commit, no traversal or case-folding collisions, bounded sizes, unknown fields
+rejected. Download URLs, bundle contracts and the allowlist of installable
+packages all come from the registry; there is no per-package branch in Rust.
+The interface imports the same files, so its list of installable mods cannot
+drift from the engine's.
+
+A resource may name a different repository path in `from`. That is how a Minify
+`blacklist.txt` line is represented: the listed game path receives the matching
+`Minify/bin/blank-files/blank.<ext>` placeholder, fetched and hash-checked like any
+other file. The placeholder must have the same extension as the target. Only literal
+blacklist lines can be expressed; Minify's `**` and `>>` patterns expand against the
+installed game's file list and are not supported. Zero-length resources are allowed
+when their hash is the SHA-256 of empty input; they need no download and are written
+as zero-length VPK entries, which is how Minify silences sounds.
+
+`minify.remove-river` is the first package added only as data: 9 files, 5 zero-length
+sounds and 9 blacklist placeholders from the same pinned commit. The engine
+downloaded and verified all 23 resources and built a four-package VPK. It has not been
+checked in Dota yet, and its manifest records no verified language.
+
+The three pilot packages were moved from Rust constants into manifests without
+changing any path, size or hash. A test pins a fingerprint of the contracts, and
+building the ordered three-package bundle from the real pinned resources gave the
+same plan ID and VPK SHA-256 before and after the move, so existing installations
+and their journals are still recognised.
+
+### Installed profile
+
+After a committed pilot install, Rust writes one derived record to
+`<app_data>/engine-v1/installed-profile.json` (schema version 1): deployment
+operation ID, plan ID, ordered package IDs, language, installed SHA-256, UTC
+install time, the Steam Dota build number seen at install time, the linked Steam
+operation ID once launch options are applied, and the app version. It holds no
+filesystem paths, Steam IDs or account names. The file is written to a synced
+temporary file in the same directory and renamed over the previous one;
+symlinked paths, unknown fields and malformed values are rejected.
+
+The profile is informational. Ownership record and journals remain the source of
+truth, and their schema and transaction steps are unchanged. A profile whose
+operation, hash, plan, language or package order differs from the current owned
+deployment is ignored as stale. A failed profile write or clear never fails or
+alters the install or rollback result. A successful rollback clears the profile,
+so a deployment restored from an earlier chain, or one installed before this
+record existed, has no profile until it is installed again.
+
+`current_tree_pilot` returns the matching profile and a `dotaPatched` flag,
+true only when both the recorded and the current build numbers are known and
+differ. This replaces the browser-storage build baseline the Tree Mod screen
+used before. The write, stale-profile, privacy and failed-write paths are covered
+by synthetic tests on macOS; the profile has not yet been observed on a Windows
+install.
+
+### Signed package catalog
+
+The manifests are also published as a signed catalog so new or updated packages
+can reach existing installs without an app release. `npm run catalog:publish`
+writes `website/public/bot/catalog/index.json` (schema 1, a sequence number one
+higher than the previous one, issue and expiry times 180 days apart, and every
+manifest) and signs it with `tauri signer` using a catalog key that is separate
+from the updater key. The auth Worker serves these files as static assets at
+`/catalog/index.json` and `/catalog/index.json.sig`. `npm run catalog:check`
+fails CI when the published catalog no longer matches `src-tauri/packages` or
+expires within seven days; a Rust test fails when the committed signature does
+not verify.
+
+At startup the desktop calls `refresh_catalog` (serialized per process).
+`catalog_index.rs` re-verifies the cached catalog, then fetches the remote one
+over HTTPS with bounded sizes. A remote catalog is accepted only if:
+
+- the signature over the exact bytes verifies against the embedded public key
+  (the catalog files are committed with `-text` in `.gitattributes`, because a
+  Windows checkout rewriting line endings broke exactly this in CI);
+- its sequence is at least the highest verified one seen on the device and at
+  least the one committed with the build (`build.rs` embeds it as a floor), is
+  not more than one million above that, and a reused sequence has identical
+  bytes;
+- it is unexpired, issued no more than a day in the future, and valid for at
+  most 200 days;
+- every manifest passes the embedded validation, including an allowlist of
+  compiled data extensions (`vcss_c`, `vmat_c`, `vmdl_c`, `vpcf_c`, `vsnd_c`,
+  `vtex_c`, `vxml_c`; compiled Panorama scripts are rejected);
+- no package ID changes its contract (source plus every resource). This holds
+  for packages the build ships with and for packages first accepted on this
+  device, whose contract hashes are kept in `engine-v1/catalog/contracts.json`.
+  Installed builds are re-verified against their package contracts, so new
+  content needs a new package ID.
+
+Accepted manifests may update metadata of shipped packages and add packages; a
+catalog cannot remove one. An expired cached catalog is still activated for the
+packages it provided, so installed builds stay verifiable offline; only the
+remote catalog must be fresh. Any failure keeps the current set active.
+
+The private key lives outside the repository (by default
+`~/.betterfy/catalog-signing.key`). Without it no new catalog can be signed; after
+the published one expires, clients keep the cached set and ignore newer content
+until an app release embeds a new public key. A leaked key cannot change what an
+existing package ID installs, use another host, write outside the language
+folder, or ship scripts. It could add packages built from data files at some
+commit reachable under the trusted repository path (GitHub may also serve fork
+commits there) and change metadata such as verified languages. Rotation is an
+app release that embeds the new public key, followed by a catalog signed with it.
 
 ## Definition of done for filesystem writes
 

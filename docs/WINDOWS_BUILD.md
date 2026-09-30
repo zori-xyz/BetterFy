@@ -78,9 +78,47 @@ and uploads an unsigned NSIS workflow artifact. CI installs `rustfmt` and
 failure. It does not publish a release, sign the installer, or enable the
 updater.
 
+## BetterFy Setup, the branded installer
+
+`installer/` is a second, standalone Tauri application: the user-facing
+installer. It exists because NSIS's Back/Next/Cancel/Finish buttons belong to
+the outer Windows dialog frame and cannot be recolored without unverified
+low-level window subclassing — this installer's whole interface is plain HTML
+and CSS instead, so branding it needs no such risk. See
+[`installer/README.md`](../installer/README.md) for its full design and
+current status.
+
+NSIS is not retired. `tauri-plugin-updater` on Windows is tied to Tauri's own
+NSIS/MSI bundler output and signature format, and it silently re-runs that
+same NSIS installer, in passive mode, to apply updates. BetterFy Setup and the
+NSIS build must therefore install to the exact same place: this was verified
+against Tauri's own NSIS template source (`$LOCALAPPDATA\BetterFy`, the
+`HKCU\...\Uninstall\BetterFy` registry key, and the `BetterFy` Start Menu
+folder), not assumed. Diverging would make an update create a second, orphaned
+copy instead of replacing the first. So: NSIS keeps building and keeps feeding
+the updater; BetterFy Setup replaces it only as the thing a new user downloads
+and runs once.
+
+Build it locally on Windows after building the main app:
+
+```powershell
+.\scripts\build-windows.ps1
+Copy-Item src-tauri\target\release\betterfy.exe installer\src-tauri\payload\betterfy.exe
+cd installer
+npx tauri build
+```
+
+The unsigned installer is written to
+`installer\src-tauri\target\release\betterfy-installer.exe`. CI does the same
+two-stage build in `early-access-release.yml` and `windows-build.yml`.
+
 ## Release boundary
 
-An unsigned CI artifact is for internal testing only. Public distribution still
-requires a Windows code-signing certificate, signed updater configuration,
-hash publication, dependency/license review, and real Steam/Dota integration
-tests on Windows.
+An unsigned CI artifact remains an Early Access test release, not a signed
+Stable release. BetterFy Setup EA.18 completed a founder-run native Windows
+pass covering direct install, existing-install update, uninstall/reinstall and
+launch; see [`EA18_WINDOWS_BASELINE.md`](EA18_WINDOWS_BASELINE.md). Stable still
+requires a retained second-machine report, a real signed-updater-in-place pass,
+WebView2 provisioning beyond detection if the link-only fallback proves
+insufficient, dependency/license review, and a code-signing certificate for the
+first executable a new user runs.

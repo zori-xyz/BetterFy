@@ -558,6 +558,56 @@ pub(crate) fn store_remote_fixture_content(
     store_one(&objects, &manifests, &manifest, payload)
 }
 
+/// Internal pinned-resource cache. The expected identity comes from a compiled
+/// Rust contract, never from the frontend or a downloaded manifest.
+pub(crate) fn store_pinned_resource(
+    app_data_root: &Path,
+    expected_size: usize,
+    expected_sha256: &str,
+    bytes: &[u8],
+) -> Result<(), String> {
+    if expected_size == 0
+        || expected_size as u64 > MAX_ARTIFACT_BYTES
+        || expected_sha256.len() != 64
+        || !expected_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        || bytes.len() != expected_size
+        || sha256(bytes) != expected_sha256
+    {
+        return Err("content_hash_mismatch".to_string());
+    }
+    let mutex = CONTENT_STORE_MUTEX.get_or_init(|| Mutex::new(()));
+    let _guard = mutex
+        .lock()
+        .map_err(|_| "content_store_unavailable".to_string())?;
+    let (objects, _) = prepare_roots(app_data_root)?;
+    publish_noclobber(&objects, expected_sha256, bytes)?;
+    read_pinned_resource(app_data_root, expected_size, expected_sha256).map(|_| ())
+}
+
+pub(crate) fn read_pinned_resource(
+    app_data_root: &Path,
+    expected_size: usize,
+    expected_sha256: &str,
+) -> Result<Vec<u8>, String> {
+    if expected_size == 0
+        || expected_size as u64 > MAX_ARTIFACT_BYTES
+        || expected_sha256.len() != 64
+        || !expected_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err("content_request_invalid".to_string());
+    }
+    let (objects, _) = prepare_roots(app_data_root)?;
+    let bytes = read_limited(&objects.join(expected_sha256), MAX_ARTIFACT_BYTES)?;
+    if bytes.len() != expected_size || sha256(&bytes) != expected_sha256 {
+        return Err("content_store_corrupt".to_string());
+    }
+    Ok(bytes)
+}
+
 pub fn read_verified_fixture_artifact(
     app_data_root: &Path,
     package_id: &str,
@@ -603,6 +653,41 @@ mod tests {
         ContentIntakeRequest {
             package_ids: vec!["fixture.ambient-violet".to_string()],
         }
+    }
+
+    #[test]
+    fn pinned_binary_object_is_verified_and_never_overwritten() {
+        let root = temp_root("pinned-tree-object");
+        let bytes = b"compiled-tree";
+        let hash = sha256(bytes);
+        assert_eq!(
+            store_pinned_resource(&root, bytes.len(), &hash, b"changed-tree")
+                .err()
+                .as_deref(),
+            Some("content_hash_mismatch")
+        );
+        assert!(!root.exists());
+        store_pinned_resource(&root, bytes.len(), &hash, bytes).expect("publish");
+        store_pinned_resource(&root, bytes.len(), &hash, bytes).expect("idempotent retry");
+        assert_eq!(
+            read_pinned_resource(&root, bytes.len(), &hash).unwrap(),
+            bytes
+        );
+        let object = root.join("content-v1/objects/sha256").join(hash);
+        fs::write(&object, b"wrong").expect("simulate external corruption");
+        assert_eq!(
+            read_pinned_resource(&root, bytes.len(), &sha256(bytes))
+                .err()
+                .as_deref(),
+            Some("content_store_corrupt")
+        );
+        assert_eq!(
+            store_pinned_resource(&root, bytes.len(), &sha256(bytes), bytes)
+                .err()
+                .as_deref(),
+            Some("content_store_corrupt")
+        );
+        fs::remove_dir_all(root).expect("clean generated test directory");
     }
 
     #[test]

@@ -9,10 +9,7 @@
     "process:allow-restart",
     {
       "identifier": "opener:allow-open-url",
-      "allow": [
-        { "url": "https://t.me/BeterFyBot?start=auth_*" },
-        { "url": "https://zori-xyz.github.io/BetterFy/" }
-      ]
+      "allow": [{ "url": "https://*" }]
     }
   ]
 }

@@ -20,6 +20,14 @@ const browser = await chromium.launch({ headless: true, executablePath });
 const errors = [];
 const layoutIssues = [];
 const contrastIssues = [];
+const forbiddenCopy = [
+  /remove the noise/i,
+  /technical noise/i,
+  /calm (?:space|state|workspace)/i,
+  /убери лишнее/i,
+  /техническ(?:ий|ого) шум/i,
+  /спокойн(?:ое|ый|ую) (?:пространство|состояние|интерфейс)/i,
+];
 
 const observePage = (page) => {
   page.on("console", (message) => {
@@ -34,6 +42,12 @@ const observePage = (page) => {
 };
 
 const auditLayout = async (page, label) => {
+  const pageCopy = await page.locator("body").innerText();
+  for (const pattern of forbiddenCopy) {
+    if (pattern.test(pageCopy)) {
+      layoutIssues.push({ screen: label, kind: "forbidden-copy", pattern: pattern.source });
+    }
+  }
   const issues = await page.evaluate((screenLabel) => {
     const candidates = document.querySelectorAll(
       "h1, h2, h3, p, button, a, .section-label, .scene-copy > span, .scene-copy > p",
@@ -44,7 +58,7 @@ const auditLayout = async (page, label) => {
       if (
         style.display === "none" ||
         style.visibility === "hidden" ||
-        element.matches(".minify-card-main") ||
+        element.matches(".minify-card-main, .home-loadout-card") ||
         rect.width === 0 ||
         rect.height === 0
       ) return [];
@@ -146,7 +160,7 @@ const auditContrast = async (page, label) => {
     const sceneSelector = [
       ".auth-scene", ".setup-scene", ".hero-art-slot", ".build-character-scene",
       ".operation-world", ".result-art", ".catalog-feature-visual",
-      ".minify-feature-visual", ".catalog-card-preview", ".minify-card-preview",
+      ".minify-feature-visual", ".catalog-card-preview", ".minify-card-preview", ".home-loadout-card",
     ].join(",");
     const modal = document.querySelector('[aria-modal="true"]');
 
@@ -234,7 +248,7 @@ const capture = async (viewport, suffix) => {
   await page.waitForTimeout(1250);
   await page.screenshot({ path: `${output}/new-loading-complete-${suffix}.png` });
 
-  await page.getByRole("link", { name: /Открыть BetterFy Bot|Open BetterFy Bot/ }).waitFor();
+  await page.getByRole("button", { name: /BetterFy ID.*(?:письма|email code)/ }).waitFor();
   await page.waitForTimeout(420);
   await auditLayout(page, `auth-${suffix}`);
   await page.screenshot({ path: `${output}/new-auth-${suffix}.png` });
@@ -242,27 +256,33 @@ const capture = async (viewport, suffix) => {
   await page.waitForTimeout(420);
   await auditLayout(page, `auth-en-${suffix}`);
   await page.screenshot({ path: `${output}/new-auth-en-${suffix}.png` });
+  await page.getByRole("button", { name: /BetterFy ID.*email code/ }).click();
+  await page.screenshot({ path: `${output}/new-email-${suffix}.png` });
+  await page.locator(".back-button").click();
   await page.getByRole("button", { name: /У меня уже есть код|I already have a code/ }).click();
   await page.waitForTimeout(420);
   await page.screenshot({ path: `${output}/new-code-${suffix}.png` });
-  await page.locator(".otp-field input").fill("123456");
-  await page.getByRole("button", { name: /Подтвердить|Confirm/ }).click();
-  await page.locator(".confirmed-view").waitFor();
-  await auditLayout(page, `confirmed-${suffix}`);
-  await page.screenshot({ path: `${output}/new-confirmed-${suffix}.png` });
-  await page.getByRole("button", { name: /Find automatically/ }).waitFor();
-  await page.waitForTimeout(420);
-  await auditLayout(page, `setup-${suffix}`);
-  await page.screenshot({ path: `${output}/new-setup-${suffix}.png` });
-  await page.getByRole("button", { name: /Find automatically/ }).click();
-  await page.getByRole("button", { name: /Continue to Home/ }).waitFor();
+  await page.locator(".back-button").click();
+  await page.locator(".auth-preview-button").click();
+  await page.getByRole("button", { name: /Choose mods|Choose more/ }).waitFor();
+  await page.locator(".home-coverflow-card.is-active").waitFor();
+  await page.mouse.move(viewport.width - 24, 82);
+  const firstDropName = await page.locator(".home-coverflow-card.is-active strong").innerText();
+  await page.locator(".home-drop-controls button").last().click();
   await page.waitForTimeout(360);
-  await page.screenshot({ path: `${output}/new-setup-found-${suffix}.png` });
-  await page.getByRole("button", { name: /Continue to Home/ }).click();
-  await page.getByRole("button", { name: /Open build/ }).waitFor();
-  await page.waitForTimeout(520);
+  const secondDropName = await page.locator(".home-coverflow-card.is-active strong").innerText();
+  if (firstDropName === secondDropName) errors.push(`Home mod drop did not advance at ${suffix}`);
+  await page.waitForTimeout(420);
+  const settledDropName = await page.locator(".home-coverflow-card.is-active strong").innerText();
+  if (secondDropName !== settledDropName) errors.push(`Home mod drop advanced without player input at ${suffix}`);
+  await page.mouse.move(Math.round(viewport.width * .76), 90);
   await auditLayout(page, `home-${suffix}`);
   await page.screenshot({ path: `${output}/new-home-${suffix}.png` });
+  await page.locator(".community-card").scrollIntoViewIfNeeded();
+  await page.waitForTimeout(260);
+  await auditLayout(page, `home-community-${suffix}`);
+  await page.screenshot({ path: `${output}/new-home-community-${suffix}.png` });
+  await page.locator(".home-workbench").scrollIntoViewIfNeeded();
   await page.getByRole("button", { name: /^Discover$/ }).click();
   await page.locator(".minify-heading").waitFor();
   await page.waitForTimeout(360);
@@ -281,10 +301,26 @@ const capture = async (viewport, suffix) => {
   await page.waitForTimeout(420);
   await auditLayout(page, `wardrobe-compact-${suffix}`);
   await page.screenshot({ path: `${output}/new-wardrobe-compact-${suffix}.png` });
+  const addButtons = page.locator(".catalog-card-toggle").filter({ hasText: /Add to build/ });
+  for (let index = 0; index < 5; index += 1) {
+    await addButtons.first().click();
+  }
+  await page.locator(".app-rail").hover();
+  await page.getByRole("button", { name: /^Home$/ }).click();
+  await page.getByRole("button", { name: /Review build/ }).waitFor();
+  await page.mouse.move(Math.round(viewport.width * .72), Math.round(viewport.height * .36));
+  await page.waitForTimeout(620);
+  await auditLayout(page, `home-active-${suffix}`);
+  await page.screenshot({ path: `${output}/new-home-active-${suffix}.png` });
+  await page.getByRole("button", { name: "RU", exact: true }).click();
+  await page.waitForTimeout(320);
+  await auditLayout(page, `home-active-ru-${suffix}`);
+  await page.screenshot({ path: `${output}/new-home-active-ru-${suffix}.png` });
+  await page.getByRole("button", { name: "EN", exact: true }).click();
   await page.locator(".app-rail").hover();
   await page.getByRole("button", { name: /^Build$/ }).click();
-  await page.getByRole("button", { name: /Inspect fixture plan/ }).click();
-  await page.getByRole("heading", { name: /Fixture conflict detected/ }).waitFor();
+  await page.getByRole("button", { name: /See how checking works/ }).click();
+  await page.getByRole("heading", { name: /One resource, two variants/ }).waitFor();
   await page.waitForTimeout(260);
   await auditLayout(page, `build-${suffix}`);
   await page.screenshot({ path: `${output}/new-build-${suffix}.png` });
@@ -328,6 +364,15 @@ const capture = async (viewport, suffix) => {
 const captureMissingGame = async () => {
   const page = await browser.newPage({ viewport: { width: 980, height: 660 } });
   observePage(page);
+  await page.route("**/v1/auth/telegram/code", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      userId: "visual-check-user",
+      displayName: "Visual Check",
+      accessTier: "preview",
+    }),
+  }));
 
   await page.goto(`${base}/?game-missing=1`, { waitUntil: "networkidle" });
   await page.evaluate(() => {
@@ -335,7 +380,7 @@ const captureMissingGame = async () => {
     localStorage.setItem("betterfy:theme", "light");
   });
   await page.reload({ waitUntil: "networkidle" });
-  await page.getByRole("link", { name: /Открыть BetterFy Bot|Open BetterFy Bot/ }).waitFor();
+  await page.getByRole("button", { name: /Открыть BetterFy Bot|Open BetterFy Bot/ }).waitFor();
   await page.getByRole("button", { name: /У меня уже есть код|I already have a code/ }).click();
   await page.locator(".otp-field input").fill("123456");
   await page.getByRole("button", { name: /Подтвердить|Confirm/ }).click();
@@ -417,7 +462,7 @@ const captureLightEntry = async (viewport, suffix, full = false) => {
     await page.screenshot({ path: `${output}/new-${name}-light-${suffix}.png` });
   };
   await snapshot("loading");
-  await page.getByRole("link", { name: /Открыть BetterFy Bot|Open BetterFy Bot/ }).waitFor();
+  await page.getByRole("button", { name: /Открыть BetterFy Bot|Open BetterFy Bot/ }).waitFor();
   await page.waitForTimeout(420);
   await snapshot("auth");
   if (!full) {
@@ -428,21 +473,10 @@ const captureLightEntry = async (viewport, suffix, full = false) => {
   await page.getByRole("button", { name: /У меня уже есть код|I already have a code/ }).click();
   await page.waitForTimeout(320);
   await snapshot("code");
-  await page.locator(".otp-field input").fill("123456");
-  await page.getByRole("button", { name: /Подтвердить|Confirm/ }).click();
-  await page.locator(".confirmed-view").waitFor();
-  await page.waitForTimeout(300);
-  await snapshot("confirmed");
-  await page.getByRole("button", { name: /Найти автоматически|Find automatically/ }).waitFor();
-  await page.waitForTimeout(420);
-  await snapshot("setup");
+  await page.locator(".back-button").click();
+  await page.locator(".auth-preview-button").click();
+  await page.getByRole("button", { name: /Выбрать моды|Выбрать ещё|Choose mods|Choose more/ }).waitFor();
   if (full) {
-    await page.getByRole("button", { name: /Найти автоматически|Find automatically/ }).click();
-    await page.getByRole("button", { name: /Перейти на главную|Continue to Home/ }).waitFor();
-    await page.waitForTimeout(320);
-    await snapshot("setup-found");
-    await page.getByRole("button", { name: /Перейти на главную|Continue to Home/ }).click();
-    await page.getByRole("button", { name: /Открыть сборку|Open build/ }).waitFor();
     await page.waitForTimeout(420);
     await snapshot("home");
 
@@ -462,10 +496,10 @@ const captureLightEntry = async (viewport, suffix, full = false) => {
     await page.getByRole("button", { name: /Сборка|Build/ }).click();
     await page.waitForTimeout(300);
     await snapshot("build-review");
-    await page.getByRole("button", { name: /Проверить тестовый план|Inspect fixture plan/ }).click();
-    await page.getByRole("heading", { name: /Найден конфликт|Fixture conflict detected/ }).waitFor();
+    await page.getByRole("button", { name: /Посмотреть, как работает проверка|See how checking works/ }).click();
+    await page.getByRole("heading", { name: /Один ресурс|One resource/ }).waitFor();
     await snapshot("build-conflict");
-    await page.getByRole("button", { name: /Оставить Violet|Keep Violet/ }).click();
+    await page.getByRole("button", { name: /Выбрать Violet|Choose Violet/ }).click();
     await page.waitForTimeout(260);
     await snapshot("build-ready");
     await page.getByRole("button", { name: /Запустить preview-сборку|Start preview build/ }).click();
@@ -479,8 +513,8 @@ const captureLightEntry = async (viewport, suffix, full = false) => {
     await page.waitForTimeout(240);
     await snapshot("build-restored");
     await page.getByRole("button", { name: /Вернуться к плану|Return to plan/ }).click();
-    await page.getByRole("button", { name: /Проверить тестовый план|Inspect fixture plan/ }).click();
-    await page.getByRole("button", { name: /Оставить Violet|Keep Violet/ }).click();
+    await page.getByRole("button", { name: /Посмотреть, как работает проверка|See how checking works/ }).click();
+    await page.getByRole("button", { name: /Выбрать Violet|Choose Violet/ }).click();
     await page.getByRole("button", { name: /Запустить preview-сборку|Start preview build/ }).click();
     await page.locator(".success-result").waitFor({ timeout: 7000 });
     await page.waitForTimeout(300);

@@ -1,18 +1,50 @@
 # Tree Mod pilot ledger
 
 This ledger fixes the first real-patch candidate before any resource is accepted
-by BetterFy. It is evidence, not an enabled catalog package.
+by BetterFy. The catalog exposes it for an internal Windows installation pilot;
+that is not a compatibility or public-release claim.
 
-- Upstream: `robbyz23/dota2-minify`
+- Pinned source repository: `Egezenn/dota2-minify` (Tree Mod credited upstream to `robbyz512`)
 - Commit: `3a85572029f2c264e2a17cee1c9b54ce93e4fd93`
 - Upstream directory: `Minify/mods/Tree Mod/files`
 - Upstream license declaration: GPL-3.0
-- Intended target: `game/dota_dutch/pak66_dir.vpk`
+- Intended target: `game/dota_<selected-language>/pak66_dir.vpk`, with an
+  explicit choice of `dutch`, `russian`, `koreana`, or `schinese`.
+- `game/dota_betterfy` is not a verified mount point and is not used.
 - Runtime actions allowed: data-only VPK construction; no upstream scripts
 - Compatibility note: default terrain is required
 
-The repository does not contain these compiled game resources. Distribution and
-source-notice review must be accepted before a production registry points to them.
+The repository does not contain these compiled game resources. The founder reports
+permission from the upstream developer for this pilot. The exact grant and required
+notices are not recorded here, so public redistribution remains gated.
+
+The pinned source path was checked against the maintained `Egezenn/dota2-minify`
+repository. The previously recorded `robbyz23` owner returned 404. The resource
+paths, sizes, and hashes below were not changed.
+
+## Second pinned pilot package: Show Net Worth
+
+The internal pilot may now build Tree Mod, Show Net Worth, or both in the exact
+order selected by the user. The founder observed the Show Net Worth HUD change
+in Dota 2 on Windows and checked rollback in the same session (see the
+Windows evidence section below); this remains a single visually confirmed
+session, not a recorded compatibility result.
+
+- Package ID: `minify.show-networth`
+- Same pinned repository and commit as Tree Mod
+- Upstream directory: `Minify/mods/Show NetWorth/files`
+- Runtime actions allowed: one compiled, data-only Panorama resource; no scripts
+
+| VPK path | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `panorama/layout/hud/dota_hud_quick_stats.vxml_c` | 2705 | `91193b3e5ced7d0d4122cfd5910aa3e16d7e2e3a38864f4146e8c9af1075a13d` |
+
+BetterFy does not rename upstream VPK archives to resolve collisions. It verifies
+the pinned resources, merges their resource maps, applies the visible selected
+order (first package wins a differing same-path collision), and writes one
+deterministic BetterFy-owned `pak66_dir.vpk`. Identical resources are deduplicated.
+The full ordered inputs remain bound to the reviewed plan even when a later file
+is shadowed.
 
 | VPK path | Bytes | SHA-256 |
 | --- | ---: | --- |
@@ -40,10 +72,95 @@ source-notice review must be accepted before a production registry points to the
 
 ## Enablement gates
 
-1. Accept the distribution and attribution decision for the compiled resources.
+1. Record the distribution and attribution terms for a public release.
 2. Convert this ledger into a signed production package manifest without changing
    a path, size, or hash.
 3. Download each resource through the pinned HTTPS content boundary and publish it
    to the immutable store only after exact verification.
 4. Build the VPK in BetterFy staging and reopen it before deploy.
 5. Pass the Tree Mod section of the Windows checklist and retain the safe report.
+
+## Current internal pilot evidence
+
+- Rust has a fixed 21-resource contract and constructs a deterministic VPK only
+  after verifying every exact size and SHA-256. Unknown or missing paths fail.
+- A pinned HTTPS intake can acquire these resources into BetterFy's immutable
+  content-addressed cache. The VPK is built by reading verified cached objects.
+- The local integration test downloaded all 21 resources from the pinned commit,
+  built and reopened a VPK, staged it with a journal, then rolled staging back.
+  This is a macOS synthetic test, not a Dota installation or compatibility test.
+- A second network integration test downloaded all three pinned packages,
+  rebuilt different selected orders from the verified cache, and confirmed 25
+  resources. The ordered plan IDs differ while the non-colliding VPK bytes remain
+  identical, proving priority is part of review identity rather than an accidental
+  archive-name scheme.
+
+## Third pinned pilot package: Repopulate Unit Query HUD
+
+- Package ID: `minify.repopulate-unit-query-hud`
+- Upstream directory: `Minify/mods/Repopulate Unit Query HUD/files`
+- Runtime actions allowed: three compiled, data-only Panorama style resources;
+  no blacklist, styling generator, or scripts
+
+| VPK path | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `panorama/styles/hud/dota_hud_query_unit_overrides.vcss_c` | 3957 | `bc9c831aacc37d21f5c48d6157ee6b80b9a06c3f9f51c48aed7c8446bb534e21` |
+| `panorama/styles/hud/dota_hud_str_agi_int_overrides.vcss_c` | 1470 | `a6e25ccb69a40c145c75e590da8d5c19ac8a50224c2c54d09ffe4e8de8603871` |
+| `panorama/styles/hud/tooltip_unit_damage_armor_overrides.vcss_c` | 1458 | `55efe3ff6bee15030c4016f6b18580d5d0877bfc8fbdcb3550beef4f23b70730` |
+
+The founder observed this third package's HUD change in Dota 2 on Windows in
+the same session as Tree Mod and Show Net Worth (see the Windows evidence
+section below); a recorded compatibility result is still open.
+- The internal pilot exposes only the pinned Tree Mod, Show Net Worth, and
+  Repopulate Unit Query HUD paths. Generic staged-VPK
+  deployment remains debug-only. The fixed pilot command rechecks the exact
+  pinned VPK after staging before any game-directory write.
+- Destination preview does not create a language folder in Dota. Synthetic
+  tests cover all four allowlisted destination folders, foreign-file isolation,
+  rollback, and interrupted Russian-folder recovery; these are not in-game
+  compatibility evidence.
+- macOS does not permit game deployment. The founder installed the ordered
+  three-package bundle (Tree Mod, Show Net Worth, and Repopulate Unit Query
+  HUD) on a Windows installer run and visually confirmed all three changes in
+  Dota, then ran the internal stress artifact's controlled recovery pass —
+  interrupt before publish, interrupt after publish, Steam before publish, and
+  Steam after publish — with every check reporting `PASS`, including the
+  visible BetterFy rollback returning the game to its normal state.
+  This pass was observed visually in the installer and in Dota; the Windows
+  test report JSON was not saved from this run, so exact previous-byte
+  comparison against a recorded report, the three newly selectable language
+  folders, and a second machine remain unverified. English has no separate
+  game language folder.
+
+## 2026-09-30 Windows pass on the manifest-driven engine
+
+- Artifact: `BetterFy-Windows-Stress-x64-nsis` from Windows CI run
+  `36742858198`, commit `cec9cf6` (package manifests, blacklist placeholders
+  and zero-length resources, `minify.remove-river`, retained evidence reports,
+  installed profile).
+- Checklist given to the founder: Remove River in game (river water and
+  splashes, Dire lava, fountains and waterfall, wading sounds) and its rollback;
+  install and rollback of the three original packages; the Unit Query HUD
+  change; `reports\` receiving an evidence file after install, the installed
+  profile appearing after install and disappearing after rollback, and the
+  "Open reports folder" button.
+- Founder report, verbatim in substance: everything on that checklist was
+  checked and works.
+- Language folder: the founder confirmed afterwards that the pass used
+  `dutch`; the Remove River manifest now records `dutch` as verified.
+- Not recorded with this report: the saved evidence JSON itself and which Unit
+  Query HUD change was observed. The evidence files are written automatically
+  to `%APPDATA%\app.betterfy.desktop\reports\`.
+
+## 2026-09-30 Windows pass on the signed catalog
+
+- Artifact: `BetterFy-Windows-Stress-x64-nsis` from Windows CI run
+  `36752379826`, commit `a28d1b5` (signed remote catalog, review hardening,
+  catalog sequence 2 marking Remove River as verified with `dutch`).
+- Checklist given to the founder: the app starts;
+  `%APPDATA%\app.betterfy.desktop\engine-v1\catalog\` contains `index.json`,
+  `index.json.sig` and `contracts.json`; Remove River no longer shows the
+  "not verified in game" note.
+- Founder report: all of it was checked and works.
+- Not recorded with this report: the catalog `sequence` the device accepted and
+  the contents of `contracts.json`.

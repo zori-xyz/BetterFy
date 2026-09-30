@@ -10,6 +10,19 @@ it creates an immutable prerelease with a fixed installer filename and a SHA-256
 sidecar. These prereleases are never used by the in-app updater. Once a signed
 stable release exists, the website and authenticated release resolver prefer it.
 
+The published, user-facing installer is `BetterFy-Setup.exe`, built from
+`installer/` — see [WINDOWS_BUILD.md](WINDOWS_BUILD.md#betterfy-setup-the-branded-installer).
+NSIS is still built on every release: `tauri-plugin-updater` depends on its
+signature format and silently re-runs it to apply updates, so it remains the
+release's internal update mechanism even though it is no longer the download
+a person runs first.
+
+EA.18 is the current founder-verified unsigned Windows baseline. Its commit,
+artifact size, SHA-256, CI run, observed Windows behavior, and limitations are
+recorded in [EA18_WINDOWS_BASELINE.md](EA18_WINDOWS_BASELINE.md). A later
+prerelease produced by the same workflow is not automatically human-verified;
+record a new manual observation when its installer behavior changes.
+
 ## One-time repository setup
 
 The updater public key is committed in `src-tauri/tauri.conf.json`. Its private

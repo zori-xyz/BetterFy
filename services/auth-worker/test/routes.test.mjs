@@ -4,6 +4,7 @@ import {
   detectImageContentType,
   deviceChallengeState,
   normalizeClientKind,
+  normalizeEmail,
   parseDeviceStartPayload,
   refreshFamilyCompromised,
   refreshCredentialState,
@@ -12,6 +13,7 @@ import {
   selectTelegramAvatarFileId,
   supportsRotatingDesktopCredentials,
 } from "../src/index.mjs";
+import { hashIdPassword, normalizeIdUsername, validIdPassword, verifyIdPassword } from "../src/id-password.mjs";
 
 const releaseAsset = (url = "https://github.com/zori-xyz/BetterFy/releases/download/v0.1.0/BetterFy-Windows-x64-setup.exe") => ({
   name: "BetterFy-Windows-x64-setup.exe",
@@ -69,6 +71,75 @@ test("rotation is negotiated explicitly so older desktop builds keep working", (
   assert.equal(supportsRotatingDesktopCredentials({ clientKind: "desktop" }), false);
   assert.equal(supportsRotatingDesktopCredentials({ clientKind: "web", credentialMode: "rotating-v1" }), false);
   assert.equal(supportsRotatingDesktopCredentials({ clientKind: "desktop", credentialMode: "rotating-v1" }), true);
+});
+
+test("email identities normalize conservative ASCII addresses and reject ambiguous inputs", () => {
+  assert.equal(normalizeEmail("PLAYER+ONE@Example.com"), "player+one@example.com");
+  assert.equal(normalizeEmail(" player@example.com "), null);
+  assert.equal(normalizeEmail("a..b@example.com"), null);
+  assert.equal(normalizeEmail("player@-example.com"), null);
+  assert.equal(normalizeEmail("player@example..com"), null);
+  assert.equal(normalizeEmail("player@example.com\nBCC:other@example.com"), null);
+  assert.equal(normalizeEmail("тест@example.com"), null);
+});
+
+test("BetterFy ID usernames and password rules reject ambiguous credentials", () => {
+  assert.equal(normalizeIdUsername("Player_07"), "player_07");
+  assert.equal(normalizeIdUsername("7player"), null);
+  assert.equal(normalizeIdUsername("player name"), null);
+  assert.equal(normalizeIdUsername("p"), null);
+  assert.equal(validIdPassword("a long passphrase 2026"), true);
+  assert.equal(validIdPassword("short"), false);
+  assert.equal(validIdPassword("a long\npassphrase"), false);
+});
+
+test("BetterFy ID passwords have unique salts and verify without accepting a wrong value", async () => {
+  const pepper = "test-only-password-pepper-with-32-characters";
+  const first = await hashIdPassword("a long passphrase 2026", pepper);
+  const second = await hashIdPassword("a long passphrase 2026", pepper);
+  assert.notEqual(first, second);
+  assert.match(first, /^pbkdf2-sha256\$600000\$[0-9a-f]{32}\$[0-9a-f]{64}$/);
+  assert.equal(await verifyIdPassword("a long passphrase 2026", pepper, first), true);
+  assert.equal(await verifyIdPassword("not the passphrase", pepper, first), false);
+  assert.equal(await verifyIdPassword("a long passphrase 2026", pepper, first.replace("600000", "1")), false);
+});
+
+test("BetterFy ID routes fail closed without mail and password configuration", async () => {
+  const request = (path) => new Request(`https://auth.example${path}`, {
+    method: "POST", headers: { origin: "https://zori-xyz.github.io", "content-type": "application/json" },
+    body: JSON.stringify({ username: "player_07", email: "player@example.com", password: "a long passphrase 2026" }),
+  });
+  assert.equal((await route(request("/v1/auth/id/register/start"), env)).status, 503);
+  assert.equal((await route(request("/v1/auth/id/login"), env)).status, 503);
+});
+
+test("email routes fail closed when delivery is not configured", async () => {
+  const response = await route(new Request("https://auth.example/v1/auth/email/start", {
+    method: "POST", headers: { origin: "https://zori-xyz.github.io", "content-type": "application/json" },
+    body: JSON.stringify({ email: "player@example.com" }),
+  }), env);
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("access-control-allow-origin"), "https://zori-xyz.github.io");
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  const status = await route(new Request("https://auth.example/v1/session/email"), env);
+  assert.equal(status.status, 401);
+});
+
+test("unknown email sign-in returns a generic accepted response without sending mail", async () => {
+  const calls = [];
+  const database = { prepare(query) {
+    return { bind(...values) {
+      calls.push([query, values]);
+      return { async first() { return query.includes("auth_rate_limits") ? { request_count: 1 } : null; } };
+    } };
+  } };
+  const response = await route(new Request("https://auth.example/v1/auth/email/start", {
+    method: "POST", headers: { origin: "https://zori-xyz.github.io", "content-type": "application/json" },
+    body: JSON.stringify({ email: "unknown@example.com", language: "ru" }),
+  }), { ...env, AUTH_DB: database, AUTH_CODE_PEPPER: "test-only-pepper-of-sufficient-length", RESEND_API_KEY: "test-only", EMAIL_FROM: "test@example.com" });
+  assert.equal(response.status, 202);
+  assert.deepEqual(await response.json(), { accepted: true });
+  assert.equal(calls.some(([query]) => query.includes("betterfy_email_codes")), false);
 });
 
 test("device deep links accept only an exact opaque challenge", () => {

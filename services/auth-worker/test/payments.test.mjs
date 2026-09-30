@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import {
   ACCESS_PLANS,
   SUBSCRIPTION_PERIOD_SECONDS,
+  entitlementTimeline,
   invoicePayload,
   isEntitlementActive,
   parseStarsPrice,
-  paymentExpiry,
   planById,
   planBySku,
   priceForPlan,
@@ -71,10 +71,43 @@ test("successful payment must still match the stored order", () => {
   assert.equal(validateSuccessfulPayment({ ...payment, telegram_payment_charge_id: "" }, order), false);
 });
 
-test("Telegram expiry wins for monthly access and one-time passes extend safely", () => {
-  assert.equal(paymentExpiry({ subscription_expiration_date: 5000 }, 1000, planById("30d")), 5000);
-  assert.equal(paymentExpiry({}, 1000, planById("30d")), 1000 + SUBSCRIPTION_PERIOD_SECONDS);
-  assert.equal(paymentExpiry({}, 1000, planById("3d"), 2000), 2000 + 3 * 24 * 60 * 60);
+const DAY = 24 * 60 * 60;
+const charge = (chargeId, paidAt, sku) => ({ chargeId, paidAt, sku });
+
+test("paid periods queue one after another instead of overlapping", () => {
+  const timeline = entitlementTimeline([
+    charge("month", 1000, "betterfy-premium-30d"),
+    charge("pass", 2000, "betterfy-premium-3d"),
+  ]);
+  assert.equal(timeline.activeUntil, 1000 + 33 * DAY);
+  assert.equal(timeline.expiries.get("month"), 1000 + SUBSCRIPTION_PERIOD_SECONDS);
+  assert.equal(timeline.expiries.get("pass"), 1000 + 33 * DAY);
+  assert.equal(timeline.sourceChargeId, "pass");
   assert.equal(isEntitlementActive({ active_until: 1001 }, 1000), true);
   assert.equal(isEntitlementActive({ active_until: 1000 }, 1000), false);
+});
+
+test("a refund removes exactly its own period from stacked access", () => {
+  const remaining = entitlementTimeline([charge("pass", 2000, "betterfy-premium-3d")]);
+  assert.equal(remaining.activeUntil, 2000 + 3 * DAY);
+  assert.equal(entitlementTimeline([]).sourceChargeId, null);
+});
+
+test("a monthly subscription starts after days the user already paid for", () => {
+  const timeline = entitlementTimeline([
+    charge("pass", 1000, "betterfy-premium-15d"),
+    charge("month", 1000 + DAY, "betterfy-premium-30d"),
+  ]);
+  assert.equal(timeline.activeUntil, 1000 + 45 * DAY);
+});
+
+test("gaps between purchases are not back-filled and unknown plans are ignored", () => {
+  const timeline = entitlementTimeline([
+    charge("late", 100 * DAY, "betterfy-premium-3d"),
+    charge("early", 0, "betterfy-premium-3d"),
+    charge("bogus", 50 * DAY, "unknown-sku"),
+  ]);
+  assert.equal(timeline.expiries.get("early"), 3 * DAY);
+  assert.equal(timeline.activeUntil, 103 * DAY);
+  assert.equal(timeline.expiries.has("bogus"), false);
 });

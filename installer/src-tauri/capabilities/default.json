@@ -1,0 +1,6 @@
+{
+  "identifier": "main-capability",
+  "description": "Lets the main window close itself from the page's own buttons; the OS-drawn title bar's own close button does not need this.",
+  "windows": ["main"],
+  "permissions": ["core:window:allow-close"]
+}

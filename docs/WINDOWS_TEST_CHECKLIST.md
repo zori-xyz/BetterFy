@@ -85,29 +85,171 @@ BetterFy must not force-terminate processes and must never launch Dota itself.
   remain.
 
 This flow writes only inside BetterFy application data. The game-deployment
-transaction exists behind a strict verified-VPK boundary, but no current catalog
-package satisfies it. Do not report a real patch until the Tree Mod pilot is
-explicitly enabled in an internal build.
+transaction exists behind a strict verified-VPK boundary. Tree Mod, Show Net
+Worth, and Repopulate Unit Query HUD are the only live pilot packages; no other
+catalog item may be treated as installable. Dutch has founder-observed in-game
+evidence for Tree Mod, not a general compatibility result for other languages or mods.
 
-## 7. Tree Mod pilot (only after an internal build marks it enabled)
+## 7. Tree Mod internal pilot
 
 - Confirm `pak66_dir.vpk` is absent, or is identified by BetterFy as its own prior
   install. A foreign file in that slot must block the operation.
-- Run with Dota open and confirm graceful shutdown is required before any write.
-- Patch Tree Mod, verify Steam restarts and Dota does not, then start Dota manually.
-- Confirm the default-terrain trees are replaced as described by the pilot.
-- Roll back and verify the exact previous target bytes return, or the initial
-  BetterFy target disappears.
+- Run with Dota and Steam open. After clicking Install, confirm BetterFy requests
+  graceful shutdown before any write and refuses to continue if either remains
+  open after the timeout. No force-kill should occur.
+- Select only Tree Mod in My build. Prepare the 21 resources and check the verified
+  plan. Choose the game language before installation, then check that both the
+  receipt and actual target file use `game/dota_<selected-language>/pak66_dir.vpk`.
+  A BetterFy success state alone is not proof that Dota mounted the file.
+- Before confirming installation, verify that merely previewing the selected
+  destination did not create a new `dota_<selected-language>` folder in `game`.
+- During preparation, cancel once, reopen the app, and resume. The verified file
+  count must continue without publishing an unverified resource.
+- Choose the intended Steam profile before installation. Verify BetterFy adds
+  `-language <selected-language>` only to that profile and restarts Steam, but does not launch
+  Dota. Repeat without a selected profile: Steam should restart without a profile
+  edit, and the command should be available to copy for manual entry.
+- Start Dota manually. Record the visible game language and whether it can be
+  changed without losing the Tree Mod effect.
+- Confirm the default-terrain trees are replaced as described by the pilot for
+  each newly selected language. Dutch has already been observed by the founder;
+  Russian, Korean and Simplified Chinese have not.
+- Restore the existing Dutch operation before switching to another language.
+  Check that the prior VPK and BetterFy-owned launch option are removed and no
+  unrelated Steam option or language-folder file changes.
+  Founder evidence now covers the visible rollback and return to normal trees;
+  retain exact before/after hashes in the next pass before marking byte-perfect
+  restoration verified.
+- Do not switch the installer to `dota_betterfy` until a separate Windows test
+  demonstrates that the current Dota client mounts that exact folder.
+- Close Dota and Steam, then roll back in BetterFy. Verify both the exact
+  previous target bytes and Steam launch options return, or the initial BetterFy
+  target disappears when no previous file existed.
+- Restart BetterFy between install and rollback once. The installed operation
+  and its restore action must still be discoverable.
+- For version 0.1.3, restart BetterFy after automatic Steam profile activation
+  and verify that the same Steam profile and its rollback operation are found
+  without browser storage. Then restore and confirm the VPK and the exact
+  previous launch options are both restored. A pre-0.1.3 Steam edit has no
+  durable Tree Mod link and must be checked separately.
+- Interrupt the Steam profile change in an internal failure-injection build.
+  BetterFy must require Steam recovery before allowing VPK rollback, and the
+  recovery action must not overwrite an unrelated Steam edit.
+- In a disposable Windows test installation, remove only BetterFy's pinned
+  downloaded-resource cache after install, then restart BetterFy. The owned VPK
+  and file-restore action should remain visible, while automatic Steam setup is
+  blocked until the package can be verified again. Do not delete the deployment
+  journal or its private backup for this test.
 - Repeat with a failure-injection internal build on both sides of atomic publish.
   Recovery must be deterministic and diagnostics must remain safe.
 
+### Controlled recovery pass in the stress artifact
+
+The `Windows build` workflow produces an internal artifact whose name starts with
+`BetterFy-Windows-Stress`. The public Early Access release intentionally does not
+contain these controls.
+
+1. Prepare the selected package set and choose one language. Do not run this pass
+   over an active BetterFy installation; restore it first.
+2. Open **Windows test report → Controlled recovery**.
+3. Run **Interrupt before publish**. It must report `PASS`, leave the target
+   unchanged, and record a failed pre-commit journal.
+4. Run **Interrupt after publish**. It must report `PASS`, remove or restore the
+   target, and record `rollbackVerified: true`.
+5. Install normally without automatic Steam activation. The game VPK remains
+   installed so the Steam transaction can be tested independently.
+6. Choose a Steam profile which does not already contain the selected BetterFy
+   language, then run **Steam · before publish** and **Steam · after publish**.
+   Both must report `PASS`; unrelated launch options must remain byte-for-byte
+   unchanged.
+7. Copy the Windows test report after every language/package matrix. The JSON is
+   designed to be shareable: verify visually that it contains no paths, Steam ID,
+   account name, profile token, or authentication data.
+8. Finish by restoring the normal installation and rerunning diagnostics. No
+   recoverable deployment or Steam transaction may remain.
+
 ## 8. Verify installation and updates
+
+Before installer/update checks, run one multi-mod pass:
+
+- select Tree Mod, Show Net Worth, and Repopulate Unit Query HUD and note their visible priority order;
+- prepare the bundle and confirm it reports 3 packages and 25 resources;
+- install through Dutch, restart BetterFy, and confirm the same three-package
+  operation is rediscovered with all three package IDs;
+- launch Dota manually and verify the tree replacement, net-worth HUD, and
+  unit-query HUD changes; a BetterFy success state alone is not proof;
+- reverse the priority and prepare again; the plan identity must change even if
+  the packages do not collide;
+- restore and confirm normal trees/HUD and the previous exact target bytes.
+
+The founder observed all three changes and restoration during the EA.18 Windows
+baseline. They remain pinned internal pilots—not general catalog packages—until
+provenance/signature gates and a retained repeatable compatibility report pass.
 
 - Install the same internal version over the existing installation and confirm
   that settings survive.
 - A real in-app update can only be tested after a newer, signed release and its
   signed updater manifest are published. Unsigned workflow artifacts do not
   activate the public updater.
+
+## 9. BetterFy Setup (the branded installer)
+
+EA.18 completed the first founder-run Windows pass for this section. The
+immutable artifact and retained evidence boundary are recorded in
+[`EA18_WINDOWS_BASELINE.md`](EA18_WINDOWS_BASELINE.md). Keep this checklist for
+new installer behavior, signed-updater compatibility, regressions, and a
+retained second-machine report; do not describe the current installer as
+Windows-untested.
+
+1. Uninstall any existing BetterFy install first (Settings → Apps, or the
+   Windows 8 uninstall flow) so this starts from a clean machine.
+2. Run `BetterFy-Setup.exe`. Confirm the sidebar renders the wordmark,
+   "Join Our Telegram", and the QR (not broken/missing), switch RU ↔ EN with
+   the top-right toggle and confirm every screen's text changes, and confirm
+   **Cancel** actually closes the window — this exact button silently did
+   nothing in the first real build until a missing capability grant was
+   found and fixed.
+3. Confirm the install path reads `%LOCALAPPDATA%\BetterFy`, and — only if
+   this machine genuinely lacks WebView2 — the WebView2 warning appears and
+   its button opens Microsoft's official download page.
+4. Install with both checkboxes on. Confirm BetterFy launches, a Start Menu
+   shortcut exists under a `BetterFy` folder, and a Desktop shortcut exists
+   at the real Desktop location — this matters specifically if this machine's
+   Desktop has been relocated by OneDrive.
+5. Open **Settings → Apps → Installed apps** and confirm BetterFy is listed
+   with the correct version, publisher, and size.
+6. **Run `BetterFy-Setup.exe` again over the existing install.** Confirm the
+   welcome screen now reads "Update" (not "Install"), shows the installed
+   version, and offers an **Uninstall BetterFy** link inline — this is the
+   in-app path, separate from Windows' own Apps & Features. With BetterFy
+   itself running, attempt the update and confirm it reports `app_running`
+   with a plain-language message rather than corrupting the install; close
+   BetterFy and confirm Retry then succeeds.
+7. **Update-in-place through the real updater, the compatibility check that
+   matters most:** with this BetterFy Setup install still in place, trigger a
+   signed update (a newer signed release, applied the normal way through the
+   in-app updater). Confirm the existing installation is updated — same
+   folder, same shortcuts, same registry entry — and that a second, orphaned
+   copy is not created anywhere. This is the specific risk documented in
+   `ROADMAP.md`: the updater silently reruns the NSIS installer, and it must
+   recognize this installation as the one to replace.
+8. Uninstall BetterFy from the installer's own **Uninstall BetterFy** button
+   (not just Apps & Features). Confirm clicking it shows a styled confirmation
+   screen (not a native OS dialog — an earlier build's native `confirm()` was
+   silently suppressed in this WebView2 environment, so the button appeared
+   to do nothing), and that **Cancel** on that screen returns to Update
+   without uninstalling. Confirm the Start Menu and Desktop shortcuts and the
+   registry entry are gone, and that BetterFy's own account/session data
+   under `%APPDATA%\app.betterfy.desktop\` is untouched. A leftover
+   `uninstall.exe` in an otherwise-empty `%LOCALAPPDATA%\BetterFy` folder is
+   a known, accepted gap — record it, do not treat it as a new finding.
+   Confirm **Install again** on this screen returns to a working, fresh
+   welcome screen (not the stale "Update" framing).
+9. Force an error deliberately (for example, rename `payload/` before
+   building so `run_install` returns `payload_not_embedded`, or simply pull
+   the network/deny a file permission) and confirm the error screen shows a
+   plain-language explanation plus working Retry and Contact-support
+   buttons, not just a bare code.
 
 ## Send back after the pass
 
@@ -118,3 +260,13 @@ explicitly enabled in an internal build.
 - the installed BetterFy version and Windows version.
 
 Do not send personal Steam files, Telegram codes, or full filesystem paths.
+
+### EA.18 retained result
+
+The founder reported the application and Setup pass complete on Windows on
+2026-09-27. CI run `36337097018` built the corresponding tagged artifact and its
+published SHA-256 verifies. Install, existing-install update, uninstall/reinstall,
+launch and the application/pinned-pilot journey were observed working. No safe
+readiness report, Windows build metadata, or test-report JSON was retained, so
+those details remain required for the next evidence-bearing matrix rather than
+being reconstructed from memory.

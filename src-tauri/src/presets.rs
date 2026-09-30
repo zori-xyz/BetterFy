@@ -290,14 +290,16 @@ fn workshop_presets() -> Vec<PresetRecord> {
     ]
 }
 
-#[tauri::command]
+// Preset commands only touch local files; `async` keeps that I/O off the
+// main (window) thread, where Tauri would otherwise run a sync command.
+#[tauri::command(async)]
 pub fn list_presets(app: tauri::AppHandle) -> Result<Vec<PresetRecord>, String> {
     let mut presets = read_local_presets(&presets_dir(&app)?)?;
     presets.extend(workshop_presets());
     Ok(presets)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_preset(
     app: tauri::AppHandle,
     request: SavePresetRequest,
@@ -305,7 +307,7 @@ pub fn save_preset(
     save_preset_to_dir(&presets_dir(&app)?, request)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_preset(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let path = local_path(&presets_dir(&app)?, &id)?;
     let metadata = fs::symlink_metadata(&path).map_err(|_| "preset_not_found".to_string())?;
@@ -315,7 +317,7 @@ pub fn delete_preset(app: tauri::AppHandle, id: String) -> Result<(), String> {
     fs::remove_file(path).map_err(|_| "preset_store_unavailable".to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn export_preset(app: tauri::AppHandle, id: String) -> Result<String, String> {
     let mut presets = read_local_presets(&presets_dir(&app)?)?;
     presets.extend(workshop_presets());
@@ -326,7 +328,7 @@ pub fn export_preset(app: tauri::AppHandle, id: String) -> Result<String, String
     serde_json::to_string_pretty(&preset).map_err(|_| "preset_invalid".to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn import_preset(app: tauri::AppHandle, serialized: String) -> Result<PresetRecord, String> {
     if serialized.len() > 64 * 1024 {
         return Err("preset_too_large".to_string());

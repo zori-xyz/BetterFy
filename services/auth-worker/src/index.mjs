@@ -13,14 +13,16 @@ import {
   normalizeChallengeToken,
   normalizeCode,
   normalizeDeviceId,
+  rateLimitSubject,
 } from "./security.mjs";
 import { COPY } from "./copy.mjs";
+import { hashIdPassword, normalizeIdUsername, validIdPassword, verifyIdPassword } from "./id-password.mjs";
 import {
   ACCESS_PLANS,
   PREMIUM_ENTITLEMENT,
   invoicePayload,
+  entitlementTimeline,
   isEntitlementActive,
-  paymentExpiry,
   planById,
   planBySku,
   priceForPlan,
@@ -33,11 +35,46 @@ const ISSUE_LIMIT = 3;
 const ISSUE_WINDOW_SECONDS = 10 * 60;
 const VERIFY_LIMIT = 10;
 const VERIFY_WINDOW_SECONDS = 10 * 60;
+// Telegram codes are not bound to the requester, so every wrong guess is a
+// guess against all live codes. A small global failure budget caps that total
+// regardless of how many addresses an attacker controls. Exhausting it only
+// pauses the code fallback; device approval keeps working.
+const DEFAULT_VERIFY_GLOBAL_FAILURE_LIMIT = 60;
+const REFRESH_REUSE_GRACE_SECONDS = 60;
+const RELEASES_CACHE_SECONDS = 10 * 60;
 const CHALLENGE_CREATE_LIMIT = 6;
 const CHALLENGE_POLL_SECONDS = 2;
 const MAX_BODY_BYTES = 8 * 1024;
 const AVATAR_REFRESH_SECONDS = 24 * 60 * 60;
 const AVATAR_RETRY_SECONDS = 5 * 60;
+const EMAIL_TTL_SECONDS = 10 * 60;
+
+export const BOT_CARD_FILES = Object.freeze({
+  mainMenu: Object.freeze({ en: "main-menu-en.jpg", ru: "main-menu-ru.jpg" }),
+  premium: Object.freeze({ en: "premium-en.jpg", ru: "premium-ru.jpg" }),
+  loginConfirm: Object.freeze({ en: "login-confirm-en.jpg", ru: "login-confirm-ru.jpg" }),
+  loginApproved: Object.freeze({ en: "login-approved-en.jpg", ru: "login-approved-ru.jpg" }),
+  accessCode: Object.freeze({ en: "access-code-en.jpg", ru: "access-code-ru.jpg" }),
+});
+
+export function botCardFile(card, language) {
+  const localized = BOT_CARD_FILES[card];
+  if (!localized) throw new Error("unknown_bot_card");
+  return localized[language === "ru" ? "ru" : "en"];
+}
+
+export function normalizeEmail(value) {
+  if (typeof value !== "string" || value.length > 254 || value !== value.trim()) return null;
+  const email = value.toLowerCase();
+  if (!/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(email)) return null;
+  if (email.includes("..") || email.split("@")[1].split(".").some((label) => label.startsWith("-") || label.endsWith("-"))) return null;
+  return email;
+}
+
+function emailHint(email) {
+  const [local, domain] = email.split("@");
+  return `${local.slice(0, 1)}***@${domain}`;
+}
 
 function matchesConfiguredSecret(value, expected) {
   return typeof expected === "string" && expected.length >= 32 && constantTimeEqual(value, expected);
@@ -122,6 +159,7 @@ export function detectImageContentType(bytes) {
 }
 
 async function refreshAvatar(env, telegramUserId, now, force = false) {
+  if (!/^[0-9]+$/.test(String(telegramUserId ?? ""))) return null;
   const existing = await env.AUTH_DB.prepare(
     "SELECT avatar_file_id, avatar_checked_at FROM betterfy_users WHERE telegram_user_id = ?",
   ).bind(String(telegramUserId)).first();
@@ -143,6 +181,13 @@ async function refreshAvatar(env, telegramUserId, now, force = false) {
   }
 }
 
+// Standalone BetterFy ID accounts store "id:<uuid>" in the legacy Telegram
+// column. Premium is bought in the bot and lands on the Telegram account, so
+// the app needs to know whether this account has one.
+export function isTelegramIdentity(value) {
+  return /^[0-9]+$/.test(String(value ?? ""));
+}
+
 export function normalizeClientKind(value) {
   return value === "web" || value === "desktop" ? value : "unknown";
 }
@@ -158,6 +203,14 @@ export function refreshCredentialState(credential, now) {
 export function supportsRotatingDesktopCredentials(payload) {
   return normalizeClientKind(payload?.clientKind) === "desktop"
     && payload?.credentialMode === "rotating-v1";
+}
+
+export function refreshReuseAllowed(credential, now) {
+  return Boolean(credential
+    && credential.used_at != null
+    && credential.revoked_at == null
+    && typeof credential.replaced_by_hash === "string"
+    && now - Number(credential.used_at) <= REFRESH_REUSE_GRACE_SECONDS);
 }
 
 export function refreshFamilyCompromised(row) {
@@ -314,12 +367,22 @@ async function sessionProfile(request, env, origin) {
     username: user.username ?? undefined,
     accessTier: isEntitlementActive(entitlement, now) ? "premium" : "early-access",
     avatarAvailable: Boolean(avatarFileId),
+    telegramLinked: isTelegramIdentity(user.telegram_user_id),
     accessExpiresAt: isEntitlementActive(entitlement, now) ? entitlement.active_until : undefined,
     accessPlan: isEntitlementActive(entitlement, now) ? plan?.id : undefined,
     accessRecurring: isEntitlementActive(entitlement, now) ? Boolean(plan?.recurring && entitlement.canceled_at == null) : false,
     sessionExpiresAt: user.expires_at,
     sessionId: user.session_id ?? undefined,
   }, 200, headers);
+}
+
+async function emailIdentityStatus(request, env, origin) {
+  const headers = corsHeaders(origin);
+  const user = await authenticatedUser(request, env, Math.floor(Date.now() / 1000));
+  if (!user) return json({ error: "unauthorized" }, 401, headers);
+  const identity = await env.AUTH_DB.prepare("SELECT email_hint FROM betterfy_email_identities WHERE user_id = ?")
+    .bind(user.user_id).first();
+  return json({ linked: Boolean(identity), emailHint: identity?.email_hint ?? null }, 200, headers);
 }
 
 async function revokeSession(request, env, origin) {
@@ -408,6 +471,7 @@ function authPayload(user, entitlement, plan, session, extra = {}) {
     sessionToken: session.token,
     sessionId: session.sessionId,
     avatarAvailable: Boolean(user.avatar_file_id),
+    telegramLinked: isTelegramIdentity(user.telegram_user_id),
     accessExpiresAt: active ? entitlement.active_until : undefined,
     accessPlan: active ? plan?.id : undefined,
     accessRecurring: active ? Boolean(plan?.recurring && entitlement.canceled_at == null) : false,
@@ -428,16 +492,27 @@ async function refreshDesktopSession(request, env, origin) {
   if (!/^[A-Za-z0-9_-]{43}$/.test(refreshToken)) {
     return json({ error: "refresh_rejected" }, 401, headers);
   }
-  const tokenHash = await keyedHash(`refresh:${refreshToken}`, env.AUTH_CODE_PEPPER);
-  const credential = await env.AUTH_DB.prepare(
-    `SELECT r.family_id, r.user_id, r.generation, r.expires_at, r.used_at, r.revoked_at,
-            u.telegram_user_id, u.display_name, u.username, u.language, u.avatar_file_id
+  const credentialQuery = `SELECT r.family_id, r.user_id, r.generation, r.expires_at, r.used_at, r.revoked_at,
+            r.replaced_by_hash, u.telegram_user_id, u.display_name, u.username, u.language, u.avatar_file_id
      FROM auth_refresh_tokens r
      JOIN betterfy_users u ON u.user_id = r.user_id
-     WHERE r.token_hash = ?`,
-  ).bind(tokenHash).first();
-  const credentialState = refreshCredentialState(credential, now);
+     WHERE r.token_hash = ?`;
+  let tokenHash = await keyedHash(`refresh:${refreshToken}`, env.AUTH_CODE_PEPPER);
+  let credential = await env.AUTH_DB.prepare(credentialQuery).bind(tokenHash).first();
+  let credentialState = refreshCredentialState(credential, now);
   if (credentialState === "unknown") return json({ error: "refresh_rejected" }, 401, headers);
+  if (refreshReuseAllowed(credential, now)) {
+    // The client lost the previous response (timeout, crash, vault write
+    // failure) and is retrying with the token it still holds. Rotating its
+    // unused successor once keeps the user signed in; a thief using the old
+    // token instead is still detected when the real client refreshes next.
+    const successor = await env.AUTH_DB.prepare(credentialQuery).bind(credential.replaced_by_hash).first();
+    if (refreshCredentialState(successor, now) === "active") {
+      tokenHash = credential.replaced_by_hash;
+      credential = successor;
+      credentialState = "active";
+    }
+  }
   if (credentialState !== "active") {
     await revokeCredentialFamily(env, credential.family_id, now);
     return json({ error: "refresh_rejected" }, 401, headers);
@@ -530,15 +605,30 @@ export function selectWindowsInstallerRelease(releases) {
   return asset ? { release, asset } : null;
 }
 
+// Unauthenticated GitHub API calls share a 60-per-hour budget per egress IP,
+// and Workers egress IPs are shared, so the release list is cached at the edge.
+async function fetchReleases() {
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  const cacheKey = "https://betterfy-auth.internal/github-releases";
+  const cached = await cache?.match(cacheKey);
+  if (cached) return cached.json();
+  const response = await fetch("https://api.github.com/repos/zori-xyz/BetterFy/releases?per_page=20", {
+    headers: { accept: "application/vnd.github+json", "user-agent": "BetterFy-Auth-Worker" },
+  });
+  if (!response.ok) return null;
+  const releases = await response.json();
+  await cache?.put(cacheKey, new Response(JSON.stringify(releases), {
+    headers: { "content-type": "application/json", "cache-control": `max-age=${RELEASES_CACHE_SECONDS}` },
+  }));
+  return releases;
+}
+
 async function latestRelease(request, env, origin) {
   const headers = corsHeaders(origin);
   const user = await authenticatedUser(request, env, Math.floor(Date.now() / 1000));
   if (!user) return json({ error: "unauthorized" }, 401, headers);
-  const response = await fetch("https://api.github.com/repos/zori-xyz/BetterFy/releases?per_page=20", {
-    headers: { accept: "application/vnd.github+json", "user-agent": "BetterFy-Auth-Worker" },
-  });
-  if (!response.ok) return json({ error: "release_unavailable" }, 503, headers);
-  const releases = await response.json();
+  const releases = await fetchReleases();
+  if (!releases) return json({ error: "release_unavailable" }, 503, headers);
   const selected = selectWindowsInstallerRelease(releases);
   const release = selected?.release;
   const asset = selected?.asset;
@@ -621,9 +711,10 @@ function plansKeyboard(language) {
 }
 
 async function sendPlans(env, chatId, language) {
-  await telegram(env, "sendMessage", {
+  await telegram(env, "sendPhoto", {
     chat_id: chatId,
-    text: COPY[language].choosePlan,
+    photo: cardUrl(env, botCardFile("premium", language)),
+    caption: COPY[language].choosePlan,
     reply_markup: plansKeyboard(language),
   });
 }
@@ -639,11 +730,10 @@ function formatExpiry(timestamp, language) {
 
 async function upsertUser(env, from, language, now) {
   const displayName = [from.first_name, from.last_name].filter(Boolean).join(" ").trim() || "BetterFy player";
-  const existing = await env.AUTH_DB.prepare(
-    "SELECT user_id FROM betterfy_users WHERE telegram_user_id = ?",
-  ).bind(String(from.id)).first();
-  const userId = existing?.user_id ?? crypto.randomUUID();
-  await env.AUTH_DB.prepare(
+  // One statement, so two webhooks for the same new Telegram user cannot both
+  // pick a fresh id: the loser's insert becomes an update and RETURNING
+  // yields the id that actually exists.
+  const row = await env.AUTH_DB.prepare(
     `INSERT INTO betterfy_users
       (user_id, telegram_user_id, display_name, username, language, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -651,8 +741,11 @@ async function upsertUser(env, from, language, now) {
        display_name = excluded.display_name,
        username = excluded.username,
        language = excluded.language,
-       updated_at = excluded.updated_at`,
-  ).bind(userId, String(from.id), displayName, from.username ?? null, language, now, now).run();
+       updated_at = excluded.updated_at
+     RETURNING user_id`,
+  ).bind(crypto.randomUUID(), String(from.id), displayName, from.username ?? null, language, now, now).first();
+  const userId = row?.user_id;
+  if (!userId) throw new Error("user_upsert_failed");
   await refreshAvatar(env, from.id, now);
   return userId;
 }
@@ -669,10 +762,49 @@ async function getLanguage(env, from) {
 async function sendWelcome(env, chatId, language) {
   await telegram(env, "sendPhoto", {
     chat_id: chatId,
-    photo: cardUrl(env, "message-master.png"),
+    photo: cardUrl(env, botCardFile("mainMenu", language)),
     caption: COPY[language].welcome,
     reply_markup: welcomeKeyboard(language),
   });
+}
+
+const DEVICE_PLATFORMS = { windows: "Windows", macos: "macOS", linux: "Linux" };
+
+export function deviceChallengeContext(payload, country) {
+  const platform = Object.hasOwn(DEVICE_PLATFORMS, payload?.platform ?? "") ? payload.platform : null;
+  const version = typeof payload?.appVersion === "string"
+    && /^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}(?:-[0-9A-Za-z.]{1,20})?$/.test(payload.appVersion)
+    ? payload.appVersion
+    : null;
+  return {
+    platform,
+    version,
+    country: typeof country === "string" && /^[A-Z]{2}$/.test(country) ? country : null,
+  };
+}
+
+// A two-digit number the desktop shows while it waits for Telegram. The bot
+// repeats it, so someone who was sent a sign-in link by another person has
+// something concrete to compare before approving.
+export async function deviceMatchCode(token, pepper) {
+  const digest = await keyedHash(`device-match:${token}`, pepper);
+  return String((Number.parseInt(digest.slice(0, 8), 16) % 90) + 10);
+}
+
+export function deviceRequestCaption(language, challenge, matchCode) {
+  const copy = COPY[language];
+  const time = new Intl.DateTimeFormat(language === "ru" ? "ru-RU" : "en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
+  }).format(new Date(Number(challenge.created_at) * 1000));
+  const details = copy.deviceDetails
+    .replace("{platform}", DEVICE_PLATFORMS[challenge.client_platform] ?? copy.deviceUnknown)
+    .replace("{version}", challenge.client_version ?? copy.deviceUnknown)
+    .replace("{country}", challenge.request_country ?? copy.deviceUnknown)
+    .replace("{time}", time);
+  const match = matchCode ? `\n\n${copy.deviceMatch.replace("{code}", matchCode)}` : "";
+  return `${copy.deviceRequest}\n\n${details}${match}`;
 }
 
 function deviceDecisionKeyboard(language, token) {
@@ -698,16 +830,18 @@ function primaryAuthDb(env) {
 async function sendDeviceChallenge(env, message, language, token, now) {
   const challengeHash = await keyedHash(`device-challenge:${token}`, env.AUTH_CODE_PEPPER);
   const challenge = await primaryAuthDb(env).prepare(
-    "SELECT status, expires_at FROM auth_device_challenges WHERE challenge_hash = ?",
+    `SELECT status, expires_at, created_at, client_platform, client_version, request_country
+     FROM auth_device_challenges WHERE challenge_hash = ?`,
   ).bind(challengeHash).first();
   if (deviceChallengeState(challenge, now) !== "pending") {
     return telegram(env, "sendMessage", { chat_id: message.chat.id, text: COPY[language].deviceExpired });
   }
   await upsertUser(env, message.from, language, now);
+  const matchCode = challenge.client_version ? await deviceMatchCode(token, env.AUTH_CODE_PEPPER) : null;
   return telegram(env, "sendPhoto", {
     chat_id: message.chat.id,
-    photo: cardUrl(env, "message-master.png"),
-    caption: COPY[language].deviceRequest,
+    photo: cardUrl(env, botCardFile("loginConfirm", language)),
+    caption: deviceRequestCaption(language, challenge, matchCode),
     reply_markup: deviceDecisionKeyboard(language, token),
     protect_content: true,
   });
@@ -740,7 +874,7 @@ async function decideDeviceChallenge(env, callback, language, token, approved, n
   }
   return telegram(env, "sendPhoto", {
     chat_id: chatId,
-    photo: cardUrl(env, language === "ru" ? "approved-ru.png" : "approved-en.png"),
+    photo: cardUrl(env, botCardFile("loginApproved", language)),
     caption: COPY[language].deviceApproved,
     protect_content: true,
   });
@@ -755,6 +889,12 @@ async function issueCode(env, chatId, from, language, now) {
     await telegram(env, "sendMessage", { chat_id: chatId, text: COPY[language].rateLimited });
     return;
   }
+
+  // Only the newest code stays valid: fewer live codes means fewer targets
+  // for a guess against the shared six-digit space.
+  await env.AUTH_DB.prepare(
+    "UPDATE auth_codes SET consumed_at = ? WHERE user_id = ? AND consumed_at IS NULL AND expires_at > ?",
+  ).bind(now, userId, now).run();
 
   let code;
   let hash;
@@ -771,7 +911,7 @@ async function issueCode(env, chatId, from, language, now) {
 
   await telegram(env, "sendPhoto", {
     chat_id: chatId,
-    photo: cardUrl(env, language === "ru" ? "code-ru.png" : "code-en.png"),
+    photo: cardUrl(env, botCardFile("accessCode", language)),
     parse_mode: "HTML",
     caption: `<b>${COPY[language].codeTitle}</b>\n\n<code>${formatCode(code)}</code>\n\n${COPY[language].codeBody}`,
     protect_content: true,
@@ -804,9 +944,10 @@ async function sendSubscriptionStatus(env, chatId, from, language, now) {
   const userId = await upsertUser(env, from, language, now);
   const subscription = await subscriptionRecord(env, userId);
   if (!isEntitlementActive(subscription, now)) {
-    await telegram(env, "sendMessage", {
+    await telegram(env, "sendPhoto", {
       chat_id: chatId,
-      text: COPY[language].subscriptionInactive,
+      photo: cardUrl(env, botCardFile("premium", language)),
+      caption: COPY[language].subscriptionInactive,
       reply_markup: { inline_keyboard: [[{ text: `⭐ ${COPY[language].subscribe}`, callback_data: "plans" }]] },
     });
     return false;
@@ -816,9 +957,10 @@ async function sendSubscriptionStatus(env, chatId, from, language, now) {
   const buttons = recurring && recurring.canceled_at == null
     ? [[{ text: COPY[language].subscriptionCancel, callback_data: "cancel_subscription" }]]
     : [];
-  await telegram(env, "sendMessage", {
+  await telegram(env, "sendPhoto", {
     chat_id: chatId,
-    text: `${COPY[language].subscriptionActive} ${formatExpiry(subscription.active_until, language)}.`,
+    photo: cardUrl(env, botCardFile("premium", language)),
+    caption: `${COPY[language].subscriptionActive} ${formatExpiry(subscription.active_until, language)}.`,
     reply_markup: { inline_keyboard: buttons },
   });
   return true;
@@ -850,7 +992,9 @@ async function sendAccessInvoice(env, chatId, from, language, now, planId) {
     currency: "XTR",
     prices: [{ label: COPY[language].plans[plan.id].title, amount }],
     start_parameter: `premium_${plan.id}_${orderId}`,
-    photo_url: cardUrl(env, "message-master.png"),
+    photo_url: cardUrl(env, botCardFile("premium", language)),
+    photo_width: 1280,
+    photo_height: 720,
     protect_content: true,
   };
   if (plan.recurring) invoice.subscription_period = plan.durationSeconds;
@@ -877,6 +1021,45 @@ async function handlePreCheckout(env, query, now) {
   }
 }
 
+async function recomputeEntitlement(env, userId, now, fallbackChargeId) {
+  // Concurrent payments or refunds for the same user are rare but possible.
+  // The recomputation is repeated until the set of charges it read is still
+  // the current one, so a late writer never leaves a stale expiry behind.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const rows = (await env.AUTH_DB.prepare(
+      `SELECT p.telegram_charge_id, p.paid_at, o.sku
+       FROM star_payment_events p
+       JOIN payment_orders o ON o.order_id = p.order_id
+       WHERE p.user_id = ? AND p.refunded_at IS NULL`,
+    ).bind(userId).all()).results ?? [];
+    const timeline = entitlementTimeline(rows.map((row) => ({
+      chargeId: row.telegram_charge_id,
+      paidAt: row.paid_at,
+      sku: row.sku,
+    })));
+    const activeUntil = timeline.sourceChargeId ? timeline.activeUntil : now;
+    await env.AUTH_DB.batch([
+      ...[...timeline.expiries].map(([chargeId, expiresAt]) => env.AUTH_DB.prepare(
+        "UPDATE star_payment_events SET expires_at = ? WHERE telegram_charge_id = ?",
+      ).bind(expiresAt, chargeId)),
+      env.AUTH_DB.prepare(
+        `INSERT INTO entitlements
+          (user_id, entitlement_key, active_until, source, source_charge_id, updated_at)
+         VALUES (?, ?, ?, 'telegram_stars', ?, ?)
+         ON CONFLICT(user_id, entitlement_key) DO UPDATE SET
+           active_until = excluded.active_until,
+           source_charge_id = excluded.source_charge_id,
+           updated_at = excluded.updated_at`,
+      ).bind(userId, PREMIUM_ENTITLEMENT, activeUntil, timeline.sourceChargeId ?? fallbackChargeId, now),
+    ]);
+    const current = await env.AUTH_DB.prepare(
+      "SELECT COUNT(*) AS count FROM star_payment_events WHERE user_id = ? AND refunded_at IS NULL",
+    ).bind(userId).first();
+    if (Number(current?.count ?? 0) === rows.length) return activeUntil;
+  }
+  throw new Error("entitlement_recompute_contended");
+}
+
 async function handleSuccessfulPayment(env, message, language, now) {
   const payment = message.successful_payment;
   const order = await env.AUTH_DB.prepare(
@@ -895,11 +1078,9 @@ async function handleSuccessfulPayment(env, message, language, now) {
     "SELECT telegram_charge_id FROM star_payment_events WHERE telegram_charge_id = ?",
   ).bind(payment.telegram_payment_charge_id).first();
   if (duplicate) return;
-  const currentEntitlement = await env.AUTH_DB.prepare(
-    "SELECT active_until FROM entitlements WHERE user_id = ? AND entitlement_key = ?",
-  ).bind(order.user_id, PREMIUM_ENTITLEMENT).first();
 
-  const expiresAt = paymentExpiry(payment, now, plan, currentEntitlement?.active_until);
+  // expires_at is provisional here; recomputeEntitlement writes the real value
+  // from the full queue of non-refunded charges.
   const results = await env.AUTH_DB.batch([
     env.AUTH_DB.prepare(
       `INSERT OR IGNORE INTO star_payment_events
@@ -912,26 +1093,15 @@ async function handleSuccessfulPayment(env, message, language, now) {
       order.user_id,
       payment.total_amount,
       now,
-      expiresAt,
+      now + plan.durationSeconds,
       payment.is_recurring ? 1 : 0,
       payment.is_first_recurring ? 1 : 0,
     ),
     env.AUTH_DB.prepare(
       "UPDATE payment_orders SET status = 'paid', updated_at = ? WHERE order_id = ?",
     ).bind(now, order.order_id),
-    env.AUTH_DB.prepare(
-      `INSERT INTO entitlements
-        (user_id, entitlement_key, active_until, source, source_charge_id, updated_at)
-       VALUES (?, ?, ?, 'telegram_stars', ?, ?)
-       ON CONFLICT(user_id, entitlement_key) DO UPDATE SET
-         active_until = MAX(entitlements.active_until, excluded.active_until),
-         source_charge_id = CASE
-           WHEN excluded.active_until >= entitlements.active_until THEN excluded.source_charge_id
-           ELSE entitlements.source_charge_id
-         END,
-         updated_at = excluded.updated_at`,
-    ).bind(order.user_id, PREMIUM_ENTITLEMENT, expiresAt, payment.telegram_payment_charge_id, now),
   ]);
+  const expiresAt = await recomputeEntitlement(env, order.user_id, now, payment.telegram_payment_charge_id);
 
   if (Number(results[0]?.meta?.changes ?? 0) === 1) {
     await telegram(env, "sendMessage", {
@@ -965,26 +1135,15 @@ async function handleRefundedPayment(env, message, language, now) {
     "SELECT user_id, order_id FROM star_payment_events WHERE telegram_charge_id = ?",
   ).bind(payment.telegram_payment_charge_id).first();
   if (!event) return;
-  await env.AUTH_DB.prepare(
-    "UPDATE star_payment_events SET refunded_at = COALESCE(refunded_at, ?) WHERE telegram_charge_id = ?",
-  ).bind(now, payment.telegram_payment_charge_id).run();
-  const remaining = await env.AUTH_DB.prepare(
-    `SELECT expires_at AS active_until, telegram_charge_id
-     FROM star_payment_events
-     WHERE user_id = ? AND refunded_at IS NULL AND expires_at > ?
-     ORDER BY expires_at DESC
-     LIMIT 1`,
-  ).bind(event.user_id, now).first();
-  const activeUntil = Number(remaining?.active_until ?? now);
   await env.AUTH_DB.batch([
+    env.AUTH_DB.prepare(
+      "UPDATE star_payment_events SET refunded_at = COALESCE(refunded_at, ?) WHERE telegram_charge_id = ?",
+    ).bind(now, payment.telegram_payment_charge_id),
     env.AUTH_DB.prepare(
       "UPDATE payment_orders SET status = 'refunded', updated_at = ? WHERE order_id = ?",
     ).bind(now, event.order_id),
-    env.AUTH_DB.prepare(
-      `UPDATE entitlements SET active_until = ?, source_charge_id = ?, updated_at = ?
-       WHERE user_id = ? AND entitlement_key = ?`,
-    ).bind(activeUntil, remaining?.telegram_charge_id ?? payment.telegram_payment_charge_id, now, event.user_id, PREMIUM_ENTITLEMENT),
   ]);
+  await recomputeEntitlement(env, event.user_id, now, payment.telegram_payment_charge_id);
   await telegram(env, "sendMessage", { chat_id: message.chat.id, text: COPY[language].paymentRefunded });
 }
 
@@ -1066,9 +1225,8 @@ async function handleWebhook(request, env) {
   return json({ ok: true });
 }
 
-async function consumeRequestLimit(env, request, now, namespace, limit, windowSeconds) {
-  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
-  const bucket = await keyedHash(`${namespace}:${ip}`, env.AUTH_CODE_PEPPER);
+async function consumeBucketLimit(env, value, now, namespace, limit, windowSeconds) {
+  const bucket = await keyedHash(`${namespace}:${value}`, env.AUTH_CODE_PEPPER);
   const resetBefore = now - windowSeconds;
   const row = await env.AUTH_DB.prepare(
     `INSERT INTO auth_rate_limits (bucket_hash, window_started_at, request_count)
@@ -1079,6 +1237,24 @@ async function consumeRequestLimit(env, request, now, namespace, limit, windowSe
      RETURNING request_count`,
   ).bind(bucket, now, resetBefore, resetBefore, now).first();
   return Number(row?.request_count ?? limit + 1) <= limit;
+}
+
+async function bucketCount(env, value, now, namespace, windowSeconds) {
+  const bucket = await keyedHash(`${namespace}:${value}`, env.AUTH_CODE_PEPPER);
+  const row = await env.AUTH_DB.prepare(
+    "SELECT window_started_at, request_count FROM auth_rate_limits WHERE bucket_hash = ?",
+  ).bind(bucket).first();
+  if (!row || Number(row.window_started_at) < now - windowSeconds) return 0;
+  return Number(row.request_count ?? 0);
+}
+
+async function consumeRequestLimit(env, request, now, namespace, limit, windowSeconds) {
+  return consumeBucketLimit(env, rateLimitSubject(request.headers.get("CF-Connecting-IP")), now, namespace, limit, windowSeconds);
+}
+
+export function verifyGlobalFailureLimit(env) {
+  const value = Number(env?.VERIFY_GLOBAL_FAILURE_LIMIT);
+  return Number.isSafeInteger(value) && value > 0 ? value : DEFAULT_VERIFY_GLOBAL_FAILURE_LIMIT;
 }
 
 async function consumeRateLimit(env, request, now) {
@@ -1113,11 +1289,13 @@ async function createDeviceChallenge(request, env, origin) {
   const challengeHash = await keyedHash(`device-challenge:${token}`, env.AUTH_CODE_PEPPER);
   const deviceHash = await keyedHash(`device:${deviceId}`, env.AUTH_CODE_PEPPER);
   const expiresAt = now + DEVICE_CHALLENGE_TTL_SECONDS;
+  const context = deviceChallengeContext(payload, request.cf?.country);
   await env.AUTH_DB.prepare(
     `INSERT INTO auth_device_challenges
-      (challenge_hash, device_hash, status, created_at, expires_at)
-     VALUES (?, ?, 'pending', ?, ?)`,
-  ).bind(challengeHash, deviceHash, now, expiresAt).run();
+      (challenge_hash, device_hash, status, created_at, expires_at,
+       client_platform, client_version, request_country)
+     VALUES (?, ?, 'pending', ?, ?, ?, ?, ?)`,
+  ).bind(challengeHash, deviceHash, now, expiresAt, context.platform, context.version, context.country).run();
   const botUsername = /^[A-Za-z0-9_]{5,32}$/.test(String(env.BOT_USERNAME ?? ""))
     ? String(env.BOT_USERNAME)
     : "BeterFyBot";
@@ -1125,6 +1303,7 @@ async function createDeviceChallenge(request, env, origin) {
     challengeToken: token,
     deviceId,
     deepLink: `https://t.me/${botUsername}?start=auth_${token}`,
+    matchCode: context.version ? await deviceMatchCode(token, env.AUTH_CODE_PEPPER) : undefined,
     expiresAt,
     pollAfterSeconds: CHALLENGE_POLL_SECONDS,
   }, 201, headers);
@@ -1195,13 +1374,21 @@ async function verifyCode(request, env, origin) {
   }
   const code = normalizeCode(payload?.code);
   if (!code) return json({ error: "invalid_code" }, 400, headers);
+  const failureLimit = verifyGlobalFailureLimit(env);
+  if (await bucketCount(env, "global", now, "verify-failure", VERIFY_WINDOW_SECONDS) >= failureLimit) {
+    console.error("verify_failure_budget_exhausted", { limit: failureLimit });
+    return json({ error: "rate_limited" }, 429, { ...headers, "retry-after": "600" });
+  }
   const hash = await keyedHash(`code:${code}`, env.AUTH_CODE_PEPPER);
   const consumed = await env.AUTH_DB.prepare(
     `UPDATE auth_codes SET consumed_at = ?
      WHERE code_hash = ? AND consumed_at IS NULL AND expires_at > ?
      RETURNING user_id`,
   ).bind(now, hash, now).first();
-  if (!consumed?.user_id) return json({ error: "code_invalid_or_expired" }, 401, headers);
+  if (!consumed?.user_id) {
+    await consumeBucketLimit(env, "global", now, "verify-failure", failureLimit, VERIFY_WINDOW_SECONDS);
+    return json({ error: "code_invalid_or_expired" }, 401, headers);
+  }
 
   const user = await env.AUTH_DB.prepare(
     "SELECT user_id, telegram_user_id, display_name, username, language, avatar_file_id FROM betterfy_users WHERE user_id = ?",
@@ -1210,8 +1397,8 @@ async function verifyCode(request, env, origin) {
   const entitlement = await subscriptionRecord(env, user.user_id);
   const plan = planBySku(entitlement?.sku);
 
-  const approvedCard = user.language === "ru" ? "approved-ru.png" : "approved-en.png";
-  const copy = COPY[user.language === "ru" ? "ru" : "en"];
+  const language = user.language === "ru" ? "ru" : "en";
+  const copy = COPY[language];
   const clientKind = normalizeClientKind(payload?.clientKind);
   const rotatingDesktop = supportsRotatingDesktopCredentials(payload);
   const session = rotatingDesktop
@@ -1220,7 +1407,7 @@ async function verifyCode(request, env, origin) {
   try {
     await telegram(env, "sendPhoto", {
       chat_id: user.telegram_user_id,
-      photo: cardUrl(env, approvedCard),
+      photo: cardUrl(env, botCardFile("loginApproved", language)),
       caption: copy.approved,
       protect_content: true,
     });
@@ -1231,6 +1418,253 @@ async function verifyCode(request, env, origin) {
   return json(authPayload(user, entitlement, plan, session, rotatingDesktop ? {
     refreshToken: session.refreshToken,
     refreshExpiresAt: now + REFRESH_FAMILY_TTL_SECONDS,
+  } : {}), 200, headers);
+}
+
+async function sendEmailCode(env, email, code, language) {
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) throw new Error("email_not_configured");
+  const ru = language === "ru";
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      from: env.EMAIL_FROM,
+      to: [email],
+      subject: ru ? "Код входа BetterFy ID" : "Your BetterFy ID sign-in code",
+      text: ru
+        ? `Код BetterFy ID: ${code}\nОн действует 10 минут. Если ты не запрашивал вход, игнорируй это письмо.`
+        : `BetterFy ID code: ${code}\nIt is valid for 10 minutes. If you did not request this, ignore this email.`,
+    }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) throw new Error("email_delivery_failed");
+}
+
+async function requestEmailCode(request, env, origin, purpose) {
+  const headers = corsHeaders(origin);
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return json({ error: "email_unavailable" }, 503, headers);
+  let payload;
+  try { payload = await readJson(request); } catch { return json({ error: "invalid_request" }, 400, headers); }
+  const email = normalizeEmail(payload?.email);
+  if (!email) return json({ error: "invalid_email" }, 400, headers);
+  const now = Math.floor(Date.now() / 1000);
+  const emailHash = await keyedHash(`email:${email}`, env.AUTH_CODE_PEPPER);
+  const allowedIp = await consumeRequestLimit(env, request, now, `email_${purpose}`, 6, 600);
+  const allowedEmail = await consumeBucketLimit(env, emailHash, now, `email_address_${purpose}`, 3, 600);
+  if (!allowedIp || !allowedEmail) return json({ error: "rate_limited" }, 429, { ...headers, "retry-after": "600" });
+
+  let userId;
+  if (purpose === "link") {
+    const user = await authenticatedUser(request, env, now);
+    if (!user) return json({ error: "unauthorized" }, 401, headers);
+    const existing = await env.AUTH_DB.prepare("SELECT user_id FROM betterfy_email_identities WHERE email_hash = ? OR user_id = ? LIMIT 1")
+      .bind(emailHash, user.user_id).first();
+    if (existing) return json({ error: "email_already_linked" }, 409, headers);
+    userId = user.user_id;
+  } else {
+    const identity = await env.AUTH_DB.prepare("SELECT user_id FROM betterfy_email_identities WHERE email_hash = ?")
+      .bind(emailHash).first();
+    userId = identity?.user_id;
+    // The response is identical for unknown addresses. A new profile must first
+    // be established and linked through the verified Telegram session.
+    if (!userId) return json({ accepted: true }, 202, headers);
+  }
+
+  const code = generateCode();
+  const codeHash = await keyedHash(`email-code:${purpose}:${emailHash}:${code}`, env.AUTH_CODE_PEPPER);
+  await env.AUTH_DB.prepare(
+    "INSERT INTO betterfy_email_codes (code_hash, email_hash, user_id, purpose, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+  ).bind(codeHash, emailHash, userId, purpose, now, now + EMAIL_TTL_SECONDS).run();
+  try {
+    await sendEmailCode(env, email, code, payload?.language);
+  } catch {
+    await env.AUTH_DB.prepare("DELETE FROM betterfy_email_codes WHERE code_hash = ?").bind(codeHash).run();
+    return json({ error: "email_unavailable" }, 503, headers);
+  }
+  return json({ accepted: true }, 202, headers);
+}
+
+async function verifyEmailCode(request, env, origin, purpose) {
+  const headers = corsHeaders(origin);
+  const now = Math.floor(Date.now() / 1000);
+  if (!(await consumeRateLimit(env, request, now))) return json({ error: "rate_limited" }, 429, headers);
+  let payload;
+  try { payload = await readJson(request); } catch { return json({ error: "invalid_request" }, 400, headers); }
+  const email = normalizeEmail(payload?.email);
+  const code = normalizeCode(payload?.code);
+  if (!email || !code) return json({ error: "invalid_request" }, 400, headers);
+  const emailHash = await keyedHash(`email:${email}`, env.AUTH_CODE_PEPPER);
+  if (!(await consumeBucketLimit(env, emailHash, now, `email_verify_${purpose}`, 10, 600))) {
+    return json({ error: "rate_limited" }, 429, headers);
+  }
+  const codeHash = await keyedHash(`email-code:${purpose}:${emailHash}:${code}`, env.AUTH_CODE_PEPPER);
+  const caller = purpose === "link" ? await authenticatedUser(request, env, now) : null;
+  if (purpose === "link" && !caller) return json({ error: "unauthorized" }, 401, headers);
+  const consumed = await env.AUTH_DB.prepare(
+    `UPDATE betterfy_email_codes SET consumed_at = ?
+     WHERE code_hash = ? AND email_hash = ? AND purpose = ? AND consumed_at IS NULL AND expires_at > ?
+       AND (? = 'signin' OR user_id = ?)
+     RETURNING user_id`,
+  ).bind(now, codeHash, emailHash, purpose, now, purpose, caller?.user_id ?? "").first();
+  if (!consumed?.user_id) {
+    return json({ error: "code_invalid_or_expired" }, 401, headers);
+  }
+  if (purpose === "link") {
+    try {
+      await env.AUTH_DB.prepare("INSERT INTO betterfy_email_identities (email_hash, user_id, email_hint, verified_at) VALUES (?, ?, ?, ?)")
+        .bind(emailHash, caller.user_id, emailHint(email), now).run();
+    } catch {
+      return json({ error: "email_already_linked" }, 409, headers);
+    }
+    return json({ linked: true, emailHint: emailHint(email) }, 200, headers);
+  }
+  const identity = await env.AUTH_DB.prepare("SELECT user_id FROM betterfy_email_identities WHERE email_hash = ?")
+    .bind(emailHash).first();
+  if (identity?.user_id !== consumed.user_id) return json({ error: "code_invalid_or_expired" }, 401, headers);
+  const user = await env.AUTH_DB.prepare(
+    "SELECT user_id, telegram_user_id, display_name, username, language, avatar_file_id FROM betterfy_users WHERE user_id = ?",
+  ).bind(identity.user_id).first();
+  if (!user) return json({ error: "profile_missing" }, 500, headers);
+  const rotatingDesktop = supportsRotatingDesktopCredentials(payload);
+  const session = rotatingDesktop
+    ? await issueDesktopCredentials(env, user.user_id, now)
+    : await issueSession(env, user.user_id, now, normalizeClientKind(payload?.clientKind));
+  const entitlement = await subscriptionRecord(env, user.user_id);
+  const plan = planBySku(entitlement?.sku);
+  return json(authPayload(user, entitlement, plan, session, rotatingDesktop ? {
+    refreshToken: session.refreshToken,
+    refreshExpiresAt: now + REFRESH_FAMILY_TTL_SECONDS,
+  } : {}), 200, headers);
+}
+
+async function startIdRegistration(request, env, origin) {
+  const headers = corsHeaders(origin);
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM || !env.AUTH_PASSWORD_PEPPER) return json({ error: "id_unavailable" }, 503, headers);
+  let payload;
+  try { payload = await readJson(request); } catch { return json({ error: "invalid_request" }, 400, headers); }
+  const email = normalizeEmail(payload?.email);
+  const usernameKey = normalizeIdUsername(payload?.username);
+  if (!email || !usernameKey || !validIdPassword(payload?.password)) return json({ error: "invalid_request" }, 400, headers);
+  const now = Math.floor(Date.now() / 1000);
+  const emailHash = await keyedHash(`email:${email}`, env.AUTH_CODE_PEPPER);
+  const allowedIp = await consumeRequestLimit(env, request, now, "id_register", 4, 600);
+  const allowedEmail = await consumeBucketLimit(env, emailHash, now, "id_register_email", 3, 600);
+  if (!allowedIp || !allowedEmail) return json({ error: "rate_limited" }, 429, { ...headers, "retry-after": "600" });
+  // An abandoned registration must not hold a username forever.
+  await env.AUTH_DB.prepare(
+    "DELETE FROM betterfy_id_registrations WHERE expires_at <= ? AND (username_key = ? OR email_hash = ?)",
+  ).bind(now, usernameKey, emailHash).run();
+  // Whether an email is registered stays private: the response is the same.
+  const emailTaken = await env.AUTH_DB.prepare(
+    "SELECT 1 FROM betterfy_email_identities WHERE email_hash = ?",
+  ).bind(emailHash).first();
+  if (emailTaken) return json({ accepted: true }, 202, headers);
+  // Usernames are public anyway, so a taken one is reported instead of
+  // leaving the user waiting for a code that is never sent.
+  const usernameTaken = await env.AUTH_DB.prepare(
+    `SELECT 1 FROM betterfy_id_credentials WHERE username_key = ?
+     UNION SELECT 1 FROM betterfy_id_registrations WHERE username_key = ? AND email_hash != ? LIMIT 1`,
+  ).bind(usernameKey, usernameKey, emailHash).first();
+  if (usernameTaken) return json({ error: "username_taken" }, 409, headers);
+  const passwordHash = await hashIdPassword(payload.password, env.AUTH_PASSWORD_PEPPER);
+  const code = generateCode();
+  const codeHash = await keyedHash(`id-registration:${emailHash}:${code}`, env.AUTH_CODE_PEPPER);
+  try {
+    await env.AUTH_DB.prepare(
+      `INSERT INTO betterfy_id_registrations
+       (email_hash, username_key, password_hash, code_hash, email_hint, language, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(email_hash) DO UPDATE SET username_key = excluded.username_key,
+       password_hash = excluded.password_hash, code_hash = excluded.code_hash,
+       language = excluded.language, created_at = excluded.created_at, expires_at = excluded.expires_at`,
+    ).bind(emailHash, usernameKey, passwordHash, codeHash, emailHint(email), payload.language === "en" ? "en" : "ru", now, now + EMAIL_TTL_SECONDS).run();
+  } catch {
+    // The only constraint left to violate is a concurrent claim on the username.
+    return json({ error: "username_taken" }, 409, headers);
+  }
+  try {
+    await sendEmailCode(env, email, code, payload.language);
+  } catch {
+    await env.AUTH_DB.prepare("DELETE FROM betterfy_id_registrations WHERE email_hash = ? AND code_hash = ?").bind(emailHash, codeHash).run();
+    return json({ error: "id_unavailable" }, 503, headers);
+  }
+  return json({ accepted: true }, 202, headers);
+}
+
+async function verifyIdRegistration(request, env, origin) {
+  const headers = corsHeaders(origin);
+  if (!env.AUTH_PASSWORD_PEPPER) return json({ error: "id_unavailable" }, 503, headers);
+  let payload;
+  try { payload = await readJson(request); } catch { return json({ error: "invalid_request" }, 400, headers); }
+  const email = normalizeEmail(payload?.email);
+  const code = normalizeCode(payload?.code);
+  if (!email || !code) return json({ error: "invalid_request" }, 400, headers);
+  const now = Math.floor(Date.now() / 1000);
+  const emailHash = await keyedHash(`email:${email}`, env.AUTH_CODE_PEPPER);
+  if (!(await consumeRequestLimit(env, request, now, "id_register_verify", 10, 600))
+    || !(await consumeBucketLimit(env, emailHash, now, "id_register_verify_email", 10, 600))) {
+    return json({ error: "rate_limited" }, 429, headers);
+  }
+  const codeHash = await keyedHash(`id-registration:${emailHash}:${code}`, env.AUTH_CODE_PEPPER);
+  const pending = await env.AUTH_DB.prepare(
+    "SELECT username_key, password_hash, email_hint, language FROM betterfy_id_registrations WHERE email_hash = ? AND code_hash = ? AND expires_at > ?",
+  ).bind(emailHash, codeHash, now).first();
+  if (!pending) return json({ error: "code_invalid_or_expired" }, 401, headers);
+  const userId = crypto.randomUUID();
+  try {
+    await env.AUTH_DB.batch([
+      env.AUTH_DB.prepare(
+        `INSERT INTO betterfy_users (user_id, telegram_user_id, display_name, username, language, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(userId, `id:${userId}`, pending.username_key, pending.username_key, pending.language, now, now),
+      env.AUTH_DB.prepare(
+        "INSERT INTO betterfy_email_identities (email_hash, user_id, email_hint, verified_at) VALUES (?, ?, ?, ?)",
+      ).bind(emailHash, userId, pending.email_hint, now),
+      env.AUTH_DB.prepare(
+        "INSERT INTO betterfy_id_credentials (user_id, username_key, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+      ).bind(userId, pending.username_key, pending.password_hash, now, now),
+      env.AUTH_DB.prepare("DELETE FROM betterfy_id_registrations WHERE email_hash = ? AND code_hash = ?").bind(emailHash, codeHash),
+    ]);
+  } catch {
+    return json({ error: "registration_unavailable" }, 409, headers);
+  }
+  const user = { user_id: userId, display_name: pending.username_key, username: pending.username_key, avatar_file_id: null };
+  const rotatingDesktop = supportsRotatingDesktopCredentials(payload);
+  const session = rotatingDesktop ? await issueDesktopCredentials(env, userId, now) : await issueSession(env, userId, now, normalizeClientKind(payload?.clientKind));
+  return json(authPayload(user, null, null, session, rotatingDesktop ? {
+    refreshToken: session.refreshToken, refreshExpiresAt: now + REFRESH_FAMILY_TTL_SECONDS,
+  } : {}), 200, headers);
+}
+
+async function signInWithId(request, env, origin) {
+  const headers = corsHeaders(origin);
+  if (!env.AUTH_PASSWORD_PEPPER) return json({ error: "id_unavailable" }, 503, headers);
+  let payload;
+  try { payload = await readJson(request); } catch { return json({ error: "invalid_request" }, 400, headers); }
+  const principal = normalizeEmail(payload?.identifier) ?? normalizeIdUsername(payload?.identifier);
+  if (!principal || !validIdPassword(payload?.password)) return json({ error: "invalid_credentials" }, 401, headers);
+  const now = Math.floor(Date.now() / 1000);
+  const principalHash = await keyedHash(`id-login:${principal}`, env.AUTH_CODE_PEPPER);
+  if (!(await consumeRequestLimit(env, request, now, "id_login", 12, 600))
+    || !(await consumeBucketLimit(env, principalHash, now, "id_login_principal", 8, 600))) {
+    return json({ error: "rate_limited" }, 429, headers);
+  }
+  const emailHash = principal.includes("@") ? await keyedHash(`email:${principal}`, env.AUTH_CODE_PEPPER) : "";
+  const user = await env.AUTH_DB.prepare(
+    `SELECT u.user_id, u.telegram_user_id, u.display_name, u.username, u.language, u.avatar_file_id, c.password_hash
+     FROM betterfy_id_credentials c JOIN betterfy_users u ON u.user_id = c.user_id
+     LEFT JOIN betterfy_email_identities e ON e.user_id = c.user_id
+     WHERE c.username_key = ? OR e.email_hash = ? LIMIT 1`,
+  ).bind(principal, emailHash).first();
+  const dummyHash = "pbkdf2-sha256$600000$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000";
+  const correct = await verifyIdPassword(payload.password, env.AUTH_PASSWORD_PEPPER, user?.password_hash ?? dummyHash);
+  if (!user || !correct) return json({ error: "invalid_credentials" }, 401, headers);
+  const rotatingDesktop = supportsRotatingDesktopCredentials(payload);
+  const session = rotatingDesktop ? await issueDesktopCredentials(env, user.user_id, now) : await issueSession(env, user.user_id, now, normalizeClientKind(payload?.clientKind));
+  const entitlement = await subscriptionRecord(env, user.user_id);
+  const plan = planBySku(entitlement?.sku);
+  return json(authPayload(user, entitlement, plan, session, rotatingDesktop ? {
+    refreshToken: session.refreshToken, refreshExpiresAt: now + REFRESH_FAMILY_TTL_SECONDS,
   } : {}), 200, headers);
 }
 
@@ -1254,10 +1688,13 @@ export async function route(request, env) {
     if (origin === false) return json({ error: "origin_not_allowed" }, 403);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
     if (request.method === "GET" && url.pathname === "/v1/session/profile") return sessionProfile(request, env, origin);
+    if (request.method === "GET" && url.pathname === "/v1/session/email") return emailIdentityStatus(request, env, origin);
     if (request.method === "GET" && url.pathname === "/v1/session/avatar") return profileAvatar(request, env, origin);
     if (request.method === "GET" && url.pathname === "/v1/session/devices") return listDeviceSessions(request, env, origin);
     if (request.method === "POST" && url.pathname === "/v1/session/devices/revoke") return revokeDeviceSession(request, env, origin);
     if (request.method === "POST" && url.pathname === "/v1/session/logout") return revokeSession(request, env, origin);
+    if (request.method === "POST" && url.pathname === "/v1/session/email/start") return requestEmailCode(request, env, origin, "link");
+    if (request.method === "POST" && url.pathname === "/v1/session/email/verify") return verifyEmailCode(request, env, origin, "link");
     if (request.method === "GET" && url.pathname === "/v1/releases/latest") return latestRelease(request, env, origin);
     return json({ error: "method_not_allowed" }, 405, corsHeaders(origin));
   }
@@ -1266,6 +1703,23 @@ export async function route(request, env) {
     if (origin === false) return json({ error: "origin_not_allowed" }, 403);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
     if (request.method === "POST") return verifyCode(request, env, origin);
+  }
+  if (url.pathname === "/v1/auth/email/start" || url.pathname === "/v1/auth/email/verify") {
+    const origin = allowedOrigin(request, env);
+    if (origin === false) return json({ error: "origin_not_allowed" }, 403);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    if (request.method === "POST" && url.pathname.endsWith("/start")) return requestEmailCode(request, env, origin, "signin");
+    if (request.method === "POST") return verifyEmailCode(request, env, origin, "signin");
+    return json({ error: "method_not_allowed" }, 405, corsHeaders(origin));
+  }
+  if (["/v1/auth/id/login", "/v1/auth/id/register/start", "/v1/auth/id/register/verify"].includes(url.pathname)) {
+    const origin = allowedOrigin(request, env);
+    if (origin === false) return json({ error: "origin_not_allowed" }, 403);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405, corsHeaders(origin));
+    if (url.pathname.endsWith("/login")) return signInWithId(request, env, origin);
+    if (url.pathname.endsWith("/start")) return startIdRegistration(request, env, origin);
+    return verifyIdRegistration(request, env, origin);
   }
   if (url.pathname === "/v1/auth/device/challenges" || url.pathname === "/v1/auth/device/challenges/poll") {
     const origin = allowedOrigin(request, env);
@@ -1286,7 +1740,28 @@ export async function route(request, env) {
   return json({ error: "not_found" }, 404);
 }
 
+// Expired rows are kept for a day so support can still see what happened to a
+// recent sign-in. Refresh tokens are kept until their whole family expires,
+// because replay detection needs the used ones. Payment rows are never pruned.
+export const CLEANUP_STATEMENTS = [
+  "DELETE FROM auth_codes WHERE expires_at < ?",
+  "DELETE FROM auth_device_challenges WHERE expires_at < ?",
+  "DELETE FROM betterfy_email_codes WHERE expires_at < ?",
+  "DELETE FROM betterfy_id_registrations WHERE expires_at < ?",
+  "DELETE FROM auth_sessions WHERE expires_at < ?",
+  "DELETE FROM auth_refresh_tokens WHERE expires_at < ?",
+  "DELETE FROM auth_rate_limits WHERE window_started_at < ?",
+];
+
+export async function cleanupExpiredRows(env, now) {
+  const cutoff = now - 24 * 60 * 60;
+  await env.AUTH_DB.batch(CLEANUP_STATEMENTS.map((sql) => env.AUTH_DB.prepare(sql).bind(cutoff)));
+}
+
 export default {
+  async scheduled(controller, env, context) {
+    context.waitUntil(cleanupExpiredRows(env, Math.floor(Date.now() / 1000)));
+  },
   async fetch(request, env) {
     try {
       return await route(request, env);

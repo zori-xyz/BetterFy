@@ -1,5 +1,14 @@
 # BetterFy design system
 
+> September 12, 2026: the user authorized a complete visual replacement, preserving only the official wordmark. The active application now uses `src/studio/`. Its current direction and verification record are in [Studio redesign](docs/STUDIO_REDESIGN.md). The earlier direction below is historical where it conflicts with that replacement.
+
+> September 20, 2026: BetterFy ID is an explicit username/email/password path
+> with email verification. Telegram is the quick alternate path. The access
+> screen uses a BetterFy-original typographic ID seal beside the canonical
+> wordmark, a solid-color Manrope heading, and restrained violet emphasis.
+> Older Telegram-only and email-code-only auth composition notes below are
+> historical where they conflict with this decision.
+
 This document is the durable visual authority for BetterFy. Read
 `docs/EXPERIENCE_CONSTITUTION.md` before designing a surface or flow.
 
@@ -62,9 +71,9 @@ This document is the durable visual authority for BetterFy. Read
 - Background imagery must be reviewed before component styling because it
   defines the perceived product world. A screen cannot be accepted when its
   background belongs to an older BetterFy direction.
-- The BetterFy mark is three equal forward-leaning glass capsules with a dark
-  violet core, luminous purple rim, and restrained internal reflection. Do not
-  change their count, relative size, spacing, or lean between surfaces.
+- The old three-capsule mark is an archived exploration. Keep its component only
+  while older prototype code still needs migration; do not render it as a logo,
+  avatar fallback, readiness signal, or decorative brand motif.
 - Avoid terminal panels, circular KPI gauges, multicolor status dashboards,
   generic SaaS card grids, neon outlines on every element, and decorative
   background circles copied from the references.
@@ -212,17 +221,30 @@ design-system decision.
 | `brand/betterfy-symbol-dark-on-light.jpg` | Alternate dark tile on a light safety field | Founder-authored and founder-approved; auxiliary export, not the default |
 | `src/BetterFyMark.tsx` | Archived three-capsule exploration; not rendered as BetterFy identity | Semantic SVG |
 | `src/BetterFyWordmark.tsx` | Canonical Better/Fy typography | Semantic HTML + vendored fonts |
-| `src/assets/dota-spirits-setup.png` | Dota connection companions | Founder-approved prototype screenshot; temporary and prohibited from release |
-| `src/assets/witch-doctor-auth.png` | Authentication scene anchor | Founder-approved prototype screenshot; temporary and prohibited from release |
-| `src/assets/bane-home.png` | Home scene anchor | Founder-approved prototype screenshot; temporary and prohibited from release |
-| `src/assets/wukong-build.png` | Build review scene anchor | Founder-approved prototype screenshot; temporary and prohibited from release |
-| `src/assets/enigma-progress.webp` | Build progress environment | Founder-approved prototype screenshot; temporary and prohibited from release |
-| `src/assets/courier-success.png` | Success → Play scene anchor | Founder-approved 1200×1200 prototype screenshot; temporary and prohibited from release |
-| `src/assets/pudge-recovery.png` | Recovery / Restore scene anchor | Founder-approved prototype screenshot; temporary and prohibited from release |
+| `src/assets/scenes/betterfy-access-ribbon-v1.jpg` | Boot background with the violet BetterFy ribbon | Founder-supplied and founder-approved prototype background; currently rendered, release status requires the founder's source/provenance confirmation |
+| `src/assets/scenes/bane-access-v1.jpg` | Archived boot-to-auth Bane concept | Newly authored prototype scene; no longer rendered and prohibited from release pending Valve/redistribution review |
+| `src/assets/scenes/bane-access-v1.png` | High-resolution master for the archived Bane concept | Newly authored master; not bundled by the application, prototype-only and prohibited from release pending Valve/redistribution review |
+| `src/assets/scenes/betterfy-workbench-v1.jpg` | Current Home loadout-table background | Newly authored character-free BetterFy workshop scene; currently rendered, prototype-only until its generated-asset provenance is accepted for release |
+| `src/assets/scenes/betterfy-workbench-v1.png` | High-resolution master for the Home loadout-table background | Newly authored master; not bundled by the application, prototype-only until its generated-asset provenance is accepted for release |
+| `src/assets/scenes/juggernaut-home-v1.jpg` | Archived Home fitting-room concept | Newly authored prototype scene; not rendered in the current Home direction and prohibited from release pending Valve/redistribution review |
+| `src/assets/scenes/juggernaut-home-v1.png` | High-resolution master for the archived Home fitting-room concept | Newly authored master; not bundled by the application and prohibited from release pending Valve/redistribution review |
+| `src/assets/witch-doctor-auth.png` | Archived authentication concept | Founder-approved prototype cutout; not rendered in the current product-scene direction and prohibited from release pending redistribution review |
+| `src/assets/dota-spirits-setup.png` | Archived Dota connection concept | Founder-approved prototype cutout; not rendered in the current product-scene direction and prohibited from release pending redistribution review |
+| `src/assets/bane-home.png` | Archived Home concept shared with an earlier website scene | Founder-approved prototype cutout; not rendered in the current application direction and prohibited from release pending redistribution review |
+| `src/assets/wukong-build.png` | Archived build-review concept | Founder-approved prototype cutout; not rendered in the current product-scene direction and prohibited from release pending redistribution review |
+| `src/assets/enigma-progress.webp` | Archived build-progress environment | Founder-approved prototype environment; not rendered in the current product-scene direction and prohibited from release pending redistribution review |
+| `src/assets/courier-success.png` | Archived Success → Play concept | Founder-approved 1200×1200 prototype cutout; not rendered in the current product-scene direction and prohibited from release pending redistribution review |
+| `src/assets/pudge-recovery.png` | Archived recovery concept | Founder-approved prototype cutout; not rendered in the current product-scene direction and prohibited from release pending redistribution review |
 | `src/assets/minify/*.jpg` | Functional-mod previews on the Minify catalog page | Imported from the official Egezenn/dota2-minify snapshot by founder request; prototype-only pending Valve/redistribution review |
+| `src/assets/dota-emoticons/*.gif` / `*.png` | Rotating community-card accent on Home plus first-frame reduced-motion fallbacks | Twelve original 32x32 Dota 2 game emoticons downloaded from Liquipedia Commons on 2026-08-29 at the founder's direction; prototype-only and prohibited from release pending Valve/media redistribution review |
 | `website/public/bot/message-master.png` | Telegram bot welcome card | Founder-owned and founder-approved master; composition must remain unchanged |
 | `website/public/bot/code-ru.png` / `code-en.png` | One-time-code message cards | Approved variants of the founder master; only the central headline changes |
 | `website/public/bot/approved-ru.png` / `approved-en.png` | Successful sign-in message cards | Approved variants of the founder master; only the central headline changes |
+| `website/public/app-home-original.webp` / `app-home-dark-en.webp` | Website hero product scene in RU and EN | Founder-authored BetterFy website composition; approved for the prototype direction, but embedded Dota-derived imagery remains prohibited from release pending redistribution review |
+| `website/public/poster-minify.webp` / `poster-minify-en.webp` | Website Minify product scene in RU and EN | Founder-authored BetterFy website composition; approved for the prototype direction, with preview imagery remaining prototype-only pending upstream and redistribution review |
+| `website/public/poster-wardrobe.webp` / `poster-wardrobe-ru-dark.webp` / `poster-wardrobe-en-light.webp` / `poster-wardrobe-en-dark.webp` | Website Wardrobe product scene across language and surface variants | Founder-authored BetterFy website composition; approved for the prototype direction, but embedded Dota-derived imagery remains prohibited from release pending redistribution review |
+| `website/public/og.webp` | Website social preview | Founder-authored BetterFy website composition; prototype-only because it includes the same Dota-derived scene used by the website |
+| `website/public/betterfy-icon.webp` | Website touch icon | BetterFy-only branded raster; release-ready once the final brand-icon decision is approved |
 | `src-tauri/icons/icon-source.png` | Canonical application-icon master generated from the approved dark `B` symbol | Founder-authored and founder-approved; release-ready |
 | `src-tauri/windows/installer/sidebar.bmp` | NSIS welcome/finish brand panel | Newly authored BetterFy-only wordmark/signature art; release-ready |
 | `src-tauri/windows/installer/header.bmp` | NSIS install/uninstall page banner | Newly authored BetterFy-only installer art; release-ready |
@@ -241,7 +263,7 @@ a release. Replace every Dota-derived raster before release.
 
 | Incoming file | Reserved role | Composition contract |
 | --- | --- | --- |
-| BetterFy three-capsule render supplied in the previous message | Account avatar and final brand-render reference | Use the existing scalable `BetterFyMark` in interface chrome; raster render is a material reference, never a repeated background ornament |
+| BetterFy three-capsule render supplied in the previous message | Archived visual exploration | Do not use as BetterFy identity; the typographic wordmark is the only current logo |
 | `Dota 2 Sun Wukong Wallpaper.png` | Build scene anchor, imported as `src/assets/wukong-build.png` | Large layered cutout with breathing, bounded backlight and light pass; do not combine it with a competing full-scene character background |
 | `Dota 2 Courier PNG.png` | Success → Play scene anchor, imported as `src/assets/courier-success.png` | The courier carries the visual release after verification; Play remains the only primary action |
 | `Dota 2 PNG.png` | Recovery and Restore scene anchor, imported as `src/assets/pudge-recovery.png` | Pudge may overlap the recovery composition and hook may lead toward the restore action; danger color remains semantic and restrained |

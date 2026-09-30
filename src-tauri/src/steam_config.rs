@@ -1,7 +1,7 @@
+use crate::game_language::GameLanguage;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-const MANAGED_LANGUAGE: &str = "dutch";
 const DOTA_CONFIG_PATH: [&str; 7] = [
     "UserLocalConfigStore",
     "Software",
@@ -238,24 +238,35 @@ fn find_value<'a>(object: &'a ObjectValue, path: &[&str]) -> Option<&'a Value> {
     find_value(child, tail)
 }
 
-fn command_tokens(value: &str) -> Result<Vec<String>, String> {
+fn command_token_spans(value: &str) -> Result<Vec<(String, usize, usize)>, String> {
     let bytes = value.as_bytes();
     let mut tokens = Vec::new();
     let mut current = Vec::new();
+    let mut start = None;
     let mut quoted = false;
     let mut index = 0;
     while index < bytes.len() {
         match bytes[index] {
-            b'"' => quoted = !quoted,
+            b'"' => {
+                start.get_or_insert(index);
+                quoted = !quoted;
+            }
             b' ' | b'\t' if !quoted => {
                 if !current.is_empty() {
-                    tokens.push(
+                    tokens.push((
                         String::from_utf8(std::mem::take(&mut current))
                             .map_err(|_| "launch_options_invalid".to_string())?,
-                    );
+                        start
+                            .take()
+                            .ok_or_else(|| "launch_options_invalid".to_string())?,
+                        index,
+                    ));
                 }
             }
-            byte => current.push(byte),
+            byte => {
+                start.get_or_insert(index);
+                current.push(byte);
+            }
         }
         index += 1;
     }
@@ -263,31 +274,39 @@ fn command_tokens(value: &str) -> Result<Vec<String>, String> {
         return Err("launch_options_invalid".to_string());
     }
     if !current.is_empty() {
-        tokens.push(String::from_utf8(current).map_err(|_| "launch_options_invalid".to_string())?);
+        tokens.push((
+            String::from_utf8(current).map_err(|_| "launch_options_invalid".to_string())?,
+            start.ok_or_else(|| "launch_options_invalid".to_string())?,
+            value.len(),
+        ));
     }
     Ok(tokens)
 }
 
-fn add_managed_argument(existing: &str) -> Result<String, String> {
-    let tokens = command_tokens(existing)?;
-    let mut managed_language_found = false;
-    for (index, token) in tokens.iter().enumerate() {
+fn add_managed_argument(existing: &str, language: GameLanguage) -> Result<String, String> {
+    let tokens = command_token_spans(existing)?;
+    let mut managed_language: Option<(usize, usize, &str)> = None;
+    for (index, (token, _, _)) in tokens.iter().enumerate() {
         if token.eq_ignore_ascii_case("-language") {
-            let Some(language) = tokens.get(index + 1) else {
+            let Some((existing_language, start, end)) = tokens.get(index + 1) else {
                 return Err("launch_options_invalid".to_string());
             };
-            if language.eq_ignore_ascii_case(MANAGED_LANGUAGE) {
-                if managed_language_found {
-                    return Err("launch_options_invalid".to_string());
-                }
-                managed_language_found = true;
-            } else {
-                return Err("launch_option_conflict".to_string());
+            if managed_language.is_some() {
+                return Err("launch_options_invalid".to_string());
             }
+            managed_language = Some((*start, *end, existing_language));
         }
     }
-    if managed_language_found {
-        return Ok(existing.to_string());
+    if let Some((start, end, existing_language)) = managed_language {
+        if existing_language.eq_ignore_ascii_case(language.suffix()) {
+            return Ok(existing.to_string());
+        }
+        return Ok(format!(
+            "{}{}{}",
+            &existing[..start],
+            language.suffix(),
+            &existing[end..]
+        ));
     }
 
     let separator = if existing.is_empty()
@@ -300,7 +319,10 @@ fn add_managed_argument(existing: &str) -> Result<String, String> {
     } else {
         " "
     };
-    Ok(format!("{existing}{separator}-language {MANAGED_LANGUAGE}"))
+    Ok(format!(
+        "{existing}{separator}-language {}",
+        language.suffix()
+    ))
 }
 
 fn encode_vdf(value: &str) -> String {
@@ -308,6 +330,13 @@ fn encode_vdf(value: &str) -> String {
 }
 
 pub fn plan_managed_launch_option(contents: &str) -> Result<LaunchOptionPlan, String> {
+    plan_launch_option_for_language(contents, GameLanguage::Dutch)
+}
+
+pub fn plan_launch_option_for_language(
+    contents: &str,
+    language: GameLanguage,
+) -> Result<LaunchOptionPlan, String> {
     let root = parse(contents)?;
     let app_path = &DOTA_CONFIG_PATH[..DOTA_CONFIG_PATH.len() - 1];
     let app = find_value(&root, app_path).ok_or_else(|| "dota_config_missing".to_string())?;
@@ -317,7 +346,7 @@ pub fn plan_managed_launch_option(contents: &str) -> Result<LaunchOptionPlan, St
 
     let updated_contents = match find_value(&root, &DOTA_CONFIG_PATH) {
         Some(Value::Text(value)) => {
-            let updated = add_managed_argument(&value.decoded)?;
+            let updated = add_managed_argument(&value.decoded, language)?;
             if updated == value.decoded {
                 contents.to_string()
             } else {
@@ -335,8 +364,10 @@ pub fn plan_managed_launch_option(contents: &str) -> Result<LaunchOptionPlan, St
                 .chars()
                 .take_while(|character| matches!(character, ' ' | '\t'))
                 .collect::<String>();
-            let insertion =
-                format!("{indentation}\t\"LaunchOptions\"\t\t\"-language {MANAGED_LANGUAGE}\"\n");
+            let insertion = format!(
+                "{indentation}\t\"LaunchOptions\"\t\t\"-language {}\"\n",
+                language.suffix()
+            );
             let mut result = String::with_capacity(contents.len() + insertion.len());
             result.push_str(&contents[..app.close_line_start]);
             result.push_str(&insertion);
@@ -401,12 +432,36 @@ mod tests {
     }
 
     #[test]
-    fn rejects_a_foreign_language_instead_of_overwriting_it() {
-        let input = local_config(Some("-novid -language russian"));
-        assert_eq!(
-            plan_managed_launch_option(&input).err().as_deref(),
-            Some("launch_option_conflict")
-        );
+    fn selected_language_is_preserved_and_replaces_only_the_language_value() {
+        let input = local_config(Some("-novid"));
+        for language in GameLanguage::ALL {
+            let plan = plan_launch_option_for_language(&input, language).expect("language plan");
+            assert!(plan
+                .updated_contents
+                .contains(&format!("-novid -language {}", language.suffix())));
+            let repeat = plan_launch_option_for_language(&plan.updated_contents, language)
+                .expect("same language");
+            assert!(!repeat.changed);
+            for other in GameLanguage::ALL {
+                if other != language {
+                    let switched = plan_launch_option_for_language(&plan.updated_contents, other)
+                        .expect("replace selected language");
+                    assert!(switched.changed);
+                    assert!(switched
+                        .updated_contents
+                        .contains(&format!("-novid -language {}", other.suffix())));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn replaces_a_foreign_language_without_touching_other_options() {
+        let input = local_config(Some("-novid -language russian +exec autoexec.cfg"));
+        let plan = plan_managed_launch_option(&input).expect("replace language");
+        assert!(plan
+            .updated_contents
+            .contains("-novid -language dutch +exec autoexec.cfg"));
     }
 
     #[test]
@@ -414,7 +469,7 @@ mod tests {
         let mixed = local_config(Some("-language dutch -language russian"));
         assert_eq!(
             plan_managed_launch_option(&mixed).err().as_deref(),
-            Some("launch_option_conflict")
+            Some("launch_options_invalid")
         );
         let duplicate = local_config(Some("-language dutch -language DUTCH"));
         assert_eq!(

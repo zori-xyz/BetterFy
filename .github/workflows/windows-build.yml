@@ -46,11 +46,31 @@ jobs:
         run: cargo fmt --all --manifest-path src-tauri/Cargo.toml -- --check
 
       - name: Lint Rust engine
-        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
+        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --features internal-stress-test -- -D warnings
+
+      - name: Test internal recovery boundaries
+        run: npm run engine:stress-check
+
+      - name: Check installer formatting
+        run: cargo fmt --all --manifest-path installer/src-tauri/Cargo.toml -- --check
+
+      - name: Lint installer
+        run: cargo clippy --locked --manifest-path installer/src-tauri/Cargo.toml -- -D warnings
+
+      - name: Test installer
+        run: cargo test --locked --manifest-path installer/src-tauri/Cargo.toml
+
+      - name: Install installer dependencies
+        working-directory: installer
+        run: npm ci
+
+      - name: Build installer (empty payload; verifies the Rust code compiles on Windows)
+        working-directory: installer
+        run: npx tauri build --debug
 
       - name: Build unsigned Windows installer
         uses: tauri-apps/tauri-action@v1
         with:
-          args: --bundles nsis --config src-tauri/tauri.ci.conf.json
+          args: --bundles nsis --config src-tauri/tauri.ci.conf.json --features internal-stress-test
           uploadWorkflowArtifacts: true
-          workflowArtifactNamePattern: BetterFy-Windows-[arch]-[bundle]
+          workflowArtifactNamePattern: BetterFy-Windows-Stress-[arch]-[bundle]

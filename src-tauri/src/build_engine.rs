@@ -10,6 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::content_store::{self, ContentIntakeRequest, FixturePackageContract};
 
 const ENGINE_SCHEMA_VERSION: u32 = 1;
+const VERIFIED_BUNDLE_OWNER: &str = "betterfy.verified-bundle";
 const MAX_OPERATION_FILES: usize = 256;
 const MAX_STAGED_BYTES: u64 = 64 * 1024 * 1024;
 static OPERATION_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -110,6 +111,8 @@ struct BuildJournal {
     schema_version: u32,
     operation_id: String,
     plan_id: String,
+    #[serde(default)]
+    package_ids: Vec<String>,
     phase: OperationPhase,
     created_at_ms: u128,
     updated_at_ms: u128,
@@ -121,7 +124,7 @@ struct BuildJournal {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildReceipt {
-    operation_id: String,
+    pub(crate) operation_id: String,
     plan_id: String,
     phase: OperationPhase,
     staged_root: String,
@@ -138,6 +141,7 @@ pub struct OperationSummary {
     phase: OperationPhase,
     created_at_ms: u128,
     staged_files: usize,
+    package_count: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -227,12 +231,13 @@ fn validate_recipe_contract(
 
 pub fn create_build_plan(request: BuildPlanRequest) -> Result<BuildPlan, String> {
     let available = fixture_manifests()?;
-    let requested: BTreeSet<String> = request
+    let mut seen = BTreeSet::new();
+    let requested = request
         .mod_ids
         .into_iter()
         .map(|id| id.trim().to_string())
-        .filter(|id| !id.is_empty())
-        .collect();
+        .filter(|id| !id.is_empty() && seen.insert(id.clone()))
+        .collect::<Vec<_>>();
     let mut selected = Vec::new();
     for requested_id in requested {
         let manifest = available
@@ -464,7 +469,7 @@ fn read_journal(path: &Path) -> Result<BuildJournal, String> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum FailurePoint {
+pub(crate) enum FailurePoint {
     None,
     AfterFirstWrite,
     BeforeVerification,
@@ -475,6 +480,122 @@ pub fn execute_build(
     request: ExecuteBuildRequest,
 ) -> Result<BuildReceipt, String> {
     execute_build_with_failure(app_data_root, request, FailurePoint::None)
+}
+
+/// Only a VPK constructed from the pinned Tree Mod resource contract can enter
+/// this staging path; the frontend cannot create the verified input type.
+pub(crate) fn stage_verified_vpk(
+    app_data_root: &Path,
+    verified: &crate::tree_pilot::VerifiedTreeVpk,
+    expected_plan_id: &str,
+    confirmed: bool,
+) -> Result<BuildReceipt, String> {
+    stage_verified_vpk_with_failure(
+        app_data_root,
+        verified,
+        expected_plan_id,
+        confirmed,
+        FailurePoint::None,
+    )
+}
+
+pub(crate) fn stage_verified_vpk_with_failure(
+    app_data_root: &Path,
+    verified: &crate::tree_pilot::VerifiedTreeVpk,
+    expected_plan_id: &str,
+    confirmed: bool,
+    failure: FailurePoint,
+) -> Result<BuildReceipt, String> {
+    let vpk_bytes = verified.bytes();
+    if !confirmed {
+        return Err("build_confirmation_required".to_string());
+    }
+    let actual_plan_id = verified.plan_id().to_string();
+    if expected_plan_id != actual_plan_id {
+        return Err("build_plan_stale".to_string());
+    }
+    crate::vpk::inspect(vpk_bytes).map_err(|_| "verification_failed".to_string())?;
+    if vpk_bytes.len() as u64 > MAX_STAGED_BYTES {
+        return Err("build_too_large".to_string());
+    }
+    let (operations_root, journals_root) = prepare_owned_roots(app_data_root)?;
+    let operation_id = new_operation_id()?;
+    let operation_root = operations_root.join(&operation_id);
+    fs::create_dir(&operation_root).map_err(|_| "build_failed".to_string())?;
+    reject_symlink(&operation_root)?;
+    let staging_root = operation_root.join("staging");
+    fs::create_dir(&staging_root).map_err(|_| "build_failed".to_string())?;
+    reject_symlink(&staging_root)?;
+    let journal_path = journals_root.join(format!("{operation_id}.json"));
+    let timestamp = now_ms()?;
+    let file_hash = sha256(vpk_bytes);
+    let mut journal = BuildJournal {
+        schema_version: ENGINE_SCHEMA_VERSION,
+        operation_id: operation_id.clone(),
+        plan_id: actual_plan_id.clone(),
+        package_ids: verified.bundle_plan().package_ids.clone(),
+        phase: OperationPhase::Staging,
+        created_at_ms: timestamp,
+        updated_at_ms: timestamp,
+        staged_root: staging_root.to_string_lossy().into_owned(),
+        files: vec![JournalFile {
+            owner_id: VERIFIED_BUNDLE_OWNER.to_string(),
+            destination: crate::tree_pilot::TARGET_FILE.to_string(),
+            expected_sha256: file_hash.clone(),
+            actual_sha256: None,
+            size: vpk_bytes.len() as u64,
+            staged: false,
+        }],
+        error_code: None,
+    };
+    atomic_write_json(&journal_path, &journal)?;
+    let result = (|| {
+        let target = staging_root.join(crate::tree_pilot::TARGET_FILE);
+        let mut file = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&target)
+            .map_err(|_| "build_failed".to_string())?;
+        file.write_all(vpk_bytes)
+            .and_then(|_| file.sync_all())
+            .map_err(|_| "build_failed".to_string())?;
+        journal.files[0].staged = true;
+        if failure == FailurePoint::AfterFirstWrite {
+            return Err("injected_failure".to_string());
+        }
+        journal.phase = OperationPhase::Verifying;
+        journal.updated_at_ms = now_ms()?;
+        atomic_write_json(&journal_path, &journal)?;
+        if failure == FailurePoint::BeforeVerification {
+            return Err("injected_failure".to_string());
+        }
+        let reopened = fs::read(&target).map_err(|_| "verification_failed".to_string())?;
+        if reopened.len() != vpk_bytes.len() || sha256(&reopened) != file_hash {
+            return Err("verification_failed".to_string());
+        }
+        crate::vpk::inspect(&reopened).map_err(|_| "verification_failed".to_string())?;
+        journal.files[0].actual_sha256 = Some(file_hash);
+        journal.phase = OperationPhase::Ready;
+        journal.updated_at_ms = now_ms()?;
+        atomic_write_json(&journal_path, &journal)?;
+        Ok(())
+    })();
+    if let Err(code) = result {
+        journal.phase = OperationPhase::Failed;
+        journal.error_code = Some(code.clone());
+        journal.updated_at_ms = now_ms().unwrap_or(journal.updated_at_ms);
+        let _ = atomic_write_json(&journal_path, &journal);
+        return Err(code);
+    }
+    Ok(BuildReceipt {
+        operation_id,
+        plan_id: actual_plan_id,
+        phase: OperationPhase::Ready,
+        staged_root: staging_root.to_string_lossy().into_owned(),
+        staged_files: 1,
+        staged_bytes: vpk_bytes.len() as u64,
+        checksums_verified: true,
+    })
 }
 
 fn execute_build_with_failure(
@@ -513,6 +634,7 @@ fn execute_build_with_failure(
         schema_version: ENGINE_SCHEMA_VERSION,
         operation_id: operation_id.clone(),
         plan_id: plan.plan_id.clone(),
+        package_ids: plan.inputs.iter().map(|input| input.id.clone()).collect(),
         phase: OperationPhase::Staging,
         created_at_ms: timestamp,
         updated_at_ms: timestamp,
@@ -750,6 +872,7 @@ pub fn list_operations(app_data_root: &Path) -> Result<Vec<OperationSummary>, St
             phase: journal.phase,
             created_at_ms: journal.created_at_ms,
             staged_files: journal.files.iter().filter(|file| file.staged).count(),
+            package_count: journal.package_ids.len(),
         });
     }
     summaries.sort_by_key(|summary| std::cmp::Reverse(summary.created_at_ms));
@@ -872,6 +995,34 @@ mod tests {
         .expect("deduplicated plan");
         assert_eq!(plan.inputs.len(), 1);
         assert_eq!(plan.operations.len(), 1);
+    }
+
+    #[test]
+    fn plan_preserves_first_seen_priority_order() {
+        let first = create_build_plan(BuildPlanRequest {
+            mod_ids: vec![
+                "fixture.ambient-violet".to_string(),
+                "fixture.ambient-clean".to_string(),
+                "fixture.ambient-violet".to_string(),
+            ],
+        })
+        .expect("ordered plan");
+        let reversed = create_build_plan(BuildPlanRequest {
+            mod_ids: vec![
+                "fixture.ambient-clean".to_string(),
+                "fixture.ambient-violet".to_string(),
+            ],
+        })
+        .expect("reversed plan");
+        assert_eq!(
+            first
+                .inputs
+                .iter()
+                .map(|input| input.id.as_str())
+                .collect::<Vec<_>>(),
+            ["fixture.ambient-violet", "fixture.ambient-clean"]
+        );
+        assert_ne!(first.plan_id, reversed.plan_id);
     }
 
     #[test]
@@ -1024,12 +1175,13 @@ mod tests {
                 schema_version: ENGINE_SCHEMA_VERSION,
                 operation_id: operation_id.to_string(),
                 plan_id: plan_id.clone(),
+                package_ids: vec!["minify.tree-mod".to_string()],
                 phase: OperationPhase::Ready,
                 created_at_ms: timestamp,
                 updated_at_ms: timestamp,
                 staged_root: staging.to_string_lossy().into_owned(),
                 files: vec![JournalFile {
-                    owner_id: "minify.tree-mod".to_string(),
+                    owner_id: VERIFIED_BUNDLE_OWNER.to_string(),
                     destination: "pak66_dir.vpk".to_string(),
                     expected_sha256: hash.clone(),
                     actual_sha256: Some(hash.clone()),
@@ -1049,6 +1201,30 @@ mod tests {
                 .as_deref(),
             Some("verification_failed")
         );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn verified_vpk_staging_is_bound_to_the_complete_bundle_plan() {
+        let root = temp_root("bundle-plan-binding");
+        let verified = crate::tree_pilot::verified_test_vpk();
+        let output_identity = format!("sha256:{}", verified.sha256());
+        assert_ne!(verified.plan_id(), output_identity);
+        assert_eq!(
+            stage_verified_vpk(&root, &verified, &output_identity, true)
+                .err()
+                .as_deref(),
+            Some("build_plan_stale")
+        );
+        let receipt = stage_verified_vpk(&root, &verified, verified.plan_id(), true)
+            .expect("stage reviewed bundle");
+        let summaries = list_operations(&root).expect("summaries");
+        let summary = summaries
+            .iter()
+            .find(|summary| summary.operation_id == receipt.operation_id)
+            .expect("operation summary");
+        assert_eq!(summary.package_count, 1);
+        assert_eq!(summary.plan_id, verified.plan_id());
         fs::remove_dir_all(root).expect("cleanup");
     }
 

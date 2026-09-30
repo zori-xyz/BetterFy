@@ -58,7 +58,8 @@ enabled in small, recoverable slices.
 | Catalog and wardrobe | Product preview | Navigation, filtering, provenance fields, and local selection work; content download is not enabled. |
 | Presets | Implemented locally | Configurations are validated and stored atomically; JSON import and export are available. |
 | Authentication | Deployed Early Access boundary | Native desktop sign-in uses a ten-minute device-bound Telegram approve/deny challenge. A six-digit code remains the website and cross-device fallback. Web receives a revocable twelve-hour session; Rust keeps a fifteen-minute access token in memory and rotates a single-use refresh credential stored in Credential Manager or Keychain. Profile, avatar, entitlement, session listing, and revocation are implemented. Secure browser cookies, account deletion/retention, and a complete human-driven Windows auth pass remain release gates. |
-| Dota file deployment | Transaction foundation implemented | Rust builds and reopens a deterministic embedded VPK and has a fixed-slot backup, deploy, verify, recover, and rollback transaction covered by synthetic failure tests. No catalog package reaches it yet, so the production trigger remains closed pending Tree Mod intake and native Windows evidence. |
+| Dota file deployment | Internal three-package pilot | Rust verifies pinned Tree Mod, Show Net Worth, and Unit Query HUD resources, merges the selected packages in visible priority order into one deterministic VPK, and uses an ownership-scoped backup/deploy/recover/rollback transaction. The founder installed the ordered three-package bundle on Windows and visually confirmed the result in Dota, then completed the internal stress artifact's controlled recovery pass (interrupt before/after publish, Steam before/after publish) with every check reporting `PASS`. This single Windows session was visual confirmation, not a recorded evidence report: the Windows test report JSON was not saved, and other languages, other machines, and exact-byte comparison against a saved report remain open. General catalog deployment remains closed. |
+| BetterFy Setup | Verified Early Access baseline | EA.18 was built on native Windows CI and the founder completed a Windows install, update, uninstall/reinstall, launch, sign-in, and pinned-pilot application pass. The artifact hash and retained limitations are recorded in [`docs/EA18_WINDOWS_BASELINE.md`](docs/EA18_WINDOWS_BASELINE.md). Code signing, WebView2 provisioning, signed-updater compatibility evidence, and a repeatable second-machine report remain open. |
 | Public updates | Prepared, not released | Signed updater infrastructure exists; public releases require signing secrets and release approval. |
 
 No current build claims VAC safety, ban immunity, universal compatibility, or
@@ -131,11 +132,31 @@ On Windows 10 or 11 with Microsoft C++ Build Tools installed:
 .\scripts\build-windows.ps1
 ```
 
-The unsigned internal installer is written to:
+The unsigned internal NSIS artifact is written to:
 
 ```text
 src-tauri\target\release\bundle\nsis\
 ```
+
+The installer a user actually downloads and runs is **BetterFy Setup**, a
+separate, plain-HTML/CSS Tauri application in [`installer/`](installer/) that
+replaces NSIS's wizard so the product's own dark/violet identity — including
+a real violet primary button — can be used without recoloring native Windows
+controls. NSIS keeps building on every release: the signed auto-updater is
+tied to its artifact format and silently reruns it, in passive mode, to apply
+updates, so it remains the release's internal update mechanism. Build it after
+the main app (`.\scripts\build-windows.ps1`) with:
+
+```powershell
+Copy-Item src-tauri\target\release\betterfy.exe installer\src-tauri\payload\betterfy.exe
+cd installer
+npx tauri build
+```
+
+EA.18 has completed a founder-run native Windows Early Access pass. See
+[`docs/EA18_WINDOWS_BASELINE.md`](docs/EA18_WINDOWS_BASELINE.md) for the exact
+artifact, observed paths, and retained limitations, and
+[`installer/README.md`](installer/README.md) for the implementation contract.
 
 Every push to `main` and every pull request produces a native Windows check.
 Unsigned artifacts are for internal testing; signed public releases use a
@@ -143,6 +164,7 @@ separate tag-driven workflow.
 
 - [Windows build guide](docs/WINDOWS_BUILD.md)
 - [Windows test checklist](docs/WINDOWS_TEST_CHECKLIST.md)
+- [EA.18 Windows baseline](docs/EA18_WINDOWS_BASELINE.md)
 - [Release and updater guide](docs/RELEASING.md)
 - [Latest Windows workflow runs](https://github.com/zori-xyz/BetterFy/actions/workflows/windows-build.yml)
 
@@ -153,6 +175,7 @@ separate tag-driven workflow.
 | [`src/`](src/) | React interface, product routes, localization, catalogs, and the typed engine bridge |
 | [`src-tauri/src/`](src-tauri/src/) | Rust commands, Dota discovery, staging, journals, Steam configuration, presets, and runtime control |
 | [`src-tauri/fixtures/`](src-tauri/fixtures/) | Repository-owned engine fixtures used to prove planning and recovery safely |
+| [`installer/`](installer/) | BetterFy Setup: the standalone, branded Tauri installer that replaces the NSIS wizard for end users |
 | [`scripts/`](scripts/) | Windows builds, catalog checks, icon verification, and visual journey audits |
 | [`docs/`](docs/) | Architecture, product rules, Minify research, Windows builds, releases, and roadmap |
 | [`.github/`](.github/) | Native Windows CI, signed releases, ownership, and contribution templates |
@@ -174,10 +197,13 @@ The current engine follows these rules:
 - start Steam only, never Dota 2;
 - refuse rollback when an unrelated external edit would be overwritten.
 
-The game-file transaction follows this contract in synthetic tests. It is not
-enabled for users until a provenance-accepted package reaches staging and the
-native Windows matrix passes. See [engine architecture](docs/ENGINE_ARCHITECTURE.md)
-and the [patching audit](docs/MINIFY_PATCHING_AUDIT.md).
+The game-file transaction follows this contract in synthetic tests and is live
+only for the three pinned internal pilot packages covered by the Windows
+baseline. Generic catalog deployment remains closed until a provenance-accepted,
+signed package reaches staging through the generic engine and its native Windows
+matrix passes. See [engine architecture](docs/ENGINE_ARCHITECTURE.md), the
+[EA.18 Windows baseline](docs/EA18_WINDOWS_BASELINE.md), and the
+[patching audit](docs/MINIFY_PATCHING_AUDIT.md).
 
 ## Branches and changes
 

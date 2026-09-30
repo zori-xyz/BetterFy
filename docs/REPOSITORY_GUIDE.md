@@ -61,6 +61,25 @@ add generated signatures, assistant credits, or promotional filler.
 | `docs/` | product, engine, build, release, and contribution contracts |
 | `.github/workflows/` | native Windows validation and signed release publication |
 
+## Frontend source of truth
+
+The desktop product has one React entry path:
+
+```text
+src/main.tsx → src/studio/StudioApp.tsx
+```
+
+Do not add a parallel root application under `src/App.tsx` or restore the
+retired catalog-route copies. `npm run frontend:check` protects this boundary
+before every production build. Shared bridges may remain outside `studio/`,
+but user-facing desktop work belongs in the Studio tree unless the entry
+contract is deliberately changed and reviewed.
+
+The visible catalog is broader than the trusted deployment boundary. Only the
+three explicitly pinned game packages exposed by `TreePilot` are currently
+installable. Other game cards and all wardrobe cards are preview-and-save
+content until their package intake and deployment path is enabled.
+
 Changes to Rust commands, auth/session contracts, D1 migrations, payment state,
 release workflows, updater settings, or recovery contracts require maintainer
 review.

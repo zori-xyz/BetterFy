@@ -12,6 +12,7 @@ on:
       - "scripts/**"
       - "src/**"
       - "src-tauri/**"
+      - "installer/**"
 
 permissions:
   contents: write
@@ -55,21 +56,52 @@ jobs:
       - name: Lint Rust engine
         run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
 
-      - name: Build unsigned NSIS installer
+      - name: Check installer formatting
+        run: cargo fmt --all --manifest-path installer/src-tauri/Cargo.toml -- --check
+
+      - name: Lint installer
+        run: cargo clippy --locked --manifest-path installer/src-tauri/Cargo.toml -- -D warnings
+
+      - name: Test installer
+        run: cargo test --locked --manifest-path installer/src-tauri/Cargo.toml
+
+      # NSIS remains the updater's own artifact format: the signed
+      # tauri-plugin-updater config expects a `.nsis.zip`/`.sig` pair, and it
+      # runs this exact installer, in passive mode, to apply updates. This
+      # build is no longer the user-facing download; see BetterFy Setup below.
+      - name: Build unsigned NSIS installer (for the updater)
         uses: tauri-apps/tauri-action@v1
         with:
           args: --bundles nsis --config src-tauri/tauri.ci.conf.json
+
+      - name: Stage the built app as the installer's payload
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "installer/src-tauri/payload" | Out-Null
+          $binary = Get-ChildItem "src-tauri/target/release/betterfy.exe" -ErrorAction Stop
+          Copy-Item $binary.FullName "installer/src-tauri/payload/betterfy.exe"
+
+      - name: Install installer dependencies
+        working-directory: installer
+        run: npm ci
+
+      - name: Build BetterFy Setup (the branded installer)
+        working-directory: installer
+        run: npx tauri build
 
       - name: Prepare fixed release assets
         id: release
         shell: pwsh
         run: |
-          $installer = Get-ChildItem "src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1
-          if (-not $installer) { throw "NSIS installer was not produced" }
+          $installer = Get-ChildItem "installer/src-tauri/target/release/betterfy-installer.exe" -ErrorAction Stop
           New-Item -ItemType Directory -Force -Path "release-assets" | Out-Null
-          Copy-Item $installer.FullName "release-assets/BetterFy-Windows-x64-setup.exe"
-          $hash = (Get-FileHash "release-assets/BetterFy-Windows-x64-setup.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  BetterFy-Windows-x64-setup.exe" | Set-Content -Encoding ascii "release-assets/BetterFy-Windows-x64-setup.exe.sha256"
+          Copy-Item $installer.FullName "release-assets/BetterFy-Setup.exe"
+          $hash = (Get-FileHash "release-assets/BetterFy-Setup.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+          # -NoNewline plus an explicit `n avoids Set-Content's own CRLF, so
+          # `shasum -c` on macOS/Linux accepts this file without stripping
+          # CRLF first; PowerShell's Get-FileHash-based verification is fine
+          # with a lone LF too.
+          Set-Content -Path "release-assets/BetterFy-Setup.exe.sha256" -Value "$hash  BetterFy-Setup.exe`n" -Encoding ascii -NoNewline
           $version = node -p "require('./package.json').version"
           "tag=v$version-ea.${{ github.run_number }}" >> $env:GITHUB_OUTPUT
           "title=BetterFy v$version · Early Access ${{ github.run_number }}" >> $env:GITHUB_OUTPUT
@@ -82,10 +114,10 @@ jobs:
         shell: pwsh
         run: |
           gh release create "$env:RELEASE_TAG" `
-            "release-assets/BetterFy-Windows-x64-setup.exe" `
-            "release-assets/BetterFy-Windows-x64-setup.exe.sha256" `
+            "release-assets/BetterFy-Setup.exe" `
+            "release-assets/BetterFy-Setup.exe.sha256" `
             --repo "${{ github.repository }}" `
             --target "${{ github.sha }}" `
             --title "$env:RELEASE_TITLE" `
-            --notes "Unsigned Early Access installer for Windows testing. Windows may show an unknown publisher warning. Production Dota deployment remains disabled." `
+            --notes "Unsigned Early Access installer for Windows testing. BetterFy Setup replaces the NSIS wizard as the user-facing installer; the NSIS artifact remains internal to the signed auto-updater. Windows may show an unknown publisher warning. Live Dota deployment is limited to the pinned internal pilot packages documented in the repository. EA.18 is the retained founder-verified Windows baseline; a newer artifact is not automatically human-verified when installer behavior changes. See docs/EA18_WINDOWS_BASELINE.md and installer/README.md." `
             --prerelease

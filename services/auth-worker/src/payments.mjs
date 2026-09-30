@@ -56,11 +56,26 @@ export function validateSuccessfulPayment(payment, order) {
   );
 }
 
-export function paymentExpiry(payment, now, plan, currentActiveUntil = now) {
-  if (!plan) throw new Error("invalid_payment_plan");
-  const reported = Number(payment?.subscription_expiration_date);
-  if (plan.recurring && Number.isSafeInteger(reported) && reported > now) return reported;
-  return Math.max(now, Number(currentActiveUntil) || now) + plan.durationSeconds;
+// Access is a single queue of paid periods. Each non-refunded charge adds its
+// plan duration, starting at its payment time or when the previous period
+// ends, whichever is later. Recomputing from the charges (instead of extending
+// a stored date) makes a refund remove exactly its own period and lets a
+// monthly subscription start after days the user already paid for.
+export function entitlementTimeline(charges) {
+  const ordered = [...(Array.isArray(charges) ? charges : [])]
+    .filter((charge) => planBySku(charge?.sku) && Number.isSafeInteger(Number(charge?.paidAt)))
+    .sort((left, right) => Number(left.paidAt) - Number(right.paidAt)
+      || String(left.chargeId).localeCompare(String(right.chargeId)));
+  let activeUntil = 0;
+  let sourceChargeId = null;
+  const expiries = new Map();
+  for (const charge of ordered) {
+    const start = Math.max(Number(charge.paidAt), activeUntil);
+    activeUntil = start + planBySku(charge.sku).durationSeconds;
+    sourceChargeId = charge.chargeId;
+    expiries.set(charge.chargeId, activeUntil);
+  }
+  return { activeUntil, sourceChargeId, expiries };
 }
 
 export function isEntitlementActive(row, now) {

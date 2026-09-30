@@ -11,6 +11,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply AUTH_DB --remote"
   },
   "devDependencies": {
+    "miniflare": "5.20260801.1-alpha",
     "wrangler": "^4.28.1"
   }
 }

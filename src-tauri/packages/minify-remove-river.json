@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "id": "minify.remove-river",
+  "catalogId": "minify-remove-river",
+  "name": {
+    "ru": "Убрать реку",
+    "en": "Remove River"
+  },
+  "author": "robbyz512",
+  "source": {
+    "repository": "Egezenn/dota2-minify",
+    "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+    "directory": "Minify/mods/Remove River/files",
+    "license": "GPL-3.0"
+  },
+  "distribution": "internal_pilot",
+  "verifiedLanguages": [
+    "dutch"
+  ],
+  "resources": [
+    {
+      "path": "materials/water/water_dota_blood.vmat_c",
+      "bytes": 6296,
+      "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+    },
+    {
+      "path": "materials/water/water_econ_dota_chrome.vmat_c",
+      "bytes": 6296,
+      "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+    },
+    {
+      "path": "materials/water/water_econ_dota_electrified.vmat_c",
+      "bytes": 6296,
+      "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+    },
+    {
+      "path": "materials/water/water_econ_dota_oil.vmat_c",
+      "bytes": 6296,
+      "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+    },
+    {
+      "path": "materials/water/water_econ_dota_potion.vmat_c",
+      "bytes": 6296,
+      "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+    },
+    {
+      "path": "materials/water/water_econ_dota_slime.vmat_c",
+      "bytes": 6296,
+      "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+    },
+    {
+      "path": "materials/water/water_generic_000.vmat_c",
+      "bytes": 6296,
+      "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+    },
+    {
+      "path": "materials/water/water_generic_000_slope.vmat_c",
+      "bytes": 6296,
+      "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+    },
+    {
+      "path": "particles/generic_gameplay/water_splash.vpcf_c",
+      "bytes": 2465,
+      "sha256": "c2f65746b0c2032c63c93550ad5c2114a897a2012e9b8761eddde25fa7d5b418"
+    },
+    {
+      "path": "sounds/items/river_paint.vsnd_c",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "sounds/physics/footsteps/common/wade5.vsnd_c",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "sounds/physics/footsteps/common/wade6.vsnd_c",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "sounds/physics/footsteps/common/wade7.vsnd_c",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "sounds/physics/footsteps/common/wade8.vsnd_c",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "materials/blends/dire_lava_tint_00.vmat_c",
+      "bytes": 1551,
+      "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f",
+      "from": "Minify/bin/blank-files/blank.vmat_c"
+    },
+    {
+      "path": "materials/blends/dire_lava.vmat_c",
+      "bytes": 1551,
+      "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f",
+      "from": "Minify/bin/blank-files/blank.vmat_c"
+    },
+    {
+      "path": "materials/models/effects/fountain_dire_01.vmat_c",
+      "bytes": 1551,
+      "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f",
+      "from": "Minify/bin/blank-files/blank.vmat_c"
+    },
+    {
+      "path": "materials/models/effects/fountain_radiant_00.vmat_c",
+      "bytes": 1551,
+      "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f",
+      "from": "Minify/bin/blank-files/blank.vmat_c"
+    },
+    {
+      "path": "materials/models/effects/fountain_waterfall_00.vmat_c",
+      "bytes": 1551,
+      "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f",
+      "from": "Minify/bin/blank-files/blank.vmat_c"
+    },
+    {
+      "path": "materials/models/effects/radiant_lightrays.vmat_c",
+      "bytes": 1551,
+      "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f",
+      "from": "Minify/bin/blank-files/blank.vmat_c"
+    },
+    {
+      "path": "materials/models/effects/water_edges_00.vmat_c",
+      "bytes": 1551,
+      "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f",
+      "from": "Minify/bin/blank-files/blank.vmat_c"
+    },
+    {
+      "path": "models/effects/waterfall_contact_radial_01.vmdl_c",
+      "bytes": 3249,
+      "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2",
+      "from": "Minify/bin/blank-files/blank.vmdl_c"
+    },
+    {
+      "path": "models/effects/waterfall_pour_splash_00.vmdl_c",
+      "bytes": 3249,
+      "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2",
+      "from": "Minify/bin/blank-files/blank.vmdl_c"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "minify.show-networth",
+  "catalogId": "minify-show-networth",
+  "name": {
+    "ru": "Показывать свой Net Worth",
+    "en": "Show NetWorth"
+  },
+  "author": "MeGaNeKoS",
+  "source": {
+    "repository": "Egezenn/dota2-minify",
+    "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+    "directory": "Minify/mods/Show NetWorth/files",
+    "license": "GPL-3.0"
+  },
+  "distribution": "internal_pilot",
+  "verifiedLanguages": [
+    "dutch"
+  ],
+  "resources": [
+    {
+      "path": "panorama/layout/hud/dota_hud_quick_stats.vxml_c",
+      "bytes": 2705,
+      "sha256": "91193b3e5ced7d0d4122cfd5910aa3e16d7e2e3a38864f4146e8c9af1075a13d"
+    }
+  ]
+}
