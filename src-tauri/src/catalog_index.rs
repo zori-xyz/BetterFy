@@ -3,29 +3,40 @@
 //! The catalog is `index.json` plus `index.json.sig`, produced by
 //! `npm run catalog:publish` and signed in the minisign format of
 //! `tauri signer` with a key that is separate from the updater key. The
-//! desktop accepts a catalog only when:
+//! desktop accepts a remote catalog only when:
 //!
 //! - the signature over the exact bytes verifies against the embedded public
 //!   key;
-//! - its `sequence` is not lower than the last catalog accepted on this device
-//!   (a replayed older catalog cannot roll packages back);
-//! - it has not expired and was not issued in the future;
-//! - every manifest passes the same validation as the embedded manifests,
-//!   which also pins the source repository, so even a leaked signing key cannot
-//!   point BetterFy at another host or repository.
+//! - its `sequence` is at least the highest one this device has seen and at
+//!   least the one committed with this build (`BETTERFY_MIN_CATALOG_SEQUENCE`),
+//!   and a reused sequence carries the same bytes;
+//! - it is unexpired, not issued in the future, and valid for at most 200 days;
+//! - every manifest passes the embedded validation (trusted repository, pinned
+//!   commit, data-only extensions, bounded sizes) and no package ID changes its
+//!   contract: neither a package this build ships with nor one accepted
+//!   earlier on this device.
 //!
-//! An accepted catalog is cached in app data together with its signature and
-//! re-verified on every load. Without a usable catalog the embedded manifests
-//! stay active; a network or signature failure never removes a package.
+//! A leaked signing key is therefore limited to adding packages built from
+//! data files at some commit reachable through the trusted repository path
+//! (GitHub may also serve fork commits there), and to metadata. It cannot
+//! change what an existing package ID installs, write outside the language
+//! folder, or use another host.
+//!
+//! An accepted catalog is cached with its signature and re-verified on load.
+//! An expired cached catalog stays usable for packages it already provided, so
+//! installed builds stay verifiable offline. Every failure keeps the current
+//! set; a catalog never removes a package.
 
 use crate::package_registry::{self, PackageSummary};
 use base64::Engine;
 use minisign_verify::{PublicKey, Signature};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const CATALOG_URL: &str = "https://betterfy-auth.zori-xyz.workers.dev/catalog/index.json";
@@ -35,6 +46,18 @@ const MAX_INDEX_BYTES: usize = 1024 * 1024;
 const MAX_SIGNATURE_BYTES: usize = 4 * 1024;
 /// Tolerated clock skew for `issuedAt` in the future.
 const MAX_CLOCK_SKEW_SECONDS: i64 = 24 * 60 * 60;
+const MAX_VALIDITY_SECONDS: i64 = 200 * 24 * 60 * 60;
+/// A single catalog cannot jump the sequence far enough to lock out every
+/// later legitimate catalog.
+const MAX_SEQUENCE_JUMP: u64 = 1_000_000;
+
+static REFRESH_LOCK: Mutex<()> = Mutex::new(());
+/// Sequence and byte hash of the catalog currently active in this process.
+static ACTIVE: Mutex<Option<(u64, String)>> = Mutex::new(None);
+
+fn min_sequence() -> u64 {
+    env!("BETTERFY_MIN_CATALOG_SEQUENCE").parse().unwrap_or(1)
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -110,47 +133,65 @@ fn parse_utc(value: &str) -> Option<i64> {
     Some(days * 86_400 + hour * 3_600 + minute * 60 + second)
 }
 
-/// Everything except the signature: schema, freshness, anti-rollback and
-/// manifest validation. Returns the merged package set to activate.
-fn accept(
-    index: &CatalogIndex,
-    last_sequence: Option<u64>,
-    now: i64,
-) -> Result<Vec<package_registry::PackageManifest>, String> {
-    if index.schema_version != 1 || index.sequence == 0 {
-        return Err("catalog_invalid".to_string());
-    }
-    if last_sequence.is_some_and(|last| index.sequence < last) {
-        return Err("catalog_rollback".to_string());
-    }
-    let issued = parse_utc(&index.issued_at).ok_or_else(|| "catalog_invalid".to_string())?;
-    let expires = parse_utc(&index.expires_at).ok_or_else(|| "catalog_invalid".to_string())?;
-    if issued > now + MAX_CLOCK_SKEW_SECONDS || expires <= issued {
-        return Err("catalog_invalid".to_string());
-    }
-    if expires <= now {
-        return Err("catalog_expired".to_string());
-    }
-    if index.packages.is_empty() {
-        return Err("catalog_invalid".to_string());
-    }
-    package_registry::merge_remote(&index.packages)
-}
-
-fn parse_and_accept(
-    index_bytes: &[u8],
-    signature: &str,
-    last_sequence: Option<u64>,
-    now: i64,
-) -> Result<(CatalogIndex, Vec<package_registry::PackageManifest>), String> {
+/// Signature, size and schema. Freshness and sequence are checked separately
+/// because a cached catalog is still a valid baseline after it expires.
+fn verify_and_parse(index_bytes: &[u8], signature: &str) -> Result<CatalogIndex, String> {
     if index_bytes.len() > MAX_INDEX_BYTES || signature.len() > MAX_SIGNATURE_BYTES {
         return Err("catalog_too_large".to_string());
     }
     verify_signature(index_bytes, signature, CATALOG_PUBLIC_KEY)?;
     let index: CatalogIndex =
         serde_json::from_slice(index_bytes).map_err(|_| "catalog_invalid".to_string())?;
-    let merged = accept(&index, last_sequence, now)?;
-    Ok((index, merged))
+    if index.schema_version != 1 || index.sequence == 0 || index.packages.is_empty() {
+        return Err("catalog_invalid".to_string());
+    }
+    Ok(index)
+}
+
+fn check_time(index: &CatalogIndex, now: i64, allow_expired: bool) -> Result<(), String> {
+    let issued = parse_utc(&index.issued_at).ok_or_else(|| "catalog_invalid".to_string())?;
+    let expires = parse_utc(&index.expires_at).ok_or_else(|| "catalog_invalid".to_string())?;
+    if issued > now + MAX_CLOCK_SKEW_SECONDS
+        || expires <= issued
+        || expires - issued > MAX_VALIDITY_SECONDS
+    {
+        return Err("catalog_invalid".to_string());
+    }
+    if !allow_expired && expires <= now {
+        return Err("catalog_expired".to_string());
+    }
+    Ok(())
+}
+
+fn check_sequence(sequence: u64, baseline: u64) -> Result<(), String> {
+    if sequence < baseline {
+        return Err("catalog_rollback".to_string());
+    }
+    if sequence > baseline.saturating_add(MAX_SEQUENCE_JUMP) {
+        return Err("catalog_invalid".to_string());
+    }
+    Ok(())
+}
+
+/// A package ID keeps the contract it had when this device first accepted it.
+fn check_contracts(
+    merged: &[package_registry::PackageManifest],
+    known: &BTreeMap<String, String>,
+) -> Result<(), String> {
+    for manifest in merged {
+        if known
+            .get(&manifest.id)
+            .is_some_and(|hash| *hash != manifest.contract_hash())
+        {
+            return Err("catalog_contract_changed".to_string());
+        }
+    }
+    Ok(())
+}
+
+fn byte_hash(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 fn cache_dir(app_data_root: &Path) -> Result<PathBuf, String> {
@@ -173,7 +214,7 @@ fn read_bounded(path: &Path, limit: usize) -> Option<Vec<u8>> {
 }
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    let temporary = path.with_extension("tmp");
+    let temporary = path.with_extension(format!("{}.tmp", std::process::id()));
     let _ = fs::remove_file(&temporary);
     let mut file = OpenOptions::new()
         .create_new(true)
@@ -264,30 +305,104 @@ fn status(source: &'static str, sequence: Option<u64>, error: Option<String>) ->
     }
 }
 
+fn read_contracts(dir: &Path) -> BTreeMap<String, String> {
+    read_bounded(&dir.join("contracts.json"), MAX_INDEX_BYTES)
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default()
+}
+
+fn write_contracts(
+    dir: &Path,
+    known: &mut BTreeMap<String, String>,
+    merged: &[package_registry::PackageManifest],
+) -> Result<(), String> {
+    let before = known.len();
+    for manifest in merged {
+        known
+            .entry(manifest.id.clone())
+            .or_insert_with(|| manifest.contract_hash());
+    }
+    if known.len() == before {
+        return Ok(());
+    }
+    let bytes =
+        serde_json::to_vec_pretty(known).map_err(|_| "catalog_cache_invalid".to_string())?;
+    write_atomic(&dir.join("contracts.json"), &bytes)
+}
+
+/// Activates a set unless the same catalog, or a newer one, is already active
+/// in this process. Repeated refreshes do not re-activate (or leak) anything.
+fn activate_if_newer(
+    sequence: u64,
+    hash: String,
+    merged: Vec<package_registry::PackageManifest>,
+) -> Result<(), String> {
+    let mut active = ACTIVE
+        .lock()
+        .map_err(|_| "package_registry_invalid".to_string())?;
+    if active
+        .as_ref()
+        .is_some_and(|(current, current_hash)| *current > sequence || *current_hash == hash)
+    {
+        return Ok(());
+    }
+    package_registry::activate(merged)?;
+    *active = Some((sequence, hash));
+    Ok(())
+}
+
 /// Activates the cached catalog if it still verifies, then tries the remote
-/// one. Every failure leaves the previously active set in place.
+/// one. Serialized per process; every failure leaves the current set in place.
 pub fn refresh(app_data_root: &Path) -> CatalogStatus {
+    let Ok(_guard) = REFRESH_LOCK.lock() else {
+        return status("embedded", None, Some("catalog_busy".to_string()));
+    };
     let now = now_seconds();
     let dir = match cache_dir(app_data_root) {
         Ok(dir) => dir,
         Err(error) => return status("embedded", None, Some(error)),
     };
+    let mut known = read_contracts(&dir);
+    let mut baseline = min_sequence();
+    let mut cached_hash = None;
     let mut source = "embedded";
     let mut sequence = None;
     if let Some(cached) = read_cache(&dir) {
-        if let Ok((index, merged)) = parse_and_accept(&cached.index, &cached.signature, None, now) {
-            if package_registry::activate(merged).is_ok() {
-                source = "cache";
-                sequence = Some(index.sequence);
+        if let Ok(index) = verify_and_parse(&cached.index, &cached.signature) {
+            // A verified cached catalog raises the baseline even if it can no
+            // longer be used, so losing usability never re-opens rollback.
+            baseline = baseline.max(index.sequence);
+            let hash = byte_hash(&cached.index);
+            cached_hash = Some(hash.clone());
+            let usable = (index.sequence >= min_sequence()
+                && check_time(&index, now, true).is_ok())
+            .then(|| package_registry::merge_remote(&index.packages).ok())
+            .flatten()
+            .filter(|merged| check_contracts(merged, &known).is_ok());
+            if let Some(merged) = usable {
+                if activate_if_newer(index.sequence, hash, merged).is_ok() {
+                    source = "cache";
+                    sequence = Some(index.sequence);
+                }
             }
         }
     }
     let remote = fetch_remote().and_then(|(bytes, signature)| {
-        let (index, merged) = parse_and_accept(&bytes, &signature, sequence, now)?;
-        if Some(index.sequence) != sequence {
+        let index = verify_and_parse(&bytes, &signature)?;
+        check_sequence(index.sequence, baseline)?;
+        let hash = byte_hash(&bytes);
+        if index.sequence == baseline && cached_hash.as_ref().is_some_and(|cached| *cached != hash)
+        {
+            return Err("catalog_sequence_reused".to_string());
+        }
+        check_time(&index, now, false)?;
+        let merged = package_registry::merge_remote(&index.packages)?;
+        check_contracts(&merged, &known)?;
+        write_contracts(&dir, &mut known, &merged)?;
+        if cached_hash.as_ref() != Some(&hash) {
             write_cache(&dir, &bytes, &signature)?;
         }
-        package_registry::activate(merged)?;
+        activate_if_newer(index.sequence, hash, merged)?;
         Ok(index.sequence)
     });
     match remote {
@@ -319,11 +434,15 @@ mod tests {
 
     #[test]
     fn the_published_catalog_is_signed_by_the_catalog_key() {
-        verify_signature(PUBLISHED_INDEX, PUBLISHED_SIGNATURE, CATALOG_PUBLIC_KEY)
+        let parsed = verify_and_parse(PUBLISHED_INDEX, PUBLISHED_SIGNATURE)
             .expect("published catalog must verify; run `npm run catalog:publish`");
-        let parsed: CatalogIndex = serde_json::from_slice(PUBLISHED_INDEX).expect("schema");
-        assert_eq!(parsed.schema_version, 1);
-        package_registry::merge_remote(&parsed.packages).expect("published manifests are valid");
+        assert_eq!(
+            parsed.sequence,
+            min_sequence(),
+            "build.rs floor follows the committed index"
+        );
+        let merged = package_registry::merge_remote(&parsed.packages).expect("valid manifests");
+        assert!(check_contracts(&merged, &BTreeMap::new()).is_ok());
     }
 
     #[test]
@@ -335,7 +454,7 @@ mod tests {
             .expect("digit");
         tampered[position] = b'2';
         assert_eq!(
-            verify_signature(&tampered, PUBLISHED_SIGNATURE, CATALOG_PUBLIC_KEY)
+            verify_and_parse(&tampered, PUBLISHED_SIGNATURE)
                 .err()
                 .as_deref(),
             Some("catalog_signature_invalid")
@@ -343,46 +462,100 @@ mod tests {
         assert!(
             verify_signature(PUBLISHED_INDEX, PUBLISHED_SIGNATURE, UPDATER_PUBLIC_KEY).is_err()
         );
-        assert!(verify_signature(PUBLISHED_INDEX, "not base64!", CATALOG_PUBLIC_KEY).is_err());
+        assert!(verify_and_parse(PUBLISHED_INDEX, "not base64!").is_err());
+        // Line endings rewritten by a checkout must not verify either.
+        let crlf = String::from_utf8(PUBLISHED_INDEX.to_vec())
+            .unwrap()
+            .replace('\n', "\r\n");
+        assert!(verify_and_parse(crlf.as_bytes(), PUBLISHED_SIGNATURE).is_err());
     }
 
     #[test]
-    fn freshness_and_rollback_rules() {
+    fn freshness_rules() {
         let now = parse_utc("2026-10-01T00:00:00Z").unwrap();
         let ok = index(5, "2026-09-30T00:00:00Z", "2027-03-01T00:00:00Z");
-        assert!(
-            accept(&ok, Some(5), now).is_ok(),
-            "same sequence is a re-download"
-        );
-        assert!(accept(&ok, Some(4), now).is_ok());
-        assert_eq!(
-            accept(&ok, Some(6), now).err().as_deref(),
-            Some("catalog_rollback")
-        );
+        assert!(check_time(&ok, now, false).is_ok());
         let expired = index(5, "2026-01-01T00:00:00Z", "2026-06-01T00:00:00Z");
         assert_eq!(
-            accept(&expired, None, now).err().as_deref(),
+            check_time(&expired, now, false).err().as_deref(),
             Some("catalog_expired")
         );
-        let future = index(5, "2026-12-01T00:00:00Z", "2027-06-01T00:00:00Z");
-        assert_eq!(
-            accept(&future, None, now).err().as_deref(),
-            Some("catalog_invalid")
+        assert!(
+            check_time(&expired, now, true).is_ok(),
+            "an expired cache stays a baseline"
         );
-        let zero = index(0, "2026-09-30T00:00:00Z", "2027-03-01T00:00:00Z");
-        assert!(accept(&zero, None, now).is_err());
+        let future = index(5, "2026-12-01T00:00:00Z", "2027-06-01T00:00:00Z");
+        assert!(check_time(&future, now, false).is_err());
+        let forever = index(5, "2026-09-30T00:00:00Z", "9999-01-01T00:00:00Z");
+        assert!(
+            check_time(&forever, now, false).is_err(),
+            "validity is capped"
+        );
+    }
+
+    #[test]
+    fn sequence_rules() {
+        assert!(check_sequence(5, 5).is_ok());
+        assert!(check_sequence(6, 5).is_ok());
+        assert_eq!(
+            check_sequence(4, 5).err().as_deref(),
+            Some("catalog_rollback")
+        );
+        assert!(check_sequence(u64::MAX, 5).is_err(), "no lock-out jump");
+    }
+
+    #[test]
+    fn a_package_id_never_changes_what_it_installs() {
+        let published: serde_json::Value = serde_json::from_slice(PUBLISHED_INDEX).unwrap();
+        let mut packages = published["packages"].as_array().unwrap().clone();
+        // Metadata may change.
+        let tree = packages
+            .iter_mut()
+            .find(|p| p["id"] == "minify.tree-mod")
+            .unwrap();
+        tree["name"]["en"] = "Tree Mod (renamed)".into();
+        assert!(package_registry::merge_remote(&packages).is_ok());
+        // The contract of a shipped package may not.
+        let tree = packages
+            .iter_mut()
+            .find(|p| p["id"] == "minify.tree-mod")
+            .unwrap();
+        tree["resources"][0]["sha256"] = "0".repeat(64).into();
+        assert_eq!(
+            package_registry::merge_remote(&packages).err().as_deref(),
+            Some("catalog_contract_changed")
+        );
+        // Nor the contract of a package accepted earlier on this device.
+        let merged =
+            package_registry::merge_remote(&published["packages"].as_array().unwrap().clone())
+                .unwrap();
+        let mut known = BTreeMap::new();
+        known.insert("minify.remove-river".to_string(), "different".to_string());
+        assert_eq!(
+            check_contracts(&merged, &known).err().as_deref(),
+            Some("catalog_contract_changed")
+        );
     }
 
     #[test]
     fn remote_manifests_cannot_leave_the_trusted_repository_or_collide() {
-        let now = parse_utc("2026-10-01T00:00:00Z").unwrap();
         let mut hostile = index(2, "2026-09-30T00:00:00Z", "2027-03-01T00:00:00Z");
         hostile.packages[0]["source"]["repository"] = "attacker/mods".into();
-        assert!(accept(&hostile, None, now).is_err());
+        assert!(package_registry::merge_remote(&hostile.packages).is_err());
+        let mut script = index(2, "2026-09-30T00:00:00Z", "2027-03-01T00:00:00Z");
+        script.packages[0]["id"] = "minify.new-package".into();
+        script.packages[0]["catalogId"] = "minify-new-package".into();
+        script.packages[0]["resources"][0]["path"] = "panorama/scripts/hud.vjs_c".into();
+        assert!(
+            package_registry::merge_remote(&script.packages).is_err(),
+            "scripts are not data"
+        );
         let mut colliding = index(2, "2026-09-30T00:00:00Z", "2027-03-01T00:00:00Z");
         colliding.packages[0]["id"] = "minify.renamed".into();
         assert_eq!(
-            accept(&colliding, None, now).err().as_deref(),
+            package_registry::merge_remote(&colliding.packages)
+                .err()
+                .as_deref(),
             Some("package_manifest_invalid:catalog_id_conflict")
         );
     }
@@ -397,7 +570,7 @@ mod tests {
     }
 
     #[test]
-    fn a_cache_pair_that_does_not_verify_is_ignored() {
+    fn cache_and_contract_files_round_trip_and_corruption_is_ignored() {
         let root = std::env::temp_dir().join(format!(
             "betterfy-catalog-cache-{}-{}",
             std::process::id(),
@@ -405,13 +578,15 @@ mod tests {
         ));
         let dir = cache_dir(&root).expect("cache dir");
         write_cache(&dir, PUBLISHED_INDEX, PUBLISHED_SIGNATURE).expect("write");
-        let cached = read_cache(&dir).expect("read back");
-        assert_eq!(cached.index, PUBLISHED_INDEX);
+        assert_eq!(read_cache(&dir).expect("read back").index, PUBLISHED_INDEX);
         fs::write(dir.join("index.json"), b"{}").expect("corrupt");
         let corrupted = read_cache(&dir).expect("read corrupted");
-        assert!(
-            parse_and_accept(&corrupted.index, &corrupted.signature, None, now_seconds()).is_err()
-        );
+        assert!(verify_and_parse(&corrupted.index, &corrupted.signature).is_err());
+        let parsed = verify_and_parse(PUBLISHED_INDEX, PUBLISHED_SIGNATURE).unwrap();
+        let merged = package_registry::merge_remote(&parsed.packages).unwrap();
+        let mut known = BTreeMap::new();
+        write_contracts(&dir, &mut known, &merged).expect("contracts");
+        assert_eq!(read_contracts(&dir).len(), merged.len());
         let _ = fs::remove_dir_all(root);
     }
 }

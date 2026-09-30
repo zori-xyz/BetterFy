@@ -24,7 +24,13 @@ import {
 } from "../engine";
 import { useLocale } from "../i18n";
 import { deliveryLabel, modById } from "./model";
-import { engineIdFor, findPackage, installablePackages, packageName } from "./packages";
+import {
+  MAX_BUNDLE_PACKAGES,
+  engineIdFor,
+  findPackage,
+  installablePackages,
+  packageName,
+} from "./packages";
 import { setEngineActive } from "./engineActivity";
 
 const codeOf = (error: unknown) =>
@@ -190,7 +196,7 @@ export default function TreePilot({
   const packageLabel = (id: string) => packageName(id, language);
   const supportedBundle =
     ids.length > 0 &&
-    ids.length <= installablePackages.length &&
+    ids.length <= Math.min(installablePackages.length, MAX_BUNDLE_PACKAGES) &&
     ids.every((id) => findPackage(id) !== undefined) &&
     new Set(ids).size === ids.length;
   const bundleName = !ids.length

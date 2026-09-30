@@ -271,7 +271,8 @@ async fn refresh_catalog(app: AppHandle) -> Result<catalog_index::CatalogStatus,
         .map_err(|_| "runtime_worker_failed".to_string())
 }
 
-/// Packages this build can install, from the embedded manifests.
+/// Packages that can be installed now: the embedded manifests, merged with a
+/// verified signed catalog once `refresh_catalog` has accepted one.
 #[tauri::command]
 fn list_installable_packages() -> Result<Vec<package_registry::PackageSummary>, String> {
     package_registry::summaries()

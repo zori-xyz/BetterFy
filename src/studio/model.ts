@@ -1,4 +1,4 @@
-import { pilotCatalogIds } from "./packages";
+import { MAX_BUNDLE_PACKAGES, pilotCatalogIds } from "./packages";
 import { wardrobeCatalogItems, wardrobeCategoryLabels } from "../modCatalog";
 import { minifyMods, minifyCategoryLabels, minifyPreviewUrl, minifySource } from "../minifyCatalog";
 import rawCatalog from "../webCatalog.json";
@@ -19,7 +19,7 @@ export function deliveryLabel(status: "pilot" | "preview", language: Language) {
 export function isPilotSelection(ids: string[]) {
   return (
     ids.length > 0 &&
-    ids.length <= pilotModIds.size &&
+    ids.length <= Math.min(pilotModIds.size, MAX_BUNDLE_PACKAGES) &&
     new Set(ids).size === ids.length &&
     ids.every(isPilotMod)
   );

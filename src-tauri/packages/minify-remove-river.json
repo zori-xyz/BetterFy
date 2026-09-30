@@ -14,7 +14,9 @@
     "license": "GPL-3.0"
   },
   "distribution": "internal_pilot",
-  "verifiedLanguages": [],
+  "verifiedLanguages": [
+    "dutch"
+  ],
   "resources": [
     {
       "path": "materials/water/water_dota_blood.vmat_c",

@@ -37,8 +37,15 @@ const listeners = new Set<() => void>();
 export function applyInstallablePackages(summaries: PackageManifest[]) {
   for (const summary of summaries) {
     const existing = installablePackages.findIndex((item) => item.id === summary.id);
-    if (existing >= 0) installablePackages[existing] = summary;
-    else installablePackages.push(summary);
+    if (existing >= 0) {
+      // Drop the previous catalog ID if the package was relabelled.
+      const previous = installablePackages[existing];
+      if (previous.catalogId !== summary.catalogId) {
+        byAnyId.delete(previous.catalogId);
+        pilotCatalogIds.delete(previous.catalogId);
+      }
+      installablePackages[existing] = summary;
+    } else installablePackages.push(summary);
     index(summary);
   }
   installablePackages.sort((a, b) => a.catalogId.localeCompare(b.catalogId));
@@ -56,6 +63,9 @@ export function usePackagesRevision() {
 }
 
 /** Catalog ID (`minify-tree-mod`) or engine ID (`minify.tree-mod`). */
+/** Upper bound on packages the engine merges into one build (tree_pilot.rs). */
+export const MAX_BUNDLE_PACKAGES = 16;
+
 export function findPackage(id: string) {
   return byAnyId.get(id);
 }

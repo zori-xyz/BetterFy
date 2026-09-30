@@ -24,6 +24,12 @@ const TRUSTED_REPOSITORY: &str = "Egezenn/dota2-minify";
 const MAX_RESOURCES_PER_PACKAGE: usize = 256;
 const MAX_RESOURCE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_PACKAGE_BYTES: usize = 32 * 1024 * 1024;
+/// Compiled Source 2 data resources only. Compiled Panorama scripts
+/// (`vjs_c`) and anything else are not data and are never accepted, even from
+/// a validly signed catalog.
+const ALLOWED_EXTENSIONS: &[&str] = &[
+    "vcss_c", "vmat_c", "vmdl_c", "vpcf_c", "vsnd_c", "vtex_c", "vxml_c",
+];
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -98,6 +104,30 @@ pub struct PackageSummary {
 }
 
 impl PackageManifest {
+    /// Identity of what the package installs: source and every resource.
+    /// Metadata (names, author, verified languages) is not part of it. A
+    /// published package ID never changes contract: an installed build is
+    /// re-verified against its package's contract, so changing it would make
+    /// existing installs unverifiable. New content needs a new ID.
+    pub fn contract_hash(&self) -> String {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(format!(
+            "{}|{}|{}\n",
+            self.source.repository, self.source.commit, self.source.directory
+        ));
+        for resource in &self.resources {
+            hasher.update(format!(
+                "{}|{}|{}|{}\n",
+                resource.path,
+                resource.bytes,
+                resource.sha256,
+                resource.from.as_deref().unwrap_or("")
+            ));
+        }
+        format!("{:x}", hasher.finalize())
+    }
+
     /// `https://raw.githubusercontent.com/<repository>/<commit>/<directory>/<path>`,
     /// with spaces in the directory percent-encoded exactly as before.
     pub fn resource_url(&self, resource: &Resource) -> String {
@@ -213,7 +243,10 @@ fn validate(manifest: &PackageManifest) -> Result<(), String> {
     let mut paths = BTreeSet::new();
     let mut total = 0usize;
     for resource in &manifest.resources {
-        if !valid_resource_path(&resource.path) || !paths.insert(resource.path.as_str()) {
+        if !valid_resource_path(&resource.path)
+            || !paths.insert(resource.path.as_str())
+            || !extension(&resource.path).is_some_and(|ext| ALLOWED_EXTENSIONS.contains(&ext))
+        {
             return invalid("resource_path");
         }
         if resource.bytes > MAX_RESOURCE_BYTES
@@ -293,19 +326,27 @@ pub fn packages() -> Result<&'static [PackageManifest], String> {
 }
 
 /// Validates manifests from a signed catalog with the same rules as the
-/// embedded ones and merges them over the embedded set: a remote manifest
-/// replaces the embedded one with the same ID and may add new packages, but a
-/// catalog can never remove a package this build ships with, so an installed
-/// build always keeps its contract.
+/// embedded ones and merges them over the embedded set. A remote manifest may
+/// update the metadata of a package this build ships with, but not its
+/// contract (see `contract_hash`), may add new packages, and can never remove
+/// one, so an installed build always keeps a verifiable contract.
 pub fn merge_remote(remote: &[serde_json::Value]) -> Result<Vec<PackageManifest>, String> {
     let sources = remote
         .iter()
         .map(serde_json::Value::to_string)
         .collect::<Vec<_>>();
     let remote = parse_all(&sources.iter().map(String::as_str).collect::<Vec<_>>())?;
-    let mut merged = embedded()
+    let base = embedded()
         .as_ref()
-        .map_err(|_| "package_registry_invalid".to_string())?
+        .map_err(|_| "package_registry_invalid".to_string())?;
+    for manifest in &remote {
+        if base.iter().any(|shipped| {
+            shipped.id == manifest.id && shipped.contract_hash() != manifest.contract_hash()
+        }) {
+            return Err("catalog_contract_changed".to_string());
+        }
+    }
+    let mut merged = base
         .iter()
         .filter(|base| !remote.iter().any(|manifest| manifest.id == base.id))
         .cloned()

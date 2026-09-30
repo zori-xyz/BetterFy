@@ -447,20 +447,42 @@ fails CI when the published catalog no longer matches `src-tauri/packages` or
 expires within seven days; a Rust test fails when the committed signature does
 not verify.
 
-At startup the desktop calls `refresh_catalog`. `catalog_index.rs` re-verifies
-the cached catalog, then fetches the remote one over HTTPS with bounded sizes and
-accepts it only if the signature verifies against the embedded public key, its
-sequence is not lower than the cached one, it has not expired and was not issued
-more than a day in the future, and every manifest passes the embedded
-validation, which also pins the source repository. Accepted manifests replace
-embedded ones with the same ID and may add packages; a catalog cannot remove a
-package the build ships with. Any failure keeps the previous set active.
+At startup the desktop calls `refresh_catalog` (serialized per process).
+`catalog_index.rs` re-verifies the cached catalog, then fetches the remote one
+over HTTPS with bounded sizes. A remote catalog is accepted only if:
+
+- the signature over the exact bytes verifies against the embedded public key
+  (the catalog files are committed with `-text` in `.gitattributes`, because a
+  Windows checkout rewriting line endings broke exactly this in CI);
+- its sequence is at least the highest verified one seen on the device and at
+  least the one committed with the build (`build.rs` embeds it as a floor), is
+  not more than one million above that, and a reused sequence has identical
+  bytes;
+- it is unexpired, issued no more than a day in the future, and valid for at
+  most 200 days;
+- every manifest passes the embedded validation, including an allowlist of
+  compiled data extensions (`vcss_c`, `vmat_c`, `vmdl_c`, `vpcf_c`, `vsnd_c`,
+  `vtex_c`, `vxml_c`; compiled Panorama scripts are rejected);
+- no package ID changes its contract (source plus every resource). This holds
+  for packages the build ships with and for packages first accepted on this
+  device, whose contract hashes are kept in `engine-v1/catalog/contracts.json`.
+  Installed builds are re-verified against their package contracts, so new
+  content needs a new package ID.
+
+Accepted manifests may update metadata of shipped packages and add packages; a
+catalog cannot remove one. An expired cached catalog is still activated for the
+packages it provided, so installed builds stay verifiable offline; only the
+remote catalog must be fresh. Any failure keeps the current set active.
 
 The private key lives outside the repository (by default
-`~/.betterfy/catalog-signing.key`). Losing it means shipping an app update with a
-new public key; a leaked key allows only manifests that still pass validation,
-i.e. data files from the pinned-commit trusted repository. Rotation is an app
-release that embeds the new public key, followed by a catalog signed with it.
+`~/.betterfy/catalog-signing.key`). Without it no new catalog can be signed; after
+the published one expires, clients keep the cached set and ignore newer content
+until an app release embeds a new public key. A leaked key cannot change what an
+existing package ID installs, use another host, write outside the language
+folder, or ship scripts. It could add packages built from data files at some
+commit reachable under the trusted repository path (GitHub may also serve fork
+commits there) and change metadata such as verified languages. Rotation is an
+app release that embeds the new public key, followed by a catalog signed with it.
 
 ## Definition of done for filesystem writes
 

@@ -228,8 +228,8 @@ fn fetch_verified_binary_with<T: DownloadTransport>(
     Ok(bytes)
 }
 
-/// Used only with URLs and hashes from the embedded package manifests. No
-/// caller-supplied URL crosses the Tauri bridge.
+/// Used only with URLs and hashes from validated package manifests (embedded
+/// or from a signed catalog). No caller-supplied URL crosses the Tauri bridge.
 pub(crate) fn fetch_pinned_pilot_resource(
     package_id: &str,
     resource: &crate::package_registry::Resource,

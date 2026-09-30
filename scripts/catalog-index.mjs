@@ -50,10 +50,19 @@ if (mode === "check") {
   console.log(`Catalog sequence ${current.sequence} matches ${current.packages.length} manifests.`);
 } else if (mode === "publish") {
   const previous = published();
+  // Never reuse a sequence that is already live: clients reject a reused
+  // sequence with different bytes. Publishing from two branches would do that.
+  let live = 0;
+  try {
+    const response = await fetch("https://betterfy-auth.zori-xyz.workers.dev/catalog/index.json");
+    if (response.ok) live = (await response.json()).sequence ?? 0;
+  } catch {
+    console.warn("Could not read the live catalog; using the committed sequence only.");
+  }
   const now = new Date();
   const index = {
     schemaVersion: 1,
-    sequence: (previous?.sequence ?? 0) + 1,
+    sequence: Math.max(previous?.sequence ?? 0, live) + 1,
     issuedAt: now.toISOString().replace(/\.\d{3}Z$/, "Z"),
     expiresAt: new Date(now.getTime() + VALIDITY_DAYS * 24 * 60 * 60 * 1000)
       .toISOString()
