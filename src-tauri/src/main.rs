@@ -263,12 +263,6 @@ fn list_installable_packages() -> Result<Vec<package_registry::PackageSummary>, 
     package_registry::summaries()
 }
 
-#[tauri::command(async)]
-fn dota_build(game_path: String) -> Result<Option<String>, String> {
-    let installation = validate_candidate(Path::new(&game_path), "manual")?;
-    Ok(dota_build_id(Path::new(&installation.path)))
-}
-
 /// Best-effort Dota build lookup for the installed profile.
 fn current_dota_build(game_path: &str) -> Option<String> {
     let installation = validate_candidate(Path::new(game_path), "manual").ok()?;
@@ -1211,7 +1205,6 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             discover_game,
-            dota_build,
             list_installable_packages,
             validate_game_path,
             collect_system_diagnostics,
