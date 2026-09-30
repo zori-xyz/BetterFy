@@ -3,6 +3,7 @@
 mod archive_inspector;
 mod auth_session;
 mod build_engine;
+mod catalog_index;
 mod content_store;
 mod evidence_reports;
 mod game_deployment;
@@ -255,6 +256,19 @@ fn parse_build_id(contents: &str) -> Option<String> {
             _ => None,
         }
     })
+}
+
+/// Loads the cached signed catalog and checks the remote one. Network and
+/// signature failures are reported but never remove a package.
+#[tauri::command]
+async fn refresh_catalog(app: AppHandle) -> Result<catalog_index::CatalogStatus, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "catalog_cache_invalid".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || catalog_index::refresh(&app_data))
+        .await
+        .map_err(|_| "runtime_worker_failed".to_string())
 }
 
 /// Packages this build can install, from the embedded manifests.
@@ -1206,6 +1220,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             discover_game,
             list_installable_packages,
+            refresh_catalog,
             validate_game_path,
             collect_system_diagnostics,
             intake_fixture_content,

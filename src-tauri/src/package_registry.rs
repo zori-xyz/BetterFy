@@ -9,7 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
-use std::sync::OnceLock;
+use std::sync::{OnceLock, RwLock};
 
 const MANIFESTS: &[&str] = &[
     include_str!("../packages/minify-tree-mod.json"),
@@ -268,16 +268,65 @@ fn parse_all(sources: &[&str]) -> Result<Vec<PackageManifest>, String> {
         .collect()
 }
 
-fn registry() -> &'static Result<Vec<PackageManifest>, String> {
-    static REGISTRY: OnceLock<Result<Vec<PackageManifest>, String>> = OnceLock::new();
-    REGISTRY.get_or_init(|| parse_all(MANIFESTS))
+fn embedded() -> &'static Result<Vec<PackageManifest>, String> {
+    static EMBEDDED: OnceLock<Result<Vec<PackageManifest>, String>> = OnceLock::new();
+    EMBEDDED.get_or_init(|| parse_all(MANIFESTS))
 }
 
+/// The merged set installed from a verified remote catalog, if any. Each
+/// accepted catalog is leaked once so lookups can keep returning `'static`
+/// references; a catalog is a few kilobytes and is replaced at most once per
+/// refresh.
+static ACTIVE: RwLock<Option<&'static [PackageManifest]>> = RwLock::new(None);
+
 pub fn packages() -> Result<&'static [PackageManifest], String> {
-    registry()
+    if let Some(active) = *ACTIVE
+        .read()
+        .map_err(|_| "package_registry_invalid".to_string())?
+    {
+        return Ok(active);
+    }
+    embedded()
         .as_ref()
         .map(Vec::as_slice)
         .map_err(|_| "package_registry_invalid".to_string())
+}
+
+/// Validates manifests from a signed catalog with the same rules as the
+/// embedded ones and merges them over the embedded set: a remote manifest
+/// replaces the embedded one with the same ID and may add new packages, but a
+/// catalog can never remove a package this build ships with, so an installed
+/// build always keeps its contract.
+pub fn merge_remote(remote: &[serde_json::Value]) -> Result<Vec<PackageManifest>, String> {
+    let sources = remote
+        .iter()
+        .map(serde_json::Value::to_string)
+        .collect::<Vec<_>>();
+    let remote = parse_all(&sources.iter().map(String::as_str).collect::<Vec<_>>())?;
+    let mut merged = embedded()
+        .as_ref()
+        .map_err(|_| "package_registry_invalid".to_string())?
+        .iter()
+        .filter(|base| !remote.iter().any(|manifest| manifest.id == base.id))
+        .cloned()
+        .collect::<Vec<_>>();
+    merged.extend(remote);
+    let mut catalog_ids = BTreeSet::new();
+    if !merged
+        .iter()
+        .all(|manifest| catalog_ids.insert(manifest.catalog_id.clone()))
+    {
+        return Err("package_manifest_invalid:catalog_id_conflict".to_string());
+    }
+    Ok(merged)
+}
+
+pub fn activate(merged: Vec<PackageManifest>) -> Result<(), String> {
+    let leaked: &'static [PackageManifest] = Box::leak(merged.into_boxed_slice());
+    *ACTIVE
+        .write()
+        .map_err(|_| "package_registry_invalid".to_string())? = Some(leaked);
+    Ok(())
 }
 
 /// Resolves either the engine ID (`minify.tree-mod`) or the catalog ID
@@ -361,6 +410,17 @@ mod tests {
         let mut value: serde_json::Value = serde_json::from_str(MANIFESTS[1]).expect("json");
         edit(&mut value);
         value.to_string()
+    }
+
+    #[test]
+    fn every_manifest_file_is_embedded() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("packages");
+        let files = std::fs::read_dir(dir)
+            .expect("packages dir")
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "json"))
+            .count();
+        assert_eq!(files, MANIFESTS.len(), "add the new manifest to MANIFESTS");
     }
 
     #[test]

@@ -1,0 +1,344 @@
+{
+  "schemaVersion": 1,
+  "sequence": 1,
+  "issuedAt": "2026-09-30T17:15:10Z",
+  "expiresAt": "2027-03-29T17:15:10Z",
+  "packages": [
+    {
+      "schemaVersion": 1,
+      "id": "minify.remove-river",
+      "catalogId": "minify-remove-river",
+      "name": {
+        "ru": "Убрать реку",
+        "en": "Remove River"
+      },
+      "author": "robbyz512",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Remove River/files",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "resources": [
+        {
+          "path": "materials/water/water_dota_blood.vmat_c",
+          "bytes": 6296,
+          "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+        },
+        {
+          "path": "materials/water/water_econ_dota_chrome.vmat_c",
+          "bytes": 6296,
+          "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+        },
+        {
+          "path": "materials/water/water_econ_dota_electrified.vmat_c",
+          "bytes": 6296,
+          "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+        },
+        {
+          "path": "materials/water/water_econ_dota_oil.vmat_c",
+          "bytes": 6296,
+          "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+        },
+        {
+          "path": "materials/water/water_econ_dota_potion.vmat_c",
+          "bytes": 6296,
+          "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+        },
+        {
+          "path": "materials/water/water_econ_dota_slime.vmat_c",
+          "bytes": 6296,
+          "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+        },
+        {
+          "path": "materials/water/water_generic_000.vmat_c",
+          "bytes": 6296,
+          "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+        },
+        {
+          "path": "materials/water/water_generic_000_slope.vmat_c",
+          "bytes": 6296,
+          "sha256": "3000a01fca080f0a89fc5975022921235575a87c87759ddee0ba7e11e8a82d86"
+        },
+        {
+          "path": "particles/generic_gameplay/water_splash.vpcf_c",
+          "bytes": 2465,
+          "sha256": "c2f65746b0c2032c63c93550ad5c2114a897a2012e9b8761eddde25fa7d5b418"
+        },
+        {
+          "path": "sounds/items/river_paint.vsnd_c",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "sounds/physics/footsteps/common/wade5.vsnd_c",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "sounds/physics/footsteps/common/wade6.vsnd_c",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "sounds/physics/footsteps/common/wade7.vsnd_c",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "sounds/physics/footsteps/common/wade8.vsnd_c",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "materials/blends/dire_lava_tint_00.vmat_c",
+          "bytes": 1551,
+          "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f",
+          "from": "Minify/bin/blank-files/blank.vmat_c"
+        },
+        {
+          "path": "materials/blends/dire_lava.vmat_c",
+          "bytes": 1551,
+          "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f",
+          "from": "Minify/bin/blank-files/blank.vmat_c"
+        },
+        {
+          "path": "materials/models/effects/fountain_dire_01.vmat_c",
+          "bytes": 1551,
+          "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f",
+          "from": "Minify/bin/blank-files/blank.vmat_c"
+        },
+        {
+          "path": "materials/models/effects/fountain_radiant_00.vmat_c",
+          "bytes": 1551,
+          "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f",
+          "from": "Minify/bin/blank-files/blank.vmat_c"
+        },
+        {
+          "path": "materials/models/effects/fountain_waterfall_00.vmat_c",
+          "bytes": 1551,
+          "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f",
+          "from": "Minify/bin/blank-files/blank.vmat_c"
+        },
+        {
+          "path": "materials/models/effects/radiant_lightrays.vmat_c",
+          "bytes": 1551,
+          "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f",
+          "from": "Minify/bin/blank-files/blank.vmat_c"
+        },
+        {
+          "path": "materials/models/effects/water_edges_00.vmat_c",
+          "bytes": 1551,
+          "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f",
+          "from": "Minify/bin/blank-files/blank.vmat_c"
+        },
+        {
+          "path": "models/effects/waterfall_contact_radial_01.vmdl_c",
+          "bytes": 3249,
+          "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2",
+          "from": "Minify/bin/blank-files/blank.vmdl_c"
+        },
+        {
+          "path": "models/effects/waterfall_pour_splash_00.vmdl_c",
+          "bytes": 3249,
+          "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2",
+          "from": "Minify/bin/blank-files/blank.vmdl_c"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "id": "minify.repopulate-unit-query-hud",
+      "catalogId": "minify-repopulate-unit-query-hud",
+      "name": {
+        "ru": "Вернуть расширенный HUD цели",
+        "en": "Repopulate Unit Query HUD"
+      },
+      "author": "MeGaNeKoS",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Repopulate Unit Query HUD/files",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [
+        "dutch"
+      ],
+      "resources": [
+        {
+          "path": "panorama/styles/hud/dota_hud_query_unit_overrides.vcss_c",
+          "bytes": 3957,
+          "sha256": "bc9c831aacc37d21f5c48d6157ee6b80b9a06c3f9f51c48aed7c8446bb534e21"
+        },
+        {
+          "path": "panorama/styles/hud/dota_hud_str_agi_int_overrides.vcss_c",
+          "bytes": 1470,
+          "sha256": "a6e25ccb69a40c145c75e590da8d5c19ac8a50224c2c54d09ffe4e8de8603871"
+        },
+        {
+          "path": "panorama/styles/hud/tooltip_unit_damage_armor_overrides.vcss_c",
+          "bytes": 1458,
+          "sha256": "55efe3ff6bee15030c4016f6b18580d5d0877bfc8fbdcb3550beef4f23b70730"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "id": "minify.show-networth",
+      "catalogId": "minify-show-networth",
+      "name": {
+        "ru": "Показывать свой Net Worth",
+        "en": "Show NetWorth"
+      },
+      "author": "MeGaNeKoS",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Show NetWorth/files",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [
+        "dutch"
+      ],
+      "resources": [
+        {
+          "path": "panorama/layout/hud/dota_hud_quick_stats.vxml_c",
+          "bytes": 2705,
+          "sha256": "91193b3e5ced7d0d4122cfd5910aa3e16d7e2e3a38864f4146e8c9af1075a13d"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "id": "minify.tree-mod",
+      "catalogId": "minify-tree-mod",
+      "name": {
+        "ru": "Упрощённые деревья",
+        "en": "Tree Mod"
+      },
+      "author": "robbyz512",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Tree Mod/files",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [
+        "dutch"
+      ],
+      "resources": [
+        {
+          "path": "materials/default/default_color_tga_41192599.vtex_c",
+          "bytes": 2184,
+          "sha256": "31b8213992d35927c009f82a6dc25104e90179f1285317ccad4f81a78d90f247"
+        },
+        {
+          "path": "materials/default/default_refl_tga_250508db.vtex_c",
+          "bytes": 2280,
+          "sha256": "f0456410fba5bf070fcb760ee2e3c8dde67748b229910e329f5627ca8f61162d"
+        },
+        {
+          "path": "materials/tree_topiary.vmat_c",
+          "bytes": 3541,
+          "sha256": "4984a99ad0b98966c09fb30f3387d6e229c0011f0e17a2d2b721aef8ec6be3a2"
+        },
+        {
+          "path": "materials/tree_topiary_block.vmat_c",
+          "bytes": 2756,
+          "sha256": "14fb25a924bfaaf9a422067348e3c83321530ab4433eaf8d56540731f2832e6c"
+        },
+        {
+          "path": "materials/tree_topiary_normals_png_b25ef11b.vtex_c",
+          "bytes": 176820,
+          "sha256": "ed25236d789cb2c67b25055a0e1475dcb10d67e909e5bbc66720664180fa09e5"
+        },
+        {
+          "path": "materials/tree_topiary_texture_png_6834bd45.vtex_c",
+          "bytes": 176836,
+          "sha256": "f53063c0d5d45a0f3d95650abbe9a0598704c708cc963358a56920ad784333c7"
+        },
+        {
+          "path": "models/props_tree/dire_tree004.vmdl_c",
+          "bytes": 16692,
+          "sha256": "e38d311f65638ca693398102f0a6cf6b882c5c63d83757309949d57338180354"
+        },
+        {
+          "path": "models/props_tree/dire_tree004b.vmdl_c",
+          "bytes": 16709,
+          "sha256": "4deef81ce074c7bab7065fbc093dcb6d0246750912faf1119af07c41a20bb59f"
+        },
+        {
+          "path": "models/props_tree/dire_tree007.vmdl_c",
+          "bytes": 16708,
+          "sha256": "8a0a066202a1a47187958c10d473a22c52b87421c4650c3b466414e8c8b23c0f"
+        },
+        {
+          "path": "models/props_tree/dire_tree008.vmdl_c",
+          "bytes": 16692,
+          "sha256": "65c3d58ca27c8e3446b3c2b8c9dd5da273eca0d835f870e7ed52e867a4bffd27"
+        },
+        {
+          "path": "models/props_tree/tree_bamboo_01.vmdl_c",
+          "bytes": 16584,
+          "sha256": "74e6787b8eb7a4ce84c0b47accb34cbd62019b83965f5e66b00631305faeead1"
+        },
+        {
+          "path": "models/props_tree/tree_bamboo_02.vmdl_c",
+          "bytes": 16712,
+          "sha256": "6621e86081c76356b580155ec6160a37fb9e567e7021030f78a03423c3caab73"
+        },
+        {
+          "path": "models/props_tree/tree_cine_00_low.vmdl_c",
+          "bytes": 16714,
+          "sha256": "b603bb945fee943ddc9735fd1165f747ae9cebd95e18041325c7d5d9a533dd00"
+        },
+        {
+          "path": "models/props_tree/tree_cine_02_low.vmdl_c",
+          "bytes": 16682,
+          "sha256": "2637581f1bf9830893540668e36722f6e7604c2ac6c8180d8cb61d9ba414d904"
+        },
+        {
+          "path": "models/props_tree/tree_oak_01.vmdl_c",
+          "bytes": 16581,
+          "sha256": "17dedac072ef3f5b2ef68f5c9629046d3bd81cf41a50228f972b71fcb8a53a58"
+        },
+        {
+          "path": "models/props_tree/tree_oak_01b.vmdl_c",
+          "bytes": 16582,
+          "sha256": "cdc510a3511b5011f9687ad1dd8588e9c2d74fd91b6b9fbc877b5728bf1a0351"
+        },
+        {
+          "path": "models/props_tree/tree_oak_02.vmdl_c",
+          "bytes": 16581,
+          "sha256": "51afa0d18c83ef9581599efeaefadbc4b03cfee29849adee8aa7460c398ad7d1"
+        },
+        {
+          "path": "models/props_tree/tree_pine_01.vmdl_c",
+          "bytes": 16710,
+          "sha256": "9c9a60aaf2ee340d7568f1dcd86b45f60b452d105f8a1f4164caac19c9e6b953"
+        },
+        {
+          "path": "models/props_tree/tree_pine_02.vmdl_c",
+          "bytes": 16710,
+          "sha256": "5882bcc219dcce99549bcfaf398f6704eb58f682efe1b017855cafeed42498e7"
+        },
+        {
+          "path": "models/props_tree/tree_pine_03b.vmdl_c",
+          "bytes": 16711,
+          "sha256": "5ff016bd90a915389d4d6742a88d62691b10d9d47dc974b1ed4b3f11d47cc35c"
+        },
+        {
+          "path": "models/props_tree/tree_pine_03b_sfm.vmdl_c",
+          "bytes": 16711,
+          "sha256": "5ff016bd90a915389d4d6742a88d62691b10d9d47dc974b1ed4b3f11d47cc35c"
+        }
+      ],
+      "compatibilityNote": "Default terrain is required."
+    }
+  ]
+}

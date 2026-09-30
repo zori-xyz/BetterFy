@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import BetterFyWordmark from "../BetterFyWordmark";
 import { fetchTelegramAvatar, type AuthSession } from "../auth";
-import type { GameInstallation } from "../engine";
+import { engineBridge, type GameInstallation } from "../engine";
 import { useLocale, modCount } from "../i18n";
 import { getStorageItem, getStoredStringArray, setStorageItem } from "../storage";
 import { presetBridge, presetTitle, type BetterFyPreset } from "../presets";
@@ -29,6 +29,7 @@ import Catalog, { initialFilters, ModDetails, type CatalogFilters } from "./Cata
 import Home from "./Home";
 import Build from "./Build";
 import { useEngineActive } from "./engineActivity";
+import { applyInstallablePackages, usePackagesRevision } from "./packages";
 import Library from "./Library";
 import { Preferences, Profile } from "./Preferences";
 import { deliveryLabel, getSelectionDelivery, modById, type Domain, type StudioMod } from "./model";
@@ -100,6 +101,20 @@ export default function Workspace({
   const scrollPositions = useRef<Partial<Record<Route, number>>>({});
   const currentRoute = useRef(route);
   const busy = useEngineActive();
+  // Re-render when a newer signed catalog adds or updates installable packages.
+  usePackagesRevision();
+  useEffect(() => {
+    let active = true;
+    engineBridge
+      .refreshCatalog()
+      .then((status) => {
+        if (active && status?.packages.length) applyInstallablePackages(status.packages);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
   const preview = !session || session.source === "demo";
   const delivery = getSelectionDelivery(selected);
   useEffect(() => {

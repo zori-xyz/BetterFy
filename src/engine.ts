@@ -215,6 +215,24 @@ export type TreePilotDownloadStatus = {
   plan: TreePilotPlan | null;
 };
 
+export type CatalogPackage = {
+  id: string;
+  catalogId: string;
+  name: { ru: string; en: string };
+  author: string;
+  license: string;
+  resourceCount: number;
+  verifiedLanguages: string[];
+  compatibilityNote: string | null;
+};
+
+export type CatalogStatus = {
+  source: "embedded" | "cache" | "remote";
+  sequence: number | null;
+  packages: CatalogPackage[];
+  error: string | null;
+};
+
 export type TreePilotCurrentState = GameDeploymentReceipt & {
   packageVerified: boolean;
   steamOperationId: string | null;
@@ -337,6 +355,7 @@ export interface EngineBridge {
     language: GameLanguage,
   ): Promise<GameDeploymentReceipt>;
   currentTreePilot(gamePath: string): Promise<TreePilotCurrentState | null>;
+  refreshCatalog(): Promise<CatalogStatus | null>;
   applyTreeSteamLaunchOptions(request: TreeSteamActivationRequest): Promise<SteamConfigReceipt>;
   applyTreeSteamLaunchOptionsStress(
     request: TreeSteamActivationRequest,
@@ -605,6 +624,9 @@ export const mockEngine: EngineBridge = {
     throw new EngineFault("desktop_runtime_required", "install_tree_pilot");
   },
   async currentTreePilot() {
+    return null;
+  },
+  async refreshCatalog() {
     return null;
   },
   async applyTreeSteamLaunchOptions() {
@@ -973,6 +995,11 @@ export const engineBridge: EngineBridge = {
       invoke<TreePilotCurrentState | null>("current_tree_pilot", { gamePath }),
       30_000,
     );
+  },
+  async refreshCatalog() {
+    if (!isTauriRuntime()) return mockEngine.refreshCatalog();
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall("refresh_catalog", invoke<CatalogStatus>("refresh_catalog"), 30_000);
   },
   async applyTreeSteamLaunchOptions(request) {
     if (!isTauriRuntime()) return mockEngine.applyTreeSteamLaunchOptions(request);

@@ -36,6 +36,8 @@ jobs:
         run: npm run site:build
       - name: Check website journeys
         run: npm run site:check:ci
+      - name: Check the signed package catalog matches the manifests
+        run: npm run catalog:check
       - name: Install auth worker dependencies
         run: npm ci --prefix services/auth-worker
       - name: Test auth worker

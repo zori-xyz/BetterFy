@@ -434,6 +434,34 @@ used before. The write, stale-profile, privacy and failed-write paths are covere
 by synthetic tests on macOS; the profile has not yet been observed on a Windows
 install.
 
+### Signed package catalog
+
+The manifests are also published as a signed catalog so new or updated packages
+can reach existing installs without an app release. `npm run catalog:publish`
+writes `website/public/bot/catalog/index.json` (schema 1, a sequence number one
+higher than the previous one, issue and expiry times 180 days apart, and every
+manifest) and signs it with `tauri signer` using a catalog key that is separate
+from the updater key. The auth Worker serves these files as static assets at
+`/catalog/index.json` and `/catalog/index.json.sig`. `npm run catalog:check`
+fails CI when the published catalog no longer matches `src-tauri/packages` or
+expires within seven days; a Rust test fails when the committed signature does
+not verify.
+
+At startup the desktop calls `refresh_catalog`. `catalog_index.rs` re-verifies
+the cached catalog, then fetches the remote one over HTTPS with bounded sizes and
+accepts it only if the signature verifies against the embedded public key, its
+sequence is not lower than the cached one, it has not expired and was not issued
+more than a day in the future, and every manifest passes the embedded
+validation, which also pins the source repository. Accepted manifests replace
+embedded ones with the same ID and may add packages; a catalog cannot remove a
+package the build ships with. Any failure keeps the previous set active.
+
+The private key lives outside the repository (by default
+`~/.betterfy/catalog-signing.key`). Losing it means shipping an app update with a
+new public key; a leaked key allows only manifests that still pass validation,
+i.e. data files from the pinned-commit trusted repository. Rotation is an app
+release that embeds the new public key, followed by a catalog signed with it.
+
 ## Definition of done for filesystem writes
 
 - Unit tests cover path validation, traversal attempts, conflicts, and journal
