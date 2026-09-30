@@ -131,3 +131,24 @@ section below); a recorded compatibility result is still open.
   comparison against a recorded report, the three newly selectable language
   folders, and a second machine remain unverified. English has no separate
   game language folder.
+
+## 2026-09-30 Windows pass on the manifest-driven engine
+
+- Artifact: `BetterFy-Windows-Stress-x64-nsis` from Windows CI run
+  `36742858198`, commit `cec9cf6` (package manifests, blacklist placeholders
+  and zero-length resources, `minify.remove-river`, retained evidence reports,
+  installed profile).
+- Checklist given to the founder: Remove River in game (river water and
+  splashes, Dire lava, fountains and waterfall, wading sounds) and its rollback;
+  install and rollback of the three original packages; the Unit Query HUD
+  change; `reports\` receiving an evidence file after install, the installed
+  profile appearing after install and disappearing after rollback, and the
+  "Open reports folder" button.
+- Founder report, verbatim in substance: everything on that checklist was
+  checked and works.
+- Not recorded with this report: the Dota language folder used, the saved
+  evidence JSON itself, and which Unit Query HUD change was observed. The
+  evidence files are now written automatically to
+  `%APPDATA%\app.betterfy.desktop\reports\`; attaching one would close the
+  first two gaps. Until the language is known, the Remove River manifest keeps
+  an empty `verifiedLanguages` list.
