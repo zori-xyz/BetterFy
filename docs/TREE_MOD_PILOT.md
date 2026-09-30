@@ -151,3 +151,16 @@ section below); a recorded compatibility result is still open.
 - Not recorded with this report: the saved evidence JSON itself and which Unit
   Query HUD change was observed. The evidence files are written automatically
   to `%APPDATA%\app.betterfy.desktop\reports\`.
+
+## 2026-09-30 Windows pass on the signed catalog
+
+- Artifact: `BetterFy-Windows-Stress-x64-nsis` from Windows CI run
+  `36752379826`, commit `a28d1b5` (signed remote catalog, review hardening,
+  catalog sequence 2 marking Remove River as verified with `dutch`).
+- Checklist given to the founder: the app starts;
+  `%APPDATA%\app.betterfy.desktop\engine-v1\catalog\` contains `index.json`,
+  `index.json.sig` and `contracts.json`; Remove River no longer shows the
+  "not verified in game" note.
+- Founder report: all of it was checked and works.
+- Not recorded with this report: the catalog `sequence` the device accepted and
+  the contents of `contracts.json`.
