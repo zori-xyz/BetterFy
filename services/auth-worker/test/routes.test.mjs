@@ -98,10 +98,10 @@ test("BetterFy ID passwords have unique salts and verify without accepting a wro
   const first = await hashIdPassword("a long passphrase 2026", pepper);
   const second = await hashIdPassword("a long passphrase 2026", pepper);
   assert.notEqual(first, second);
-  assert.match(first, /^pbkdf2-sha256\$600000\$[0-9a-f]{32}\$[0-9a-f]{64}$/);
+  assert.match(first, /^pbkdf2-sha256\$20000\$[0-9a-f]{32}\$[0-9a-f]{64}$/);
   assert.equal(await verifyIdPassword("a long passphrase 2026", pepper, first), true);
   assert.equal(await verifyIdPassword("not the passphrase", pepper, first), false);
-  assert.equal(await verifyIdPassword("a long passphrase 2026", pepper, first.replace("600000", "1")), false);
+  assert.equal(await verifyIdPassword("a long passphrase 2026", pepper, first.replace("$20000$", "$1$")), false);
 });
 
 test("BetterFy ID routes fail closed without mail and password configuration", async () => {

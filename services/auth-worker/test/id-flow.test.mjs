@@ -59,7 +59,7 @@ test("ID registration verifies email, stores only a salted verifier, and signs i
   globalThis.fetch = async (url, options) => {
     assert.equal(url, "https://api.resend.com/emails");
     const mail = JSON.parse(options.body);
-    deliveredCode = /\b\d{6}\b/.exec(mail.text)?.[0] ?? "";
+    deliveredCode = (/\b(\d{3}) (\d{3})\b/.exec(mail.text)?.slice(1) ?? []).join("");
     return new Response("{}", { status: 200 });
   };
   try {
@@ -79,7 +79,7 @@ test("ID registration verifies email, stores only a salted verifier, and signs i
     assert.equal(typeof profile.sessionToken, "string");
     const stored = db.sqlite.prepare("SELECT u.telegram_user_id, c.password_hash FROM betterfy_users u JOIN betterfy_id_credentials c ON c.user_id = u.user_id").get();
     assert.match(stored.telegram_user_id, /^id:/);
-    assert.match(stored.password_hash, /^pbkdf2-sha256\$600000\$/);
+    assert.match(stored.password_hash, /^pbkdf2-sha256\$20000\$/);
     assert.doesNotMatch(stored.password_hash, /long passphrase/);
 
     const replay = await route(post("/v1/auth/id/register/verify", { email: "player@example.com", code: deliveredCode }), env);
