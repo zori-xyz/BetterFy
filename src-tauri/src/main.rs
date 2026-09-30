@@ -7,6 +7,7 @@ mod content_store;
 mod game_deployment;
 mod game_language;
 mod mod_bundle;
+mod package_registry;
 mod presets;
 mod remote_intake;
 mod runtime_control;
@@ -248,6 +249,12 @@ fn parse_build_id(contents: &str) -> Option<String> {
             _ => None,
         }
     })
+}
+
+/// Packages this build can install, from the embedded manifests.
+#[tauri::command]
+fn list_installable_packages() -> Result<Vec<package_registry::PackageSummary>, String> {
+    package_registry::summaries()
 }
 
 #[tauri::command(async)]
@@ -1089,6 +1096,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             discover_game,
             dota_build,
+            list_installable_packages,
             validate_game_path,
             collect_system_diagnostics,
             intake_fixture_content,

@@ -228,17 +228,17 @@ fn fetch_verified_binary_with<T: DownloadTransport>(
     Ok(bytes)
 }
 
-/// Used only with Rust-owned Tree Mod URLs and hashes. No caller-supplied URL
-/// crosses the Tauri bridge.
+/// Used only with URLs and hashes from the embedded package manifests. No
+/// caller-supplied URL crosses the Tauri bridge.
 pub(crate) fn fetch_pinned_pilot_resource(
     package_id: &str,
-    resource: &crate::tree_pilot::Resource,
+    resource: &crate::package_registry::Resource,
     cancelled: &AtomicBool,
 ) -> Result<Vec<u8>, String> {
     let download_url = crate::tree_pilot::pinned_url(package_id, resource)?;
     let spec = RemotePackageSpec {
         package_id: package_id.to_string(),
-        version: crate::tree_pilot::SOURCE_COMMIT.to_string(),
+        version: crate::tree_pilot::source_commit(package_id)?,
         format: "raw".to_string(),
         file_name: "compiled-resource".to_string(),
         download_url,
@@ -552,7 +552,7 @@ mod tests {
 
     #[test]
     fn tree_download_rejects_a_substituted_compiled_contract_before_network() {
-        let mut forged = crate::tree_pilot::RESOURCES[0];
+        let mut forged = crate::tree_pilot::tree_resources()[0].clone();
         forged.bytes += 1;
         assert_eq!(
             fetch_pinned_pilot_resource(

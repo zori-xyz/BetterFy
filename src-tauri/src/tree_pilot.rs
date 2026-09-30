@@ -1,8 +1,10 @@
-//! Pinned, data-only contract for the first engine pilot.
+//! Download, verification and bundling for the pinned, data-only packages
+//! described by `package_registry` manifests.
 
 use crate::mod_bundle::{
     self, BundleContribution, BundleDuplicate, BundleOverride, BundlePackage, BundlePlan,
 };
+use crate::package_registry::{self, PackageManifest, Resource};
 use crate::vpk;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -34,169 +36,21 @@ fn download_slot() -> &'static Mutex<Option<Arc<TreeDownload>>> {
     DOWNLOAD.get_or_init(|| Mutex::new(None))
 }
 
+/// The first pilot package. Older journals written before bundles recorded
+/// their package list are read as this single package.
 pub(crate) const PACKAGE_ID: &str = "minify.tree-mod";
-pub(crate) const SHOW_NETWORTH_PACKAGE_ID: &str = "minify.show-networth";
-pub(crate) const UNIT_QUERY_HUD_PACKAGE_ID: &str = "minify.repopulate-unit-query-hud";
-pub(crate) const SOURCE_COMMIT: &str = "3a85572029f2c264e2a17cee1c9b54ce93e4fd93";
 pub(crate) const TARGET_FILE: &str = "pak66_dir.vpk";
-
-#[derive(Clone, Copy)]
-pub struct Resource {
-    pub path: &'static str,
-    pub bytes: usize,
-    pub sha256: &'static str,
-}
-
-pub const RESOURCES: [Resource; 21] = [
-    Resource {
-        path: "materials/default/default_color_tga_41192599.vtex_c",
-        bytes: 2184,
-        sha256: "31b8213992d35927c009f82a6dc25104e90179f1285317ccad4f81a78d90f247",
-    },
-    Resource {
-        path: "materials/default/default_refl_tga_250508db.vtex_c",
-        bytes: 2280,
-        sha256: "f0456410fba5bf070fcb760ee2e3c8dde67748b229910e329f5627ca8f61162d",
-    },
-    Resource {
-        path: "materials/tree_topiary.vmat_c",
-        bytes: 3541,
-        sha256: "4984a99ad0b98966c09fb30f3387d6e229c0011f0e17a2d2b721aef8ec6be3a2",
-    },
-    Resource {
-        path: "materials/tree_topiary_block.vmat_c",
-        bytes: 2756,
-        sha256: "14fb25a924bfaaf9a422067348e3c83321530ab4433eaf8d56540731f2832e6c",
-    },
-    Resource {
-        path: "materials/tree_topiary_normals_png_b25ef11b.vtex_c",
-        bytes: 176820,
-        sha256: "ed25236d789cb2c67b25055a0e1475dcb10d67e909e5bbc66720664180fa09e5",
-    },
-    Resource {
-        path: "materials/tree_topiary_texture_png_6834bd45.vtex_c",
-        bytes: 176836,
-        sha256: "f53063c0d5d45a0f3d95650abbe9a0598704c708cc963358a56920ad784333c7",
-    },
-    Resource {
-        path: "models/props_tree/dire_tree004.vmdl_c",
-        bytes: 16692,
-        sha256: "e38d311f65638ca693398102f0a6cf6b882c5c63d83757309949d57338180354",
-    },
-    Resource {
-        path: "models/props_tree/dire_tree004b.vmdl_c",
-        bytes: 16709,
-        sha256: "4deef81ce074c7bab7065fbc093dcb6d0246750912faf1119af07c41a20bb59f",
-    },
-    Resource {
-        path: "models/props_tree/dire_tree007.vmdl_c",
-        bytes: 16708,
-        sha256: "8a0a066202a1a47187958c10d473a22c52b87421c4650c3b466414e8c8b23c0f",
-    },
-    Resource {
-        path: "models/props_tree/dire_tree008.vmdl_c",
-        bytes: 16692,
-        sha256: "65c3d58ca27c8e3446b3c2b8c9dd5da273eca0d835f870e7ed52e867a4bffd27",
-    },
-    Resource {
-        path: "models/props_tree/tree_bamboo_01.vmdl_c",
-        bytes: 16584,
-        sha256: "74e6787b8eb7a4ce84c0b47accb34cbd62019b83965f5e66b00631305faeead1",
-    },
-    Resource {
-        path: "models/props_tree/tree_bamboo_02.vmdl_c",
-        bytes: 16712,
-        sha256: "6621e86081c76356b580155ec6160a37fb9e567e7021030f78a03423c3caab73",
-    },
-    Resource {
-        path: "models/props_tree/tree_cine_00_low.vmdl_c",
-        bytes: 16714,
-        sha256: "b603bb945fee943ddc9735fd1165f747ae9cebd95e18041325c7d5d9a533dd00",
-    },
-    Resource {
-        path: "models/props_tree/tree_cine_02_low.vmdl_c",
-        bytes: 16682,
-        sha256: "2637581f1bf9830893540668e36722f6e7604c2ac6c8180d8cb61d9ba414d904",
-    },
-    Resource {
-        path: "models/props_tree/tree_oak_01.vmdl_c",
-        bytes: 16581,
-        sha256: "17dedac072ef3f5b2ef68f5c9629046d3bd81cf41a50228f972b71fcb8a53a58",
-    },
-    Resource {
-        path: "models/props_tree/tree_oak_01b.vmdl_c",
-        bytes: 16582,
-        sha256: "cdc510a3511b5011f9687ad1dd8588e9c2d74fd91b6b9fbc877b5728bf1a0351",
-    },
-    Resource {
-        path: "models/props_tree/tree_oak_02.vmdl_c",
-        bytes: 16581,
-        sha256: "51afa0d18c83ef9581599efeaefadbc4b03cfee29849adee8aa7460c398ad7d1",
-    },
-    Resource {
-        path: "models/props_tree/tree_pine_01.vmdl_c",
-        bytes: 16710,
-        sha256: "9c9a60aaf2ee340d7568f1dcd86b45f60b452d105f8a1f4164caac19c9e6b953",
-    },
-    Resource {
-        path: "models/props_tree/tree_pine_02.vmdl_c",
-        bytes: 16710,
-        sha256: "5882bcc219dcce99549bcfaf398f6704eb58f682efe1b017855cafeed42498e7",
-    },
-    Resource {
-        path: "models/props_tree/tree_pine_03b.vmdl_c",
-        bytes: 16711,
-        sha256: "5ff016bd90a915389d4d6742a88d62691b10d9d47dc974b1ed4b3f11d47cc35c",
-    },
-    Resource {
-        path: "models/props_tree/tree_pine_03b_sfm.vmdl_c",
-        bytes: 16711,
-        sha256: "5ff016bd90a915389d4d6742a88d62691b10d9d47dc974b1ed4b3f11d47cc35c",
-    },
-];
-
-pub const SHOW_NETWORTH_RESOURCES: [Resource; 1] = [Resource {
-    path: "panorama/layout/hud/dota_hud_quick_stats.vxml_c",
-    bytes: 2705,
-    sha256: "91193b3e5ced7d0d4122cfd5910aa3e16d7e2e3a38864f4146e8c9af1075a13d",
-}];
-
-pub const UNIT_QUERY_HUD_RESOURCES: [Resource; 3] = [
-    Resource {
-        path: "panorama/styles/hud/dota_hud_query_unit_overrides.vcss_c",
-        bytes: 3957,
-        sha256: "bc9c831aacc37d21f5c48d6157ee6b80b9a06c3f9f51c48aed7c8446bb534e21",
-    },
-    Resource {
-        path: "panorama/styles/hud/dota_hud_str_agi_int_overrides.vcss_c",
-        bytes: 1470,
-        sha256: "a6e25ccb69a40c145c75e590da8d5c19ac8a50224c2c54d09ffe4e8de8603871",
-    },
-    Resource {
-        path: "panorama/styles/hud/tooltip_unit_damage_armor_overrides.vcss_c",
-        bytes: 1458,
-        sha256: "55efe3ff6bee15030c4016f6b18580d5d0877bfc8fbdcb3550beef4f23b70730",
-    },
-];
+/// Upper bound on packages merged into one VPK.
+const MAX_BUNDLE_PACKAGES: usize = 16;
 
 fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
-    if ids.is_empty() || ids.len() > 3 {
+    if ids.is_empty() || ids.len() > MAX_BUNDLE_PACKAGES {
         return Err("pilot_package_unsupported".to_string());
     }
     let mut seen = BTreeSet::new();
     ids.iter()
-        .map(|id| match id.as_str() {
-            "minify-tree-mod" | PACKAGE_ID => Ok(PACKAGE_ID.to_string()),
-            "minify-show-networth" | SHOW_NETWORTH_PACKAGE_ID => {
-                Ok(SHOW_NETWORTH_PACKAGE_ID.to_string())
-            }
-            "minify-repopulate-unit-query-hud" | UNIT_QUERY_HUD_PACKAGE_ID => {
-                Ok(UNIT_QUERY_HUD_PACKAGE_ID.to_string())
-            }
-            _ => Err("pilot_package_unsupported".to_string()),
-        })
-        .map(|result| {
-            let id = result?;
+        .map(|id| {
+            let id = package_registry::find(id)?.id.clone();
             if !seen.insert(id.clone()) {
                 return Err("pilot_package_invalid".to_string());
             }
@@ -205,15 +59,8 @@ fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
         .collect()
 }
 
-fn contract(id: &str) -> Result<(&'static str, &'static [Resource]), String> {
-    match id {
-        PACKAGE_ID => Ok(("Tree%20Mod", &RESOURCES)),
-        SHOW_NETWORTH_PACKAGE_ID => Ok(("Show%20NetWorth", &SHOW_NETWORTH_RESOURCES)),
-        UNIT_QUERY_HUD_PACKAGE_ID => {
-            Ok(("Repopulate%20Unit%20Query%20HUD", &UNIT_QUERY_HUD_RESOURCES))
-        }
-        _ => Err("pilot_package_unsupported".to_string()),
-    }
+fn contract(id: &str) -> Result<&'static PackageManifest, String> {
+    package_registry::find(id)
 }
 
 pub(crate) struct VerifiedTreeVpk {
@@ -228,7 +75,7 @@ pub(crate) struct TreePilotPlan {
     plan_id: String,
     package_id: String,
     package_ids: Vec<String>,
-    source_commit: &'static str,
+    source_commit: String,
     target_file: &'static str,
     resource_count: usize,
     resource_bytes: usize,
@@ -281,19 +128,22 @@ pub(crate) fn verified_test_vpk() -> VerifiedTreeVpk {
     }
 }
 
+/// The only URL a pilot resource may be downloaded from: the manifest's
+/// pinned commit, for a resource that is exactly in that manifest.
 pub(crate) fn pinned_url(package_id: &str, resource: &Resource) -> Result<String, String> {
-    let (folder, resources) = contract(package_id)?;
-    if !resources.iter().any(|expected| {
+    let manifest = contract(package_id)?;
+    if !manifest.resources.iter().any(|expected| {
         expected.path == resource.path
             && expected.bytes == resource.bytes
             && expected.sha256 == resource.sha256
     }) {
         return Err("download_contract_invalid".to_string());
     }
-    Ok(format!(
-        "https://raw.githubusercontent.com/Egezenn/dota2-minify/{SOURCE_COMMIT}/Minify/mods/{folder}/files/{}",
-        resource.path
-    ))
+    Ok(manifest.resource_url(resource))
+}
+
+pub(crate) fn source_commit(package_id: &str) -> Result<String, String> {
+    Ok(contract(package_id)?.source.commit.clone())
 }
 
 #[cfg(test)]
@@ -315,20 +165,20 @@ fn acquire_verified_resources_with_progress(
     cancelled: &AtomicBool,
     mut progress: impl FnMut(usize),
 ) -> Result<(), String> {
-    let resources = package_ids
+    let manifests = package_ids
         .iter()
         .map(|id| contract(id))
         .collect::<Result<Vec<_>, _>>()?;
     let mut index = 0usize;
-    for (package_id, (_, contract)) in package_ids.iter().zip(resources) {
-        for resource in contract {
+    for (package_id, manifest) in package_ids.iter().zip(manifests) {
+        for resource in &manifest.resources {
             if cancelled.load(Ordering::Relaxed) {
                 return Err("download_cancelled".to_string());
             }
             if crate::content_store::read_pinned_resource(
                 app_data_root,
                 resource.bytes,
-                resource.sha256,
+                &resource.sha256,
             )
             .is_ok()
             {
@@ -344,7 +194,7 @@ fn acquire_verified_resources_with_progress(
             crate::content_store::store_pinned_resource(
                 app_data_root,
                 resource.bytes,
-                resource.sha256,
+                &resource.sha256,
                 &bytes,
             )?;
             index += 1;
@@ -360,7 +210,7 @@ pub(crate) fn begin_download(
 ) -> Result<TreeDownloadStatus, String> {
     let package_ids = normalize_package_ids(&requested_package_ids)?;
     let total_resources = package_ids.iter().try_fold(0usize, |total, id| {
-        contract(id).map(|(_, resources)| total + resources.len())
+        contract(id).map(|manifest| total + manifest.resources.len())
     })?;
     let mut slot = download_slot()
         .lock()
@@ -482,19 +332,20 @@ pub(crate) fn build_from_verified_store(
     let packages = package_ids
         .iter()
         .map(|package_id| {
-            let (_, contract) = contract(package_id)?;
-            let resources = contract
+            let manifest = contract(package_id)?;
+            let resources = manifest
+                .resources
                 .iter()
                 .map(|resource| {
                     crate::content_store::read_pinned_resource(
                         app_data_root,
                         resource.bytes,
-                        resource.sha256,
+                        &resource.sha256,
                     )
-                    .map(|bytes| (resource.path.to_string(), bytes))
+                    .map(|bytes| (resource.path.clone(), bytes))
                 })
                 .collect::<Result<BTreeMap<_, _>, _>>()?;
-            verify_resources(contract, &resources)?;
+            verify_resources(&manifest.resources, &resources)?;
             Ok(BundlePackage {
                 package_id: package_id.clone(),
                 resources,
@@ -506,11 +357,17 @@ pub(crate) fn build_from_verified_store(
 
 fn plan_for(verified: &VerifiedTreeVpk) -> TreePilotPlan {
     let hash = verified.sha256().to_string();
+    let commits = verified
+        .bundle_plan()
+        .package_ids
+        .iter()
+        .filter_map(|id| source_commit(id).ok())
+        .collect::<BTreeSet<_>>();
     TreePilotPlan {
         plan_id: verified.plan_id().to_string(),
         package_id: verified.bundle_plan().package_ids.join("+"),
         package_ids: verified.bundle_plan().package_ids.clone(),
-        source_commit: SOURCE_COMMIT,
+        source_commit: commits.into_iter().collect::<Vec<_>>().join(","),
         target_file: TARGET_FILE,
         resource_count: verified.bundle_plan().resource_count,
         resource_bytes: verified.bundle_plan().payload_bytes,
@@ -562,7 +419,7 @@ fn verify_resources(
             return Err("tree_contract_invalid".to_string());
         }
         let bytes = resources
-            .get(expected.path)
+            .get(&expected.path)
             .ok_or_else(|| "tree_resource_set_invalid".to_string())?;
         if bytes.len() != expected.bytes
             || format!("{:x}", Sha256::digest(bytes)) != expected.sha256
@@ -574,10 +431,18 @@ fn verify_resources(
 }
 
 #[cfg(test)]
+pub(crate) fn tree_resources() -> Vec<Resource> {
+    contract(PACKAGE_ID)
+        .expect("tree manifest")
+        .resources
+        .clone()
+}
+
+#[cfg(test)]
 pub(crate) fn build_verified_vpk(
     resources: &BTreeMap<String, Vec<u8>>,
 ) -> Result<VerifiedTreeVpk, String> {
-    verify_resources(&RESOURCES, resources)?;
+    verify_resources(&tree_resources(), resources)?;
     build_verified_bundle(vec![BundlePackage {
         package_id: PACKAGE_ID.to_string(),
         resources: resources.clone(),
@@ -601,16 +466,20 @@ fn build_verified_bundle(packages: Vec<BundlePackage>) -> Result<VerifiedTreeVpk
 mod tests {
     use super::*;
 
+    const SHOW_NETWORTH_PACKAGE_ID: &str = "minify.show-networth";
+    const UNIT_QUERY_HUD_PACKAGE_ID: &str = "minify.repopulate-unit-query-hud";
+
     #[test]
     fn ledger_is_exact_and_bounded() {
         assert_eq!(PACKAGE_ID, "minify.tree-mod");
-        assert_eq!(SOURCE_COMMIT.len(), 40);
+        let tree = contract(PACKAGE_ID).expect("tree manifest");
+        assert_eq!(tree.source.commit.len(), 40);
         assert_eq!(TARGET_FILE, "pak66_dir.vpk");
-        assert_eq!(RESOURCES.len(), 21);
-        assert!(RESOURCES.iter().map(|item| item.bytes).sum::<usize>() < 1024 * 1024);
-        assert!(RESOURCES.iter().all(|item| item.sha256.len() == 64));
+        assert_eq!(tree.resources.len(), 21);
+        assert!(tree.resources.iter().map(|item| item.bytes).sum::<usize>() < 1024 * 1024);
+        assert!(tree.resources.iter().all(|item| item.sha256.len() == 64));
         let ledger = include_str!("../../docs/TREE_MOD_PILOT.md");
-        for item in RESOURCES {
+        for item in &tree.resources {
             assert!(ledger.contains(&format!(
                 "| `{}` | {} | `{}` |",
                 item.path, item.bytes, item.sha256
@@ -628,14 +497,15 @@ mod tests {
             normalize_package_ids(&ids).expect("known pilot packages"),
             vec![SHOW_NETWORTH_PACKAGE_ID.to_string(), PACKAGE_ID.to_string()]
         );
-        assert_eq!(SHOW_NETWORTH_RESOURCES.len(), 1);
-        assert_eq!(SHOW_NETWORTH_RESOURCES[0].bytes, 2705);
-        assert_eq!(SHOW_NETWORTH_RESOURCES[0].sha256.len(), 64);
-        assert!(
-            pinned_url(SHOW_NETWORTH_PACKAGE_ID, &SHOW_NETWORTH_RESOURCES[0])
-                .expect("pinned URL")
-                .contains("/Show%20NetWorth/files/")
-        );
+        let networth = &contract(SHOW_NETWORTH_PACKAGE_ID)
+            .expect("manifest")
+            .resources;
+        assert_eq!(networth.len(), 1);
+        assert_eq!(networth[0].bytes, 2705);
+        assert_eq!(networth[0].sha256.len(), 64);
+        assert!(pinned_url(SHOW_NETWORTH_PACKAGE_ID, &networth[0])
+            .expect("pinned URL")
+            .contains("/Show%20NetWorth/files/"));
         assert_eq!(
             normalize_package_ids(&["unknown".to_string()])
                 .err()
@@ -679,23 +549,23 @@ mod tests {
             Some("tree_resource_set_invalid")
         );
         let contract = [Resource {
-            path: "models/props_tree/tree_oak_01.vmdl_c",
+            path: "models/props_tree/tree_oak_01.vmdl_c".to_string(),
             bytes: 4,
-            sha256: "dc9c5edb8b2d479e697b4b0b8ab874f32b325138598ce9e7b759eb8292110622",
+            sha256: "dc9c5edb8b2d479e697b4b0b8ab874f32b325138598ce9e7b759eb8292110622".to_string(),
         }];
-        let mut resources = BTreeMap::from([(contract[0].path.to_string(), b"tree".to_vec())]);
+        let mut resources = BTreeMap::from([(contract[0].path.clone(), b"tree".to_vec())]);
         assert!(verify_resources(&contract, &resources).is_ok());
         assert!(mod_bundle::build(vec![BundlePackage {
             package_id: "test.tree".to_string(),
             resources: resources.clone(),
         }])
         .is_ok());
-        resources.get_mut(contract[0].path).unwrap()[0] ^= 1;
+        resources.get_mut(&contract[0].path).unwrap()[0] ^= 1;
         assert_eq!(
             verify_resources(&contract, &resources).err().as_deref(),
             Some("tree_resource_unverified")
         );
-        resources.remove(contract[0].path);
+        resources.remove(&contract[0].path);
         assert_eq!(
             verify_resources(&contract, &resources).err().as_deref(),
             Some("tree_resource_set_invalid")
@@ -724,33 +594,33 @@ mod tests {
     fn builds_the_real_pinned_tree_vpk_without_touching_dota() {
         let root = std::env::var_os("BETTERFY_TREE_RESOURCE_ROOT")
             .expect("set BETTERFY_TREE_RESOURCE_ROOT to a temporary resource directory");
-        let resources = RESOURCES
+        let resources = tree_resources()
             .iter()
             .map(|resource| {
-                let bytes = std::fs::read(std::path::Path::new(&root).join(resource.path))
+                let bytes = std::fs::read(std::path::Path::new(&root).join(&resource.path))
                     .expect("read pinned resource");
-                (resource.path.to_string(), bytes)
+                (resource.path.clone(), bytes)
             })
             .collect::<BTreeMap<_, _>>();
         let first = build_verified_vpk(&resources).expect("build exact pinned resources");
         let second = build_verified_vpk(&resources).expect("build again");
         assert_eq!(first.bytes(), second.bytes());
         let report = vpk::inspect(first.bytes()).expect("reopen VPK");
-        assert_eq!(report.entries, RESOURCES.len());
+        assert_eq!(report.entries, tree_resources().len());
         assert_eq!(
             report.payload_bytes,
-            RESOURCES
+            tree_resources()
                 .iter()
                 .map(|entry| entry.bytes as u64)
                 .sum::<u64>()
         );
         let app_data = std::path::Path::new(&root).join("betterfy-test-app-data");
-        for resource in RESOURCES {
+        for resource in tree_resources() {
             crate::content_store::store_pinned_resource(
                 &app_data,
                 resource.bytes,
-                resource.sha256,
-                resources.get(resource.path).unwrap(),
+                &resource.sha256,
+                resources.get(&resource.path).unwrap(),
             )
             .expect("publish verified pinned resource");
         }
@@ -859,7 +729,7 @@ mod tests {
             "download failed: {:?}",
             status.error_code
         );
-        assert_eq!(status.verified_resources, RESOURCES.len());
+        assert_eq!(status.verified_resources, tree_resources().len());
         assert!(status.plan.is_some());
         let ids = vec![PACKAGE_ID.to_string()];
         let first = build_from_verified_store(&root, &ids).expect("build from cache");

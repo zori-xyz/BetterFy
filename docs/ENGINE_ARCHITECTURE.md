@@ -374,6 +374,26 @@ archive extraction, and generic live Dota deployment remain disabled. The fixed
 Tree Mod internal pilot is separate. The full threat model is documented in
 `docs/CONTENT_INTAKE_SECURITY.md`.
 
+### Package manifests (PackageManifest v1)
+
+Installable packages are declared, not coded. Each one is a JSON file in
+`src-tauri/packages/`: engine ID and catalog ID, Russian and English names,
+author, pinned source (repository, 40-character commit, directory, license),
+distribution state, verified languages, and the exact resource list (lowercase
+relative path, byte size, SHA-256). `package_registry.rs` embeds the files at
+build time and validates them on first use: trusted repository only, pinned
+commit, no traversal or case-folding collisions, bounded sizes, unknown fields
+rejected. Download URLs, bundle contracts and the allowlist of installable
+packages all come from the registry; there is no per-package branch in Rust.
+The interface imports the same files, so its list of installable mods cannot
+drift from the engine's.
+
+The three pilot packages were moved from Rust constants into manifests without
+changing any path, size or hash. A test pins a fingerprint of the contracts, and
+building the ordered three-package bundle from the real pinned resources gave the
+same plan ID and VPK SHA-256 before and after the move, so existing installations
+and their journals are still recognised.
+
 ## Definition of done for filesystem writes
 
 - Unit tests cover path validation, traversal attempts, conflicts, and journal

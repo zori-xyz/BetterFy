@@ -24,6 +24,7 @@ import {
 } from "../engine";
 import { useLocale } from "../i18n";
 import { deliveryLabel, modById } from "./model";
+import { engineIdFor, findPackage, installablePackages, packageName } from "./packages";
 import { setEngineActive } from "./engineActivity";
 import { getStorageItem, setStorageItem } from "../storage";
 
@@ -189,24 +190,12 @@ export default function TreePilot({
     if (phase === "install" || phase === "steam" || phase === "restore" || recovering)
       setEngineActive(true);
   }, [phase, recovering]);
-  const supportedIds = [
-    "minify-tree-mod",
-    "minify-show-networth",
-    "minify-repopulate-unit-query-hud",
-  ];
   const catalogName = (id: string) => modById.get(id)?.name[language];
-  const packageLabel = (id: string) =>
-    id.includes("tree-mod")
-      ? "Tree Mod"
-      : id.includes("show-networth")
-        ? "Show Net Worth"
-        : id.includes("unit-query-hud")
-          ? "Unit Query HUD"
-          : id;
+  const packageLabel = (id: string) => packageName(id, language);
   const supportedBundle =
     ids.length > 0 &&
-    ids.length <= 3 &&
-    ids.every((id) => supportedIds.includes(id)) &&
+    ids.length <= installablePackages.length &&
+    ids.every((id) => findPackage(id) !== undefined) &&
     new Set(ids).size === ids.length;
   const bundleName = !ids.length
     ? isRu
@@ -229,15 +218,7 @@ export default function TreePilot({
     setVerifiedResources(status.verifiedResources);
     setTotalResources(status.totalResources);
     if (status.phase === "ready") {
-      const expectedIds = ids.map((id) =>
-        id === "minify-tree-mod"
-          ? "minify.tree-mod"
-          : id === "minify-show-networth"
-            ? "minify.show-networth"
-            : id === "minify-repopulate-unit-query-hud"
-              ? "minify.repopulate-unit-query-hud"
-              : id,
-      );
+      const expectedIds = ids.map(engineIdFor);
       if (
         status.plan?.planId.startsWith("sha256:") &&
         status.plan.packageIds.join("|") === expectedIds.join("|")
@@ -806,7 +787,10 @@ export default function TreePilot({
           </small>
           <h2 id="tree-pilot-title">{bundleName}</h2>
         </div>
-        <span className="s-tree-pilot-mark">{String(ids.length).padStart(2, "0")} / 03</span>
+        <span className="s-tree-pilot-mark">
+          {String(ids.length).padStart(2, "0")} /{" "}
+          {String(installablePackages.length).padStart(2, "0")}
+        </span>
       </div>
       <p>
         {isRu

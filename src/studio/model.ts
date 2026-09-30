@@ -1,14 +1,11 @@
+import { installablePackages } from "./packages";
 import { wardrobeCatalogItems, wardrobeCategoryLabels } from "../modCatalog";
 import { minifyMods, minifyCategoryLabels, minifyPreviewUrl, minifySource } from "../minifyCatalog";
 import rawCatalog from "../webCatalog.json";
 import type { Language } from "../i18n";
 
 export type Domain = "wardrobe" | "game";
-export const pilotModIds = new Set([
-  "minify-tree-mod",
-  "minify-show-networth",
-  "minify-repopulate-unit-query-hud",
-]);
+export const pilotModIds = new Set(installablePackages.map((manifest) => manifest.catalogId));
 
 export function isPilotMod(id: string) {
   return pilotModIds.has(id);
