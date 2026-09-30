@@ -239,6 +239,11 @@ export type TreeSteamStartRequest = {
 
 export type DeploymentStressFailurePoint = "after_prepared" | "after_replace";
 
+export type SavedEvidence = {
+  fileName: string;
+  entries: number;
+};
+
 export type DeploymentStressCapabilities = {
   enabled: boolean;
   failurePoints: DeploymentStressFailurePoint[];
@@ -331,6 +336,8 @@ export interface EngineBridge {
     failurePoint: DeploymentStressFailurePoint,
   ): Promise<GameDeploymentReceipt>;
   collectTreePilotEvidence(gamePath: string): Promise<DeploymentEvidenceReport>;
+  saveTreePilotEvidence(gamePath: string): Promise<SavedEvidence>;
+  openReportsFolder(): Promise<void>;
   startSteamAfterProfile(
     profileToken: string,
     operationId: string | null,
@@ -611,6 +618,12 @@ export const mockEngine: EngineBridge = {
       entries: [],
       steamEntries: [],
     };
+  },
+  async saveTreePilotEvidence() {
+    throw new EngineFault("desktop_runtime_required", "save_tree_pilot_evidence");
+  },
+  async openReportsFolder() {
+    throw new EngineFault("desktop_runtime_required", "open_reports_folder");
   },
   async startSteamAfterProfile() {
     throw new EngineFault("platform_not_supported", "start_steam_after_profile");
@@ -1032,6 +1045,24 @@ export const engineBridge: EngineBridge = {
       throw new EngineFault("invalid_response", "collect_tree_pilot_evidence");
     }
     return report;
+  },
+  async saveTreePilotEvidence(gamePath) {
+    if (!isTauriRuntime()) return mockEngine.saveTreePilotEvidence(gamePath);
+    const { invoke } = await import("@tauri-apps/api/core");
+    const saved = await guardedEngineCall(
+      "save_tree_pilot_evidence",
+      invoke<SavedEvidence>("save_tree_pilot_evidence", { gamePath }),
+      30_000,
+    );
+    if (typeof saved.fileName !== "string" || typeof saved.entries !== "number") {
+      throw new EngineFault("invalid_response", "save_tree_pilot_evidence");
+    }
+    return saved;
+  },
+  async openReportsFolder() {
+    if (!isTauriRuntime()) return mockEngine.openReportsFolder();
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall("open_reports_folder", invoke<void>("open_reports_folder"));
   },
   async startSteamAfterProfile(profileToken, operationId, language = "dutch") {
     if (!isTauriRuntime()) {

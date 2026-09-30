@@ -4,6 +4,7 @@ mod archive_inspector;
 mod auth_session;
 mod build_engine;
 mod content_store;
+mod evidence_reports;
 mod game_deployment;
 mod game_language;
 mod mod_bundle;
@@ -767,15 +768,61 @@ async fn collect_tree_pilot_evidence(
         .map_err(|_| "deployment_failed".to_string())?;
     let app_version = app.package_info().version.to_string();
     tauri::async_runtime::spawn_blocking(move || {
-        validate_candidate(Path::new(&game_path), "manual")?;
-        Ok(TreePilotEvidenceReport {
-            deployment: game_deployment::collect_evidence(
-                &app_data,
-                Path::new(&game_path),
-                app_version,
-            )?,
-            steam_entries: steam_accounts::collect_platform_evidence(&app_data)?,
-        })
+        tree_pilot_evidence_report(&app_data, &game_path, app_version)
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+fn tree_pilot_evidence_report(
+    app_data: &Path,
+    game_path: &str,
+    app_version: String,
+) -> Result<TreePilotEvidenceReport, String> {
+    validate_candidate(Path::new(game_path), "manual")?;
+    Ok(TreePilotEvidenceReport {
+        deployment: game_deployment::collect_evidence(app_data, Path::new(game_path), app_version)?,
+        steam_entries: steam_accounts::collect_platform_evidence(app_data)?,
+    })
+}
+
+fn save_tree_pilot_evidence_report(
+    app_data: &Path,
+    game_path: &str,
+    app_version: String,
+) -> Result<evidence_reports::SavedEvidence, String> {
+    let report = tree_pilot_evidence_report(app_data, game_path, app_version)?;
+    let entries = report.deployment.entries.len() + report.steam_entries.len();
+    evidence_reports::save_report(app_data, &report, entries, std::time::SystemTime::now())
+}
+
+#[tauri::command]
+async fn save_tree_pilot_evidence(
+    app: AppHandle,
+    game_path: String,
+) -> Result<evidence_reports::SavedEvidence, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "report_write_failed".to_string())?;
+    let app_version = app.package_info().version.to_string();
+    tauri::async_runtime::spawn_blocking(move || {
+        save_tree_pilot_evidence_report(&app_data, &game_path, app_version)
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+#[tauri::command]
+async fn open_reports_folder(app: AppHandle) -> Result<(), String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "report_write_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let dir = evidence_reports::reports_dir(&app_data)?;
+        tauri_plugin_opener::open_path(&dir, None::<&str>)
+            .map_err(|_| "reports_folder_open_failed".to_string())
     })
     .await
     .map_err(|_| "runtime_worker_failed".to_string())?
@@ -1124,6 +1171,8 @@ fn main() {
             tree_pilot_stress_capabilities,
             install_tree_pilot_stress,
             collect_tree_pilot_evidence,
+            save_tree_pilot_evidence,
+            open_reports_folder,
             current_tree_pilot,
             preview_tree_language,
             start_steam_after_tree_pilot,
@@ -1274,5 +1323,58 @@ mod tests {
             Some("invalid_game_path")
         );
         fs::remove_dir_all(base).expect("cleanup");
+    }
+
+    #[test]
+    fn saved_evidence_report_contains_no_local_paths() {
+        let base = unique_temp("saved-evidence");
+        let app_data = base.join("app-data");
+        let root = base.join("dota 2 beta");
+        create_valid_fixture(&root);
+        let package = vpk::build(vec![vpk::VpkInput {
+            path: "models/props_tree/tree_oak_01.vmdl_c",
+            bytes: b"evidence-fixture",
+        }])
+        .expect("package");
+        let checksum = format!("{:x}", sha2::Sha256::digest(&package));
+        game_deployment::deploy_verified_vpk(&app_data, &root, &package, &checksum)
+            .expect("deploy");
+
+        let saved = save_tree_pilot_evidence_report(
+            &app_data,
+            &root.to_string_lossy(),
+            "0.1-test".to_string(),
+        )
+        .expect("save evidence");
+        assert_eq!(saved.entries, 1);
+        assert!(saved.file_name.starts_with("evidence-"));
+        let text = fs::read_to_string(app_data.join("reports").join(&saved.file_name))
+            .expect("saved report");
+        let parsed: serde_json::Value = serde_json::from_str(&text).expect("valid json");
+        assert_eq!(parsed["schemaVersion"], 1);
+        assert_eq!(parsed["entries"][0]["installedSha256"], checksum);
+
+        let mut forbidden = vec![
+            app_data.to_string_lossy().to_string(),
+            base.to_string_lossy().to_string(),
+            root.to_string_lossy().to_string(),
+        ];
+        if let Ok(canonical) = app_data.canonicalize() {
+            forbidden.push(canonical.to_string_lossy().to_string());
+        }
+        if let Ok(canonical) = root.canonicalize() {
+            forbidden.push(canonical.to_string_lossy().to_string());
+        }
+        // JSON escapes backslashes, so also check the escaped Windows form.
+        let escaped = forbidden
+            .iter()
+            .map(|path| path.replace('\\', "\\\\"))
+            .collect::<Vec<_>>();
+        for path in forbidden.iter().chain(escaped.iter()) {
+            assert!(!text.contains(path.as_str()), "report leaks {path}");
+        }
+        assert!(!text.contains("targetIdentity"));
+        assert!(!text.contains("profileToken"));
+        let _ = fs::remove_dir_all(base);
     }
 }

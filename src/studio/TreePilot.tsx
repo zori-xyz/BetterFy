@@ -181,6 +181,8 @@ export default function TreePilot({
   const [stressMessage, setStressMessage] = useState("");
   const [evidence, setEvidence] = useState<DeploymentEvidenceReport | null>(null);
   const [reportCopied, setReportCopied] = useState(false);
+  const [savedReport, setSavedReport] = useState("");
+  const [reportError, setReportError] = useState("");
   const [error, setError] = useState("");
   const [dotaPatched, setDotaPatched] = useState(false);
   // Only work that touches game files or Steam blocks the rest of the app.
@@ -384,6 +386,7 @@ export default function TreePilot({
     if (!plan || !canInstall || !selectedLanguage || phase !== "idle") return;
     setError("");
     setPhase("install");
+    let installed = false;
     try {
       await engineBridge.previewTreeLanguage(installation.path, selectedLanguage);
       if (selectedProfile) {
@@ -401,6 +404,7 @@ export default function TreePilot({
         selectedLanguage,
       );
       if (!receipt.committed || !receipt.backupVerified) throw new Error("deployment_unverified");
+      installed = true;
       await engineBridge
         .dotaBuild(installation.path)
         .then((build) => {
@@ -453,6 +457,7 @@ export default function TreePilot({
     } finally {
       setEngineActive(false);
       setPhase("idle");
+      if (installed) saveEvidenceReport();
     }
   }
 
@@ -496,6 +501,7 @@ export default function TreePilot({
         );
       }
       setSteamRecoveryRequired(false);
+      saveEvidenceReport();
     } catch (cause) {
       setError(codeOf(cause));
     } finally {
@@ -626,6 +632,7 @@ export default function TreePilot({
       setSteamOperationId(current?.steamOperationId ?? null);
       if (current?.steamProfileToken) setSelectedProfile(current.steamProfileToken);
       setSteamRecoveryRequired(current?.steamRecoveryRequired ?? false);
+      saveEvidenceReport();
     } catch (cause) {
       setError(codeOf(cause));
     } finally {
@@ -646,6 +653,28 @@ export default function TreePilot({
       }
     } catch (cause) {
       setError(codeOf(cause));
+    }
+  }
+
+  // Keeps a retained copy of the report on disk after state-changing
+  // operations. Fire-and-forget: a failure is shown quietly in the report
+  // section and never interrupts the operation that triggered it.
+  function saveEvidenceReport() {
+    if (!canManage) return;
+    engineBridge
+      .saveTreePilotEvidence(installation.path)
+      .then((saved) => {
+        setSavedReport(saved.fileName);
+        setReportError("");
+      })
+      .catch((cause) => setReportError(codeOf(cause)));
+  }
+
+  async function openReportsFolder() {
+    try {
+      await engineBridge.openReportsFolder();
+    } catch (cause) {
+      setReportError(codeOf(cause));
     }
   }
 
@@ -695,6 +724,7 @@ export default function TreePilot({
             ? "PASS · Обрыв после публикации восстановлен из проверенного состояния."
             : "PASS · Interruption after publish was restored from verified state.",
       );
+      saveEvidenceReport();
     } catch (cause) {
       setError(codeOf(cause));
     } finally {
@@ -764,6 +794,7 @@ export default function TreePilot({
             ? "PASS · Изменение Steam после записи восстановлено byte-for-byte."
             : "PASS · Steam change after publish was restored byte-for-byte.",
       );
+      saveEvidenceReport();
     } catch (cause) {
       setError(codeOf(cause));
     } finally {
@@ -1237,6 +1268,24 @@ export default function TreePilot({
                 : isRu
                   ? "Скопировать отчёт"
                   : "Copy report"}
+            </button>
+          </div>
+          <div>
+            <p role="status">
+              {savedReport
+                ? isRu
+                  ? `Отчёт сохранён: ${savedReport}`
+                  : `Report saved: ${savedReport}`
+                : isRu
+                  ? "Отчёт сохраняется автоматически после установки, отката, проверки и стресс-теста."
+                  : "The report is saved automatically after install, restore, recovery, and stress tests."}
+              {reportError &&
+                (isRu
+                  ? ` Не удалось сохранить или открыть отчёт (${reportError}).`
+                  : ` Could not save or open the report (${reportError}).`)}
+            </p>
+            <button className="s-btn" type="button" onClick={() => void openReportsFolder()}>
+              {isRu ? "Открыть папку отчётов" : "Open reports folder"}
             </button>
           </div>
           {stressEnabled && plan && !operationId && (
