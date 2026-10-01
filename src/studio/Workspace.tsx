@@ -22,6 +22,7 @@ import {
 import BetterFyWordmark from "../BetterFyWordmark";
 import { fetchTelegramAvatar, type AuthSession } from "../auth";
 import { engineBridge, type GameInstallation } from "../engine";
+import { flyToBuild } from "./flyToBuild";
 import { useLocale, modCount } from "../i18n";
 import { getStorageItem, getStoredStringArray, setStorageItem } from "../storage";
 import { presetBridge, presetTitle, type BetterFyPreset } from "../presets";
@@ -100,6 +101,8 @@ export default function Workspace({
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollPositions = useRef<Partial<Record<Route, number>>>({});
   const currentRoute = useRef(route);
+  const mainNavRef = useRef<HTMLElement>(null);
+  const [indicator, setIndicator] = useState<{ top: number; height: number } | null>(null);
   const busy = useEngineActive();
   // Re-render when a newer signed catalog adds or updates installable packages.
   usePackagesRevision();
@@ -154,6 +157,19 @@ export default function Workspace({
   useLayoutEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollPositions.current[route] ?? 0;
     currentRoute.current = route;
+  }, [route]);
+  // The sidebar highlight is one element that slides to the active item.
+  useLayoutEffect(() => {
+    const nav = mainNavRef.current;
+    if (!nav) return;
+    const measure = () => {
+      const active = nav.querySelector<HTMLElement>("button[aria-current=page]");
+      setIndicator(active ? { top: active.offsetTop, height: active.offsetHeight } : null);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    return () => observer.disconnect();
   }, [route]);
   const navigate = (next: Route) => {
     if (next === route) return;
@@ -220,6 +236,7 @@ export default function Workspace({
       return;
     }
     saveSelection([...selected, mod.id]);
+    flyToBuild(mod.image);
     notify(isRu ? "Добавлено в твою сборку" : "Added to your build");
   };
   const moveGameMod = (id: string, direction: -1 | 1) => {
@@ -296,7 +313,21 @@ export default function Workspace({
           <ChevronDown />
         </button>
         <span className="s-nav-label">{isRu ? "ПРОСТРАНСТВО" : "WORKSPACE"}</span>
-        <nav aria-label={isRu ? "Основная навигация" : "Main navigation"}>
+        <nav
+          className="s-nav-main"
+          ref={mainNavRef}
+          aria-label={isRu ? "Основная навигация" : "Main navigation"}
+        >
+          <span
+            className="s-nav-indicator"
+            aria-hidden="true"
+            hidden={!indicator}
+            style={
+              indicator
+                ? { transform: `translateY(${indicator.top}px)`, height: indicator.height }
+                : undefined
+            }
+          />
           {(
             [
               { id: "home", icon: Compass },
@@ -307,12 +338,15 @@ export default function Workspace({
           ).map(({ id, icon: Icon }) => (
             <button
               key={id}
+              data-nav={id}
               aria-current={route === id ? "page" : undefined}
               onClick={() => navigate(id)}
             >
               <Icon />
               <span>{labels[id]}</span>
-              {id === "build" && selected.length > 0 && <b>{selected.length}</b>}
+              {id === "build" && selected.length > 0 && (
+                <b key={selected.length}>{selected.length}</b>
+              )}
             </button>
           ))}
         </nav>
