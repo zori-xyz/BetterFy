@@ -18,6 +18,7 @@ import {
 import BetterFyWordmark from "./BetterFyWordmark";
 import AccentTitle from "./AccentTitle";
 import AuthAmbient from "./studio/AuthAmbient";
+import { BotHint, RollingDigits, SuccessBurst } from "./AuthDetails";
 import {
   authMode,
   authErrorCode,
@@ -500,12 +501,8 @@ export default function AuthFlow({
 
   return (
     <main className={`auth-stage auth-stage-${stage}`}>
-      {stage === "login" && (
-        <>
-          <div className="auth-id-environment" aria-hidden="true" />
-          <AuthAmbient />
-        </>
-      )}
+      {stage === "login" && <div className="auth-id-environment" aria-hidden="true" />}
+      <AuthAmbient />
       <header className="auth-header" data-tauri-drag-region>
         <div className="auth-brand">
           <BetterFyWordmark />
@@ -542,7 +539,7 @@ export default function AuthFlow({
               )}
             </div>
 
-            <div className="auth-login-card">
+            <div className="auth-login-card" data-spotlight="tilt">
               <div className="auth-id-heading">
                 <IdMark />
               </div>
@@ -942,7 +939,9 @@ export default function AuthFlow({
             {challengeMatch && (
               <div className="challenge-match">
                 <span>{t.matchLabel}</span>
-                <strong>{challengeMatch}</strong>
+                <strong>
+                  <RollingDigits value={challengeMatch} />
+                </strong>
                 <small>{t.matchHint}</small>
               </div>
             )}
@@ -979,7 +978,7 @@ export default function AuthFlow({
 
         {stage === "code" && (
           <form
-            className={`auth-view code-view view-enter ${error ? "is-error" : ""}`}
+            className={`auth-view code-view view-enter ${error ? "is-error" : ""} ${code.length === 6 ? "is-complete" : ""}`}
             onSubmit={verify}
           >
             <button className="back-button" type="button" onClick={() => setStage("login")}>
@@ -991,6 +990,7 @@ export default function AuthFlow({
               <AccentTitle text={t.codeTitle} />
             </h1>
             <p>{t.codeText}</p>
+            <BotHint isRu={language === "ru"} />
 
             <label className="otp-field">
               <span>{t.codeLabel}</span>
@@ -1075,6 +1075,7 @@ export default function AuthFlow({
         {stage === "confirmed" && (
           <div className="auth-view confirmed-view view-enter" role="status" aria-live="polite">
             <div className="verification-success">
+              <SuccessBurst />
               <Check />
             </div>
             <span className="section-label">BETTERFY ID / READY</span>

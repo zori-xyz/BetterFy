@@ -28,6 +28,7 @@ import {
 import { PageHead } from "./ui";
 import EmailIdentity from "./EmailIdentity";
 import BetterFyWordmark from "../BetterFyWordmark";
+import { revealTheme } from "./delight";
 
 export function Preferences({
   theme,
@@ -102,7 +103,12 @@ export function Preferences({
                     key={value}
                     className={`s-theme-option is-${value}`}
                     aria-pressed={theme === value}
-                    onClick={() => setTheme(value)}
+                    onClick={(event) =>
+                      revealTheme(event, () => {
+                        document.documentElement.dataset.theme = value;
+                        setTheme(value);
+                      })
+                    }
                   >
                     <span className="s-theme-mini">
                       <BetterFyWordmark />

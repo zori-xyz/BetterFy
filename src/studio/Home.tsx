@@ -17,6 +17,7 @@ import { ModCard } from "./ui";
 import EmoteStage, { emoteStyle } from "./EmoteStage";
 import { useState } from "react";
 import LookCarousel from "./LookCarousel";
+import { CountUp } from "./delight";
 
 export const collectionCopy = [
   {
@@ -125,7 +126,9 @@ export default function Home({
         </div>
         <LookCarousel motion={motion} onOpen={onOpen} />
         <div className="s-hero-inventory">
-          <span>{mods.length.toLocaleString(language === "ru" ? "ru-RU" : "en-GB")}</span>{" "}
+          <span>
+            <CountUp value={mods.length} locale={language === "ru" ? "ru-RU" : "en-GB"} />
+          </span>{" "}
           {isRu ? "модов и обликов в каталоге" : "mods and looks in the catalog"}
         </div>
       </section>
