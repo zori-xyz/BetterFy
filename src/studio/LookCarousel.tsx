@@ -32,7 +32,6 @@ function path(width: number, cardWidth: number): Keyframe[] {
     return {
       offset: (progress * travel) / duration,
       transform: `translate3d(${x}px, ${y}px, 0) rotate(${(progress - 0.5) * 5}deg) scale(${scale})`,
-      zIndex: Math.round((1 - edge) * 10),
       opacity: progress < 0.035 ? progress / 0.035 : progress > 0.965 ? (1 - progress) / 0.035 : 1,
     };
   });
