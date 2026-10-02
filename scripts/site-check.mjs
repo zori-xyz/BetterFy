@@ -100,11 +100,11 @@ async function assertIdSignInFlow() {
 async function assertReleaseStates() {
   for (const state of ["missing", "unavailable"]) {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-    await page.route("https://api.github.com/repos/zori-xyz/BetterFy/releases/latest", (route) => state === "missing"
-      ? route.fulfill({ status: 404, contentType: "application/json", body: "{}" })
+    await page.route(/^https:\/\/api\.github\.com\/repos\/zori-xyz\/BetterFy\/releases\?per_page=20$/, (route) => state === "missing"
+      ? route.fulfill({ status: 200, contentType: "application/json", body: "[]" })
       : route.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
     await page.goto(origin, { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Проверить сборку Windows" }).click();
+    await page.getByRole("button", { name: "Скачать для Windows" }).first().click();
     const expected = state === "missing" ? /ещё не выпущена/i : /не удалось связаться/i;
     await page.getByRole("dialog").getByText(expected).waitFor();
     if (state === "unavailable") await page.getByRole("button", { name: "Повторить" }).waitFor();
@@ -138,7 +138,6 @@ try {
       if (message.type() === "error" && !message.text().startsWith("Failed to load resource:")) browserErrors.push(message.text());
     });
     page.on("response", (response) => {
-      if (response.status() === 404 && response.url().endsWith("/repos/zori-xyz/BetterFy/releases/latest")) return;
       if (response.status() >= 400) browserErrors.push(`${response.status()} ${response.url()}`);
     });
     await page.addInitScript((language) => localStorage.setItem("betterfy-site-language", language), testCase.language);
@@ -162,10 +161,9 @@ try {
     const botHref = await page.locator('.site-footer a[href^="https://t.me/BeterFyBot"]').getAttribute("href");
     if (!botHref?.startsWith("https://t.me/BeterFyBot")) throw new Error(`Unexpected Telegram link: ${botHref}`);
 
-    const journeyTabs = page.getByRole("tab");
-    await journeyTabs.first().focus();
-    await page.keyboard.press("ArrowRight");
-    if (await journeyTabs.nth(1).getAttribute("aria-selected") !== "true") throw new Error(`${testCase.language} ${testCase.width}px journey tabs do not support arrow keys`);
+    const faqToggle = page.locator(".faq-item > button").nth(1);
+    await faqToggle.click();
+    if (await faqToggle.getAttribute("aria-expanded") !== "true") throw new Error(`${testCase.language} ${testCase.width}px FAQ answers do not open`);
 
     if (testCase.width <= 1100) {
       const menuButton = page.getByRole("button", { name: testCase.language === "ru" ? "Меню" : "Menu" });
@@ -199,7 +197,7 @@ try {
   await assertIdSignInFlow();
   await assertReleaseStates();
   await assertReducedMotionAndObserverFallback();
-  console.log(`BetterFy website: ${cases.length} responsive checks, mobile navigation, modal focus, auth/release failures, journey keyboard controls, reduced motion, and storage fallbacks passed.`);
+  console.log(`BetterFy website: ${cases.length} responsive checks, mobile navigation, modal focus, auth/release failures, FAQ disclosure, reduced motion, and storage fallbacks passed.`);
 } finally {
   await browser.close();
 }
