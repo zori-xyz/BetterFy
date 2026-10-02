@@ -161,10 +161,9 @@ try {
     const botHref = await page.locator('.site-footer a[href^="https://t.me/BeterFyBot"]').getAttribute("href");
     if (!botHref?.startsWith("https://t.me/BeterFyBot")) throw new Error(`Unexpected Telegram link: ${botHref}`);
 
-    const journeyTabs = page.getByRole("tab");
-    await journeyTabs.first().focus();
-    await page.keyboard.press("ArrowRight");
-    if (await journeyTabs.nth(1).getAttribute("aria-selected") !== "true") throw new Error(`${testCase.language} ${testCase.width}px journey tabs do not support arrow keys`);
+    const faqToggle = page.locator(".faq-item > button").nth(1);
+    await faqToggle.click();
+    if (await faqToggle.getAttribute("aria-expanded") !== "true") throw new Error(`${testCase.language} ${testCase.width}px FAQ answers do not open`);
 
     if (testCase.width <= 1100) {
       const menuButton = page.getByRole("button", { name: testCase.language === "ru" ? "Меню" : "Menu" });
@@ -198,7 +197,7 @@ try {
   await assertIdSignInFlow();
   await assertReleaseStates();
   await assertReducedMotionAndObserverFallback();
-  console.log(`BetterFy website: ${cases.length} responsive checks, mobile navigation, modal focus, auth/release failures, journey keyboard controls, reduced motion, and storage fallbacks passed.`);
+  console.log(`BetterFy website: ${cases.length} responsive checks, mobile navigation, modal focus, auth/release failures, FAQ disclosure, reduced motion, and storage fallbacks passed.`);
 } finally {
   await browser.close();
 }
