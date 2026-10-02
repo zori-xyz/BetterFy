@@ -5,7 +5,7 @@
    Everything here is switched off by the global motion-disabled and
    prefers-reduced-motion rules in studio.css and studio-polish.css. */
 
-.lucide{transition:transform var(--s-motion-slow) var(--s-ease-spring)}
+.lucide{overflow:visible;transition:transform var(--s-motion-slow) var(--s-ease-spring)}
 .lucide>*{transform-box:fill-box;transform-origin:center;transition:transform var(--s-motion-slow) var(--s-ease-spring),opacity var(--s-motion-base) var(--s-ease-out),fill var(--s-motion-base) var(--s-ease-out)}
 
 /* Navigation */
