@@ -100,11 +100,11 @@ async function assertIdSignInFlow() {
 async function assertReleaseStates() {
   for (const state of ["missing", "unavailable"]) {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-    await page.route("https://api.github.com/repos/zori-xyz/BetterFy/releases/latest", (route) => state === "missing"
-      ? route.fulfill({ status: 404, contentType: "application/json", body: "{}" })
+    await page.route(/^https:\/\/api\.github\.com\/repos\/zori-xyz\/BetterFy\/releases\?per_page=20$/, (route) => state === "missing"
+      ? route.fulfill({ status: 200, contentType: "application/json", body: "[]" })
       : route.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
     await page.goto(origin, { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Проверить сборку Windows" }).click();
+    await page.getByRole("button", { name: "Скачать для Windows" }).first().click();
     const expected = state === "missing" ? /ещё не выпущена/i : /не удалось связаться/i;
     await page.getByRole("dialog").getByText(expected).waitFor();
     if (state === "unavailable") await page.getByRole("button", { name: "Повторить" }).waitFor();
@@ -138,7 +138,6 @@ try {
       if (message.type() === "error" && !message.text().startsWith("Failed to load resource:")) browserErrors.push(message.text());
     });
     page.on("response", (response) => {
-      if (response.status() === 404 && response.url().endsWith("/repos/zori-xyz/BetterFy/releases/latest")) return;
       if (response.status() >= 400) browserErrors.push(`${response.status()} ${response.url()}`);
     });
     await page.addInitScript((language) => localStorage.setItem("betterfy-site-language", language), testCase.language);
