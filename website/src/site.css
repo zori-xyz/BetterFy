@@ -453,3 +453,5 @@ a:hover>.wordmark .wordmark-fy,.footer-mark:hover .wordmark-fy{transform:transla
 @media(max-width:1100px){.mod-grid{grid-template-columns:1fr 1fr}.how-steps{grid-template-columns:1fr}}
 @media(max-width:720px){.mods{padding-block:64px 24px}.mod-grid{grid-template-columns:1fr}.how{padding-block:64px;margin-top:40px}.looks,.faq{padding-block:56px 16px}.header-download{width:40px;padding:0;justify-content:center}.header-download span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}}
 @media(max-width:420px){.header-download{display:none}}
+.profile-avatar.is-logo{background:none;box-shadow:0 12px 34px rgba(180,92,239,.25)}
+.profile-avatar.is-logo img{border-radius:inherit}

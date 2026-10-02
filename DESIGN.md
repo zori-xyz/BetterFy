@@ -244,6 +244,7 @@ design-system decision.
 | `website/public/site-wardrobe-*-dark.webp` / `site-wardrobe-*-light.webp` | Website looks scene in RU and EN, dark and light app themes | Same source and status as the hero screens; embedded Dota-derived imagery remains prohibited from release pending redistribution review |
 | `website/public/mods/*.jpg` | Pilot mod cards on the website (Remove River, Tree Mod, Show NetWorth) | Copies of `src/assets/minify/*.jpg` from the Egezenn/dota2-minify snapshot; prototype-only pending Valve/redistribution review |
 | `website/public/og.webp` | Website social preview | Rendered from the same 2026-10-02 home screenshot with the BetterFy wordmark; prototype-only because it includes the same Dota-derived scene |
+| `website/public/betterfy-logo.png` | Sign-in dialog avatar before the person signs in | 256px copy of `src-tauri/icons/128x128@2x.png`, the approved dark `B` symbol; release-ready |
 | `website/public/betterfy-icon.webp` | Website touch icon | BetterFy-only branded raster; release-ready once the final brand-icon decision is approved |
 | `src-tauri/icons/icon-source.png` | Canonical application-icon master generated from the approved dark `B` symbol | Founder-authored and founder-approved; release-ready |
 | `src-tauri/windows/installer/sidebar.bmp` | NSIS welcome/finish brand panel | Newly authored BetterFy-only wordmark/signature art; release-ready |
