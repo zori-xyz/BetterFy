@@ -167,9 +167,27 @@
 .s-switch[aria-checked=true]:active>span{transform:translateX(11px)}
 
 /* The "Fy" of the wordmark answers the pointer. */
-.s-brand .wordmark-fy{transition:transform .6s var(--s-ease-spring)}
-.s-brand:hover .wordmark-fy{transform:translateY(0) rotate(-12deg) scale(1.08)}
+/* The script glyph draws well outside its .72 line box. Padding grows the
+   box to cover the ink and the negative margin cancels it in layout, so the
+   moving layer is not clipped to the old box (visible in WebKit). */
+.s-brand .wordmark-fy{padding:.18em .22em .26em;margin:-.18em -.22em -.26em calc(1px - .22em);transition:transform .6s var(--s-ease-spring)}
+.s-brand:hover .wordmark-fy{transform:translateY(-1px) rotate(-8deg)}
 
 /* Theme cards preview the switch on hover. */
 .s-theme-option{transition:transform .5s var(--s-ease-spring),border-color .2s,box-shadow .2s}
 .s-theme-option:hover{transform:translateY(-3px)}
+
+/* Home carousel: hovering one look dims the rest and brings its art closer;
+   the stage shows a grab cursor because it can be dragged. */
+.s-look-carousel.is-animated .s-home-showcase{cursor:grab;touch-action:pan-y}
+.s-look-carousel.is-animated .s-home-showcase.is-dragging{cursor:grabbing}
+.s-home-showcase.is-dragging .s-showcase-look{pointer-events:none}
+.s-showcase-look{transition:border-color .25s,filter .35s var(--s-ease-out),box-shadow .35s var(--s-ease-out)}
+.s-showcase-look>img{transition:transform .8s var(--s-ease-spring)}
+.s-showcase-look>span{transition:transform .5s var(--s-ease-spring)}
+@media(hover:hover) and (pointer:fine){
+  .s-home-showcase:has(.s-showcase-look:hover) .s-showcase-look:not(:hover){filter:brightness(.55) saturate(.8)}
+  .s-showcase-look:hover{box-shadow:0 18px 44px rgb(var(--mood-rgb,180 92 239)/.28)}
+  .s-showcase-look:hover>img{transform:scale(1.07)}
+  .s-showcase-look:hover>span{transform:translateY(-3px)}
+}

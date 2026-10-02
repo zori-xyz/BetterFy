@@ -6,16 +6,12 @@ type Speck = {
   size: number;
   depth: number;
   phase: number;
-  pushX: number;
-  pushY: number;
 };
-type Ripple = { x: number; y: number; start: number };
 type Comet = { x: number; y: number; start: number; length: number };
 
 // Background of the sign-in screens: slow violet light, drifting specks that
 // make room for the pointer and link up into a small constellation around
-// it, an occasional comet, and a ripple where the person clicks empty space.
-// Runs at most ~30 fps and stops entirely when motion is off or the window
+// it, and an occasional comet. Runs at most ~30 fps and stops entirely when motion is off or the window
 // is hidden.
 const REACH = 150;
 const LINK = 112;
@@ -36,10 +32,7 @@ export default function AuthAmbient() {
       size: index % 11 === 0 ? 1.6 : index % 3 === 0 ? 1.05 : 0.65,
       depth: 0.35 + (index % 7) / 9,
       phase: index * 1.41,
-      pushX: 0,
-      pushY: 0,
     }));
-    const ripples: Ripple[] = [];
     let comet: Comet | null = null;
     let nextComet = 4000;
     let width = 0;
@@ -72,20 +65,20 @@ export default function AuthAmbient() {
           y: height * (0.78 + Math.cos(seconds * 0.05) * 0.05),
           r: Math.max(width, height) * 0.5,
           color: violet,
-          alpha: light ? 0.08 : 0.11,
+          alpha: light ? 0.045 : 0.06,
         },
         {
           x: width * (0.86 + Math.cos(seconds * 0.06) * 0.05),
           y: height * (0.12 + Math.sin(seconds * 0.08) * 0.06),
           r: Math.max(width, height) * 0.42,
           color: light ? "172, 77, 140" : "207, 75, 201",
-          alpha: light ? 0.05 : 0.07,
+          alpha: light ? 0.028 : 0.038,
         },
       ];
       if (pointerX >= 0) {
         glowX += (pointerX - glowX) * 0.08;
         glowY += (pointerY - glowY) * 0.08;
-        pools.push({ x: glowX, y: glowY, r: 260, color: violet, alpha: light ? 0.06 : 0.08 });
+        pools.push({ x: glowX, y: glowY, r: 240, color: violet, alpha: light ? 0.03 : 0.04 });
       }
       for (const pool of pools) {
         const gradient = context.createRadialGradient(pool.x, pool.y, 0, pool.x, pool.y, pool.r);
@@ -97,13 +90,8 @@ export default function AuthAmbient() {
 
       const points: { x: number; y: number; near: number }[] = [];
       for (const speck of specks) {
-        speck.pushX *= 0.92;
-        speck.pushY *= 0.92;
-        let x = speck.x * width + speck.pushX;
-        let y =
-          ((speck.y * height + seconds * (2.5 + speck.depth * 4)) % (height + 20)) -
-          10 +
-          speck.pushY;
+        let x = speck.x * width;
+        let y = ((speck.y * height + seconds * (2.5 + speck.depth * 4)) % (height + 20)) - 10;
         let near = 0;
         if (pointerX >= 0) {
           const dx = x - pointerX;
@@ -133,7 +121,7 @@ export default function AuthAmbient() {
           if (!points[b].near) continue;
           const distance = Math.hypot(points[a].x - points[b].x, points[a].y - points[b].y);
           if (distance > LINK) continue;
-          const alpha = (1 - distance / LINK) * Math.min(points[a].near, points[b].near) * 0.9;
+          const alpha = (1 - distance / LINK) * Math.min(points[a].near, points[b].near) * 0.65;
           context.strokeStyle = `rgba(${violet}, ${alpha})`;
           context.beginPath();
           context.moveTo(points[a].x, points[a].y);
@@ -143,21 +131,6 @@ export default function AuthAmbient() {
       }
 
       if (!moving) return;
-
-      for (let index = ripples.length - 1; index >= 0; index -= 1) {
-        const ripple = ripples[index];
-        const progress = (time - ripple.start) / 900;
-        if (progress >= 1) {
-          ripples.splice(index, 1);
-          continue;
-        }
-        const eased = 1 - (1 - progress) ** 3;
-        context.strokeStyle = `rgba(${violet}, ${(1 - progress) * 0.55})`;
-        context.lineWidth = 1.4;
-        context.beginPath();
-        context.arc(ripple.x, ripple.y, 8 + eased * 130, 0, Math.PI * 2);
-        context.stroke();
-      }
 
       if (!comet && time > nextComet) {
         comet = {
@@ -236,25 +209,6 @@ export default function AuthAmbient() {
       pointerX = -1;
       pointerY = -1;
     };
-    const onDown = (event: PointerEvent) => {
-      if (!active) return;
-      const target = event.target as Element | null;
-      if (target?.closest("button, a, input, label, select, textarea, .auth-login-card")) return;
-      const point = local(event);
-      ripples.push({ x: point.x, y: point.y, start: performance.now() });
-      for (const speck of specks) {
-        const x = speck.x * width + speck.pushX;
-        const dx = x - point.x;
-        const y = speck.y * height;
-        const dy = y - point.y;
-        const distance = Math.hypot(dx, dy) || 1;
-        if (distance < 220) {
-          const force = (1 - distance / 220) * 34;
-          speck.pushX += (dx / distance) * force;
-          speck.pushY += (dy / distance) * force;
-        }
-      }
-    };
     const observer = new ResizeObserver(resize);
     const classObserver = new MutationObserver(sync);
     observer.observe(host);
@@ -264,7 +218,6 @@ export default function AuthAmbient() {
     });
     window.addEventListener("pointermove", onPointer, { passive: true });
     document.addEventListener("pointerleave", onLeave);
-    host.addEventListener("pointerdown", onDown);
     document.addEventListener("visibilitychange", sync);
     motion.addEventListener("change", sync);
     resize();
@@ -276,7 +229,6 @@ export default function AuthAmbient() {
       classObserver.disconnect();
       window.removeEventListener("pointermove", onPointer);
       document.removeEventListener("pointerleave", onLeave);
-      host.removeEventListener("pointerdown", onDown);
       document.removeEventListener("visibilitychange", sync);
       motion.removeEventListener("change", sync);
     };
