@@ -192,8 +192,8 @@ const explainError = (code: string, isRu: boolean) => {
       "The test failure point did not fire. This test did not verify the normal installation.",
     ],
     stress_test_disabled: [
-      "Контролируемый стресс-тест доступен только во внутренней Windows-сборке.",
-      "Controlled stress testing is available only in the internal Windows build.",
+      "Контролируемый стресс-тест доступен только аккаунту разработчика.",
+      "Controlled stress testing is available only to a developer account.",
     ],
   };
   return (

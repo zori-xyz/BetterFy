@@ -198,13 +198,17 @@ results in Dota and the recovery controls described in `TREE_MOD_PILOT.md`.
 This remains one founder-observed machine without a retained report JSON, not
 general compatibility evidence.
 
-The normal release build and the internal stress build share the same transaction
-code. Only the CI `windows-build` artifact enables the `internal-stress-test`
-feature. That feature exposes two deterministic stop points on each game-file and
-Steam-profile transaction: after the verified temporary state is journaled, and
-immediately after the atomic replacement. Each control immediately invokes the
-normal recovery path and requires a matching recovery receipt. The Early Access
-release workflow does not enable these controls.
+The normal release build and the stress controls share the same transaction
+code. The CI `windows-build` artifact and the Early Access release both compile
+the `internal-stress-test` feature, which adds two deterministic stop points on
+each game-file and Steam-profile transaction: after the verified temporary state
+is journaled, and immediately after the atomic replacement. Each control
+immediately invokes the normal recovery path and requires a matching recovery
+receipt. The app offers and accepts these controls only when the auth service's
+current profile marks the signed-in account as a developer. That mark comes from
+the Worker setting `BETTERFY_DEVELOPER_LOGINS` (BetterFy ID logins, never
+committed), so every other account, a signed-out app, or an offline app sees no
+stress controls.
 
 The runtime preflight is now implemented behind typed Tauri commands. Windows
 process enumeration uses Tool Help APIs and recognizes the Steam client, Web

@@ -25,6 +25,9 @@ pub struct AuthProfile {
     pub session_id: Option<String>,
     pub avatar_available: Option<bool>,
     pub telegram_linked: Option<bool>,
+    /// Set by the auth service for logins listed in its developer setting.
+    #[serde(default)]
+    pub developer: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -945,6 +948,17 @@ pub async fn auth_profile(app: AppHandle) -> Result<AuthProfile, String> {
     run_blocking(app, auth_profile_blocking).await
 }
 
+/// Whether the signed-in account carries the developer mark. The profile is
+/// re-read from the auth service each time, so removing a login from the
+/// Worker setting takes effect without a new sign-in. Signed out, offline, or
+/// any service error counts as not a developer.
+pub async fn developer_access(app: AppHandle) -> bool {
+    run_blocking(app, auth_profile_blocking)
+        .await
+        .map(|profile| profile.developer)
+        .unwrap_or(false)
+}
+
 #[tauri::command]
 pub async fn auth_fetch_avatar(app: AppHandle) -> Result<Option<AvatarPayload>, String> {
     run_blocking(app, auth_fetch_avatar_blocking).await
@@ -986,6 +1000,7 @@ mod tests {
             session_id: None,
             avatar_available: None,
             telegram_linked: None,
+            developer: false,
         };
         *state.session.lock().expect("session lock") = Some(ActiveSession {
             profile: profile.clone(),
@@ -1012,6 +1027,7 @@ mod tests {
             session_id: Some("11111111-1111-4111-8111-111111111111".into()),
             avatar_available: Some(true),
             telegram_linked: Some(true),
+            developer: false,
         };
         let serialized = serde_json::to_string(&profile).expect("profile json");
         assert!(!serialized.contains("token"));
