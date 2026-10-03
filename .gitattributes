@@ -2,3 +2,4 @@ src-tauri/fixtures/** text eol=lf
 # Signed bytes: a checkout must not rewrite line endings, or the signature
 # no longer matches (Windows autocrlf did exactly that in CI).
 website/public/bot/catalog/** -text
+src-tauri/tests/fixtures/catalog_sequence_*.json* -text
