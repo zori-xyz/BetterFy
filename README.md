@@ -74,19 +74,28 @@ enabled in small, recoverable slices.
 ## Project activity
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/project-activity-dark.svg" />
-  <source media="(prefers-color-scheme: light)" srcset=".github/assets/project-activity-light.svg" />
-  <img alt="Project activity: commits per day over the last 60 days, split into commits made by hand and commits made from CI" src=".github/assets/project-activity-light.svg" width="880" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/zori-xyz/BetterFy/project-activity/project-activity-dark.svg" />
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/zori-xyz/BetterFy/project-activity/project-activity-light.svg" />
+  <img alt="Project activity: commits and CI runs per day over the last 60 days, drawn as two separate bars per day" src="https://raw.githubusercontent.com/zori-xyz/BetterFy/project-activity/project-activity-light.svg" width="880" />
 </picture>
 
-Non-merge commits on `main` per UTC day, by author date. A commit counts as
-"from CI" when its author is an automation account (a `[bot]` identity such as
-`github-actions[bot]`); every other commit counts as "by hand". The chart is
-regenerated daily by
+Two separate counts per UTC day, drawn side by side and never added together:
+
+- **commits**: non-merge commits reachable from any branch on GitHub (except
+  the chart's own branch), each counted once, by author date. Commits that
+  only existed on a deleted branch are not counted; for a branch that was
+  squash-merged and then deleted, only the squash commit remains.
+- **CI runs**: GitHub Actions workflow runs, by creation time, including
+  cancelled and failed runs. Runs of the chart's own workflow and runs that
+  were skipped are not counted.
+
+The chart is regenerated daily by
 [`project-activity.yml`](.github/workflows/project-activity.yml) from
-[`.github/scripts/project-activity.mjs`](.github/scripts/project-activity.mjs),
-and its own update commits count as "from CI". It measures commit volume, not
-progress or quality.
+[`.github/scripts/project-activity.mjs`](.github/scripts/project-activity.mjs)
+and published to the
+[`project-activity`](https://github.com/zori-xyz/BetterFy/tree/project-activity)
+branch, so `main` receives no update commits. It measures activity volume,
+not progress or quality.
 
 ## Run it locally
 

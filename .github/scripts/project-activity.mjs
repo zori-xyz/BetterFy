@@ -1,43 +1,51 @@
 #!/usr/bin/env node
-// Renders the README "Project activity" card from local git history.
+// Renders the README "Project activity" card: commits and GitHub Actions
+// workflow runs per day, as dark and light SVG variants.
 //
-// Output: .github/assets/project-activity-{dark,light}.svg
-//
-// Counting rules:
-// - Non-merge commits reachable from the chosen ref (default: HEAD). Merge
-//   commits are excluded because they record an integration, not new work.
-// - Days are calendar days in UTC, keyed by author date.
-// - A commit is "from CI" when its author is an automation account: a name
-//   or email containing "[bot]" (GitHub App and Actions identities such as
-//   github-actions[bot]) or the legacy Actions address action@github.com.
-//   Everything else counts as "by hand". The committer is ignored on purpose:
-//   pull requests merged in the GitHub web interface are committed by
-//   "GitHub <noreply@github.com>" but were still written by a person.
+// Series:
+// - Commits: non-merge commits reachable from any remote-tracking branch
+//   (`git log --remotes`), each counted once, keyed by author date in UTC.
+//   The branch that stores this chart is excluded. Merge commits are left
+//   out because they record an integration, not new work.
+// - CI runs: GitHub Actions workflow runs, keyed by creation time in UTC.
+//   Runs of this chart's own workflow and runs that concluded as "skipped"
+//   are left out.
+// The two series are different units. They share a count axis but are drawn
+// side by side, never stacked or summed.
 //
 // Usage:
-//   node .github/scripts/project-activity.mjs [--ref <rev>] [--days <n>]
-//        [--today YYYY-MM-DD] [--out <dir>]
+//   GITHUB_TOKEN=... node .github/scripts/project-activity.mjs
+//     [--repo owner/name] [--days <n>] [--today YYYY-MM-DD] [--out <dir>]
 //
-// Plain Node and git only; no npm dependencies.
+// The token needs read access to Actions. Plain Node and git only; no npm
+// dependencies.
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const DAY_MS = 86_400_000;
+const CHART_BRANCH = "project-activity";
+const CHART_WORKFLOW = ".github/workflows/project-activity.yml";
 
 function parseArgs(argv) {
-  const options = { ref: "HEAD", days: 60, today: null, out: null };
+  const options = {
+    repo: process.env.GITHUB_REPOSITORY ?? "zori-xyz/BetterFy",
+    days: 60,
+    today: null,
+    out: null,
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const key = argv[i];
     const value = argv[i + 1];
-    if (key === "--ref") options.ref = value;
+    if (key === "--repo") options.repo = value;
     else if (key === "--days") options.days = Number.parseInt(value, 10);
     else if (key === "--today") options.today = value;
     else if (key === "--out") options.out = value;
     else throw new Error(`Unknown argument: ${key}`);
     i += 1;
   }
+  if (!/^[\w.-]+\/[\w.-]+$/.test(options.repo)) throw new Error("--repo must be owner/name");
   if (!Number.isInteger(options.days) || options.days < 7 || options.days > 365) {
     throw new Error("--days must be an integer between 7 and 365");
   }
@@ -47,50 +55,87 @@ function parseArgs(argv) {
   return options;
 }
 
-function isAutomationAuthor(name, email) {
-  const n = name.toLowerCase();
-  const e = email.toLowerCase();
-  return n.includes("[bot]") || e.includes("[bot]") || e === "action@github.com";
+function utcDay(date) {
+  return new Date(date).toISOString().slice(0, 10);
 }
 
-function readCommits(ref) {
+function readCommitDays() {
   const output = execFileSync(
     "git",
-    ["log", "--no-merges", "--format=%at%x09%an%x09%ae", ref, "--"],
+    [
+      "log",
+      `--exclude=refs/remotes/*/${CHART_BRANCH}`,
+      "--remotes",
+      "--no-merges",
+      "--format=%H %at",
+    ],
     { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
   );
-  return output
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      const [seconds, name, email] = line.split("\t");
-      return {
-        day: new Date(Number(seconds) * 1000).toISOString().slice(0, 10),
-        ci: isAutomationAuthor(name ?? "", email ?? ""),
-      };
-    });
+  const seen = new Map();
+  for (const line of output.split("\n")) {
+    if (!line) continue;
+    const [hash, seconds] = line.split(" ");
+    if (!seen.has(hash)) seen.set(hash, utcDay(Number(seconds) * 1000));
+  }
+  if (seen.size === 0) {
+    throw new Error("No commits found on remote-tracking branches; fetch with full history first.");
+  }
+  return [...seen.values()];
 }
 
-function summarize(commits, days, today) {
+async function readRunDays(repo) {
+  const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
+  if (!token) throw new Error("Set GITHUB_TOKEN or GH_TOKEN to read workflow runs.");
+  const days = [];
+  for (let page = 1; ; page += 1) {
+    const response = await fetch(
+      `https://api.github.com/repos/${repo}/actions/runs?per_page=100&page=${page}`,
+      {
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "betterfy-project-activity",
+        },
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`Workflow runs request failed: ${response.status} ${await response.text()}`);
+    }
+    const body = await response.json();
+    for (const run of body.workflow_runs) {
+      if (run.conclusion === "skipped") continue;
+      if ((run.path ?? "").split("@")[0] === CHART_WORKFLOW) continue;
+      days.push(utcDay(run.created_at));
+    }
+    if (body.workflow_runs.length < 100) break;
+  }
+  return days;
+}
+
+function summarize(commitDays, runDays, days, today) {
   const end = Date.parse(`${today}T00:00:00Z`);
   const buckets = [];
   const index = new Map();
   for (let i = days - 1; i >= 0; i -= 1) {
-    const day = new Date(end - i * DAY_MS).toISOString().slice(0, 10);
+    const day = utcDay(end - i * DAY_MS);
     index.set(day, buckets.length);
-    buckets.push({ day, hand: 0, ci: 0 });
+    buckets.push({ day, commits: 0, runs: 0 });
   }
-  let hand = 0;
-  let ci = 0;
-  let first = null;
-  for (const commit of commits) {
-    if (commit.ci) ci += 1;
-    else hand += 1;
-    if (first === null || commit.day < first) first = commit.day;
-    const slot = index.get(commit.day);
-    if (slot !== undefined) buckets[slot][commit.ci ? "ci" : "hand"] += 1;
+  const since = commitDays.reduce((min, d) => (d < min ? d : min), commitDays[0]);
+  for (const d of commitDays) {
+    const slot = index.get(d);
+    if (slot !== undefined) buckets[slot].commits += 1;
   }
-  return { buckets, total: hand + ci, hand, ci, first, today };
+  let runs = 0;
+  for (const d of runDays) {
+    if (d < since || d > today) continue;
+    runs += 1;
+    const slot = index.get(d);
+    if (slot !== undefined) buckets[slot].runs += 1;
+  }
+  const commits = commitDays.filter((d) => d <= today).length;
+  return { buckets, commits, runs, since, today };
 }
 
 // Brand tokens from DESIGN.md and src/studio/studio-tokens.css.
@@ -103,8 +148,8 @@ const THEMES = {
     quiet: "#5D5A67",
     grid: "#1E1D27",
     empty: "#24232D",
-    hand: "#D9C6FF",
-    ci: "#A84DFF",
+    commits: "#D9C6FF",
+    runs: "#A84DFF",
   },
   light: {
     background: "#FFFFFF",
@@ -114,8 +159,8 @@ const THEMES = {
     quiet: "#8A8391",
     grid: "#EEEAF3",
     empty: "#E5E0E9",
-    hand: "#A98AE6",
-    ci: "#5F1CB3",
+    commits: "#A98AE6",
+    runs: "#5F1CB3",
   },
 };
 
@@ -134,8 +179,7 @@ function round(value) {
   return Math.round(value * 100) / 100;
 }
 
-// Rectangle with only the top corners rounded, so stacked bars sit flat on the
-// baseline and flat against each other.
+// Rectangle with only the top corners rounded, so bars sit flat on the baseline.
 function topRoundedBar(x, y, width, height, radius) {
   const r = Math.min(radius, width / 2, height);
   return (
@@ -169,43 +213,29 @@ function renderSvg(summary, themeName) {
   const plotWidth = plotRight - plotLeft;
 
   const { buckets } = summary;
-  const peak = Math.max(0, ...buckets.map((b) => b.hand + b.ci));
+  const peak = Math.max(0, ...buckets.flatMap((b) => [b.commits, b.runs]));
   const scaleMax = niceMax(peak);
   const slot = plotWidth / buckets.length;
-  const barWidth = Math.max(3, slot * 0.66);
+  const pairWidth = Math.max(5, slot * 0.72);
+  const seam = 1;
+  const barWidth = (pairWidth - seam) / 2;
   const unit = plotHeight / scaleMax;
-  const windowTotal = buckets.reduce((sum, b) => sum + b.hand + b.ci, 0);
 
   const bars = [];
   buckets.forEach((bucket, i) => {
-    const x = plotLeft + i * slot + (slot - barWidth) / 2;
-    const count = bucket.hand + bucket.ci;
-    if (count === 0) {
-      bars.push(
-        `<rect x="${round(x)}" y="${plotBottom - 2}" width="${round(barWidth)}" height="2" rx="1" fill="${t.empty}"/>`,
-      );
-      return;
-    }
-    const handHeight = bucket.hand * unit;
-    const ciHeight = bucket.ci * unit;
-    const label = `${bucket.day}: ${bucket.hand} by hand, ${bucket.ci} from CI`;
-    const parts = [];
-    if (bucket.ci > 0 && bucket.hand > 0) {
-      // Hand-written work sits on the baseline; CI work stacks on top with a
-      // 1px seam so the two segments stay distinguishable in both themes.
-      parts.push(
-        `<rect x="${round(x)}" y="${round(plotBottom - handHeight)}" width="${round(barWidth)}" height="${round(handHeight)}" fill="${t.hand}"/>`,
-      );
-      const ciTop = plotBottom - handHeight - 1 - ciHeight;
-      parts.push(
-        `<path d="${topRoundedBar(x, ciTop, barWidth, ciHeight, 2)}" fill="${t.ci}"/>`,
-      );
-    } else {
-      const h = bucket.ci > 0 ? ciHeight : handHeight;
-      parts.push(
-        `<path d="${topRoundedBar(x, plotBottom - h, barWidth, h, 2)}" fill="${bucket.ci > 0 ? t.ci : t.hand}"/>`,
-      );
-    }
+    const x0 = plotLeft + i * slot + (slot - pairWidth) / 2;
+    const series = [
+      { value: bucket.commits, color: t.commits, x: x0 },
+      { value: bucket.runs, color: t.runs, x: x0 + barWidth + seam },
+    ];
+    const parts = series.map(({ value, color, x }) => {
+      if (value === 0) {
+        return `<rect x="${round(x)}" y="${plotBottom - 2}" width="${round(barWidth)}" height="2" fill="${t.empty}"/>`;
+      }
+      const h = value * unit;
+      return `<path d="${topRoundedBar(x, plotBottom - h, barWidth, h, 1.5)}" fill="${color}"/>`;
+    });
+    const label = `${bucket.day}: ${bucket.commits} commits, ${bucket.runs} CI runs`;
     bars.push(`<g><title>${escapeXml(label)}</title>${parts.join("")}</g>`);
   });
 
@@ -222,8 +252,8 @@ function renderSvg(summary, themeName) {
   // Legend, right-aligned. Widths are estimated for a 12px system sans.
   const charWidth = 6.7;
   const legendItems = [
-    { label: "by hand", color: t.hand },
-    { label: "from CI", color: t.ci },
+    { label: "commits", color: t.commits },
+    { label: "CI runs", color: t.runs },
   ];
   let cursor = plotRight;
   const legend = [];
@@ -238,12 +268,12 @@ function renderSvg(summary, themeName) {
 
   const first = buckets[0].day;
   const last = buckets[buckets.length - 1].day;
-  const since = summary.first ?? summary.today;
-  const footer = `${summary.total} commits since ${since}  /  ${summary.hand} by hand  /  ${summary.ci} from CI`;
+  const windowCommits = buckets.reduce((sum, b) => sum + b.commits, 0);
+  const windowRuns = buckets.reduce((sum, b) => sum + b.runs, 0);
   const desc =
-    `Stacked bar chart of commits per day on BetterFy from ${first} to ${last}: ` +
-    `${windowTotal} commits in this window, peak ${peak} in one day. ` +
-    `${footer.replaceAll("  /  ", ", ")}.`;
+    `Commits and GitHub Actions workflow runs per day on BetterFy from ${first} to ${last}, ` +
+    `drawn as two separate bars per day: ${windowCommits} commits and ${windowRuns} CI runs in this window. ` +
+    `${summary.commits} commits and ${summary.runs} CI runs since ${summary.since}.`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title desc">
 <title id="title">Project activity</title>
@@ -259,7 +289,7 @@ text{font-family:${FONT};font-variant-numeric:tabular-nums}
 </style>
 <rect x="0.5" y="0.5" width="${width - 1}" height="${height - 1}" rx="20" fill="${t.background}" stroke="${t.border}"/>
 <text x="${padX}" y="50" class="title">Project activity</text>
-<text x="${padX}" y="74" class="subtitle">Commits per day over the last ${buckets.length} days, updated ${escapeXml(summary.today)}</text>
+<text x="${padX}" y="74" class="subtitle">Commits and CI runs per day over the last ${buckets.length} days, updated ${escapeXml(summary.today)}</text>
 ${legend.join("\n")}
 ${grid}
 <line x1="${plotLeft}" y1="${plotBottom + 0.5}" x2="${plotRight}" y2="${plotBottom + 0.5}" stroke="${t.border}" stroke-width="1"/>
@@ -268,25 +298,25 @@ ${bars.join("\n")}
 <text x="${plotLeft}" y="${plotBottom + 22}" class="axis">${first}</text>
 <text x="${plotRight}" y="${plotBottom + 22}" text-anchor="end" class="axis">${last}</text>
 <line x1="${padX}" y1="${height - 54.5}" x2="${width - padX}" y2="${height - 54.5}" stroke="${t.grid}" stroke-width="1"/>
-<text x="${padX}" y="${height - 24}" class="footer"><tspan class="strong">${summary.total}</tspan> commits since ${escapeXml(since)}<tspan dx="10">/</tspan><tspan dx="10" class="strong">${summary.hand}</tspan> by hand<tspan dx="10">/</tspan><tspan dx="10" class="strong">${summary.ci}</tspan> from CI</text>
+<text x="${padX}" y="${height - 24}" class="footer"><tspan class="strong">${summary.commits}</tspan> commits<tspan dx="10">/</tspan><tspan dx="10" class="strong">${summary.runs}</tspan> CI runs since ${escapeXml(summary.since)}</text>
 </svg>
 `;
 }
 
-function main() {
+async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const today = options.today ?? new Date().toISOString().slice(0, 10);
-  const out = resolve(options.out ?? resolve(import.meta.dirname, "../assets"));
-  const summary = summarize(readCommits(options.ref), options.days, today);
+  const today = options.today ?? utcDay(Date.now());
+  const out = resolve(options.out ?? "project-activity");
+  const commitDays = readCommitDays();
+  const runDays = await readRunDays(options.repo);
+  const summary = summarize(commitDays, runDays, options.days, today);
   mkdirSync(out, { recursive: true });
   for (const theme of Object.keys(THEMES)) {
     const file = resolve(out, `project-activity-${theme}.svg`);
     writeFileSync(file, renderSvg(summary, theme));
     console.log(file);
   }
-  console.log(
-    `${summary.total} commits since ${summary.first} / ${summary.hand} by hand / ${summary.ci} from CI`,
-  );
+  console.log(`${summary.commits} commits / ${summary.runs} CI runs since ${summary.since}`);
 }
 
-main();
+await main();
