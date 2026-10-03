@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { Miniflare } from "miniflare";
+import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 
 // Runs the Worker in the real workerd runtime against a local D1 database
 // built from the migrations, with Telegram and email calls stubbed. Unit
@@ -11,35 +11,44 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 
 test("worker flows against a real D1 schema", async (t) => {
   const outbound = [];
-  const mf = new Miniflare({
-    modules: true,
-    scriptPath: `${root}src/index.mjs`,
-    modulesRules: [{ type: "ESModule", include: ["**/*.mjs"] }],
-    compatibilityDate: "2026-08-01",
-    d1Databases: ["AUTH_DB"],
-    bindings: {
-      AUTH_CODE_PEPPER: "p".repeat(40),
-      AUTH_PASSWORD_PEPPER: "q".repeat(40),
-      TELEGRAM_WEBHOOK_SECRET: "w".repeat(40),
-      TELEGRAM_BOT_TOKEN: "test",
-      BOT_USERNAME: "BeterFyBot",
-      PUBLIC_WORKER_URL: "https://example.test",
-      BOT_ASSET_BASE_URL: "https://example.test",
-      ALLOWED_ORIGINS: "https://zori-xyz.github.io",
-      VERIFY_GLOBAL_FAILURE_LIMIT: "3",
-      RESEND_API_KEY: "re_test",
-      EMAIL_FROM: "BetterFy <id@example.test>",
-      BETTERFY_PLAN_3D_STARS: "75",
-      BETTERFY_PLAN_15D_STARS: "225",
-      BETTERFY_PLAN_30D_STARS: "525",
-    },
-    outboundService: async (request) => {
-      outbound.push({ url: request.url, body: await request.text() });
-      if (request.url.includes("getUserProfilePhotos"))
-        return Response.json({ ok: true, result: { photos: [] } });
-      return Response.json({ ok: true, result: {} });
-    },
-  });
+  // Miniflare 5 no longer discovers the module graph from `modules: true` +
+  // `modulesRules`, so every source module is listed, entry point first.
+  const modules = [
+    "index.mjs",
+    ...readdirSync(`${root}src`)
+      .filter((file) => file.endsWith(".mjs") && file !== "index.mjs")
+      .sort(),
+  ].map((file) => ({ type: "ESModule", path: `${root}src/${file}` }));
+  const mf = new Miniflare(
+    convertV4MiniflareOptions({
+      modules,
+      modulesRoot: `${root}src`,
+      compatibilityDate: "2026-08-01",
+      d1Databases: ["AUTH_DB"],
+      bindings: {
+        AUTH_CODE_PEPPER: "p".repeat(40),
+        AUTH_PASSWORD_PEPPER: "q".repeat(40),
+        TELEGRAM_WEBHOOK_SECRET: "w".repeat(40),
+        TELEGRAM_BOT_TOKEN: "test",
+        BOT_USERNAME: "BeterFyBot",
+        PUBLIC_WORKER_URL: "https://example.test",
+        BOT_ASSET_BASE_URL: "https://example.test",
+        ALLOWED_ORIGINS: "https://zori-xyz.github.io",
+        VERIFY_GLOBAL_FAILURE_LIMIT: "3",
+        RESEND_API_KEY: "re_test",
+        EMAIL_FROM: "BetterFy <id@example.test>",
+        BETTERFY_PLAN_3D_STARS: "75",
+        BETTERFY_PLAN_15D_STARS: "225",
+        BETTERFY_PLAN_30D_STARS: "525",
+      },
+      outboundService: async (request) => {
+        outbound.push({ url: request.url, body: await request.text() });
+        if (request.url.includes("getUserProfilePhotos"))
+          return Response.json({ ok: true, result: { photos: [] } });
+        return Response.json({ ok: true, result: {} });
+      },
+    }),
+  );
   t.after(() => mf.dispose());
   const db = await mf.getD1Database("AUTH_DB");
   for (const file of readdirSync(`${root}migrations`).sort()) {
