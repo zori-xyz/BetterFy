@@ -95,6 +95,22 @@ const explainError = (code: string, isRu: boolean) => {
       "Сборку нужно подготовить заново: список изменений устарел.",
       "Prepare the build again: the change list is out of date.",
     ],
+    steam_rollback_failed: [
+      "Параметры запуска Steam вернуть не удалось. Проверь их в свойствах Dota 2 в Steam.",
+      "Steam launch options could not be restored. Check them in Dota 2's properties in Steam.",
+    ],
+    steam_config_plan_stale: [
+      "Steam изменил свои настройки во время операции. Закрой Steam и повтори.",
+      "Steam changed its settings during the operation. Close Steam and retry.",
+    ],
+    steam_config_invalid: [
+      "Файл настроек Steam не удалось прочитать. BetterFy не будет его менять.",
+      "Steam's settings file could not be read. BetterFy will not change it.",
+    ],
+    rollback_failed: [
+      "Откат не подтвердился проверкой. Сохрани отчёт и не меняй файлы вручную.",
+      "The restore did not pass verification. Save the report and do not change files manually.",
+    ],
     panorama_resolution_missing: [
       "Сборку нужно подготовить заново: снимок интерфейса игры не найден.",
       "Prepare the build again: the snapshot of the game interface is missing.",
@@ -492,18 +508,34 @@ export default function TreePilot({
   async function restore() {
     if (!operationId || !canManage || phase !== "idle") return;
     setError("");
+    setRecoveryMessage("");
     setPhase("restore");
+    // Once BetterFy has closed Steam it always tries to start it again and
+    // keeps a report, whether or not every step of the restore succeeded.
+    let steamClosed = false;
+    let buildRestored = false;
+    let steamProblem = "";
+    let keptUserChange = false;
     try {
       if (steamRecoveryRequired) throw new Error("steam_recovery_required");
       const runtime = await engineBridge.prepareRuntimeForPatch();
       if (!runtime.patchReady) throw new Error("runtime_busy");
+      steamClosed = true;
       if (steamOperationId) {
-        const steamReceipt = await engineBridge.rollbackSteamLaunchOptions(steamOperationId);
-        if (!steamReceipt.rolledBack) throw new Error("steam_rollback_failed");
-        setSteamOperationId(null);
+        // The game file does not depend on Steam's launch options, so a
+        // Steam problem is reported but does not keep the build installed.
+        try {
+          const steamReceipt = await engineBridge.rollbackSteamLaunchOptions(steamOperationId);
+          if (!steamReceipt.rolledBack) throw new Error("steam_rollback_failed");
+          keptUserChange = Boolean(steamReceipt.keptUserChange);
+          setSteamOperationId(null);
+        } catch (cause) {
+          steamProblem = codeOf(cause);
+        }
       }
       const receipt = await engineBridge.rollbackGameDeployment(installation.path, operationId);
       if (!receipt.rolledBack) throw new Error("rollback_failed");
+      buildRestored = true;
       setOperationId(null);
       setInstalledLanguage(null);
       setInstalledPackageIds([]);
@@ -512,27 +544,53 @@ export default function TreePilot({
       setPlan(null);
       setSelectedLanguage("");
       setSteamStarted(false);
-      try {
-        const restarted = await engineBridge.startSteamAfterRestore();
-        setSteamRestarted(restarted.steamRunning);
-        setRecoveryMessage(
-          isRu
-            ? "Сборка и параметры Steam восстановлены. Steam снова запущен."
-            : "The build and Steam launch options were restored. Steam is running again.",
-        );
-      } catch {
-        setSteamRestarted(false);
-        setRecoveryMessage(
-          isRu
-            ? "Сборка восстановлена, но Steam не удалось запустить автоматически. Запусти его вручную."
-            : "The build was restored, but Steam could not be started automatically. Start it manually.",
-        );
-      }
       setSteamRecoveryRequired(false);
-      saveEvidenceReport();
+      if (steamProblem) setError(steamProblem);
     } catch (cause) {
       setError(codeOf(cause));
     } finally {
+      if (steamClosed) {
+        let steamRunning = false;
+        try {
+          steamRunning = (await engineBridge.startSteamAfterRestore()).steamRunning;
+        } catch {
+          steamRunning = false;
+        }
+        setSteamRestarted(steamRunning);
+        const parts: string[] = [];
+        if (buildRestored) {
+          parts.push(isRu ? "Сборка удалена из игры." : "The build was removed from the game.");
+          if (steamProblem)
+            parts.push(
+              isRu
+                ? "Параметры запуска Steam вернуть не удалось — нажми «Восстановить параметры Steam» или проверь их вручную."
+                : "Steam launch options could not be restored. Use Restore Steam settings or check them manually.",
+            );
+          else if (keptUserChange)
+            parts.push(
+              isRu
+                ? "BetterFy убрал свой параметр -language, а параметры запуска, изменённые после установки, оставил как есть."
+                : "BetterFy removed its -language option and kept launch options that were changed after installation.",
+            );
+          else if (steamOperationId)
+            parts.push(
+              isRu
+                ? "Параметры запуска Steam восстановлены."
+                : "Steam launch options were restored.",
+            );
+        }
+        parts.push(
+          steamRunning
+            ? isRu
+              ? "Steam снова запущен."
+              : "Steam is running again."
+            : isRu
+              ? "Steam не удалось запустить автоматически — запусти его вручную."
+              : "Steam could not be started automatically. Start it manually.",
+        );
+        setRecoveryMessage(parts.join(" "));
+        saveEvidenceReport();
+      }
       setEngineActive(false);
       setPhase("idle");
     }
