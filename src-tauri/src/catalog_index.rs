@@ -351,6 +351,34 @@ fn activate_if_newer(
     Ok(())
 }
 
+/// Decides whether a fetched catalog may replace the current one. `cached`
+/// is the verified cached catalog's sequence and byte hash, if any.
+fn evaluate_remote(
+    bytes: &[u8],
+    signature: &str,
+    baseline: u64,
+    cached: Option<&(u64, String)>,
+    known: &BTreeMap<String, String>,
+    now: i64,
+) -> Result<(CatalogIndex, String, Vec<package_registry::PackageManifest>), String> {
+    let index = verify_and_parse(bytes, signature)?;
+    check_sequence(index.sequence, baseline)?;
+    let hash = byte_hash(bytes);
+    // A reused sequence is the cached catalog's own number with different
+    // bytes. The baseline also includes this build's floor, which a cache
+    // from an older catalog sits below; comparing with the baseline would
+    // reject the legitimate catalog published at the floor.
+    if cached.is_some_and(|(cached_sequence, cached_hash)| {
+        *cached_sequence == index.sequence && *cached_hash != hash
+    }) {
+        return Err("catalog_sequence_reused".to_string());
+    }
+    check_time(&index, now, false)?;
+    let merged = package_registry::merge_remote(&index.packages)?;
+    check_contracts(&merged, known)?;
+    Ok((index, hash, merged))
+}
+
 /// Activates the cached catalog if it still verifies, then tries the remote
 /// one. Serialized per process; every failure leaves the current set in place.
 pub fn refresh(app_data_root: &Path) -> CatalogStatus {
@@ -364,7 +392,7 @@ pub fn refresh(app_data_root: &Path) -> CatalogStatus {
     };
     let mut known = read_contracts(&dir);
     let mut baseline = min_sequence();
-    let mut cached_hash = None;
+    let mut cached_catalog: Option<(u64, String)> = None;
     let mut source = "embedded";
     let mut sequence = None;
     if let Some(cached) = read_cache(&dir) {
@@ -373,41 +401,56 @@ pub fn refresh(app_data_root: &Path) -> CatalogStatus {
             // longer be used, so losing usability never re-opens rollback.
             baseline = baseline.max(index.sequence);
             let hash = byte_hash(&cached.index);
-            cached_hash = Some(hash.clone());
             let usable = (index.sequence >= min_sequence()
                 && check_time(&index, now, true).is_ok())
             .then(|| package_registry::merge_remote(&index.packages).ok())
             .flatten()
             .filter(|merged| check_contracts(merged, &known).is_ok());
             if let Some(merged) = usable {
-                if activate_if_newer(index.sequence, hash, merged).is_ok() {
+                if activate_if_newer(index.sequence, hash.clone(), merged).is_ok() {
                     source = "cache";
                     sequence = Some(index.sequence);
                 }
             }
+            cached_catalog = Some((index.sequence, hash));
         }
     }
     let remote = fetch_remote().and_then(|(bytes, signature)| {
-        let index = verify_and_parse(&bytes, &signature)?;
-        check_sequence(index.sequence, baseline)?;
-        let hash = byte_hash(&bytes);
-        if index.sequence == baseline && cached_hash.as_ref().is_some_and(|cached| *cached != hash)
-        {
-            return Err("catalog_sequence_reused".to_string());
-        }
-        check_time(&index, now, false)?;
-        let merged = package_registry::merge_remote(&index.packages)?;
-        check_contracts(&merged, &known)?;
+        let (index, hash, merged) = evaluate_remote(
+            &bytes,
+            &signature,
+            baseline,
+            cached_catalog.as_ref(),
+            &known,
+            now,
+        )?;
         write_contracts(&dir, &mut known, &merged)?;
-        if cached_hash.as_ref() != Some(&hash) {
+        if cached_catalog.as_ref().map(|(_, cached_hash)| cached_hash) != Some(&hash) {
             write_cache(&dir, &bytes, &signature)?;
         }
         activate_if_newer(index.sequence, hash, merged)?;
         Ok(index.sequence)
     });
-    match remote {
+    let result = match remote {
         Ok(accepted) => status("remote", Some(accepted), None),
         Err(error) => status(source, sequence, Some(error)),
+    };
+    record_refresh(&dir, &result, now);
+    result
+}
+
+/// The outcome of the last refresh, kept next to the cache so a rejected or
+/// unreachable catalog is visible on the machine. Best effort: failing to
+/// write it never changes the outcome.
+fn record_refresh(dir: &Path, status: &CatalogStatus, now: i64) {
+    let record = serde_json::json!({
+        "checkedAt": now,
+        "source": status.source,
+        "sequence": status.sequence,
+        "error": status.error,
+    });
+    if let Ok(bytes) = serde_json::to_vec_pretty(&record) {
+        let _ = write_atomic(&dir.join("last-refresh.json"), &bytes);
     }
 }
 
@@ -416,6 +459,9 @@ mod tests {
     use super::*;
 
     const PUBLISHED_INDEX: &[u8] = include_bytes!("../../website/public/bot/catalog/index.json");
+    /// Sequence 2 as published on 2026-09-30, the cache found on the test PC.
+    const OLD_INDEX: &[u8] = include_bytes!("../tests/fixtures/catalog_sequence_2.json");
+    const OLD_SIGNATURE: &str = include_str!("../tests/fixtures/catalog_sequence_2.json.sig");
     const PUBLISHED_SIGNATURE: &str =
         include_str!("../../website/public/bot/catalog/index.json.sig");
     const UPDATER_PUBLIC_KEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI5RjYxQTkzNTQxRDZFOTAKUldTUWJoMVVreHIyS2ZaRWFUVllzVGVUUElzM3UzU3pROXRRM0RsUGVzSGRUNXJBOWY1Q041c2UK";
@@ -491,6 +537,55 @@ mod tests {
             check_time(&forever, now, false).is_err(),
             "validity is capped"
         );
+    }
+
+    #[test]
+    fn a_cache_below_the_build_floor_does_not_block_the_catalog_at_the_floor() {
+        // EA.24/EA.25 Windows pass: the device cache held sequence 2 while
+        // this build's floor and the Worker were at the published sequence;
+        // refresh rejected it as catalog_sequence_reused.
+        let old: CatalogIndex = verify_and_parse(OLD_INDEX, OLD_SIGNATURE).expect("old catalog");
+        let published =
+            verify_and_parse(PUBLISHED_INDEX, PUBLISHED_SIGNATURE).expect("published catalog");
+        assert!(old.sequence < published.sequence);
+        assert_eq!(published.sequence, min_sequence());
+        let cached = (old.sequence, byte_hash(OLD_INDEX));
+        let baseline = min_sequence().max(old.sequence);
+        let issued = parse_utc(&published.issued_at).expect("issued");
+        let (accepted, hash, _) = evaluate_remote(
+            PUBLISHED_INDEX,
+            PUBLISHED_SIGNATURE,
+            baseline,
+            Some(&cached),
+            &BTreeMap::new(),
+            issued + 60,
+        )
+        .expect("the published catalog is accepted over an older cache");
+        assert_eq!(accepted.sequence, published.sequence);
+        // Same sequence as the cache with different bytes is still a reuse.
+        assert_eq!(
+            evaluate_remote(
+                PUBLISHED_INDEX,
+                PUBLISHED_SIGNATURE,
+                baseline,
+                Some(&(published.sequence, "0".repeat(64))),
+                &BTreeMap::new(),
+                issued + 60,
+            )
+            .err()
+            .as_deref(),
+            Some("catalog_sequence_reused")
+        );
+        // The identical cached catalog is accepted again.
+        assert!(evaluate_remote(
+            PUBLISHED_INDEX,
+            PUBLISHED_SIGNATURE,
+            baseline,
+            Some(&(published.sequence, hash)),
+            &BTreeMap::new(),
+            issued + 60,
+        )
+        .is_ok());
     }
 
     #[test]
