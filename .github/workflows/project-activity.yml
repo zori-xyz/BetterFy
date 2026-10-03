@@ -1,0 +1,86 @@
+name: Project activity chart
+
+# Regenerates the README "Project activity" card from git history.
+#
+# The scheduled and manual runs commit only .github/assets/project-activity-*.svg.
+# That path is outside every path filter in early-access-release.yml and
+# pages.yml, and release.yml runs on tags only. The push uses GITHUB_TOKEN,
+# and pushes made with GITHUB_TOKEN do not start new workflow runs, so the
+# daily commit does not re-run windows-build.yml or product-checks.yml either;
+# "[skip ci]" in the message is a second, explicit guard.
+#
+# Pull requests that change the generator or this workflow render the chart
+# and validate it without committing anything.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/scripts/project-activity.mjs"
+      - ".github/workflows/project-activity.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: project-activity-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  render:
+    name: Render activity chart
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Render chart
+        run: node .github/scripts/project-activity.mjs
+
+      - name: Validate SVG output
+        shell: python3 {0}
+        run: |
+          import xml.etree.ElementTree as ET
+
+          for theme in ("dark", "light"):
+              path = f".github/assets/project-activity-{theme}.svg"
+              root = ET.parse(path).getroot()
+              assert root.tag == "{http://www.w3.org/2000/svg}svg", root.tag
+              assert root.get("viewBox") == f"0 0 {root.get('width')} {root.get('height')}"
+              text = open(path, encoding="utf-8").read()
+              assert "<script" not in text and "@import" not in text and "href=" not in text
+              print(f"{path}: valid, {root.get('width')}x{root.get('height')}")
+
+      - name: Commit chart if it changed
+        if: github.event_name != 'pull_request'
+        run: |
+          if git diff --quiet -- .github/assets/; then
+            echo "Chart unchanged; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/assets/project-activity-dark.svg .github/assets/project-activity-light.svg
+          if git diff --cached --name-only | grep -vqE '^\.github/assets/project-activity-(dark|light)\.svg$'; then
+            echo "Refusing to commit paths outside the chart assets." >&2
+            exit 1
+          fi
+          git commit -m "chore(readme): update project activity chart [skip ci]"
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              exit 0
+            fi
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+          done
+          echo "Push failed after three attempts." >&2
+          exit 1
