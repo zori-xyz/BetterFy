@@ -775,8 +775,8 @@ async fn install_tree_pilot(
 }
 
 #[tauri::command]
-fn tree_pilot_stress_capabilities() -> DeploymentStressCapabilities {
-    game_deployment::deployment_stress_capabilities()
+async fn tree_pilot_stress_capabilities(app: AppHandle) -> DeploymentStressCapabilities {
+    game_deployment::deployment_stress_capabilities(auth_session::developer_access(app).await)
 }
 
 #[tauri::command]
@@ -787,7 +787,11 @@ async fn install_tree_pilot_stress(
     if !request.confirmed {
         return Err("deployment_confirmation_required".to_string());
     }
-    if !game_deployment::deployment_stress_capabilities().enabled {
+    if !game_deployment::deployment_stress_capabilities(
+        auth_session::developer_access(app.clone()).await,
+    )
+    .enabled
+    {
         return Err("stress_test_disabled".to_string());
     }
     let app_data = app
@@ -1032,7 +1036,11 @@ async fn apply_tree_steam_launch_options_stress(
     if !request.confirmed {
         return Err("steam_config_confirmation_required".to_string());
     }
-    if !game_deployment::deployment_stress_capabilities().enabled {
+    if !game_deployment::deployment_stress_capabilities(
+        auth_session::developer_access(app.clone()).await,
+    )
+    .enabled
+    {
         return Err("stress_test_disabled".to_string());
     }
     let app_data = app

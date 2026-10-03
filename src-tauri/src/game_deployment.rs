@@ -671,10 +671,13 @@ pub(crate) fn deploy_verified_bundle_for_language(
     )
 }
 
-pub(crate) fn deployment_stress_capabilities() -> DeploymentStressCapabilities {
+/// Stress controls need both the compiled stop points and an account the auth
+/// service marks as a developer.
+pub(crate) fn deployment_stress_capabilities(developer: bool) -> DeploymentStressCapabilities {
+    let enabled = cfg!(feature = "internal-stress-test") && developer;
     DeploymentStressCapabilities {
-        enabled: cfg!(feature = "internal-stress-test"),
-        failure_points: if cfg!(feature = "internal-stress-test") {
+        enabled,
+        failure_points: if enabled {
             vec!["after_prepared", "after_replace"]
         } else {
             Vec::new()
@@ -1124,6 +1127,16 @@ pub(crate) fn collect_evidence(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stress_controls_require_a_developer_account() {
+        let signed_out = deployment_stress_capabilities(false);
+        assert!(!signed_out.enabled);
+        assert!(signed_out.failure_points.is_empty());
+        let developer = deployment_stress_capabilities(true);
+        assert_eq!(developer.enabled, cfg!(feature = "internal-stress-test"));
+        assert_eq!(developer.failure_points.is_empty(), !developer.enabled);
+    }
 
     fn root(label: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(

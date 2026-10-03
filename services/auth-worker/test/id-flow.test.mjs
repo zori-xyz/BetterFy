@@ -91,6 +91,31 @@ test("ID registration verifies email, stores only a salted verifier, and signs i
     const byEmail = await route(post("/v1/auth/id/login", { identifier: "PLAYER@example.com", password: "a long passphrase 2026", clientKind: "web" }), env);
     assert.equal(byEmail.status, 200);
     assert.equal((await byEmail.json()).userId, profile.userId);
+
+    const sessionProfile = async (token) => {
+      const response = await route(new Request("https://auth.example/v1/session/profile", {
+        headers: { origin: "https://zori-xyz.github.io", authorization: `Bearer ${token}` },
+      }), env);
+      assert.equal(response.status, 200);
+      return response.json();
+    };
+    assert.equal((await sessionProfile(profile.sessionToken)).developer, false, "no setting, no developer");
+    env.BETTERFY_DEVELOPER_LOGINS = " someone_else , Player_07 ";
+    assert.equal((await sessionProfile(profile.sessionToken)).developer, true, "listed BetterFy ID login");
+    env.BETTERFY_DEVELOPER_LOGINS = "someone_else";
+    assert.equal((await sessionProfile(profile.sessionToken)).developer, false, "unlisted login");
+
+    // A Telegram account whose public username matches the listed login has
+    // no BetterFy ID credential and must not become a developer.
+    db.sqlite.prepare(
+      `INSERT INTO betterfy_users (user_id, telegram_user_id, display_name, username, language, created_at, updated_at)
+       VALUES ('tg-user', '123456', 'Impostor', 'someone_else', 'ru', 1, 1)`,
+    ).run();
+    const tgSession = await route(post("/v1/auth/id/login", { identifier: "Player_07", password: "a long passphrase 2026", clientKind: "web" }), env);
+    const tgToken = (await tgSession.json()).sessionToken;
+    db.sqlite.prepare("UPDATE auth_sessions SET user_id = 'tg-user' WHERE session_hash = (SELECT session_hash FROM auth_sessions ORDER BY rowid DESC LIMIT 1)").run();
+    globalThis.fetch = async () => Response.json({ ok: true, result: { photos: [] } });
+    assert.equal((await sessionProfile(tgToken)).developer, false, "Telegram username is not a BetterFy ID login");
   } finally {
     globalThis.fetch = previousFetch;
     db.sqlite.close();
