@@ -1,43 +1,35 @@
 name: Mod compatibility report
-description: Record how a pinned pilot package behaved in Dota 2 on Windows
+description: Record how installed packages behaved in Dota 2 on Windows
 title: "[Compatibility] "
 body:
   - type: markdown
     attributes:
       value: |
-        Only the pinned internal pilot packages listed below can be installed. Other catalog items are preview-and-save content and do not write Dota files, so they cannot produce a compatibility result yet.
+        Use this form for packages installed from BetterFy's Game tuning tab. One report describes one session on one machine: it is evidence for that session, not a general compatibility result.
 
-        One report describes one session on one machine. It is evidence for that session, not a general compatibility result. See the [Tree Mod pilot ledger](https://github.com/zori-xyz/BetterFy/blob/main/docs/TREE_MOD_PILOT.md) for what has already been observed.
+        A BetterFy success state is not proof that Dota loaded a change; only what you saw in the game is. See the [EA.24 Windows test plan](https://github.com/zori-xyz/BetterFy/blob/main/docs/EA24_WINDOWS_TEST_PLAN.md) for what is already being tested.
   - type: input
     id: version
     attributes:
-      label: Release tag or build
-      description: The exact tag from the Releases page, or the workflow run URL or commit for an internal CI artifact.
+      label: BetterFy release tag
+      description: The exact tag from the Releases page. For an internal CI artifact, give the workflow run URL or commit instead.
       placeholder: v0.1.4-ea.24
     validations:
       required: true
-  - type: dropdown
+  - type: textarea
     id: packages
     attributes:
-      label: Packages installed
-      description: Select every package that was part of the build.
-      multiple: true
-      options:
-        - Tree Mod
-        - Show Net Worth
-        - Repopulate Unit Query HUD
+      label: Packages in the build
+      description: Package names exactly as shown in the app's Game tuning tab, one per line, in build order (first to last).
+      placeholder: |
+        Tree Mod
+        Show NetWorth
     validations:
       required: true
-  - type: input
-    id: order
-    attributes:
-      label: Package order
-      description: The order shown in My build, first to last. The first package wins a same-path collision.
-      placeholder: Tree Mod, Show Net Worth, Repopulate Unit Query HUD
   - type: dropdown
     id: language
     attributes:
-      label: Game language slot
+      label: Game language folder
       options:
         - Dutch (dota_dutch)
         - Russian (dota_russian)

@@ -35,8 +35,8 @@ disagreement as a bug and verify the behavior before changing either side.
 - [Trusted content intake](CONTENT_INTAKE_SECURITY.md) — manifest, artifact,
   immutable-store, and recovery boundaries before downloads or extraction.
 - [Tree Mod pilot ledger](TREE_MOD_PILOT.md) — pinned upstream sources,
-  resource hashes, target paths, and Windows evidence for the three internal
-  pilot packages.
+  resource hashes, target paths, and Windows evidence for the first pilot
+  packages and the later passes on the manifest-driven engine.
 
 ## Services and accounts
 

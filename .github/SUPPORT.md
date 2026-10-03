@@ -7,7 +7,7 @@ channel that matches what you need.
 | --- | --- |
 | Installation help, account access, Early Access news | [@BeterFyBot](https://t.me/BeterFyBot) on Telegram |
 | A reproducible problem in a released build | A [bug report](https://github.com/zori-xyz/BetterFy/issues/new?template=bug.yml) |
-| How a pinned pilot package behaved in Dota 2 | A [mod compatibility report](https://github.com/zori-xyz/BetterFy/issues/new?template=mod-compatibility.yml) |
+| How an installed package behaved in Dota 2 | A [mod compatibility report](https://github.com/zori-xyz/BetterFy/issues/new?template=mod-compatibility.yml) |
 | A product improvement | A [product proposal](https://github.com/zori-xyz/BetterFy/issues/new?template=feature.yml) |
 | A suspected vulnerability | The private process in [SECURITY.md](SECURITY.md), never a public issue |
 
