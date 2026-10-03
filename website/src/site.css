@@ -79,7 +79,7 @@ a:hover>.wordmark .wordmark-fy,.footer-mark:hover .wordmark-fy{transform:transla
 .site-ambient{position:absolute;inset:0;z-index:-1;width:100%;height:100%;pointer-events:none}
 .hero{display:grid;grid-template-columns:.85fr 1.15fr;gap:56px;align-items:center;padding-block:72px 64px}
 .hero-copy{position:relative;z-index:2}
-.hero h1{font-size:clamp(52px,4.8vw,78px);line-height:1.02;margin:20px 0 22px}
+.hero h1{font-size:clamp(44px,4.2vw,68px);line-height:1.02;margin:20px 0 22px}
 .hero h1 strong{display:block;background:linear-gradient(100deg,var(--accent) 42%,#f1d5ff 50%,var(--accent) 58%) 100% 0/260% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:ink 6s var(--ease) 1.4s infinite}
 @keyframes ink{0%,65%{background-position:100% 0}100%{background-position:0 0}}
 .lead{max-width:540px;color:var(--muted);font-size:16px;line-height:1.7}
@@ -455,3 +455,12 @@ a:hover>.wordmark .wordmark-fy,.footer-mark:hover .wordmark-fy{transform:transla
 @media(max-width:420px){.header-download{display:none}}
 .profile-avatar.is-logo{background:none;box-shadow:0 12px 34px rgba(180,92,239,.25)}
 .profile-avatar.is-logo img{border-radius:inherit}
+
+/* Display type: Days One, the face of the "Better" wordmark, for large
+   headings; Manrope stays for everything small, as in the app. */
+h1,h2,.feature-copy h3,.how-copy h3,.download-inner h2{font-family:"Days One","Manrope",sans-serif;font-weight:400;letter-spacing:-.035em}
+h1 strong,h2 strong{font-weight:400}
+.hero h1{line-height:1.06}
+.section-intro h2,.download-inner h2{line-height:1.08}
+.how-copy h3{font-size:19px;letter-spacing:-.02em}
+.profile-head h2,.download-panel h2{font-family:"Days One","Manrope",sans-serif;font-weight:400;letter-spacing:-.03em}
