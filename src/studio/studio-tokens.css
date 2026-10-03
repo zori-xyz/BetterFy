@@ -35,6 +35,14 @@
   --s-text-md:12px;
   --s-text-base:13px;
   --s-text-lg:14px;
+  /* Motion scale. --s-ease-spring overshoots once and settles; it is the
+     CSS linear() approximation of a spring and needs Chromium 113+, which
+     WebView2 on supported Windows versions provides. */
+  --s-motion-fast:.16s;
+  --s-motion-base:.28s;
+  --s-motion-slow:.6s;
+  --s-ease-out:cubic-bezier(.23,1,.32,1);
+  --s-ease-spring:linear(0,.009,.035 2.1%,.141,.281 6.7%,.723 12.9%,.938 16.7%,1.017,1.077,1.121,1.149 24.3%,1.159,1.163,1.161,1.154 29.9%,1.129 32.8%,1.051 39.6%,1.017 43.1%,.991,.977 51%,.974 53.8%,.975 57.1%,.997 69.8%,1.003 76.9%,1);
   --s-hero-accent:#f29678;
   --s-hero-accent-text:#241710;
   --s-status-font-size:10px;

@@ -6,9 +6,13 @@ import type { Language } from "../i18n";
 type PackageManifest = {
   id: string;
   catalogId: string;
+  /** Replaced by a newer package; kept only so existing builds stay verifiable. */
+  supersededBy?: string | null;
   name: Record<Language, string>;
   author: string;
   verifiedLanguages?: string[];
+  conflicts?: string[];
+  requires?: string[];
 };
 
 const manifests = import.meta.glob<PackageManifest>("../../src-tauri/packages/*.json", {
@@ -16,19 +20,20 @@ const manifests = import.meta.glob<PackageManifest>("../../src-tauri/packages/*.
   import: "default",
 });
 
-export const installablePackages: PackageManifest[] = Object.values(manifests).sort((a, b) =>
-  a.catalogId.localeCompare(b.catalogId),
-);
+export const installablePackages: PackageManifest[] = Object.values(manifests)
+  .filter((manifest) => !manifest.supersededBy)
+  .sort((a, b) => a.catalogId.localeCompare(b.catalogId));
 
 const byAnyId = new Map<string, PackageManifest>();
 /** Catalog IDs of every installable package; shared with the catalog model. */
 export const pilotCatalogIds = new Set<string>();
 function index(manifest: PackageManifest) {
   byAnyId.set(manifest.id, manifest);
+  if (manifest.supersededBy) return;
   byAnyId.set(manifest.catalogId, manifest);
   pilotCatalogIds.add(manifest.catalogId);
 }
-installablePackages.forEach(index);
+Object.values(manifests).forEach(index);
 
 // The engine may activate a newer signed catalog at runtime. Its summaries
 // replace or extend the embedded list; subscribers re-render.
@@ -44,8 +49,9 @@ export function applyInstallablePackages(summaries: PackageManifest[]) {
         byAnyId.delete(previous.catalogId);
         pilotCatalogIds.delete(previous.catalogId);
       }
-      installablePackages[existing] = summary;
-    } else installablePackages.push(summary);
+      if (summary.supersededBy) installablePackages.splice(existing, 1);
+      else installablePackages[existing] = summary;
+    } else if (!summary.supersededBy) installablePackages.push(summary);
     index(summary);
   }
   installablePackages.sort((a, b) => a.catalogId.localeCompare(b.catalogId));
@@ -64,7 +70,7 @@ export function usePackagesRevision() {
 
 /** Catalog ID (`minify-tree-mod`) or engine ID (`minify.tree-mod`). */
 /** Upper bound on packages the engine merges into one build (tree_pilot.rs). */
-export const MAX_BUNDLE_PACKAGES = 16;
+export const MAX_BUNDLE_PACKAGES = 32;
 
 export function findPackage(id: string) {
   return byAnyId.get(id);
@@ -72,6 +78,24 @@ export function findPackage(id: string) {
 
 export function engineIdFor(catalogId: string) {
   return findPackage(catalogId)?.id ?? catalogId;
+}
+
+/**
+ * Minify's own rules (tree_pilot.rs checks the same): two packages that
+ * conflict, or a package whose required package is not selected.
+ */
+export function bundleRelationProblem(
+  ids: string[],
+): { kind: "conflict" | "missing"; packageId: string; otherId: string } | null {
+  const selected = new Set(ids.map((id) => findPackage(id)?.id ?? id));
+  for (const id of selected) {
+    const manifest = findPackage(id);
+    const conflict = manifest?.conflicts?.find((other) => selected.has(other));
+    if (conflict) return { kind: "conflict", packageId: id, otherId: conflict };
+    const missing = manifest?.requires?.find((other) => !selected.has(other));
+    if (missing) return { kind: "missing", packageId: id, otherId: missing };
+  }
+  return null;
 }
 
 export function packageName(id: string, language: Language) {

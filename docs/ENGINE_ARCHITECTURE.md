@@ -391,9 +391,9 @@ drift from the engine's.
 A resource may name a different repository path in `from`. That is how a Minify
 `blacklist.txt` line is represented: the listed game path receives the matching
 `Minify/bin/blank-files/blank.<ext>` placeholder, fetched and hash-checked like any
-other file. The placeholder must have the same extension as the target. Only literal
-blacklist lines can be expressed; Minify's `**` and `>>` patterns expand against the
-installed game's file list and are not supported. Zero-length resources are allowed
+other file. The placeholder must have the same extension as the target. A manifest
+may instead carry a whole `blacklist.txt` (see "Blacklist packages" below), which also
+covers Minify's `**` and `>>` patterns. Zero-length resources are allowed
 when their hash is the SHA-256 of empty input; they need no download and are written
 as zero-length VPK entries, which is how Minify silences sounds.
 
@@ -407,6 +407,134 @@ changing any path, size or hash. A test pins a fingerprint of the contracts, and
 building the ordered three-package bundle from the real pinned resources gave the
 same plan ID and VPK SHA-256 before and after the move, so existing installations
 and their journals are still recognised.
+
+### Blacklist packages
+
+A manifest may name a Minify `blacklist.txt` in a `blacklist` block: its repository
+path, size and SHA-256, plus one pinned `Minify/bin/blank-files/blank.<ext>`
+placeholder per compiled type. The file and the placeholders are downloaded through
+the same pinned path and content-addressed store as resources. The block is part of
+the package contract; manifests without it keep their previous contract hashes.
+
+`src-tauri/src/blacklist.rs` reads the file line by line: `#` comments and blank
+lines are ignored, `>>dir` selects every resource under that directory, `**regex`
+selects every resource whose path the expression matches anywhere (Minify runs
+ripgrep over the game's file list the same way), and any other line is an exact
+path. Lines are matched against the resource paths of the installed game's own
+`game/dota/pak01_dir.vpk` and `game/core/pak01_dir.vpk`, read from their directory
+trees only (`vpk::list_directory_paths`, VPK versions 1 and 2). Exact paths the game
+does not have, rules that match nothing and matches of a type without a placeholder
+are counted and skipped, never guessed. Regular expressions use the `regex` crate,
+whose matching time is linear in the input, and every file, line and result count is
+bounded.
+
+The expansion happens once, when a build is prepared for a specific installation,
+and is stored per package under `engine-v1/blacklist/`. Every later rebuild of the
+same bundle (plan verification before install, Steam setup, installed-state check,
+restore) reads that stored expansion, so a Dota update does not change what BetterFy
+considers installed. Preparing again re-expands against the current game. In a
+bundle, a file a package ships itself always wins over a blank for the same path.
+
+Manifests may also declare `conflicts` and `requires` (package IDs), mirroring
+Minify's own manifest rules: Remove Pings and Revert Ping Sounds exclude each other,
+and Dark Terrain requires Remove Foilage. The engine rejects such a selection before
+anything is downloaded; the interface explains it before preparation.
+
+Thirteen packages were added this way from the same pinned commit: Minify Base
+Attacks, Minify Spells & Items, Misc Optimization, Mute Ambient Sounds, Mute Default
+Announcer, Mute Taunt Sounds, Mute Voice Line Sounds, Remove Foilage, Remove Pings,
+Remove Sprays, Remove Weather Effects, Revert Ping Sounds (8 files plus its
+blacklist) and Dark Terrain (300 files). None of them has been checked in game yet,
+so their manifests record no verified language.
+
+### Panorama style packages
+
+A manifest may carry a Minify `styling.css` in `panoramaStyles` (repository path, size,
+SHA-256). The file is split into sections by its `/* g:panorama/styles/... */` (from
+`game/dota/pak01_dir.vpk`) and `/* c:... */` (from `game/core/pak01_dir.vpk`) headers;
+each section is CSS that Minify appends to that compiled style.
+
+BetterFy does this without Valve's resource compiler (`src-tauri/src/panorama.rs`). A
+compiled style is a Source 2 resource: a 16-byte header, a block table with offsets
+relative to each entry, and 16-byte-aligned blocks. Its `DATA` block holds a CRC, an
+image table and the plain CSS text. The engine appends the package's CSS to that text
+and rebuilds the container; every other block (dependencies, source map, image table,
+the CRC) is kept byte for byte, and appending keeps the source map's offsets valid. New
+`url(...)` images cannot be added this way, and none of the pinned `styling.css` files
+uses them. Whether the game client accepts a style whose text no longer matches the
+kept CRC is the open question; Valve ships styles where the two already differ, and the
+first in-game check on Windows answers it.
+
+When a build is prepared, the game's own styles named by the selected packages are read
+from the installation's archives, including numbered side archives (`pak01_NNN.vpk`),
+checked against the directory CRC, stored by SHA-256, and listed per package under
+`engine-v1/panorama/`. Rebuilds use these stored originals, as with blacklists. When
+several packages extend the same style, their CSS is joined lowest priority first so the
+highest-priority package's rules come last, and the result belongs to that package in
+the bundle.
+
+Seven packages use this: Remove Hero Renders, Remove Main Menu Background, Remove
+Showcases, Reposition & Rescale HUD, Transparent HUD, Revamp Hero Grid Layout (also a
+blacklist) and Stat Site Buttons (also a layout package, below).
+
+### Panorama layout packages
+
+A manifest may carry a Minify `xml.json` in `panoramaLayouts` (repository path, size,
+SHA-256), optionally with a settings `menu.xml`. Each key names a game layout
+(`panorama/layout/....xml`, compiled as `.vxml_c` in `game/dota/pak01_dir.vpk`); each
+value is a list of Minify actions: `add_script`, `add_style_include`, `set_attribute`,
+`add_child`, `insert_after`, `insert_before` and `move_into`. Minify decompiles the
+layout to XML, applies the actions with ElementTree and recompiles with the Workshop
+Tools. BetterFy edits the compiled layout directly (`src-tauri/src/panorama_layout.rs`,
+`src-tauri/src/kv3.rs`):
+
+- A compiled layout keeps its tree as binary KeyValues3 in the `LaCo` block
+  (`m_AST.m_pRoot`; nodes with `eType`, `name`, `child`/`vecChildren`,
+  `sourceLineColumn`). The reader handles KV3 versions 2 to 5, uncompressed or LZ4;
+  the edited tree is written back as uncompressed version 5. Every other block is kept
+  byte for byte.
+- Selectors follow Minify's grammar (`tag#id.class[attr=value]`) and its two different
+  "first match" orders: document order for `set_attribute`, `add_child` and the
+  `move_into` destination; parent-by-parent for `insert_*` and the moved element.
+- The compiler leaves `m_ChildResourceList` empty even for layouts that include scripts
+  and styles, so includes resolve by path at load time and editing the tree alone
+  matches the compiler's output. New nodes reuse the source position of the place they
+  are inserted at; the `DATA` CRC of the source XML is kept, as with styles.
+- A settings `menu.xml` goes into a "Minify" section appended to
+  `PopupSettingsRebornSettingsBody` in `popup_settings_reborn`, as Minify's Auto Accept
+  Match script does. BetterFy needs no Workshop Tools, so the slider is always added.
+
+Layout actions can carry script in event attributes (`onload`, `onactivate`), and
+`add_script` loads a compiled Panorama script. Both are accepted only from an
+allowlist compiled into the app: `xml.json`/`menu.xml` files by exact repository path,
+size and SHA-256, and `vjs_c` resources by exact path, size and SHA-256. A signed
+catalog cannot extend either list. The two audited scripts are Auto Accept Match's
+`popup_auto_accept_match.vjs_c` (waits the slider's delay, then dispatches
+`DOTAPlayAcceptMatch`) and Stat Site Buttons' `ssb.vjs_c` (opens the match or profile
+on Dotabuff, OpenDota or Stratz through Dota's own browser events).
+
+When a build is prepared, the game layouts each package edits are read, every action is
+applied once as a check, and the originals are stored under `engine-v1/layout/`. A target
+that a Dota update moved or removed fails preparation with
+`panorama_layout_target_missing` instead of producing a half-edited layout. When several
+packages edit the same layout, the lowest priority edits first and the result belongs to
+the highest-priority package.
+
+Verified on this Mac only: exact tree round trips through the Rust reader and writer on
+four Valve-compiled layouts (KV3 v2 with LZ4 and v5), the Rust output read back by an
+independent Python parser, and Minify's Auto Accept edits applied to a Valve-compiled
+`popup_accept_match.vxml_c`. Not yet run on Windows or in game.
+
+Auto Accept Match, Stat Site Buttons and Repopulate Unit Query HUD use this. The first
+published Repopulate package shipped only the override styles, which nothing loads
+without the `xml.json` edits that include them. Its contract cannot change (see "Signed
+package catalog"), so the full version is a new package,
+`minify.repopulate-unit-query-hud-v2`, which takes over the catalog entry. The old
+package keeps its ID and contract, so builds that include it stay verifiable and
+restorable; it carries `supersededBy` and a `-legacy` catalog ID, and the interface no
+longer offers it. A remote catalog that still lists the old package under its original
+catalog ID collides with the new one and is rejected by this build, so the catalog and
+the app release ship together.
 
 ### Installed profile
 

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "minify.stat-site-buttons",
+  "catalogId": "minify-stat-site-buttons",
+  "name": {
+    "ru": "Кнопки сервисов статистики",
+    "en": "Stat Site Buttons"
+  },
+  "author": "Egezenn",
+  "source": {
+    "repository": "Egezenn/dota2-minify",
+    "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+    "directory": "Minify/mods/Stat Site Buttons/files",
+    "license": "GPL-3.0"
+  },
+  "distribution": "internal_pilot",
+  "verifiedLanguages": [],
+  "resources": [
+    {
+      "path": "panorama/scripts/ssb.vjs_c",
+      "bytes": 1756,
+      "sha256": "34939a9a235d2bba6baade70841b9f8b21681ba2cc728a37be5272986dcf3131"
+    }
+  ],
+  "panoramaStyles": {
+    "from": "Minify/mods/Stat Site Buttons/styling.css",
+    "bytes": 1532,
+    "sha256": "c333c93166ecc5ed3e230d7d8ceafdf2b36ff21b627582eef5fd5669ee655d5a"
+  },
+  "panoramaLayouts": {
+    "from": "Minify/mods/Stat Site Buttons/xml.json",
+    "bytes": 5033,
+    "sha256": "206c2437af444129cdf372255442b0ae7b9ce563ae440b9607064ed4e1b3be4b"
+  }
+}

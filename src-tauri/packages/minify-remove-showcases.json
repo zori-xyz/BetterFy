@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "minify.remove-showcases",
+  "catalogId": "minify-remove-showcases",
+  "name": {
+    "ru": "Убрать витрины профиля",
+    "en": "Remove Showcases"
+  },
+  "author": "Egezenn",
+  "source": {
+    "repository": "Egezenn/dota2-minify",
+    "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+    "directory": "Minify/mods/Remove Showcases",
+    "license": "GPL-3.0"
+  },
+  "distribution": "internal_pilot",
+  "verifiedLanguages": [],
+  "panoramaStyles": {
+    "from": "Minify/mods/Remove Showcases/styling.css",
+    "bytes": 403,
+    "sha256": "0a3b77a10c550a89bbe44f6fa5eab2604ba45c48fd7eb7be3213602331fe0b3d"
+  }
+}

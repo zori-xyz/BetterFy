@@ -2,6 +2,7 @@
 
 mod archive_inspector;
 mod auth_session;
+mod blacklist;
 mod build_engine;
 mod catalog_index;
 mod content_store;
@@ -9,8 +10,11 @@ mod evidence_reports;
 mod game_deployment;
 mod game_language;
 mod installed_profile;
+mod kv3;
 mod mod_bundle;
 mod package_registry;
+mod panorama;
+mod panorama_layout;
 mod presets;
 mod remote_intake;
 mod runtime_control;
@@ -677,12 +681,21 @@ async fn deploy_staged_vpk(
 fn begin_tree_pilot_download(
     app: AppHandle,
     package_ids: Vec<String>,
+    game_path: Option<String>,
 ) -> Result<tree_pilot::TreeDownloadStatus, String> {
     let app_data = app
         .path()
         .app_data_dir()
         .map_err(|_| "build_failed".to_string())?;
-    tree_pilot::begin_download(app_data, package_ids)
+    // Blacklists are expanded against this installation's own archives.
+    let game_path = match game_path {
+        Some(path) => {
+            validate_candidate(Path::new(&path), "manual")?;
+            Some(std::path::PathBuf::from(path))
+        }
+        None => None,
+    };
+    tree_pilot::begin_download(app_data, package_ids, game_path)
 }
 
 #[tauri::command]

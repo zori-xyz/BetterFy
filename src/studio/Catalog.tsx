@@ -230,8 +230,8 @@ export default function Catalog({
         <p>
           {filters.domain === "game"
             ? isRu
-              ? "Три закреплённых мода — Tree Mod, Networth и Unit Query HUD — доступны в этом статусе. Остальные карточки сохраняются в набор, но пока не записываются в Dota 2."
-              : "Three pinned mods — Tree Mod, Networth and Unit Query HUD — have this status. Other cards can be saved to a build but are not written to Dota 2 yet."
+              ? "Моды с этой отметкой ставятся в Dota 2 с проверкой и откатом. Остальные карточки сохраняются в набор, но пока не записываются в Dota 2."
+              : "Mods with this mark install into Dota 2 with verification and rollback. Other cards can be saved to a build but are not written to Dota 2 yet."
             : isRu
               ? "Облики и эффекты можно изучать и сохранять в наборы. Их установка в Dota 2 пока не включена."
               : "Looks and effects can be explored and saved to builds. Installing them into Dota 2 is not enabled yet."}

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "minify.remove-hero-renders",
+  "catalogId": "minify-remove-hero-renders",
+  "name": {
+    "ru": "Убрать рендеры героев",
+    "en": "Remove Hero Renders"
+  },
+  "author": "Egezenn",
+  "source": {
+    "repository": "Egezenn/dota2-minify",
+    "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+    "directory": "Minify/mods/Remove Hero Renders",
+    "license": "GPL-3.0"
+  },
+  "distribution": "internal_pilot",
+  "verifiedLanguages": [],
+  "panoramaStyles": {
+    "from": "Minify/mods/Remove Hero Renders/styling.css",
+    "bytes": 991,
+    "sha256": "c53bc2abf9621197c2ad9b6ed9b9676a1935e12ae45aaa868181a3ae18d37b32"
+  }
+}

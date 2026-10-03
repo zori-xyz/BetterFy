@@ -66,27 +66,18 @@
 .s-showcase-look:focus-visible{z-index:30!important;opacity:1!important;transform:none!important;outline-offset:4px}
 .s-showcase-look>.s-media-fallback{width:100%;height:100%}
 .s-icon,.s-add,.s-filter-button,.s-sidebar nav button,.s-sidebar nav a,.s-setting-row .s-switch,.s-top-search{transition:background-color .2s ease,color .2s ease,border-color .2s ease,box-shadow .2s ease}
-:is(.s-btn,.s-icon,.s-add,.s-text-button,.s-filter-button,.s-sidebar nav button,.s-sidebar nav a,.s-settings-nav button,.s-collection-card,.s-top-search,.auth-open-button,.auth-web-button) svg:not(.s-spin):not(.rotated):not(.s-arrow-forward){transition:transform .22s cubic-bezier(.23,1,.32,1),stroke .2s ease;transform-origin:center;transform-box:fill-box}
+:is(.s-btn,.s-icon,.s-add,.s-text-button,.s-filter-button,.s-sidebar nav button,.s-sidebar nav a,.s-settings-nav button,.s-collection-card,.s-top-search,.auth-open-button,.auth-web-button) svg:not(.s-spin):not(.rotated):not(.s-arrow-forward){transition:transform var(--s-motion-slow) var(--s-ease-spring),stroke .2s ease;transform-origin:center;transform-box:fill-box}
 .s-mod-card,.s-preset-card,.s-collection-card{transition:border-color .2s ease,box-shadow .2s ease,background-color .2s ease}
 .s-btn-primary{box-shadow:0 3px 12px #0002}
 .s-dialog-head{border-bottom-color:var(--s-line-soft)}
 .s-setting-icon,.s-summary-icon{border:1px solid var(--s-line-soft)}
 .s-search:focus-within,.s-top-search:focus-visible{border-color:var(--s-accent);box-shadow:0 0 0 3px var(--s-tint)}
 .s-btn:active:not(:disabled),.s-add:active:not(:disabled){transform:translateY(1px) scale(.98)}
-.auth-stage button svg:not(.spin){transition:transform .22s cubic-bezier(.23,1,.32,1);transform-box:fill-box;transform-origin:center}
+.auth-stage button svg:not(.spin){transition:transform var(--s-motion-slow) var(--s-ease-spring);transform-box:fill-box;transform-origin:center}
 .telegram-primary,.telegram-web,.auth-preview-button,.have-code-button{transition:border-color .2s,background-color .2s,box-shadow .2s,transform .2s}
 @media(hover:hover) and (pointer:fine){
-  :is(.s-btn,.s-icon,.s-add,.s-text-button,.s-filter-button,.s-sidebar nav button,.s-sidebar nav a,.s-settings-nav button,.s-top-search,.auth-open-button,.auth-web-button):hover:not(:disabled) svg:not(.s-spin):not(.rotated):not(.s-arrow-forward){transform:translateY(-1px) scale(1.08)}
-  :is(.s-btn,.s-text-button,.s-collection-card):hover:not(:disabled) .lucide-arrow-right{transform:translateX(3px)}
-  :is(.s-btn,.s-text-button,.s-collection-card):hover:not(:disabled) .lucide-arrow-up-right{transform:translate(2px,-2px)}
-  .s-icon:hover .lucide-x{transform:rotate(90deg)}
-  .s-icon:hover .lucide-heart{transform:scale(1.14)}
-  .s-add:hover:not(:disabled) .lucide-plus{transform:rotate(90deg)}
   .s-mod-card:hover,.s-preset-card:hover,.s-collection-card:hover{border-color:var(--s-muted);box-shadow:0 6px 20px #00000012}
   .s-btn-primary:hover:not(:disabled){transform:translateY(-1px)}
-  .auth-stage button:hover:not(:disabled) .lucide-arrow-right{transform:translateX(3px)}
-  .telegram-primary:hover:not(:disabled) .lucide-send{transform:translate(2px,-2px) rotate(-4deg)}
-  .telegram-web:hover .lucide-external-link{transform:translate(2px,-2px)}
 }
 @media(prefers-reduced-motion:reduce){.s-btn:hover:not(:disabled) svg,.s-icon:hover svg,.s-add:hover svg,.s-text-button:hover svg{transform:none!important}}
 .motion-disabled .s-btn:hover svg,.motion-disabled .s-icon:hover svg,.motion-disabled .s-add:hover svg,.motion-disabled .s-text-button:hover svg{transform:none!important}

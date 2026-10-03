@@ -1,7 +1,8 @@
 {
   "schemaVersion": 1,
   "id": "minify.repopulate-unit-query-hud",
-  "catalogId": "minify-repopulate-unit-query-hud",
+  "catalogId": "minify-repopulate-unit-query-hud-legacy",
+  "supersededBy": "minify.repopulate-unit-query-hud-v2",
   "name": {
     "ru": "Вернуть расширенный HUD цели",
     "en": "Repopulate Unit Query HUD"

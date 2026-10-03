@@ -28,6 +28,7 @@ import {
   MAX_BUNDLE_PACKAGES,
   engineIdFor,
   findPackage,
+  bundleRelationProblem,
   installablePackages,
   packageName,
 } from "./packages";
@@ -69,6 +70,46 @@ const explainError = (code: string, isRu: boolean) => {
     download_transport_failed: [
       "Не удалось скачать ресурс. Повтори подготовку — проверенные файлы сохранятся.",
       "A resource could not be downloaded. Retry; verified files are kept.",
+    ],
+    package_conflict: [
+      "Эти моды конфликтуют между собой. Оставь в сборке только один из них.",
+      "These mods conflict. Keep only one of them in the build.",
+    ],
+    package_dependency_missing: [
+      "Одному из модов нужен другой мод. Добавь его в сборку.",
+      "One of the mods needs another mod. Add it to the build.",
+    ],
+    game_path_required: [
+      "Для этой сборки нужна подключённая Dota 2: BetterFy сверяется с файлами твоей игры.",
+      "This build needs a connected Dota 2: BetterFy checks it against your game files.",
+    ],
+    game_archive_unreadable: [
+      "Не удалось прочитать архивы Dota 2. Проверь файлы игры в Steam и повтори.",
+      "Dota 2 archives could not be read. Verify game files in Steam and retry.",
+    ],
+    blacklist_resolution_missing: [
+      "Сборку нужно подготовить заново: список изменений для этой версии игры не найден.",
+      "Prepare the build again: the change list for this game version is missing.",
+    ],
+    blacklist_resolution_stale: [
+      "Сборку нужно подготовить заново: список изменений устарел.",
+      "Prepare the build again: the change list is out of date.",
+    ],
+    panorama_resolution_missing: [
+      "Сборку нужно подготовить заново: снимок интерфейса игры не найден.",
+      "Prepare the build again: the snapshot of the game interface is missing.",
+    ],
+    panorama_resolution_stale: [
+      "Сборку нужно подготовить заново: снимок интерфейса игры устарел.",
+      "Prepare the build again: the snapshot of the game interface is out of date.",
+    ],
+    panorama_layout_target_missing: [
+      "Мод не подходит к текущей версии Dota 2: нужного элемента интерфейса больше нет. Убери мод из сборки.",
+      "This mod does not fit the current Dota 2 version: the interface element it changes is gone. Remove it from the build.",
+    ],
+    panorama_layout_unsupported: [
+      "Файл интерфейса этой версии Dota 2 в непривычном формате. BetterFy не будет его менять.",
+      "This Dota 2 version stores the interface file in an unfamiliar format. BetterFy will not change it.",
     ],
     build_plan_stale: [
       "План устарел. Подготовь сборку заново.",
@@ -198,7 +239,9 @@ export default function TreePilot({
     ids.length > 0 &&
     ids.length <= Math.min(installablePackages.length, MAX_BUNDLE_PACKAGES) &&
     ids.every((id) => findPackage(id) !== undefined) &&
-    new Set(ids).size === ids.length;
+    new Set(ids).size === ids.length &&
+    !bundleRelationProblem(ids);
+  const relation = bundleRelationProblem(ids);
   const bundleName = !ids.length
     ? isRu
       ? "Установленная сборка"
@@ -352,7 +395,12 @@ export default function TreePilot({
     setError("");
     setPhase("download");
     try {
-      applyDownloadStatus(await engineBridge.beginTreePilotDownload(ids));
+      applyDownloadStatus(
+        await engineBridge.beginTreePilotDownload(
+          ids,
+          installation.verified ? installation.path : undefined,
+        ),
+      );
     } catch (cause) {
       setError(codeOf(cause));
       setPhase("idle");
@@ -810,18 +858,40 @@ export default function TreePilot({
           : "BetterFy downloads only verified mod files, checks each one and combines them into a single file in your chosen order. If two mods change the same thing, the higher one wins."}
       </p>
       <div className="s-tree-pilot-steps">
-        <span className={plan ? "done" : ""}>
-          01 <b>{isRu ? "Скачать и сверить ресурсы" : "Download and verify resources"}</b>
-        </span>
-        <span className={operationId ? "done" : ""}>
-          02 <b>{isRu ? "Собрать и записать с откатом" : "Build and install with rollback"}</b>
-        </span>
-        <span className={steamRestarted ? "done" : ""}>
-          03 <b>{isRu ? "Открыть Steam" : "Open Steam"}</b>
-        </span>
-        <span>
-          04 <b>{isRu ? "Проверить в Dota 2" : "Check in Dota 2"}</b>
-        </span>
+        {(() => {
+          const steps = [
+            {
+              done: Boolean(plan),
+              busy: phase === "download",
+              label: isRu ? "Скачать и сверить ресурсы" : "Download and verify resources",
+            },
+            {
+              done: Boolean(operationId),
+              busy: phase === "install",
+              label: isRu ? "Собрать и записать с откатом" : "Build and install with rollback",
+            },
+            {
+              done: steamRestarted,
+              busy: phase === "steam",
+              label: isRu ? "Открыть Steam" : "Open Steam",
+            },
+            { done: false, busy: false, label: isRu ? "Проверить в Dota 2" : "Check in Dota 2" },
+          ];
+          const current = steps.findIndex((step) => !step.done);
+          return steps.map((step, index) => (
+            <span
+              key={index}
+              className={[
+                step.done ? "done" : "",
+                index === current ? "is-current" : "",
+                step.busy ? "is-busy" : "",
+              ].join(" ")}
+            >
+              <i aria-hidden="true">{step.done ? <Check /> : String(index + 1).padStart(2, "0")}</i>
+              <b>{step.label}</b>
+            </span>
+          ));
+        })()}
       </div>
       {(!canManage || (ids.length > 0 && !supportedBundle)) && (
         <div className="s-inline-note warning">
@@ -843,9 +913,17 @@ export default function TreePilot({
                     ? isRu
                       ? "Сначала подключи настоящую установку Dota 2 в настройках."
                       : "Connect a real Dota 2 installation in Settings first."
-                    : isRu
-                      ? "В живой пилот входят Tree Mod, Show Net Worth и Unit Query HUD. Убери остальные игровые моды из сборки."
-                      : "The live pilot supports Tree Mod, Show Net Worth, and Unit Query HUD. Remove other game mods from the build."}
+                    : relation
+                      ? relation.kind === "conflict"
+                        ? isRu
+                          ? `«${packageLabel(relation.packageId)}» и «${packageLabel(relation.otherId)}» нельзя ставить вместе. Оставь в сборке один из них.`
+                          : `${packageLabel(relation.packageId)} and ${packageLabel(relation.otherId)} cannot be installed together. Keep one of them.`
+                        : isRu
+                          ? `Для «${packageLabel(relation.packageId)}» нужен мод «${packageLabel(relation.otherId)}». Добавь его в сборку.`
+                          : `${packageLabel(relation.packageId)} needs ${packageLabel(relation.otherId)}. Add it to the build.`
+                      : isRu
+                        ? "Устанавливаются только моды с отметкой «Windows-пилот». Убери остальные игровые моды из сборки."
+                        : "Only mods marked Windows pilot install. Remove other game mods from the build."}
           </p>
         </div>
       )}
@@ -867,8 +945,8 @@ export default function TreePilot({
             </strong>
             <p>
               {isRu
-                ? "Моды подключаются через языковую папку Dota: игра будет запускаться с выбранным языком интерфейса. Нидерландский проверен на Windows для модов с отметкой о проверке; остальные языки ещё не проверены."
-                : "Mods are loaded through a Dota language folder: the game will start with the chosen interface language. Dutch was verified on Windows for the mods marked as verified; the other languages have not been tested yet."}
+                ? "Моды подключаются через языковую папку Dota: игра будет запускаться с выбранным языком интерфейса. Нидерландский и русский проверены на Windows для модов с отметкой о проверке; корейский и китайский ещё не проверены."
+                : "Mods are loaded through a Dota language folder: the game will start with the chosen interface language. Dutch and Russian were verified on Windows for the mods marked as verified; Korean and Chinese have not been tested yet."}
             </p>
           </div>
           <select
@@ -877,16 +955,14 @@ export default function TreePilot({
             onChange={(event) => setSelectedLanguage(event.target.value as GameLanguage | "")}
           >
             <option value="">{isRu ? "Выбери язык" : "Choose language"}</option>
-            <option value="russian">
-              {isRu ? "Русский · проверка нужна" : "Russian · needs testing"}
-            </option>
+            <option value="russian">{isRu ? "Русский · проверен" : "Russian · verified"}</option>
+            <option value="dutch">{isRu ? "Нидерландский · проверен" : "Dutch · verified"}</option>
             <option value="koreana">
               {isRu ? "Корейский · проверка нужна" : "Korean · needs testing"}
             </option>
             <option value="schinese">
               {isRu ? "Китайский · проверка нужна" : "Chinese · needs testing"}
             </option>
-            <option value="dutch">{isRu ? "Нидерландский · проверен" : "Dutch · verified"}</option>
           </select>
         </div>
       )}
@@ -1360,8 +1436,8 @@ export default function TreePilot({
       )}
       <small className="s-tree-pilot-foot">
         {isRu
-          ? "Источник: Egezenn/dota2-minify. Tree Mod, Show NetWorth и Unit Query HUD проверены в игре на одном Windows-компьютере с нидерландским языком; другие языки и компьютеры не проверены. Параметр -language меняет язык текста и может повлиять на озвучку. BetterFy мягко закрывает Dota 2 и Steam и после установки или отката снова запускает Steam."
-          : "Source: Egezenn/dota2-minify. Tree Mod, Show NetWorth and Unit Query HUD were verified in game on one Windows computer with Dutch; other languages and computers are untested. The -language option changes text language and may affect audio. BetterFy closes Dota 2 and Steam gracefully and starts Steam again after install or restore."}
+          ? "Источник: Egezenn/dota2-minify. Tree Mod, Show NetWorth, Unit Query HUD и Remove River проверены в игре на одном Windows-компьютере с нидерландским и русским языком; другие языки и компьютеры не проверены. Параметр -language меняет язык текста и может повлиять на озвучку. BetterFy мягко закрывает Dota 2 и Steam и после установки или отката снова запускает Steam."
+          : "Source: Egezenn/dota2-minify. Tree Mod, Show NetWorth, Unit Query HUD and Remove River were verified in game on one Windows computer with Dutch and Russian; other languages and computers are untested. The -language option changes text language and may affect audio. BetterFy closes Dota 2 and Steam gracefully and starts Steam again after install or restore."}
       </small>
     </section>
   );

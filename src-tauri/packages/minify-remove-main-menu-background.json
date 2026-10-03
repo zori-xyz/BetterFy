@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "minify.remove-main-menu-background",
+  "catalogId": "minify-remove-main-menu-background",
+  "name": {
+    "ru": "Убрать фон главного меню",
+    "en": "Remove Main Menu Background"
+  },
+  "author": "Egezenn",
+  "source": {
+    "repository": "Egezenn/dota2-minify",
+    "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+    "directory": "Minify/mods/Remove Main Menu Background",
+    "license": "GPL-3.0"
+  },
+  "distribution": "internal_pilot",
+  "verifiedLanguages": [],
+  "panoramaStyles": {
+    "from": "Minify/mods/Remove Main Menu Background/styling.css",
+    "bytes": 125,
+    "sha256": "3aa81c4c1ea51b9b52e38ec5e6f8262434baabf0224a2fd954670d5a106f5b15"
+  }
+}

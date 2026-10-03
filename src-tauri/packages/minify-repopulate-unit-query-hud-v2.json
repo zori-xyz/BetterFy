@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "minify.repopulate-unit-query-hud-v2",
+  "catalogId": "minify-repopulate-unit-query-hud",
+  "name": {
+    "ru": "Вернуть расширенный HUD цели",
+    "en": "Repopulate Unit Query HUD"
+  },
+  "author": "MeGaNeKoS",
+  "source": {
+    "repository": "Egezenn/dota2-minify",
+    "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+    "directory": "Minify/mods/Repopulate Unit Query HUD/files",
+    "license": "GPL-3.0"
+  },
+  "distribution": "internal_pilot",
+  "verifiedLanguages": [],
+  "resources": [
+    {
+      "path": "panorama/styles/hud/dota_hud_query_unit_overrides.vcss_c",
+      "bytes": 3957,
+      "sha256": "bc9c831aacc37d21f5c48d6157ee6b80b9a06c3f9f51c48aed7c8446bb534e21"
+    },
+    {
+      "path": "panorama/styles/hud/dota_hud_str_agi_int_overrides.vcss_c",
+      "bytes": 1470,
+      "sha256": "a6e25ccb69a40c145c75e590da8d5c19ac8a50224c2c54d09ffe4e8de8603871"
+    },
+    {
+      "path": "panorama/styles/hud/tooltip_unit_damage_armor_overrides.vcss_c",
+      "bytes": 1458,
+      "sha256": "55efe3ff6bee15030c4016f6b18580d5d0877bfc8fbdcb3550beef4f23b70730"
+    }
+  ],
+  "panoramaLayouts": {
+    "from": "Minify/mods/Repopulate Unit Query HUD/xml.json",
+    "bytes": 1741,
+    "sha256": "839dea7b08428a19ef96647cc4d89c4a1ee26ed9e8d8ef18f7edac738132b907"
+  },
+  "conflicts": [
+    "minify.repopulate-unit-query-hud"
+  ]
+}
