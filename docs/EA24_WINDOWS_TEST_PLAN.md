@@ -25,8 +25,7 @@ Nothing here has been run on Windows yet. Results are recorded in the
 
 ## Ground rules for the session
 
-- Read the repository's working rules first. They apply here unchanged,
-  including the rule against any trace of assistant tooling in commits or docs.
+- Read the repository's working rules first. They apply here unchanged.
 - The founder signs in (Telegram, Steam) and enters every password personally.
   The tester never types credentials, never reads Credential Manager values,
   and never pastes challenge links or six-digit codes into reports.
