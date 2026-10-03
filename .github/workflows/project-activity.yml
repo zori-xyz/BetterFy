@@ -1,0 +1,97 @@
+name: Project activity chart
+
+# Regenerates the README "Project activity" card: commits on every branch and
+# GitHub Actions workflow runs per day.
+#
+# The two SVG files are published to the orphan branch "project-activity",
+# which holds nothing else; main is never written. No workflow in this
+# repository runs on pushes to that branch: early-access-release.yml,
+# pages.yml, product-checks.yml, and windows-build.yml filter push events to
+# main, and release.yml runs on tags only. The push also uses GITHUB_TOKEN,
+# which does not start new workflow runs. The branch only moves forward;
+# nothing here force-pushes.
+#
+# Pull requests that change the generator or this workflow render and
+# validate the chart without publishing it.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/scripts/project-activity.mjs"
+      - ".github/workflows/project-activity.yml"
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: project-activity
+  cancel-in-progress: false
+
+jobs:
+  render:
+    name: Render activity chart
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out all branches with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Render chart
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .github/scripts/project-activity.mjs --out "$RUNNER_TEMP/project-activity"
+
+      - name: Validate SVG output
+        shell: python3 {0}
+        run: |
+          import os
+          import xml.etree.ElementTree as ET
+
+          for theme in ("dark", "light"):
+              path = os.path.join(os.environ["RUNNER_TEMP"], "project-activity", f"project-activity-{theme}.svg")
+              root = ET.parse(path).getroot()
+              assert root.tag == "{http://www.w3.org/2000/svg}svg", root.tag
+              assert root.get("viewBox") == f"0 0 {root.get('width')} {root.get('height')}"
+              text = open(path, encoding="utf-8").read()
+              assert "<script" not in text and "@import" not in text and "href=" not in text
+              print(f"{path}: valid, {root.get('width')}x{root.get('height')}")
+
+      - name: Publish to the project-activity branch if changed
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          chart="$RUNNER_TEMP/project-activity"
+          publish="$RUNNER_TEMP/publish"
+          if git ls-remote --exit-code --heads origin project-activity >/dev/null; then
+            git fetch --quiet origin project-activity
+            git worktree add --detach "$publish" FETCH_HEAD
+          else
+            git worktree add --detach "$publish" HEAD
+            git -C "$publish" switch --orphan project-activity
+          fi
+          cp "$chart/project-activity-dark.svg" "$chart/project-activity-light.svg" "$publish/"
+          cd "$publish"
+          git add project-activity-dark.svg project-activity-light.svg
+          if git diff --cached --quiet; then
+            echo "Chart unchanged; nothing to publish."
+            exit 0
+          fi
+          if git diff --cached --name-only | grep -vqE '^project-activity-(dark|light)\.svg$'; then
+            echo "Refusing to publish paths other than the two chart files." >&2
+            exit 1
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit --quiet -m "Update project activity chart"
+          git push origin HEAD:refs/heads/project-activity

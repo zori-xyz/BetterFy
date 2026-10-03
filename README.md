@@ -9,16 +9,21 @@
 
 <p align="center">
   <a href="https://github.com/zori-xyz/BetterFy/actions/workflows/windows-build.yml"><img alt="Windows build" src="https://github.com/zori-xyz/BetterFy/actions/workflows/windows-build.yml/badge.svg" /></a>
-  <a href="https://github.com/zori-xyz/BetterFy/actions/workflows/release.yml"><img alt="Windows release" src="https://github.com/zori-xyz/BetterFy/actions/workflows/release.yml/badge.svg" /></a>
-  <img alt="Tauri" src="https://img.shields.io/badge/Tauri_2-Rust-24C8DB?style=flat" />
-  <img alt="React" src="https://img.shields.io/badge/React-TypeScript-61DAFB?style=flat" />
-  <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/License-GPL--3.0-red.svg" /></a>
+  <a href="https://github.com/zori-xyz/BetterFy/actions/workflows/product-checks.yml"><img alt="Product checks" src="https://github.com/zori-xyz/BetterFy/actions/workflows/product-checks.yml/badge.svg" /></a>
+  <a href="https://github.com/zori-xyz/BetterFy/actions/workflows/early-access-release.yml"><img alt="Early Access Windows installer" src="https://github.com/zori-xyz/BetterFy/actions/workflows/early-access-release.yml/badge.svg" /></a>
+  <br />
+  <a href="https://github.com/zori-xyz/BetterFy/releases"><img alt="Latest pre-release" src="https://img.shields.io/github/v/release/zori-xyz/BetterFy?include_prereleases&amp;sort=semver&amp;label=pre-release&amp;color=A84DFF" /></a>
+  <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/github/license/zori-xyz/BetterFy?color=5F1CB3" /></a>
+  <img alt="Tauri 2 and Rust" src="https://img.shields.io/badge/Tauri_2-Rust-24C8DB?style=flat" />
+  <img alt="React and TypeScript" src="https://img.shields.io/badge/React-TypeScript-61DAFB?style=flat" />
 </p>
 
 <p align="center">
   <a href="#what-it-does">Product</a> ·
   <a href="#current-status">Status</a> ·
+  <a href="#project-activity">Activity</a> ·
   <a href="#run-it-locally">Development</a> ·
+  <a href="#build-for-windows">Windows build</a> ·
   <a href="#repository-map">Repository map</a> ·
   <a href="docs/README.md">Documentation</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
@@ -62,8 +67,35 @@ enabled in small, recoverable slices.
 | BetterFy Setup | Verified Early Access baseline | EA.18 was built on native Windows CI and the founder completed a Windows install, update, uninstall/reinstall, launch, sign-in, and pinned-pilot application pass. The artifact hash and retained limitations are recorded in [`docs/EA18_WINDOWS_BASELINE.md`](docs/EA18_WINDOWS_BASELINE.md). Code signing, WebView2 provisioning, signed-updater compatibility evidence, and a repeatable second-machine report remain open. |
 | Public updates | Prepared, not released | Signed updater infrastructure exists; public releases require signing secrets and release approval. |
 
-No current build claims VAC safety, ban immunity, universal compatibility, or
-production-ready game-file recovery.
+> [!IMPORTANT]
+> No current build claims VAC safety, ban immunity, universal compatibility, or
+> production-ready game-file recovery.
+
+## Project activity
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/zori-xyz/BetterFy/project-activity/project-activity-dark.svg" />
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/zori-xyz/BetterFy/project-activity/project-activity-light.svg" />
+  <img alt="Project activity: commits and CI runs per day over the last 60 days, drawn as two separate bars per day" src="https://raw.githubusercontent.com/zori-xyz/BetterFy/project-activity/project-activity-light.svg" width="880" />
+</picture>
+
+Two separate counts per UTC day, drawn side by side and never added together:
+
+- **commits**: non-merge commits reachable from any branch on GitHub (except
+  the chart's own branch), each counted once, by author date. Commits that
+  only existed on a deleted branch are not counted; for a branch that was
+  squash-merged and then deleted, only the squash commit remains.
+- **CI runs**: GitHub Actions workflow runs, by creation time, including
+  cancelled and failed runs. Runs of the chart's own workflow and runs that
+  were skipped are not counted.
+
+The chart is regenerated daily by
+[`project-activity.yml`](.github/workflows/project-activity.yml) from
+[`.github/scripts/project-activity.mjs`](.github/scripts/project-activity.mjs)
+and published to the
+[`project-activity`](https://github.com/zori-xyz/BetterFy/tree/project-activity)
+branch, so `main` receives no update commits. It measures activity volume,
+not progress or quality.
 
 ## Run it locally
 
@@ -167,6 +199,7 @@ separate tag-driven workflow.
 - [EA.18 Windows baseline](docs/EA18_WINDOWS_BASELINE.md)
 - [Release and updater guide](docs/RELEASING.md)
 - [Latest Windows workflow runs](https://github.com/zori-xyz/BetterFy/actions/workflows/windows-build.yml)
+- [Signed release workflow](https://github.com/zori-xyz/BetterFy/actions/workflows/release.yml) (tag-driven; no signed public release has been published yet)
 
 ## Repository map
 
@@ -178,7 +211,7 @@ separate tag-driven workflow.
 | [`installer/`](installer/) | BetterFy Setup: the standalone, branded Tauri installer that replaces the NSIS wizard for end users |
 | [`scripts/`](scripts/) | Windows builds, catalog checks, icon verification, and visual journey audits |
 | [`docs/`](docs/) | Architecture, product rules, Minify research, Windows builds, releases, and roadmap |
-| [`.github/`](.github/) | Native Windows CI, signed releases, ownership, and contribution templates |
+| [`.github/`](.github/) | Native Windows CI, signed releases, the project activity chart, ownership, and contribution templates |
 
 For a guided tour, start with [the documentation index](docs/README.md).
 
