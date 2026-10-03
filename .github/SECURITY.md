@@ -11,9 +11,10 @@ account, so please report it privately.
 Do not open a public issue, pull request, or discussion for a suspected
 vulnerability.
 
-GitHub private vulnerability reporting is not enabled for this repository.
-Contact the maintainer, [@zori-xyz](https://github.com/zori-xyz), through
-GitHub and ask for a private channel before sharing details.
+Use GitHub private vulnerability reporting: open the repository's
+[Security tab](https://github.com/zori-xyz/BetterFy/security) and choose
+**Report a vulnerability**. The report is visible only to the maintainer,
+[@zori-xyz](https://github.com/zori-xyz), until an advisory is published.
 
 A useful report includes:
 

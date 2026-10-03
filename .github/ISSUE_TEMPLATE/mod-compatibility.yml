@@ -1,6 +1,8 @@
 name: Mod compatibility report
 description: Record how installed packages behaved in Dota 2 on Windows
 title: "[Compatibility] "
+labels:
+  - compatibility
 body:
   - type: markdown
     attributes:

@@ -5,4 +5,4 @@ contact_links:
     about: Use the bot for installation help and account access. Do not send secrets or private logs.
   - name: Security vulnerability
     url: https://github.com/zori-xyz/BetterFy/blob/main/.github/SECURITY.md
-    about: Do not open a public issue. Follow the private reporting steps in the security policy.
+    about: Do not open a public issue. Report privately through the Security tab, as the security policy describes.
