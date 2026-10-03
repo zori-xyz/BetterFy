@@ -18,6 +18,9 @@ Read:
 Use an existing issue or open one before beginning a material change. For
 branch names and commits, follow the [repository guide](docs/REPOSITORY_GUIDE.md).
 
+Report suspected vulnerabilities privately as described in the
+[security policy](.github/SECURITY.md), not in an issue or pull request.
+
 ## Product boundaries
 
 - UI state is not proof that a privileged operation completed.

@@ -62,7 +62,8 @@ BetterFy turns fragmented community content into one curated, understandable, an
 
 - Working React/Tauri prototype with real catalog-shaped data and complete prototype flows.
 - Existing BetterFy mark component in `src/BetterFyMark.tsx`.
-- Existing catalog and localization in `src/catalog.ts` and `src/i18n.tsx`.
+- Existing catalogs in `src/modCatalog.ts` and `src/minifyCatalog.ts`, and
+  localization in `src/i18n.tsx`.
 - Read-only Steam/Dota discovery and deterministic fixture BuildPlan commands
   in `src-tauri/src/main.rs`.
 - A versioned fixture-package contract, cancellable HTTPS fixture acquisition,

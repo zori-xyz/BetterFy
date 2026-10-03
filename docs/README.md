@@ -20,6 +20,12 @@ disagreement as a bug and verify the behavior before changing either side.
    pass of the package engine: every package, combinations, interruptions, and
    a results table that separates observed from reported behavior.
 
+## Interface
+
+- [Studio redesign record](STUDIO_REDESIGN.md) — dated record of the Studio
+  shell: implemented surfaces, verification passes, and remaining preview and
+  provenance limits.
+
 ## Engine
 
 - [Engine architecture](ENGINE_ARCHITECTURE.md) — trust boundaries, command
@@ -28,6 +34,10 @@ disagreement as a bug and verify the behavior before changing either side.
   into the upstream patching workflow and the constraints BetterFy must retain.
 - [Trusted content intake](CONTENT_INTAKE_SECURITY.md) — manifest, artifact,
   immutable-store, and recovery boundaries before downloads or extraction.
+- [Tree Mod pilot ledger](TREE_MOD_PILOT.md) — pinned upstream sources,
+  resource hashes, target paths, and Windows evidence for the first pilot
+  packages and the later passes on the manifest-driven engine.
+
 ## Services and accounts
 
 - [Identity and web architecture](IDENTITY_AND_WEB_ARCHITECTURE.md) — native
@@ -65,6 +75,12 @@ interface and synthetic engine fixtures.
   commits, and the recommended GitHub settings.
 - [Third-party notices](../THIRD_PARTY_NOTICES.md) — asset provenance and
   redistribution constraints.
+- [Security policy](../.github/SECURITY.md) — how to report a vulnerability
+  without opening a public issue.
+- [Support](../.github/SUPPORT.md) — where setup questions, bug reports, and
+  mod compatibility reports go.
+- [Code of conduct](../.github/CODE_OF_CONDUCT.md) — expectations for issues,
+  pull requests, and discussions.
 
 ## Status language
 
