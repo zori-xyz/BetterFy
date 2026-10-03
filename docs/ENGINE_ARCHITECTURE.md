@@ -391,9 +391,9 @@ drift from the engine's.
 A resource may name a different repository path in `from`. That is how a Minify
 `blacklist.txt` line is represented: the listed game path receives the matching
 `Minify/bin/blank-files/blank.<ext>` placeholder, fetched and hash-checked like any
-other file. The placeholder must have the same extension as the target. Only literal
-blacklist lines can be expressed; Minify's `**` and `>>` patterns expand against the
-installed game's file list and are not supported. Zero-length resources are allowed
+other file. The placeholder must have the same extension as the target. A manifest
+may instead carry a whole `blacklist.txt` (see "Blacklist packages" below), which also
+covers Minify's `**` and `>>` patterns. Zero-length resources are allowed
 when their hash is the SHA-256 of empty input; they need no download and are written
 as zero-length VPK entries, which is how Minify silences sounds.
 
@@ -407,6 +407,46 @@ changing any path, size or hash. A test pins a fingerprint of the contracts, and
 building the ordered three-package bundle from the real pinned resources gave the
 same plan ID and VPK SHA-256 before and after the move, so existing installations
 and their journals are still recognised.
+
+### Blacklist packages
+
+A manifest may name a Minify `blacklist.txt` in a `blacklist` block: its repository
+path, size and SHA-256, plus one pinned `Minify/bin/blank-files/blank.<ext>`
+placeholder per compiled type. The file and the placeholders are downloaded through
+the same pinned path and content-addressed store as resources. The block is part of
+the package contract; manifests without it keep their previous contract hashes.
+
+`src-tauri/src/blacklist.rs` reads the file line by line: `#` comments and blank
+lines are ignored, `>>dir` selects every resource under that directory, `**regex`
+selects every resource whose path the expression matches anywhere (Minify runs
+ripgrep over the game's file list the same way), and any other line is an exact
+path. Lines are matched against the resource paths of the installed game's own
+`game/dota/pak01_dir.vpk` and `game/core/pak01_dir.vpk`, read from their directory
+trees only (`vpk::list_directory_paths`, VPK versions 1 and 2). Exact paths the game
+does not have, rules that match nothing and matches of a type without a placeholder
+are counted and skipped, never guessed. Regular expressions use the `regex` crate,
+whose matching time is linear in the input, and every file, line and result count is
+bounded.
+
+The expansion happens once, when a build is prepared for a specific installation,
+and is stored per package under `engine-v1/blacklist/`. Every later rebuild of the
+same bundle (plan verification before install, Steam setup, installed-state check,
+restore) reads that stored expansion, so a Dota update does not change what BetterFy
+considers installed. Preparing again re-expands against the current game. In a
+bundle, a file a package ships itself always wins over a blank for the same path.
+
+Manifests may also declare `conflicts` and `requires` (package IDs), mirroring
+Minify's own manifest rules: Remove Pings and Revert Ping Sounds exclude each other,
+and Dark Terrain requires Remove Foilage. The engine rejects such a selection before
+anything is downloaded; the interface explains it before preparation.
+
+Thirteen packages were added this way from the same pinned commit: Minify Base
+Attacks, Minify Spells & Items, Misc Optimization, Mute Ambient Sounds, Mute Default
+Announcer, Mute Taunt Sounds, Mute Voice Line Sounds, Remove Foilage, Remove Pings,
+Remove Sprays, Remove Weather Effects, Revert Ping Sounds (8 files plus its
+blacklist) and Dark Terrain (300 files). None of them has been checked in game yet,
+so their manifests record no verified language. Packages that need Panorama CSS or
+XML changes or Minify's script hooks are still not installable.
 
 ### Installed profile
 

@@ -32,6 +32,104 @@ struct TreeDownload {
     package_ids: Vec<String>,
 }
 
+/// Where the expansion of each package's blacklist against the player's game
+/// is kept. Rebuilding the same bundle later (verification, Steam setup,
+/// restore) reads this file, so a Dota update does not change what BetterFy
+/// considers installed.
+fn blacklist_resolution_path(app_data_root: &Path, package_id: &str) -> std::path::PathBuf {
+    app_data_root
+        .join("engine-v1")
+        .join("blacklist")
+        .join(format!("{package_id}.json"))
+}
+
+#[derive(serde::Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BlacklistResolution {
+    package_id: String,
+    blacklist_sha256: String,
+    expansion: crate::blacklist::Expansion,
+}
+
+fn read_game_resource_paths(game_path: &Path) -> Result<BTreeSet<String>, String> {
+    let mut paths = BTreeSet::new();
+    for archive in ["game/dota/pak01_dir.vpk", "game/core/pak01_dir.vpk"] {
+        let bytes = std::fs::read(game_path.join(archive))
+            .map_err(|_| "game_archive_unreadable".to_string())?;
+        paths.extend(vpk::list_directory_paths(&bytes)?);
+    }
+    Ok(paths)
+}
+
+/// Expands every selected blacklist against the game at `game_path` and
+/// stores the result. Packages without a blacklist need no game path.
+fn resolve_blacklists(
+    app_data_root: &Path,
+    package_ids: &[String],
+    game_path: Option<&Path>,
+) -> Result<(), String> {
+    let mut game_paths: Option<BTreeSet<String>> = None;
+    for package_id in package_ids {
+        let manifest = contract(package_id)?;
+        let Some(blacklist) = &manifest.blacklist else {
+            continue;
+        };
+        let game_path = game_path.ok_or_else(|| "game_path_required".to_string())?;
+        if game_paths.is_none() {
+            game_paths = Some(read_game_resource_paths(game_path)?);
+        }
+        let text = crate::content_store::read_pinned_resource(
+            app_data_root,
+            blacklist.bytes,
+            &blacklist.sha256,
+        )?;
+        let text = String::from_utf8(text).map_err(|_| "blacklist_invalid".to_string())?;
+        let blanks = blacklist.blanks.keys().cloned().collect::<BTreeSet<_>>();
+        let expansion =
+            crate::blacklist::expand(&text, game_paths.as_ref().expect("read above"), &blanks)?;
+        let resolution = BlacklistResolution {
+            package_id: package_id.clone(),
+            blacklist_sha256: blacklist.sha256.clone(),
+            expansion,
+        };
+        let target = blacklist_resolution_path(app_data_root, package_id);
+        let parent = target
+            .parent()
+            .ok_or_else(|| "blacklist_store_failed".to_string())?;
+        std::fs::create_dir_all(parent).map_err(|_| "blacklist_store_failed".to_string())?;
+        let bytes =
+            serde_json::to_vec(&resolution).map_err(|_| "blacklist_store_failed".to_string())?;
+        let temporary = target.with_extension("json.tmp");
+        std::fs::write(&temporary, bytes).map_err(|_| "blacklist_store_failed".to_string())?;
+        std::fs::rename(&temporary, &target).map_err(|_| "blacklist_store_failed".to_string())?;
+    }
+    Ok(())
+}
+
+fn stored_expansion(
+    app_data_root: &Path,
+    manifest: &PackageManifest,
+) -> Result<Option<crate::blacklist::Expansion>, String> {
+    let Some(blacklist) = &manifest.blacklist else {
+        return Ok(None);
+    };
+    let bytes = std::fs::read(blacklist_resolution_path(app_data_root, &manifest.id))
+        .map_err(|_| "blacklist_resolution_missing".to_string())?;
+    let resolution: BlacklistResolution =
+        serde_json::from_slice(&bytes).map_err(|_| "blacklist_resolution_invalid".to_string())?;
+    if resolution.package_id != manifest.id || resolution.blacklist_sha256 != blacklist.sha256 {
+        return Err("blacklist_resolution_stale".to_string());
+    }
+    if resolution.expansion.paths.len() > crate::blacklist::MAX_EXPANDED
+        || resolution.expansion.paths.iter().any(|(path, extension)| {
+            !blacklist.blanks.contains_key(extension) || !path.ends_with(&format!(".{extension}"))
+        })
+    {
+        return Err("blacklist_resolution_invalid".to_string());
+    }
+    Ok(Some(resolution.expansion))
+}
+
 fn download_slot() -> &'static Mutex<Option<Arc<TreeDownload>>> {
     DOWNLOAD.get_or_init(|| Mutex::new(None))
 }
@@ -41,14 +139,15 @@ fn download_slot() -> &'static Mutex<Option<Arc<TreeDownload>>> {
 pub(crate) const PACKAGE_ID: &str = "minify.tree-mod";
 pub(crate) const TARGET_FILE: &str = "pak66_dir.vpk";
 /// Upper bound on packages merged into one VPK.
-const MAX_BUNDLE_PACKAGES: usize = 16;
+const MAX_BUNDLE_PACKAGES: usize = 32;
 
 fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
     if ids.is_empty() || ids.len() > MAX_BUNDLE_PACKAGES {
         return Err("pilot_package_unsupported".to_string());
     }
     let mut seen = BTreeSet::new();
-    ids.iter()
+    let ids = ids
+        .iter()
         .map(|id| {
             let id = package_registry::find(id)?.id.clone();
             if !seen.insert(id.clone()) {
@@ -56,7 +155,19 @@ fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
             }
             Ok(id)
         })
-        .collect()
+        .collect::<Result<Vec<_>, String>>()?;
+    // Minify's own conflicts and dependencies, checked before anything is
+    // downloaded or built.
+    for id in &ids {
+        let manifest = contract(id)?;
+        if manifest.conflicts.iter().any(|other| seen.contains(other)) {
+            return Err("package_conflict".to_string());
+        }
+        if manifest.requires.iter().any(|other| !seen.contains(other)) {
+            return Err("package_dependency_missing".to_string());
+        }
+    }
+    Ok(ids)
 }
 
 fn contract(id: &str) -> Result<&'static PackageManifest, String> {
@@ -132,7 +243,7 @@ pub(crate) fn verified_test_vpk() -> VerifiedTreeVpk {
 /// pinned commit, for a resource that is exactly in that manifest.
 pub(crate) fn pinned_url(package_id: &str, resource: &Resource) -> Result<String, String> {
     let manifest = contract(package_id)?;
-    if !manifest.resources.iter().any(|expected| {
+    if !manifest.downloads().iter().any(|expected| {
         expected.path == resource.path
             && expected.bytes == resource.bytes
             && expected.sha256 == resource.sha256
@@ -172,7 +283,7 @@ fn acquire_verified_resources_with_progress(
         .collect::<Result<Vec<_>, _>>()?;
     let mut index = 0usize;
     for (package_id, manifest) in package_ids.iter().zip(manifests) {
-        for resource in &manifest.resources {
+        for resource in &manifest.downloads() {
             if cancelled.load(Ordering::Relaxed) {
                 return Err("download_cancelled".to_string());
             }
@@ -214,11 +325,19 @@ fn acquire_verified_resources_with_progress(
 pub(crate) fn begin_download(
     app_data_root: std::path::PathBuf,
     requested_package_ids: Vec<String>,
+    game_path: Option<std::path::PathBuf>,
 ) -> Result<TreeDownloadStatus, String> {
     let package_ids = normalize_package_ids(&requested_package_ids)?;
     let total_resources = package_ids.iter().try_fold(0usize, |total, id| {
-        contract(id).map(|manifest| total + manifest.resources.len())
+        contract(id).map(|manifest| total + manifest.downloads().len())
     })?;
+    if game_path.is_none()
+        && package_ids
+            .iter()
+            .any(|id| contract(id).is_ok_and(|manifest| manifest.blacklist.is_some()))
+    {
+        return Err("game_path_required".to_string());
+    }
     let mut slot = download_slot()
         .lock()
         .map_err(|_| "download_failed".to_string())?;
@@ -267,6 +386,7 @@ pub(crate) fn begin_download(
             if let Ok(mut status) = operation.status.lock() {
                 status.phase = "verifying";
             }
+            resolve_blacklists(&app_data_root, &package_ids, game_path.as_deref())?;
             plan_from_verified_store(&app_data_root, &package_ids)
         });
         if let Ok(mut status) = operation.status.lock() {
@@ -340,7 +460,7 @@ pub(crate) fn build_from_verified_store(
         .iter()
         .map(|package_id| {
             let manifest = contract(package_id)?;
-            let resources = manifest
+            let mut resources = manifest
                 .resources
                 .iter()
                 .map(|resource| {
@@ -356,6 +476,36 @@ pub(crate) fn build_from_verified_store(
                 })
                 .collect::<Result<BTreeMap<_, _>, _>>()?;
             verify_resources(&manifest.resources, &resources)?;
+            // Blacklisted game resources get the placeholder of their type.
+            // A file the package ships itself always wins over a blank.
+            if let (Some(blacklist), Some(expansion)) = (
+                &manifest.blacklist,
+                stored_expansion(app_data_root, manifest)?,
+            ) {
+                let mut blanks = BTreeMap::new();
+                for (extension, blank) in &blacklist.blanks {
+                    let bytes = crate::content_store::read_pinned_resource(
+                        app_data_root,
+                        blank.bytes,
+                        &blank.sha256,
+                    )?;
+                    if bytes.len() != blank.bytes
+                        || format!("{:x}", Sha256::digest(&bytes)) != blank.sha256
+                    {
+                        return Err("tree_resource_unverified".to_string());
+                    }
+                    blanks.insert(extension.clone(), bytes);
+                }
+                for (path, extension) in expansion.paths {
+                    if let std::collections::btree_map::Entry::Vacant(slot) = resources.entry(path)
+                    {
+                        let bytes = blanks
+                            .get(&extension)
+                            .ok_or_else(|| "blacklist_resolution_invalid".to_string())?;
+                        slot.insert(bytes.clone());
+                    }
+                }
+            }
             Ok(BundlePackage {
                 package_id: package_id.clone(),
                 resources,
@@ -722,7 +872,8 @@ mod tests {
                 .as_nanos()
         ));
         let cancelled = AtomicBool::new(false);
-        begin_download(root.clone(), vec![PACKAGE_ID.to_string()]).expect("start pinned download");
+        begin_download(root.clone(), vec![PACKAGE_ID.to_string()], None)
+            .expect("start pinned download");
         let mut completed = None;
         for _ in 0..1200 {
             let status = download_status()

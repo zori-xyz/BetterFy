@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "id": "minify.minify-base-attacks",
+  "catalogId": "minify-minify-base-attacks",
+  "name": {
+    "ru": "Облегчённые базовые атаки",
+    "en": "Minify Base Attacks"
+  },
+  "author": "robbyz512",
+  "source": {
+    "repository": "Egezenn/dota2-minify",
+    "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+    "directory": "Minify/mods/Minify Base Attacks",
+    "license": "GPL-3.0"
+  },
+  "distribution": "internal_pilot",
+  "verifiedLanguages": [],
+  "blacklist": {
+    "from": "Minify/mods/Minify Base Attacks/blacklist.txt",
+    "bytes": 18985,
+    "sha256": "a295f03160f7f89e531592e0c80d7f2a533a984eb543af472ab6b43f4b86afb9",
+    "blanks": {
+      "vcss_c": {
+        "from": "Minify/bin/blank-files/blank.vcss_c",
+        "bytes": 978,
+        "sha256": "c639e26a6fd733f9d56c9835feaaa25374b8b955ef957f5b153ea2c4cd255f55"
+      },
+      "vmat_c": {
+        "from": "Minify/bin/blank-files/blank.vmat_c",
+        "bytes": 1551,
+        "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f"
+      },
+      "vmdl_c": {
+        "from": "Minify/bin/blank-files/blank.vmdl_c",
+        "bytes": 3249,
+        "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2"
+      },
+      "vpcf_c": {
+        "from": "Minify/bin/blank-files/blank.vpcf_c",
+        "bytes": 415,
+        "sha256": "b6a43175bc631323e207ff33e2744d043e13987887fa6745d87ca0e7aa588f5f"
+      },
+      "vsnd_c": {
+        "from": "Minify/bin/blank-files/blank.vsnd_c",
+        "bytes": 1511,
+        "sha256": "73efd68e09e3bc625dbbf4cc40a6e7bfaa3213430d34a80b08aeb0b3fe3115be"
+      },
+      "vtex_c": {
+        "from": "Minify/bin/blank-files/blank.vtex_c",
+        "bytes": 11940,
+        "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+      },
+      "vxml_c": {
+        "from": "Minify/bin/blank-files/blank.vxml_c",
+        "bytes": 1045,
+        "sha256": "68b2e62e6fec2fcfbc0e551fd9a22331efc1d41d93710c7b9f50d9bc42342f91"
+      }
+    }
+  }
+}

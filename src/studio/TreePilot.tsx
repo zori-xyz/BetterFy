@@ -28,6 +28,7 @@ import {
   MAX_BUNDLE_PACKAGES,
   engineIdFor,
   findPackage,
+  bundleRelationProblem,
   installablePackages,
   packageName,
 } from "./packages";
@@ -69,6 +70,30 @@ const explainError = (code: string, isRu: boolean) => {
     download_transport_failed: [
       "Не удалось скачать ресурс. Повтори подготовку — проверенные файлы сохранятся.",
       "A resource could not be downloaded. Retry; verified files are kept.",
+    ],
+    package_conflict: [
+      "Эти моды конфликтуют между собой. Оставь в сборке только один из них.",
+      "These mods conflict. Keep only one of them in the build.",
+    ],
+    package_dependency_missing: [
+      "Одному из модов нужен другой мод. Добавь его в сборку.",
+      "One of the mods needs another mod. Add it to the build.",
+    ],
+    game_path_required: [
+      "Для этой сборки нужна подключённая Dota 2: BetterFy сверяется с файлами твоей игры.",
+      "This build needs a connected Dota 2: BetterFy checks it against your game files.",
+    ],
+    game_archive_unreadable: [
+      "Не удалось прочитать архивы Dota 2. Проверь файлы игры в Steam и повтори.",
+      "Dota 2 archives could not be read. Verify game files in Steam and retry.",
+    ],
+    blacklist_resolution_missing: [
+      "Сборку нужно подготовить заново: список изменений для этой версии игры не найден.",
+      "Prepare the build again: the change list for this game version is missing.",
+    ],
+    blacklist_resolution_stale: [
+      "Сборку нужно подготовить заново: список изменений устарел.",
+      "Prepare the build again: the change list is out of date.",
     ],
     build_plan_stale: [
       "План устарел. Подготовь сборку заново.",
@@ -198,7 +223,9 @@ export default function TreePilot({
     ids.length > 0 &&
     ids.length <= Math.min(installablePackages.length, MAX_BUNDLE_PACKAGES) &&
     ids.every((id) => findPackage(id) !== undefined) &&
-    new Set(ids).size === ids.length;
+    new Set(ids).size === ids.length &&
+    !bundleRelationProblem(ids);
+  const relation = bundleRelationProblem(ids);
   const bundleName = !ids.length
     ? isRu
       ? "Установленная сборка"
@@ -352,7 +379,12 @@ export default function TreePilot({
     setError("");
     setPhase("download");
     try {
-      applyDownloadStatus(await engineBridge.beginTreePilotDownload(ids));
+      applyDownloadStatus(
+        await engineBridge.beginTreePilotDownload(
+          ids,
+          installation.verified ? installation.path : undefined,
+        ),
+      );
     } catch (cause) {
       setError(codeOf(cause));
       setPhase("idle");
@@ -843,9 +875,17 @@ export default function TreePilot({
                     ? isRu
                       ? "Сначала подключи настоящую установку Dota 2 в настройках."
                       : "Connect a real Dota 2 installation in Settings first."
-                    : isRu
-                      ? "В живой пилот входят Tree Mod, Show Net Worth и Unit Query HUD. Убери остальные игровые моды из сборки."
-                      : "The live pilot supports Tree Mod, Show Net Worth, and Unit Query HUD. Remove other game mods from the build."}
+                    : relation
+                      ? relation.kind === "conflict"
+                        ? isRu
+                          ? `«${packageLabel(relation.packageId)}» и «${packageLabel(relation.otherId)}» нельзя ставить вместе. Оставь в сборке один из них.`
+                          : `${packageLabel(relation.packageId)} and ${packageLabel(relation.otherId)} cannot be installed together. Keep one of them.`
+                        : isRu
+                          ? `Для «${packageLabel(relation.packageId)}» нужен мод «${packageLabel(relation.otherId)}». Добавь его в сборку.`
+                          : `${packageLabel(relation.packageId)} needs ${packageLabel(relation.otherId)}. Add it to the build.`
+                      : isRu
+                        ? "Устанавливаются только моды с отметкой «Windows-пилот». Убери остальные игровые моды из сборки."
+                        : "Only mods marked Windows pilot install. Remove other game mods from the build."}
           </p>
         </div>
       )}

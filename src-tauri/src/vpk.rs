@@ -8,7 +8,7 @@ const VPK_VERSION: u32 = 1;
 const DIRECTORY_ARCHIVE_INDEX: u16 = 0x7fff;
 const ENTRY_TERMINATOR: u16 = 0xffff;
 const MAX_VPK_BYTES: usize = 256 * 1024 * 1024;
-const MAX_VPK_ENTRIES: usize = 4096;
+const MAX_VPK_ENTRIES: usize = 65_536;
 const MAX_TREE_STRING_BYTES: usize = 260;
 
 #[derive(Clone)]
@@ -320,6 +320,82 @@ pub(crate) fn extract_embedded(bytes: &[u8]) -> Result<BTreeMap<String, Vec<u8>>
     Ok(resources)
 }
 
+/// Valve's own archives (`game/dota/pak01_dir.vpk`) are version 2 and keep
+/// their data in numbered side archives. Only the directory tree is read here.
+const GAME_VPK_MAX_DIRECTORY_BYTES: usize = 1024 * 1024 * 1024;
+const GAME_VPK_MAX_ENTRIES: usize = 2_000_000;
+
+/// Lists every resource path in a game VPK directory file (version 1 or 2),
+/// lowercased, without reading any resource data.
+pub(crate) fn list_directory_paths(bytes: &[u8]) -> Result<Vec<String>, String> {
+    if bytes.len() < 12 || bytes.len() > GAME_VPK_MAX_DIRECTORY_BYTES {
+        return Err("game_vpk_invalid".to_string());
+    }
+    let mut cursor = 0usize;
+    if read_u32(bytes, &mut cursor, bytes.len())? != VPK_SIGNATURE {
+        return Err("game_vpk_invalid".to_string());
+    }
+    let version = read_u32(bytes, &mut cursor, bytes.len())?;
+    let tree_size = read_u32(bytes, &mut cursor, bytes.len())? as usize;
+    let tree_start = match version {
+        1 => 12usize,
+        2 => 28usize,
+        _ => return Err("game_vpk_version_unsupported".to_string()),
+    };
+    let tree_end = tree_start
+        .checked_add(tree_size)
+        .filter(|end| *end <= bytes.len())
+        .ok_or_else(|| "game_vpk_invalid".to_string())?;
+    let mut cursor = tree_start;
+    let mut paths = Vec::new();
+    loop {
+        let extension = read_cstring(bytes, &mut cursor, tree_end)?;
+        if extension.is_empty() {
+            break;
+        }
+        loop {
+            let directory = read_cstring(bytes, &mut cursor, tree_end)?;
+            if directory.is_empty() {
+                break;
+            }
+            loop {
+                let stem = read_cstring(bytes, &mut cursor, tree_end)?;
+                if stem.is_empty() {
+                    break;
+                }
+                // crc, preload length, archive index, offset, length, terminator
+                read_u32(bytes, &mut cursor, tree_end)?;
+                let preload = read_u16(bytes, &mut cursor, tree_end)? as usize;
+                read_u16(bytes, &mut cursor, tree_end)?;
+                read_u32(bytes, &mut cursor, tree_end)?;
+                read_u32(bytes, &mut cursor, tree_end)?;
+                if read_u16(bytes, &mut cursor, tree_end)? != ENTRY_TERMINATOR {
+                    return Err("game_vpk_invalid".to_string());
+                }
+                cursor = cursor
+                    .checked_add(preload)
+                    .filter(|end| *end <= tree_end)
+                    .ok_or_else(|| "game_vpk_invalid".to_string())?;
+                if paths.len() >= GAME_VPK_MAX_ENTRIES {
+                    return Err("game_vpk_invalid".to_string());
+                }
+                let directory = if directory == " " {
+                    ""
+                } else {
+                    directory.as_str()
+                };
+                let path = if directory.is_empty() {
+                    format!("{stem}.{extension}")
+                } else {
+                    format!("{directory}/{stem}.{extension}")
+                };
+                paths.push(path.to_ascii_lowercase());
+            }
+        }
+    }
+    Ok(paths)
+}
+
 pub fn inspect(bytes: &[u8]) -> Result<VpkReport, String> {
     let resources = extract_embedded(bytes)?;
     let payload_bytes = resources.values().try_fold(0u64, |total, resource| {
@@ -337,6 +413,39 @@ pub fn inspect(bytes: &[u8]) -> Result<VpkReport, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lists_paths_of_version_one_and_two_directories() {
+        let built = build(vec![
+            VpkInput {
+                path: "sounds/ui/ping.vsnd_c",
+                bytes: b"ping",
+            },
+            VpkInput {
+                path: "particles/rain_fx/rain.vpcf_c",
+                bytes: b"rain",
+            },
+        ])
+        .expect("vpk");
+        let mut listed = list_directory_paths(&built).expect("version 1");
+        listed.sort();
+        assert_eq!(
+            listed,
+            vec!["particles/rain_fx/rain.vpcf_c", "sounds/ui/ping.vsnd_c"]
+        );
+        // Same tree behind Valve's 28-byte version 2 header.
+        let tree_size = u32::from_le_bytes(built[8..12].try_into().unwrap()) as usize;
+        let mut v2 = Vec::new();
+        v2.extend_from_slice(&built[0..4]);
+        v2.extend_from_slice(&2u32.to_le_bytes());
+        v2.extend_from_slice(&built[8..12]);
+        v2.extend_from_slice(&[0u8; 16]);
+        v2.extend_from_slice(&built[12..12 + tree_size]);
+        let mut listed = list_directory_paths(&v2).expect("version 2");
+        listed.sort();
+        assert_eq!(listed.len(), 2);
+        assert!(list_directory_paths(b"not a vpk at all").is_err());
+    }
 
     fn fixture() -> Vec<VpkInput<'static>> {
         vec![

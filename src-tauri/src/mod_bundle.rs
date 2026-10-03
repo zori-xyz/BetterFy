@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::vpk::{self, VpkInput};
 
 const MAX_PACKAGES: usize = 64;
-const MAX_RESOURCES: usize = 4096;
+const MAX_RESOURCES: usize = 65_536;
 const MAX_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
 
 #[derive(Clone, Debug)]

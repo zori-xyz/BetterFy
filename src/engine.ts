@@ -344,7 +344,7 @@ export interface EngineBridge {
   deployStagedVpk(gamePath: string, receipt: BuildReceipt): Promise<GameDeploymentReceipt>;
   rollbackGameDeployment(gamePath: string, operationId: string): Promise<GameDeploymentReceipt>;
   recoverGameDeployments(gamePath: string): Promise<GameDeploymentRecovery>;
-  beginTreePilotDownload(packageIds: string[]): Promise<TreePilotDownloadStatus>;
+  beginTreePilotDownload(packageIds: string[], gamePath?: string): Promise<TreePilotDownloadStatus>;
   treePilotDownloadStatus(): Promise<TreePilotDownloadStatus | null>;
   cancelTreePilotDownload(): Promise<TreePilotDownloadStatus>;
   previewTreeLanguage(gamePath: string, language: GameLanguage): Promise<void>;
@@ -935,12 +935,12 @@ export const engineBridge: EngineBridge = {
       90_000,
     );
   },
-  async beginTreePilotDownload(packageIds) {
+  async beginTreePilotDownload(packageIds, gamePath) {
     if (!isTauriRuntime()) return mockEngine.beginTreePilotDownload(packageIds);
     const { invoke } = await import("@tauri-apps/api/core");
     return guardedEngineCall(
       "begin_tree_pilot_download",
-      invoke<TreePilotDownloadStatus>("begin_tree_pilot_download", { packageIds: uniqueModIds(packageIds) }),
+      invoke<TreePilotDownloadStatus>("begin_tree_pilot_download", { packageIds: uniqueModIds(packageIds), gamePath: gamePath ?? null }),
       20_000,
     );
   },

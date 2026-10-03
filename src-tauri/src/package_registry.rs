@@ -8,7 +8,7 @@
 //! installed.
 
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{OnceLock, RwLock};
 
 const MANIFESTS: &[&str] = &[
@@ -16,18 +16,33 @@ const MANIFESTS: &[&str] = &[
     include_str!("../packages/minify-show-networth.json"),
     include_str!("../packages/minify-repopulate-unit-query-hud.json"),
     include_str!("../packages/minify-remove-river.json"),
+    include_str!("../packages/minify-minify-base-attacks.json"),
+    include_str!("../packages/minify-minify-spells-and-items.json"),
+    include_str!("../packages/minify-misc-optimization.json"),
+    include_str!("../packages/minify-mute-ambient-sounds.json"),
+    include_str!("../packages/minify-mute-default-announcer.json"),
+    include_str!("../packages/minify-mute-taunt-sounds.json"),
+    include_str!("../packages/minify-mute-voice-line-sounds.json"),
+    include_str!("../packages/minify-remove-foilage.json"),
+    include_str!("../packages/minify-remove-pings.json"),
+    include_str!("../packages/minify-remove-sprays.json"),
+    include_str!("../packages/minify-remove-weather-effects.json"),
+    include_str!("../packages/minify-revert-ping-sounds.json"),
+    include_str!("../packages/minify-dark-terrain.json"),
 ];
 
 /// Only this repository is trusted as a source, and only through
 /// raw.githubusercontent.com at a pinned commit.
 const TRUSTED_REPOSITORY: &str = "Egezenn/dota2-minify";
-const MAX_RESOURCES_PER_PACKAGE: usize = 256;
+const MAX_RESOURCES_PER_PACKAGE: usize = 512;
 const MAX_RESOURCE_BYTES: usize = 8 * 1024 * 1024;
-const MAX_PACKAGE_BYTES: usize = 32 * 1024 * 1024;
+const MAX_PACKAGE_BYTES: usize = 64 * 1024 * 1024;
+/// The largest Minify blacklist at the pinned commit is about 260 KB.
+const MAX_BLACKLIST_BYTES: usize = 2 * 1024 * 1024;
 /// Compiled Source 2 data resources only. Compiled Panorama scripts
 /// (`vjs_c`) and anything else are not data and are never accepted, even from
 /// a validly signed catalog.
-const ALLOWED_EXTENSIONS: &[&str] = &[
+pub(crate) const ALLOWED_EXTENSIONS: &[&str] = &[
     "vcss_c", "vmat_c", "vmdl_c", "vpcf_c", "vsnd_c", "vtex_c", "vxml_c",
 ];
 
@@ -72,6 +87,30 @@ impl Resource {
     }
 }
 
+/// A Minify `blacklist.txt`, applied on the player's machine: each line names
+/// game resources (a path, a `>>directory` or a `**regex`) that are replaced
+/// with the blank placeholder of their type. The file and every placeholder
+/// are pinned by size and SHA-256 like any other resource.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BlacklistSpec {
+    /// Repository path of the `blacklist.txt`.
+    pub from: String,
+    pub bytes: usize,
+    pub sha256: String,
+    /// Placeholder per compiled extension (`vsnd_c` ->
+    /// `Minify/bin/blank-files/blank.vsnd_c`).
+    pub blanks: BTreeMap<String, BlankSpec>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BlankSpec {
+    pub from: String,
+    pub bytes: usize,
+    pub sha256: String,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PackageManifest {
@@ -86,7 +125,16 @@ pub struct PackageManifest {
     pub verified_languages: Vec<String>,
     #[serde(default)]
     pub compatibility_note: Option<String>,
+    #[serde(default)]
     pub resources: Vec<Resource>,
+    #[serde(default)]
+    pub blacklist: Option<BlacklistSpec>,
+    /// Packages that must not be installed together with this one.
+    #[serde(default)]
+    pub conflicts: Vec<String>,
+    /// Packages that must be installed together with this one.
+    #[serde(default)]
+    pub requires: Vec<String>,
 }
 
 /// What the interface needs to list and label installable packages.
@@ -99,6 +147,9 @@ pub struct PackageSummary {
     pub author: String,
     pub license: String,
     pub resource_count: usize,
+    pub uses_blacklist: bool,
+    pub conflicts: Vec<String>,
+    pub requires: Vec<String>,
     pub verified_languages: Vec<String>,
     pub compatibility_note: Option<String>,
 }
@@ -125,17 +176,61 @@ impl PackageManifest {
                 resource.from.as_deref().unwrap_or("")
             ));
         }
+        // Only present for blacklist packages, so the contracts of packages
+        // published before blacklists existed keep their hashes.
+        if let Some(blacklist) = &self.blacklist {
+            hasher.update(format!(
+                "blacklist|{}|{}|{}\n",
+                blacklist.from, blacklist.bytes, blacklist.sha256
+            ));
+            for (extension, blank) in &blacklist.blanks {
+                hasher.update(format!(
+                    "blank|{extension}|{}|{}|{}\n",
+                    blank.from, blank.bytes, blank.sha256
+                ));
+            }
+        }
         format!("{:x}", hasher.finalize())
+    }
+
+    /// The pinned files that are downloaded but do not go into the VPK under
+    /// their own path: the blacklist and its placeholders. They are expressed
+    /// as resources so they travel through the same pinned download and
+    /// content-addressed store.
+    pub fn auxiliary_downloads(&self) -> Vec<Resource> {
+        let Some(blacklist) = &self.blacklist else {
+            return Vec::new();
+        };
+        let mut downloads = vec![Resource {
+            path: "blacklist.txt".to_string(),
+            bytes: blacklist.bytes,
+            sha256: blacklist.sha256.clone(),
+            from: Some(blacklist.from.clone()),
+        }];
+        downloads.extend(blacklist.blanks.iter().map(|(extension, blank)| Resource {
+            path: format!("blank.{extension}"),
+            bytes: blank.bytes,
+            sha256: blank.sha256.clone(),
+            from: Some(blank.from.clone()),
+        }));
+        downloads
+    }
+
+    /// Everything the package downloads, in a stable order.
+    pub fn downloads(&self) -> Vec<Resource> {
+        let mut downloads = self.resources.clone();
+        downloads.extend(self.auxiliary_downloads());
+        downloads
     }
 
     /// `https://raw.githubusercontent.com/<repository>/<commit>/<directory>/<path>`,
     /// with spaces in the directory percent-encoded exactly as before.
     pub fn resource_url(&self, resource: &Resource) -> String {
         let location = match &resource.from {
-            Some(from) => from.replace(' ', "%20"),
+            Some(from) => encode_repository_path(from),
             None => format!(
                 "{}/{}",
-                self.source.directory.replace(' ', "%20"),
+                encode_repository_path(&self.source.directory),
                 resource.path
             ),
         };
@@ -153,10 +248,19 @@ impl PackageManifest {
             author: self.author.clone(),
             license: self.source.license.clone(),
             resource_count: self.resources.len(),
+            uses_blacklist: self.blacklist.is_some(),
+            conflicts: self.conflicts.clone(),
+            requires: self.requires.clone(),
             verified_languages: self.verified_languages.clone(),
             compatibility_note: self.compatibility_note.clone(),
         }
     }
+}
+
+/// Spaces and `&` (as in `Minify Spells & Items`) are the only characters a
+/// repository path may contain that need escaping in a URL.
+fn encode_repository_path(path: &str) -> String {
+    path.replace('&', "%26").replace(' ', "%20")
 }
 
 fn slug(value: &str) -> bool {
@@ -203,7 +307,7 @@ fn valid_repository_path(path: &str) -> bool {
                 && segment != "."
                 && segment != ".."
                 && segment.bytes().all(|byte| {
-                    byte.is_ascii_alphanumeric() || matches!(byte, b' ' | b'_' | b'-' | b'.')
+                    byte.is_ascii_alphanumeric() || matches!(byte, b' ' | b'_' | b'-' | b'.' | b'&')
                 })
         })
 }
@@ -213,6 +317,13 @@ fn extension(path: &str) -> Option<&str> {
         .next()?
         .rsplit_once('.')
         .map(|(_, extension)| extension)
+}
+
+fn valid_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn validate(manifest: &PackageManifest) -> Result<(), String> {
@@ -237,8 +348,40 @@ fn validate(manifest: &PackageManifest) -> Result<(), String> {
     if manifest.distribution != "internal_pilot" {
         return invalid("distribution");
     }
-    if manifest.resources.is_empty() || manifest.resources.len() > MAX_RESOURCES_PER_PACKAGE {
+    if manifest
+        .conflicts
+        .iter()
+        .chain(&manifest.requires)
+        .any(|id| !valid_package_id(id) || *id == manifest.id)
+    {
+        return invalid("relations");
+    }
+    if (manifest.resources.is_empty() && manifest.blacklist.is_none())
+        || manifest.resources.len() > MAX_RESOURCES_PER_PACKAGE
+    {
         return invalid("resources");
+    }
+    if let Some(blacklist) = &manifest.blacklist {
+        if !valid_repository_path(&blacklist.from)
+            || !blacklist.from.ends_with("/blacklist.txt")
+            || blacklist.bytes == 0
+            || blacklist.bytes > MAX_BLACKLIST_BYTES
+            || !valid_sha256(&blacklist.sha256)
+            || blacklist.blanks.is_empty()
+        {
+            return invalid("blacklist");
+        }
+        for (extension, blank) in &blacklist.blanks {
+            if !ALLOWED_EXTENSIONS.contains(&extension.as_str())
+                || !valid_repository_path(&blank.from)
+                || blank.from != format!("Minify/bin/blank-files/blank.{extension}")
+                || blank.bytes == 0
+                || blank.bytes > MAX_RESOURCE_BYTES
+                || !valid_sha256(&blank.sha256)
+            {
+                return invalid("blacklist_blank");
+            }
+        }
     }
     let mut paths = BTreeSet::new();
     let mut total = 0usize;
@@ -264,12 +407,7 @@ fn validate(manifest: &PackageManifest) -> Result<(), String> {
                 return invalid("resource_from");
             }
         }
-        if resource.sha256.len() != 64
-            || !resource
-                .sha256
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        {
+        if !valid_sha256(&resource.sha256) {
             return invalid("resource_hash");
         }
         total = total.saturating_add(resource.bytes);

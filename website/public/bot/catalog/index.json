@@ -1,9 +1,2075 @@
 {
   "schemaVersion": 1,
-  "sequence": 3,
-  "issuedAt": "2026-09-30T21:19:09Z",
-  "expiresAt": "2027-03-29T21:19:09Z",
+  "sequence": 4,
+  "issuedAt": "2026-10-03T08:04:39Z",
+  "expiresAt": "2027-04-01T08:04:39Z",
   "packages": [
+    {
+      "schemaVersion": 1,
+      "id": "minify.dark-terrain",
+      "catalogId": "minify-dark-terrain",
+      "name": {
+        "ru": "Тёмный ландшафт",
+        "en": "Dark Terrain"
+      },
+      "author": "robbyz512",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Dark Terrain/files",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "requires": [
+        "minify.remove-foilage"
+      ],
+      "resources": [
+        {
+          "path": "materials/blends/mod_dire_000.vmat_c",
+          "bytes": 5780,
+          "sha256": "281a05d4b64e0fcb5c5b0fd64e1c553e5da679f24483109df580a2dd08fe62c2"
+        },
+        {
+          "path": "materials/blends/mod_dire_000_vmat_g_tspecular0_83163e7b_png_d3f7b418.vtex_c",
+          "bytes": 2264,
+          "sha256": "b90195e90108d2e3c9f374dee997cf3916196073bccfffc50b685a60dbfff903"
+        },
+        {
+          "path": "materials/blends/mod_dire_000_vmat_g_tspecular3_3e7b8f16_png_a1f774e.vtex_c",
+          "bytes": 2264,
+          "sha256": "2aedcc2117c716fce10e7148902b124bf99bb82c2e892a55be955534bb87949c"
+        },
+        {
+          "path": "materials/blends/mod_dire_path_000.vmat_c",
+          "bytes": 6356,
+          "sha256": "5ad0e442a379d9f6bca13f45a73d64fbbb6043ce5e4442c1217436b287fcf153"
+        },
+        {
+          "path": "materials/blends/mod_dire_path_cracked_000.vmat_c",
+          "bytes": 6372,
+          "sha256": "3bf623b2be8e85c5f162ec95cb90db50f92ffb7237da77b5b368b461839ec7dc"
+        },
+        {
+          "path": "materials/blends/mod_dire_riverbed_path_000.vmat_c",
+          "bytes": 5380,
+          "sha256": "be1e3ab3a123067554de162b38c9d9ca48a0724b410486a6b2c067ec47f8213b"
+        },
+        {
+          "path": "materials/blends/mod_dire_riverbed_path_000_vmat_g_tspecular1_3e7b8f16.vtex_c",
+          "bytes": 2232,
+          "sha256": "2edc7e3eb2edeef0610c196335fc17d90a4566a0220d56e686b7c066fb7ead32"
+        },
+        {
+          "path": "materials/blends/mod_dire_riverbed_path_000_vmat_g_tspecular1_3e7b8f16_png_f5916667.vtex_c",
+          "bytes": 2280,
+          "sha256": "a72d2de83678bd708c9aaa01d7970b98dca1dd597ec410d6278927f8d5e8a4bc"
+        },
+        {
+          "path": "materials/blends/mod_dire_riverbed_path_000_vmat_g_tspecular3_52d5f79.vtex_c",
+          "bytes": 2232,
+          "sha256": "993c3c20c091a4aaea0ff4e4570eccd9ae43424101f7f306782d861a80d05663"
+        },
+        {
+          "path": "materials/blends/mod_radiant_000.vmat_c",
+          "bytes": 5764,
+          "sha256": "2e8f4fd0299887a16bd2bff9c9f6161d8a56cb998528e5169f0a5b23f53ee075"
+        },
+        {
+          "path": "materials/blends/mod_radiant_000_vmat_g_tspecular3_52d5f79_png_e32d4887.vtex_c",
+          "bytes": 2264,
+          "sha256": "9c0b4b36cfcd371461701516bdc13ca48f3830dc24ddf4cb19b5b9ddf4301aec"
+        },
+        {
+          "path": "materials/blends/mod_radiant_base_angled_000.vmat_c",
+          "bytes": 6372,
+          "sha256": "4d1bae729a0f35d03c37c5b3b6c1548c51362d6b155f9a4b19cf79cc18272436"
+        },
+        {
+          "path": "materials/blends/mod_radiant_dire_000.vmat_c",
+          "bytes": 5236,
+          "sha256": "8b9febd473079145e0010a3fd8c526cf4c7d78cd85b7c93a689bd0255cfd1578"
+        },
+        {
+          "path": "materials/blends/mod_radiant_dire_000_vmat_g_tspecular0_83163e7b_png_dc66b57c.vtex_c",
+          "bytes": 2264,
+          "sha256": "5f5ba933bdf38c572e67fae0c26264ca0827f4d1b03bcb86af37cb0b1f499498"
+        },
+        {
+          "path": "materials/blends/mod_radiant_dire_000_vmat_g_tspecular3_52d5f79_png_c96f4e0f.vtex_c",
+          "bytes": 2264,
+          "sha256": "5facedc9aac5120ad24621c409cbc0ecf258325199bf512e675aadaafc64d271"
+        },
+        {
+          "path": "materials/blends/mod_radiant_dire_path_000.vmat_c",
+          "bytes": 5684,
+          "sha256": "a545a74f3025869aabe7cd10b29b902bed8189cc21c2a388c0a95ec4039aa68d"
+        },
+        {
+          "path": "materials/blends/mod_radiant_path_000.vmat_c",
+          "bytes": 6372,
+          "sha256": "83df4ccacc64b2d9e621c6e3ba32af8279541c591e08c2a2337d05de3379e538"
+        },
+        {
+          "path": "materials/blends/mod_radiant_riverbed_path_000.vmat_c",
+          "bytes": 5204,
+          "sha256": "2038c7742905ae23f42290670bb0849b487f46adf957b02311ca3e105be38c68"
+        },
+        {
+          "path": "materials/blends/mod_radiant_riverbed_path_000_vmat_g_tspecular1_3e7b8f16.vtex_c",
+          "bytes": 2232,
+          "sha256": "2edc7e3eb2edeef0610c196335fc17d90a4566a0220d56e686b7c066fb7ead32"
+        },
+        {
+          "path": "materials/blends/mod_radiant_riverbed_path_000_vmat_g_tspecular1_3e7b8f16_3e7b8f16_bloom_png_e5b2b05e.vtex_c",
+          "bytes": 2312,
+          "sha256": "80faaa6ecf8bea78529df801d9406f61565b56ac02259c779992fbf5165c2773"
+        },
+        {
+          "path": "materials/blends/mod_radiant_riverbed_path_000_vmat_g_tspecular1_3e7b8f16_png_6d35c519.vtex_c",
+          "bytes": 2280,
+          "sha256": "8f16203d87a5aa4657bb20f48d956bd545d2830297589157b42d4e8373ef1c7f"
+        },
+        {
+          "path": "materials/blends/mod_radiant_riverbed_path_000_vmat_g_tspecular3_52d5f79_52d5f79_bloom_png_cbc41fe9.vtex_c",
+          "bytes": 2312,
+          "sha256": "8cdd66c3b81de0189ff29f4b5dc16de69867d7374666d5a4abb32edf38108a01"
+        },
+        {
+          "path": "materials/blends/mod_radiant_riverbed_path_000_vmat_g_tspecular3_52d5f79_png_afda8154.vtex_c",
+          "bytes": 2280,
+          "sha256": "32f58c9ed7a05d33bb0c72547f2e8cf41c910b8b6e21ae4cde2347ecbf0535c0"
+        },
+        {
+          "path": "materials/default/default_color_tga_519582ca.vtex_c",
+          "bytes": 2248,
+          "sha256": "8aa010768d2875460302ac370607f6befa3f50487594dfada100255fde513383"
+        },
+        {
+          "path": "materials/default/default_normal_tga_7652cb.vtex_c",
+          "bytes": 2192,
+          "sha256": "ca6418be9df63f605ddae2d920909eaea627f9aae9bf368f37fbfcc6758a3743"
+        },
+        {
+          "path": "materials/default/default_refl_tga_3b807e51.vtex_c",
+          "bytes": 2280,
+          "sha256": "0614d2886823477435791be871d1ec526cb1853dd2a722cffa809719b4940478"
+        },
+        {
+          "path": "materials/default/default_tga_c23e38fb.vtex_c",
+          "bytes": 2152,
+          "sha256": "34165a9dc210a08543d50f5a0e9b91abd82a8438371d2fb4287b799264697021"
+        },
+        {
+          "path": "materials/dev/deferred_post_process.vmat_c",
+          "bytes": 2484,
+          "sha256": "38084b049fd77c90cade19cbdff100e94692ff01b584b0549235f136e6ded11a"
+        },
+        {
+          "path": "materials/dev/deferred_post_process_vmat_g_tfog_9ea98ee9.vtex_c",
+          "bytes": 1976,
+          "sha256": "289024c3dbce6aa948e0916c9830659b6192399a044a056f1e31a30c36965ed2"
+        },
+        {
+          "path": "materials/effects/light_clouds_00.vtex_c",
+          "bytes": 4462,
+          "sha256": "bada73f74b30fa3c33c519d4a00e67b46e96ebb654b6d64c7776418b2c595b12"
+        },
+        {
+          "path": "materials/models/effects/mist_00_color_png_e946f983.vtex_c",
+          "bytes": 264196,
+          "sha256": "0b07b02e0ce4128c261ab2804827c2a1903241639273ab3cb03abfe1bd7801c8"
+        },
+        {
+          "path": "materials/models/props_nature/cliff_wall001.vmat_c",
+          "bytes": 2708,
+          "sha256": "9e9567419a59fe77e3f34fb57e116fd47cfcea2f8a9558ed7625cbfb3c592b34"
+        },
+        {
+          "path": "materials/models/props_structures/temple_stairs001_color_psd_2cbf7888.vtex_c",
+          "bytes": 133172,
+          "sha256": "c81c893ec38ace0310d3589ac11e9921e83af2a51dc47333b3d7a5117c75514c"
+        },
+        {
+          "path": "materials/models/props_structures/temple_stairs_blocks001_color_psd_f5cd9411.vtex_c",
+          "bytes": 133172,
+          "sha256": "4ea61f773c9e024a84b452adabc130fefa79cc84455b1c8b72958947adef14ec"
+        },
+        {
+          "path": "materials/models/props_structures/temple_stairs_blocks002_color_psd_fd634981.vtex_c",
+          "bytes": 133172,
+          "sha256": "a208c72d77f514bfb213ac84ed19be511674f432d255a6c865d6b67dc8d551e8"
+        },
+        {
+          "path": "materials/models/props_teams/team_logo_dire.vmat_c",
+          "bytes": 3381,
+          "sha256": "e4b1d831edd6539c26a2baf966451a4a4f82a639054139d95a4761c79043ee1e"
+        },
+        {
+          "path": "materials/models/props_teams/team_logo_radiant.vmat_c",
+          "bytes": 3429,
+          "sha256": "75afd00c975e1df0f55ccc6fa4600b351ce946c8e5553e5c1a184e187d1aa0f9"
+        },
+        {
+          "path": "materials/nature/dirt_cracked_patchy_00_blend_png_322f91a2.vtex_c",
+          "bytes": 351636,
+          "sha256": "0c272f91e54c994d35f6c735e65a86f3dd1e3da22b1b615e4fdb29f5dfaae716"
+        },
+        {
+          "path": "materials/nature/dirt_cracked_patchy_00_blend_png_8783fe43.vtex_c",
+          "bytes": 351636,
+          "sha256": "0878e7e579025d7a601d51065ec16f29f8a28424da38973fde5033928070dbd5"
+        },
+        {
+          "path": "materials/nature/dirt_cracked_patchy_00_blend_png_9d6b3a5b.vtex_c",
+          "bytes": 351636,
+          "sha256": "c62261c9951438831725ede418a27c9038d374100d0123062bdb9f79f94dedac"
+        },
+        {
+          "path": "materials/nature/dirt_cracked_patchy_00_mask_png_2a8a37eb.vtex_c",
+          "bytes": 2256,
+          "sha256": "f43906802d98026967a363ca7ee0e0f64283c09666db42ce9097d169c55d7898"
+        },
+        {
+          "path": "materials/nature/dirt_cracked_patchy_00_mask_png_89941271.vtex_c",
+          "bytes": 2256,
+          "sha256": "f7d4f33bb0c000cbab6d19520bc6271fff58f943e216c53643c63da456cb364b"
+        },
+        {
+          "path": "materials/nature/dirt_cracked_patchy_00_mask_png_af982322.vtex_c",
+          "bytes": 2256,
+          "sha256": "bbc409e928d3d3b84516eb01722b9dccd72a8d066088fc5b5bff818b478a0782"
+        },
+        {
+          "path": "materials/nature/dirt_cracked_patchy_00_normal_png_651caf22.vtex_c",
+          "bytes": 1400180,
+          "sha256": "cad16545592367108b730a25f42b4b7348b62cc28b2e0b402fc005e6a8cac503"
+        },
+        {
+          "path": "materials/nature/dirt_cracked_patchy_00_png_36fda9c8.vtex_c",
+          "bytes": 1400196,
+          "sha256": "98f98bb449caa562423182d8130d092596b70527c2951bf00b06cea231397577"
+        },
+        {
+          "path": "materials/nature/dirt_cracked_patchy_00_refl_png_5fb61ef8.vtex_c",
+          "bytes": 176908,
+          "sha256": "e4335e4848809d5aea523e12df9aad5a8d2e597dc3251edf3066743b2955df90"
+        },
+        {
+          "path": "materials/nature/grass_long_00_color_png_7faa461d.vtex_c",
+          "bytes": 1400196,
+          "sha256": "fc4aa6c2ba7a594403d8277d81d60a8e29078784f14ad85b7231ab2fc68309fc"
+        },
+        {
+          "path": "materials/nature/grass_long_00_mask_png_405ba075.vtex_c",
+          "bytes": 2232,
+          "sha256": "bc8656f246dbf9b48153df50c1c407384a4738a3f53c09221e571e41c05a18d0"
+        },
+        {
+          "path": "materials/nature/grass_long_00_mask_png_7618c462.vtex_c",
+          "bytes": 2232,
+          "sha256": "d1fee0f2c8581e12c069b20851a192ff01a6bd0d115834e872f37c27aa6cde0c"
+        },
+        {
+          "path": "materials/nature/grass_long_00_normal_png_e2c3d39e.vtex_c",
+          "bytes": 351604,
+          "sha256": "3b0e0018ac1bfdac0d9fd8e451a33f951e4d269128cf75a020297e54ab0cea8c"
+        },
+        {
+          "path": "materials/nature/grass_long_00b_refl_png_ae5c20c7.vtex_c",
+          "bytes": 176908,
+          "sha256": "9f2d1eb361e244d5cc088af730b434a699ad5ee9ba4e41b153b953b141faf3d5"
+        },
+        {
+          "path": "materials/nature/grass_long_00b_refl_png_d2981f2c.vtex_c",
+          "bytes": 176908,
+          "sha256": "326accc4c4d22a0ad5e91ef3eaeaf833dfdc039934a260eb7faf94c78e49143e"
+        },
+        {
+          "path": "materials/nature/grass_long_00b_refl_png_fee4df94.vtex_c",
+          "bytes": 176924,
+          "sha256": "3a3152260f22ef2f0c27e005d6114e1263ece59bc02b97800cc6497c88e4aa86"
+        },
+        {
+          "path": "materials/nature/grass_long_01_color_png_68f4fa93.vtex_c",
+          "bytes": 1400196,
+          "sha256": "c07de5bf3670e0d409ef06e0361db7001e056cf63f9314bdb6d5ffd5c4c23f82"
+        },
+        {
+          "path": "materials/nature/grass_long_01b_normal_png_a116e631.vtex_c",
+          "bytes": 351604,
+          "sha256": "080e5b542917844bb8d545dafc391c3ca1889444a2633989c25e483f2dbb8bf8"
+        },
+        {
+          "path": "materials/nature/grass_long_01b_refl_png_7e0e586d.vtex_c",
+          "bytes": 176908,
+          "sha256": "84926b4df413f60bb33374279b13a75e995b41174cfe9bea963231ddd6313a23"
+        },
+        {
+          "path": "materials/nature/river_rock001_c9440393_selfillum_png_b5c33136.vtex_c",
+          "bytes": 177064,
+          "sha256": "111b49ed0ad0a984df6d6258db4f05c4e1d8ead40d15465f4bfc928b4db47370"
+        },
+        {
+          "path": "materials/nature/river_rock001_color_png_b5fba657.vtex_c",
+          "bytes": 351620,
+          "sha256": "5011745919f62b7288762a25730b40667a9df61e20fcf87cee59606aceef2a8e"
+        },
+        {
+          "path": "materials/nature/river_rock001_normal_png_1ec09532.vtex_c",
+          "bytes": 1400180,
+          "sha256": "cf3222e0bd099663d76c1ac9bb3ef643bb57dd4c5dde93bada250198ca582873"
+        },
+        {
+          "path": "materials/nature/river_rock001_refl_png_e88c48b7.vtex_c",
+          "bytes": 176908,
+          "sha256": "926b002699def32bc25530f527ff18d0654f7be231b39481acf1fb3d8e396592"
+        },
+        {
+          "path": "materials/nature/sand_cracked001_color_png_8b53cf75.vtex_c",
+          "bytes": 1400196,
+          "sha256": "38ac70437d21ebb6cb17c81fb00b851270f0903690b6928529f6ccf4c7eb34de"
+        },
+        {
+          "path": "materials/nature/sand_cracked001_normal_png_5a08ab65.vtex_c",
+          "bytes": 351604,
+          "sha256": "cc4cc01f909f949230eca8a41f954778330eee7f36dd76d314445a0a563486aa"
+        },
+        {
+          "path": "materials/nature/sand_cracked001_refl_png_e4675d63.vtex_c",
+          "bytes": 176908,
+          "sha256": "44dd068d9d7d066ceaa5d1a9b54e3b9c9a5bed4aa7dcbbb753917f55e36e32ed"
+        },
+        {
+          "path": "materials/nature/sand_path001_color_png_8a254ba5.vtex_c",
+          "bytes": 701084,
+          "sha256": "85af9e9cb7aa8dac7dc8593c8816036d942a57277b8d3d88fb726fa425846d5a"
+        },
+        {
+          "path": "materials/nature/sand_path001_height_png_45c3c860.vtex_c",
+          "bytes": 89476,
+          "sha256": "b4875b67bacf3a0e1c169403c58e0796ea1241b6662c3f4c26ba0f3babf7f6be"
+        },
+        {
+          "path": "materials/nature/sand_path001_height_png_60884e79.vtex_c",
+          "bytes": 89476,
+          "sha256": "d4fb0b1c93438cc9c8e721a7420341455e9e7e790b1ce3be63aea57654a31a4e"
+        },
+        {
+          "path": "materials/nature/sand_path001_height_png_cfb94b77.vtex_c",
+          "bytes": 89476,
+          "sha256": "910d3daab3798a5662ae31b1cffd555149d836e1fc80e3e209e5215c973a4ac2"
+        },
+        {
+          "path": "materials/nature/sand_path001_normal_png_9a10af96.vtex_c",
+          "bytes": 351588,
+          "sha256": "efac6dc4742745a3e53f0a5a6435e19e2b423f7e6d12c6aa4a9aacf733c2da99"
+        },
+        {
+          "path": "materials/nature/sand_path001_refl_png_8a0df1cc.vtex_c",
+          "bytes": 176892,
+          "sha256": "fccec8fb977df068611a3d3e9cb8a35278cf6c30e0ae7c82490cc6cfe3b7ef66"
+        },
+        {
+          "path": "materials/nature/sand_path001_refl_png_d803fc84.vtex_c",
+          "bytes": 176892,
+          "sha256": "dc498fbfe4809b5fd248c4e40f429527736019dbe40336005e594acb65c9e215"
+        },
+        {
+          "path": "materials/nature/sand_path001b_refl_png_8b58b698.vtex_c",
+          "bytes": 176908,
+          "sha256": "ece2246c4494fca449a8ba3e1abd160d281e8fb32d42473ed0adc38cfbe64bec"
+        },
+        {
+          "path": "materials/nature/sand_path002_mask_png_128692e7.vtex_c",
+          "bytes": 351620,
+          "sha256": "8114ce4403fa4e3e57a6404bcaf743613edbe5080e502b2c3e63885db8745d56"
+        },
+        {
+          "path": "materials/nature/sand_path002_mask_png_983eb856.vtex_c",
+          "bytes": 176860,
+          "sha256": "e0440f7ca97590f116532d9365368b193d8a19fea34d782400c95f7ed3af889d"
+        },
+        {
+          "path": "materials/nature/sand_path002_mask_png_a07e048d.vtex_c",
+          "bytes": 351620,
+          "sha256": "e7f4abcacbc891e6ee2488598e1519db184192548caa41dbb6fc14d15d7940e5"
+        },
+        {
+          "path": "materials/nature/sand_path002_mask_png_c71f03a9.vtex_c",
+          "bytes": 351620,
+          "sha256": "0cd0f2bb679f92091aedb6255d8751c1a02bbaf6268ef4c6390089f1dd6847f0"
+        },
+        {
+          "path": "materials/nature/sand_path009_color_png_62a9dcac.vtex_c",
+          "bytes": 176796,
+          "sha256": "9c14638554c553022cd456ac64f107ba5caca41219094d6e9fd8a57263b4aea4"
+        },
+        {
+          "path": "materials/nature/sand_path009_color_png_70ee59c7.vtex_c",
+          "bytes": 351636,
+          "sha256": "630a3eaa3ac55f4e50a97b9550628a460d8f15c2b6fe103e6590afb7830f1c3f"
+        },
+        {
+          "path": "materials/nature/sand_path009_color_png_e48da3a.vtex_c",
+          "bytes": 351636,
+          "sha256": "fc726e2aebdebed1b47a29b75774915a07ffb98206c48f62f325b2d0f966f826"
+        },
+        {
+          "path": "materials/nature/sand_path009_color_png_e9a91a47.vtex_c",
+          "bytes": 351620,
+          "sha256": "d63cbe08f7b2aa157f464473404f4cce8afb0ad72423f2739c31974f0bca1ca4"
+        },
+        {
+          "path": "materials/overlays/aegis/ti01_color_psd_e99c677a.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/aegis/ti01_normal_psd_8093eaf9.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/aegis/ti01_refl_psd_8c815d24.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/aegis_motif_front_000_color_psd_a5cd3857.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/aegis_motif_front_000_normal_psd_c1628177.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/aegis_motif_front_000_vmat_g_tspecular_ae81057.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile001_color_psd_5d2f0f00.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile001_normal_psd_e1abc7f8.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile001_tint_psd_523f13ff.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile001b_color_psd_376f7854.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile001b_normal_psd_cf587959.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile001b_refl_psd_d338ea80.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile002_color_psd_67603e4d.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile002_normal_psd_472aa2b3.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile002_normal_psd_fffb9217.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile002_tint_psd_85690500.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile002b_color_psd_8dd4c468.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile002b_refl_psd_a8257ec9.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile003_color_psd_1bd67b70.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile003_normal_psd_b82bbb19.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile003_refl_psd_968be7e7.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile003_tint_psd_b6e0b585.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile003b_color_psd_31a8c25a.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile003b_normal_psd_aec459b0.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile004_color_psd_bd87e298.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile004_normal_psd_4a48c380.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile004_normal_psd_4b049fe4.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile004_tint_psd_29f25f7.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile004b_color_psd_19402358.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ancient_serpent_tile004b_color_psd_9306126e.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/armadillo_crest_trans_psd_f2e36cb4.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/armadillo_crest_vmat_g_tspecular_9d3f05ac.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/bad_base_stone001_height_psd_bbf22645.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/bad_base_stone001_normal_psd_d7c05f9d.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/bad_base_stone001_refl_psd_3fcaaf23.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/bad_base_stone_tintable_000_color_psd_1623f737.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/bad_puddle_lava_00_color_psd_da8651cb.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/bad_puddle_lava_00_normal_psd_98b14fda.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/bad_puddle_lava_00_refl_psd_3bf3d339.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/bad_puddle_lava_00_refl_tga_d02ab2c9.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/bad_puddle_lava_01_color_psd_bf87bfe0.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/bad_puddle_lava_01_tint_psd_da93447a.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/bad_puddle_lava_blue_00_color_psd_774ffa34.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/bad_puddle_lava_green_00_color_psd_98da3b7e.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/bad_sigil_tower001_color_tga_e7e225c2.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/bad_stone_inlay001_color_tga_f3e87282.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/blood001_color_psd_8d52d31e.vtex_c",
+          "bytes": 18340,
+          "sha256": "058ae3a1af976f05ec307dbdd6f16feec0d828b6820edf70731e9d4a3fe1b017"
+        },
+        {
+          "path": "materials/overlays/blood002_color_psd_27076626.vtex_c",
+          "bytes": 18340,
+          "sha256": "058ae3a1af976f05ec307dbdd6f16feec0d828b6820edf70731e9d4a3fe1b017"
+        },
+        {
+          "path": "materials/overlays/camp_fire_pit001_color_psd_4f346bc4.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/camp_marking003_color_psd_c8fa9b35.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/chest001_color_psd_17734c6f.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/chest001_normal_psd_854181ab.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/circle_daggers_01_trans_psd_a14176fa.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/circle_daggers_01_vmat_g_tspecular_2052e76c.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/crackle_green_000_color_psd_dbe13ee4.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/cracks_energy_01_trans_psd_37ca8e30.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/cracks_energy_01_trans_psd_3b36d454.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/cracks_energy_01_vmat_g_tspecular_2ece6386.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/drift_sand001_color_tga_56607f4e.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/drift_sand001_normal_psd_da180509.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/drift_sand001_refl_psd_f021c1a3.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/drift_snow_00_color_psd_67ddbae6.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/drift_snow_00_refl_tga_ff6d6e9c.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/earth001_color_psd_8c51b1bf.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/earth001_normal_psd_4ebb5c96.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/fire001_color_psd_51a9fc35.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/fire001_normal_psd_a99d58e0.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/fungus001_color_psd_992fb932.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/fungus001_normal_psd_9b5ffa90.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/good_base_stone001_height_psd_633d302d.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/good_base_stone001_normal_psd_3d56d11d.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/good_base_stone001_normal_psd_aef70294.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/good_base_stone001_refl_psd_5aa327a7.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/good_base_stone002_color_psd_e1282c5b.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/good_base_stone002_normal_psd_5e1ec0dd.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/good_base_stone002_refl_psd_31b1b42e.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/good_base_stone_tintable_000_color_psd_23d04080.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/good_base_stone_tintable_000_color_psd_8a68c4ee.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/good_base_stone_tintable_000_color_psd_d570670.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ground_edge001_color_psd_3e0db426.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ground_edge001_normal_psd_b6e7f851.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/ground_edge001_refl_psd_bd12d96.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/keys_01_trans_psd_6431cc69.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/keys_01_vmat_g_tspecular_39888860.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/leaves_fall000_color_psd_76e2c111.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/leaves_fall000_refl_tga_166088af.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/leaves_fall001_color_psd_6a2c58e2.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/leaves_fallen_00_color_psd_7b7dd07c.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/leaves_white000_color_psd_2e440edb.vtex_c",
+          "bytes": 18340,
+          "sha256": "058ae3a1af976f05ec307dbdd6f16feec0d828b6820edf70731e9d4a3fe1b017"
+        },
+        {
+          "path": "materials/overlays/leaves_white000_color_psd_a8889817.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/leaves_white000_normal_psd_3b708f76.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/metal001_color_psd_b7312116.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/metal001_normal_psd_1850820d.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/palm_debris000_color_psd_d438c9cc.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/palm_debris000_normal_psd_82c8d0ac.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border001_color_psd_b556f4df.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border001_snow_color_psd_f59ea4cb.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border002_color_psd_654e3e60.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border002_snow_color_psd_588ffd.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border003_color_psd_a40fde93.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border003b_color_psd_a091a6e.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border003b_refl_tga_70e19a4c.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border004_color_psd_1b1999bd.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border004b_color_psd_15dbc1ec.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border004b_trans_tga_d596719.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border005_color_psd_b25728f2.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border006_color_psd_f0dfd5da.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border007_color_psd_a7be985b.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border008_color_psd_abd0f32c.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border_dire_000_normal_psd_948fab2c.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border_tintable_000_color_psd_289184cd.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border_tintable_000_color_psd_328f3a2a.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border_tintable_000_color_psd_c80c82f1.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border_tintable_000_color_psd_f3c4b148.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border_tintable_002_color_psd_44af9a56.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border_tintable_002_refl_psd_e10af0e2.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border_tintable_003_color_psd_71c55f0b.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/path_border_tintable_003_refl_psd_3b7730ec.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/petals_blueyellow000_color_psd_3222c526.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/petals_pink000_color_psd_600bb459.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/petals_pink000_snow_color_psd_7f888d08.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/petals_plumblossom_00_color_psd_8d69c807.vtex_c",
+          "bytes": 18340,
+          "sha256": "058ae3a1af976f05ec307dbdd6f16feec0d828b6820edf70731e9d4a3fe1b017"
+        },
+        {
+          "path": "materials/overlays/petals_plumblossom_01_color_psd_7fae8bdf.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/petals_redblossom_00_color_psd_f62ba363.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/puddle001_color_psd_f962b6fe.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/puddle001_normal_psd_5a957750.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/puddle001_refl_psd_3557785.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/puddle001_refl_psd_affc3034.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/puddles_rock_00_color_psd_f02945b6.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/puddles_rock_00_refl_tga_ce7842a2.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/puddles_rock_01_color_psd_64036ba0.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/puddles_rock_01_refl_tga_d55ad40b.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/rune001_color_psd_31abb.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/rune001_normal_psd_11cd4097.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/sand_sigil001_color_tga_6349afba.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/scrape_01_color_psd_d222f865.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/scrape_01_normal_psd_634c1adf.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/scrape_01_trans_psd_ba247322.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/snow_footprints001_color_psd_3656c026.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/snow_footprints001_color_psd_a52be0f3.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/snow_footprints001_normal_psd_9763ac73.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/snow_footprints001_refl_psd_ced17714.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/snow_footprints002_color_psd_b7c73b88.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/snow_footprints_greevil001_color_psd_60a59e01.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/snow_footprints_greevil002_color_psd_c3d8251e.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/snow_footprints_greevil002_refl_tga_18d20c4b.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/snow_path003a_color_psd_c578649e.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/snow_snowangel_color_psd_5747e7f0.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/stone_cut_00_color_psd_59599f64.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/stone_cut_00_height_psd_22173028.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/stone_cut_00_normal_psd_9fa592a9.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/stone_cut_00_refl_psd_123f34be.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/stone_stain001_color_psd_a560853b.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/tentacle_motif_00_color_psd_b7bcec0d.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/tentacle_motif_00_refl_tga_433f371b.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/tile_ground_stone_tile03_vmat_g_tspecular_2ece6386.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/travel001_color_psd_a81c1ba5.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/travel001_normal_psd_50744ad0.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path001_color_psd_faaa5b17.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path001_refl_tga_115a52ec.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path001_refl_tga_6392f3d9.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path001_refl_tga_6fb91504.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path001b_color_psd_6df9d4fc.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path001b_refl_tga_70d6e136.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path002_color_psd_f406eda2.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path002_refl_psd_862614c5.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path002b_color_psd_ab6a3ed0.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path003a_color_psd_35eff4cc.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path003a_height_tga_f22ba159.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path003a_normal_psd_59889063.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path003a_normal_psd_842dece7.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path003a_normal_psd_d7957c04.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path003a_normal_psd_e166b277.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path003b_color_psd_ab737fe3.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path003b_height_psd_786a14c7.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path003b_trans_tga_a27df1c7.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path004a_color_psd_88715dcc.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path004b_color_psd_4303af39.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path_tintable_000_color_psd_91067d23.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path_tintable_000_color_psd_942eceb2.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path_tintable_000_color_psd_e0d2762e.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wagon_path_tintable_001_color_psd_b870faad.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/water001_color_psd_94bb8c45.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/water001_normal_psd_58b73bc6.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wood001_color_psd_d76b4500.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/overlays/wood001_normal_psd_f9d462ad.vtex_c",
+          "bytes": 11940,
+          "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+        },
+        {
+          "path": "materials/particle/basic_glow.vtex_c",
+          "bytes": 67588,
+          "sha256": "20da1ee1496276e7f3b3aee0b1061a74b5b6ad4e218cde78fa466ae52831bb43"
+        },
+        {
+          "path": "materials/particle/basic_rope.vtex_c",
+          "bytes": 67588,
+          "sha256": "03c6687e0fdf9d8daa06e94114328f1cd845669d3ca8384e15d1568ff56fc4df"
+        },
+        {
+          "path": "materials/particle/basic_rope_energy.vtex_c",
+          "bytes": 133140,
+          "sha256": "f4fb23d270f3c71ca8f6a29bf3e7f581e211bd7183576806d87529604d4b0a81"
+        },
+        {
+          "path": "materials/particle/basic_smoke.vtex_c",
+          "bytes": 67588,
+          "sha256": "63ab31aec4bfcdfad1def01fc61508d021670da951de5b37d7307c945de4e3c2"
+        },
+        {
+          "path": "materials/particle/basic_trail.vtex_c",
+          "bytes": 67588,
+          "sha256": "c385ee5f4c7cee81bf006ad40efba3718cd5b45b375d8ab11b5b9c8f3d82e9c0"
+        },
+        {
+          "path": "materials/rock/cliff_wall001_normal_png_dddd1f95.vtex_c",
+          "bytes": 1400180,
+          "sha256": "22d5da605fdd67fe8ba86674a3f2dbad43f02fb6754bcbf0d99ec894601002a1"
+        },
+        {
+          "path": "materials/rock/cliff_wall002_color_png_4cca3519.vtex_c",
+          "bytes": 1400196,
+          "sha256": "ae9f84d33d86ccfdd82b8f4b2a29999e3bb5f602335719a56007128ad441f3d6"
+        },
+        {
+          "path": "materials/rock/cliff_wall002_color_png_5d83bbb.vtex_c",
+          "bytes": 701084,
+          "sha256": "a573da5cdcc990d8ae9c1ece36097576017d7813e5c1c30cbe8d865503ad658c"
+        },
+        {
+          "path": "materials/rock/cliff_wall002_color_png_89db3dc4.vtex_c",
+          "bytes": 1400196,
+          "sha256": "509786c701917a7e90894f51f7acb4abb11c8ae019a1e2734e70262d51ae0fde"
+        },
+        {
+          "path": "materials/stone/stone_path001_angled_color_png_bfaa1439.vtex_c",
+          "bytes": 1400196,
+          "sha256": "eded5e6cec82316c9cc1956a7645b8a735493ec171ed1e59bac316e6d6cd830c"
+        },
+        {
+          "path": "materials/stone/stone_path001_angled_normal_png_6c9ebe49.vtex_c",
+          "bytes": 351604,
+          "sha256": "891bb6171b8a26bb35d1b093dd62ce58c6bfc363244e84a6505c90c761a80bd7"
+        },
+        {
+          "path": "materials/stone/stone_path001_refl_png_9a5addf3.vtex_c",
+          "bytes": 176892,
+          "sha256": "5e847fa2cfbe25378c65ac25a5c59edc1b29966cbca060e76b2b938092874ecf"
+        },
+        {
+          "path": "materials/stone/stone_path006_refl_png_43b8f607.vtex_c",
+          "bytes": 176796,
+          "sha256": "320d6ca60150da61164b3d3a5ccf2112f9665641ee8eb65c65b98552c6dfbb12"
+        },
+        {
+          "path": "materials/stone/stone_path007_normal_png_7b924afd.vtex_c",
+          "bytes": 351588,
+          "sha256": "6aed31c6517c6b64c5c369c3125bd9a7f31bb3d488a538a54b1ca8471c4ed166"
+        },
+        {
+          "path": "materials/stone/stone_path007_refl_png_7260d38c.vtex_c",
+          "bytes": 176892,
+          "sha256": "42c729f87be057d663b3fa12e88333fd7d08eb913588550c6cfcb56e5fa916ce"
+        },
+        {
+          "path": "materials/stone/stone_path007_refl_png_7a05ee47.vtex_c",
+          "bytes": 176892,
+          "sha256": "621fcfdf32937681c5512b52cbb64598843a5819afd9d3dbc6f77d7b05292b6e"
+        },
+        {
+          "path": "materials/stone/stone_path007_tintable_png_34173e55.vtex_c",
+          "bytes": 1400196,
+          "sha256": "e8ab89f85b8a08ae6fc138693cbe6398e0128c7634791f378ffcb7aad40a67b1"
+        },
+        {
+          "path": "materials/stone/stone_path007_tintable_png_41fd710d.vtex_c",
+          "bytes": 701084,
+          "sha256": "df3d708ad444d38d65ad6faadacb302e8bf17511eff0ab56bb88453320b61a5d"
+        },
+        {
+          "path": "materials/stone/stone_path008_normal_png_5773b6b1.vtex_c",
+          "bytes": 351588,
+          "sha256": "3cb9b9902c1ace52b48d28b5790e6bb10bfe44eda67a319f13594dbfa00c6bb7"
+        },
+        {
+          "path": "materials/stone/stone_path008_refl_png_b36f2091.vtex_c",
+          "bytes": 176860,
+          "sha256": "2ef72a43a196131fe21b9417a515d8ffa33ecd931870fa138e570cd420f731f5"
+        },
+        {
+          "path": "materials/stone/stone_path009_color_png_ace8899b.vtex_c",
+          "bytes": 351620,
+          "sha256": "2ced265e6f1d2c8ecbbc6ceb6f0716d50a21b14c5b74cd9950e24b5cc8206eb8"
+        },
+        {
+          "path": "materials/stone/stone_path_cracked_desert_color_png_8f858056.vtex_c",
+          "bytes": 351636,
+          "sha256": "6740d7d78bcf67b6e6879454cc3af61682d375301ec804c76abf0ec5cc8b780a"
+        },
+        {
+          "path": "materials/textures/team_logo_radiant_color_psd_75b68508_png_44d95697.vtex_c",
+          "bytes": 176812,
+          "sha256": "23b45fac4ff6c6ce171c66b36c51970b220fecb26c9ab3eef4353f265ec1e39a"
+        },
+        {
+          "path": "materials/textures/team_logo_radiant_normal_psd_e4231e77_png_7bea66c0.vtex_c",
+          "bytes": 351604,
+          "sha256": "dd793343a190297080dfac5e1df4b3b5b9cee9b22f14cdfe95437b242603905a"
+        },
+        {
+          "path": "materials/textures/team_logo_radiant_refl_tga_7a85b4e6_png_23481caa.vtex_c",
+          "bytes": 176908,
+          "sha256": "3135df965cad5f07d12485d99db3b4fd61b86b6d4b5e80456d7a50d7c64b01cf"
+        },
+        {
+          "path": "materials/textures/team_logo_radiant_refl_tga_7a85b4e6_png_ad425c66.vtex_c",
+          "bytes": 45976,
+          "sha256": "3abe828748de55bf8cfc1fedb0bba83616b926417e0f7ed8094aaece4da61a54"
+        },
+        {
+          "path": "materials/textures/team_logo_tintable_color_psd_439fd899_png_41f45d97.vtex_c",
+          "bytes": 176812,
+          "sha256": "7ae7adc6f5f013673ef0509324057af2b4d8dba49702896e7dc182968522719a"
+        },
+        {
+          "path": "materials/textures/team_logo_tintable_normal_psd_439fd899_png_353a3abd.vtex_c",
+          "bytes": 351604,
+          "sha256": "dce7b273d8b16ded6ee8eac2bed307ae90fd493def44461a9d869b059b8180cf"
+        },
+        {
+          "path": "materials/textures/team_logo_tintable_refl_psd_439fd899_png_a24e038c.vtex_c",
+          "bytes": 176908,
+          "sha256": "40023283d50e3fb99eed75a54fc09f12d04bed85da605c59e6c06c9d851fc482"
+        },
+        {
+          "path": "materials/water/water_flow.vmat_c",
+          "bytes": 3705,
+          "sha256": "e41c5955b9280a4033707115d4393a7f95747bcdd59c0a00c4cc6360d585cc58"
+        },
+        {
+          "path": "materials/water/water_generic_000.vmat_c",
+          "bytes": 3705,
+          "sha256": "e41c5955b9280a4033707115d4393a7f95747bcdd59c0a00c4cc6360d585cc58"
+        },
+        {
+          "path": "materials/water/water_generic_000_slope.vmat_c",
+          "bytes": 3705,
+          "sha256": "e41c5955b9280a4033707115d4393a7f95747bcdd59c0a00c4cc6360d585cc58"
+        },
+        {
+          "path": "materials/water/water_generic_000_vmat_g_tflow_fc1edd6d.vtex_c",
+          "bytes": 1976,
+          "sha256": "098b98592e0dcadc04e67f5ee29641332ed7f754fbba3bcb4da3bad99cb22a7a"
+        },
+        {
+          "path": "materials/water/water_noise_000_png_6d2375f1.vtex_c",
+          "bytes": 176796,
+          "sha256": "15fd356db587da5d2e74c56633f26114fa195f07d8116092635d7b02771742b4"
+        },
+        {
+          "path": "materials/water/water_river_normal_sharp_temp_normal_png_d333d9aa.vtex_c",
+          "bytes": 351604,
+          "sha256": "fc0ecd92c33c6179facd4a5f561ad0d9a4654293ea6a3d6064be8fdef7665adc"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "id": "minify.minify-base-attacks",
+      "catalogId": "minify-minify-base-attacks",
+      "name": {
+        "ru": "Облегчённые базовые атаки",
+        "en": "Minify Base Attacks"
+      },
+      "author": "robbyz512",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Minify Base Attacks",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "blacklist": {
+        "from": "Minify/mods/Minify Base Attacks/blacklist.txt",
+        "bytes": 18985,
+        "sha256": "a295f03160f7f89e531592e0c80d7f2a533a984eb543af472ab6b43f4b86afb9",
+        "blanks": {
+          "vcss_c": {
+            "from": "Minify/bin/blank-files/blank.vcss_c",
+            "bytes": 978,
+            "sha256": "c639e26a6fd733f9d56c9835feaaa25374b8b955ef957f5b153ea2c4cd255f55"
+          },
+          "vmat_c": {
+            "from": "Minify/bin/blank-files/blank.vmat_c",
+            "bytes": 1551,
+            "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f"
+          },
+          "vmdl_c": {
+            "from": "Minify/bin/blank-files/blank.vmdl_c",
+            "bytes": 3249,
+            "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2"
+          },
+          "vpcf_c": {
+            "from": "Minify/bin/blank-files/blank.vpcf_c",
+            "bytes": 415,
+            "sha256": "b6a43175bc631323e207ff33e2744d043e13987887fa6745d87ca0e7aa588f5f"
+          },
+          "vsnd_c": {
+            "from": "Minify/bin/blank-files/blank.vsnd_c",
+            "bytes": 1511,
+            "sha256": "73efd68e09e3bc625dbbf4cc40a6e7bfaa3213430d34a80b08aeb0b3fe3115be"
+          },
+          "vtex_c": {
+            "from": "Minify/bin/blank-files/blank.vtex_c",
+            "bytes": 11940,
+            "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+          },
+          "vxml_c": {
+            "from": "Minify/bin/blank-files/blank.vxml_c",
+            "bytes": 1045,
+            "sha256": "68b2e62e6fec2fcfbc0e551fd9a22331efc1d41d93710c7b9f50d9bc42342f91"
+          }
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "minify.minify-spells-and-items",
+      "catalogId": "minify-minify-spells-and-items",
+      "name": {
+        "ru": "Облегчённые способности и предметы",
+        "en": "Minify Spells & Items"
+      },
+      "author": "robbyz512",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Minify Spells & Items",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "blacklist": {
+        "from": "Minify/mods/Minify Spells & Items/blacklist.txt",
+        "bytes": 394938,
+        "sha256": "53afc44e513171ee356489a584da23b64773c4d4ca5f0f759f5a0e7192f167b5",
+        "blanks": {
+          "vcss_c": {
+            "from": "Minify/bin/blank-files/blank.vcss_c",
+            "bytes": 978,
+            "sha256": "c639e26a6fd733f9d56c9835feaaa25374b8b955ef957f5b153ea2c4cd255f55"
+          },
+          "vmat_c": {
+            "from": "Minify/bin/blank-files/blank.vmat_c",
+            "bytes": 1551,
+            "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f"
+          },
+          "vmdl_c": {
+            "from": "Minify/bin/blank-files/blank.vmdl_c",
+            "bytes": 3249,
+            "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2"
+          },
+          "vpcf_c": {
+            "from": "Minify/bin/blank-files/blank.vpcf_c",
+            "bytes": 415,
+            "sha256": "b6a43175bc631323e207ff33e2744d043e13987887fa6745d87ca0e7aa588f5f"
+          },
+          "vsnd_c": {
+            "from": "Minify/bin/blank-files/blank.vsnd_c",
+            "bytes": 1511,
+            "sha256": "73efd68e09e3bc625dbbf4cc40a6e7bfaa3213430d34a80b08aeb0b3fe3115be"
+          },
+          "vtex_c": {
+            "from": "Minify/bin/blank-files/blank.vtex_c",
+            "bytes": 11940,
+            "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+          },
+          "vxml_c": {
+            "from": "Minify/bin/blank-files/blank.vxml_c",
+            "bytes": 1045,
+            "sha256": "68b2e62e6fec2fcfbc0e551fd9a22331efc1d41d93710c7b9f50d9bc42342f91"
+          }
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "minify.misc-optimization",
+      "catalogId": "minify-misc-optimization",
+      "name": {
+        "ru": "Общая оптимизация",
+        "en": "Misc Optimization"
+      },
+      "author": "robbyz512",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Misc Optimization",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "blacklist": {
+        "from": "Minify/mods/Misc Optimization/blacklist.txt",
+        "bytes": 11092,
+        "sha256": "770bdb90612490f693f588870e021fcdffe1827c3def1bbc96e1c030afe9e67e",
+        "blanks": {
+          "vcss_c": {
+            "from": "Minify/bin/blank-files/blank.vcss_c",
+            "bytes": 978,
+            "sha256": "c639e26a6fd733f9d56c9835feaaa25374b8b955ef957f5b153ea2c4cd255f55"
+          },
+          "vmat_c": {
+            "from": "Minify/bin/blank-files/blank.vmat_c",
+            "bytes": 1551,
+            "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f"
+          },
+          "vmdl_c": {
+            "from": "Minify/bin/blank-files/blank.vmdl_c",
+            "bytes": 3249,
+            "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2"
+          },
+          "vpcf_c": {
+            "from": "Minify/bin/blank-files/blank.vpcf_c",
+            "bytes": 415,
+            "sha256": "b6a43175bc631323e207ff33e2744d043e13987887fa6745d87ca0e7aa588f5f"
+          },
+          "vsnd_c": {
+            "from": "Minify/bin/blank-files/blank.vsnd_c",
+            "bytes": 1511,
+            "sha256": "73efd68e09e3bc625dbbf4cc40a6e7bfaa3213430d34a80b08aeb0b3fe3115be"
+          },
+          "vtex_c": {
+            "from": "Minify/bin/blank-files/blank.vtex_c",
+            "bytes": 11940,
+            "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+          },
+          "vxml_c": {
+            "from": "Minify/bin/blank-files/blank.vxml_c",
+            "bytes": 1045,
+            "sha256": "68b2e62e6fec2fcfbc0e551fd9a22331efc1d41d93710c7b9f50d9bc42342f91"
+          }
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "minify.mute-ambient-sounds",
+      "catalogId": "minify-mute-ambient-sounds",
+      "name": {
+        "ru": "Убрать звуки окружения",
+        "en": "Mute Ambient Sounds"
+      },
+      "author": "robbyz512",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Mute Ambient Sounds",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "blacklist": {
+        "from": "Minify/mods/Mute Ambient Sounds/blacklist.txt",
+        "bytes": 859,
+        "sha256": "7038cae6313142b4586281d61c36ddfe0140bedb292cc16b1c7e70a11e834ca6",
+        "blanks": {
+          "vcss_c": {
+            "from": "Minify/bin/blank-files/blank.vcss_c",
+            "bytes": 978,
+            "sha256": "c639e26a6fd733f9d56c9835feaaa25374b8b955ef957f5b153ea2c4cd255f55"
+          },
+          "vmat_c": {
+            "from": "Minify/bin/blank-files/blank.vmat_c",
+            "bytes": 1551,
+            "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f"
+          },
+          "vmdl_c": {
+            "from": "Minify/bin/blank-files/blank.vmdl_c",
+            "bytes": 3249,
+            "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2"
+          },
+          "vpcf_c": {
+            "from": "Minify/bin/blank-files/blank.vpcf_c",
+            "bytes": 415,
+            "sha256": "b6a43175bc631323e207ff33e2744d043e13987887fa6745d87ca0e7aa588f5f"
+          },
+          "vsnd_c": {
+            "from": "Minify/bin/blank-files/blank.vsnd_c",
+            "bytes": 1511,
+            "sha256": "73efd68e09e3bc625dbbf4cc40a6e7bfaa3213430d34a80b08aeb0b3fe3115be"
+          },
+          "vtex_c": {
+            "from": "Minify/bin/blank-files/blank.vtex_c",
+            "bytes": 11940,
+            "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+          },
+          "vxml_c": {
+            "from": "Minify/bin/blank-files/blank.vxml_c",
+            "bytes": 1045,
+            "sha256": "68b2e62e6fec2fcfbc0e551fd9a22331efc1d41d93710c7b9f50d9bc42342f91"
+          }
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "minify.mute-default-announcer",
+      "catalogId": "minify-mute-default-announcer",
+      "name": {
+        "ru": "Убрать стандартного диктора",
+        "en": "Mute Default Announcer"
+      },
+      "author": "Egezenn",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Mute Default Announcer",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "blacklist": {
+        "from": "Minify/mods/Mute Default Announcer/blacklist.txt",
+        "bytes": 21,
+        "sha256": "4f1849f3d8937119f07cc2a53c0e6a9d6f4d03ca9bc36fe06963f59a21bac75c",
+        "blanks": {
+          "vcss_c": {
+            "from": "Minify/bin/blank-files/blank.vcss_c",
+            "bytes": 978,
+            "sha256": "c639e26a6fd733f9d56c9835feaaa25374b8b955ef957f5b153ea2c4cd255f55"
+          },
+          "vmat_c": {
+            "from": "Minify/bin/blank-files/blank.vmat_c",
+            "bytes": 1551,
+            "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f"
+          },
+          "vmdl_c": {
+            "from": "Minify/bin/blank-files/blank.vmdl_c",
+            "bytes": 3249,
+            "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2"
+          },
+          "vpcf_c": {
+            "from": "Minify/bin/blank-files/blank.vpcf_c",
+            "bytes": 415,
+            "sha256": "b6a43175bc631323e207ff33e2744d043e13987887fa6745d87ca0e7aa588f5f"
+          },
+          "vsnd_c": {
+            "from": "Minify/bin/blank-files/blank.vsnd_c",
+            "bytes": 1511,
+            "sha256": "73efd68e09e3bc625dbbf4cc40a6e7bfaa3213430d34a80b08aeb0b3fe3115be"
+          },
+          "vtex_c": {
+            "from": "Minify/bin/blank-files/blank.vtex_c",
+            "bytes": 11940,
+            "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+          },
+          "vxml_c": {
+            "from": "Minify/bin/blank-files/blank.vxml_c",
+            "bytes": 1045,
+            "sha256": "68b2e62e6fec2fcfbc0e551fd9a22331efc1d41d93710c7b9f50d9bc42342f91"
+          }
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "minify.mute-taunt-sounds",
+      "catalogId": "minify-mute-taunt-sounds",
+      "name": {
+        "ru": "Убрать звуки насмешек",
+        "en": "Mute Taunt Sounds"
+      },
+      "author": "robbyz512",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Mute Taunt Sounds",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "blacklist": {
+        "from": "Minify/mods/Mute Taunt Sounds/blacklist.txt",
+        "bytes": 17,
+        "sha256": "8e7cf4214eec1603d000c2339219a80310dea1a663e1b0921db13d6d5a666ae1",
+        "blanks": {
+          "vcss_c": {
+            "from": "Minify/bin/blank-files/blank.vcss_c",
+            "bytes": 978,
+            "sha256": "c639e26a6fd733f9d56c9835feaaa25374b8b955ef957f5b153ea2c4cd255f55"
+          },
+          "vmat_c": {
+            "from": "Minify/bin/blank-files/blank.vmat_c",
+            "bytes": 1551,
+            "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f"
+          },
+          "vmdl_c": {
+            "from": "Minify/bin/blank-files/blank.vmdl_c",
+            "bytes": 3249,
+            "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2"
+          },
+          "vpcf_c": {
+            "from": "Minify/bin/blank-files/blank.vpcf_c",
+            "bytes": 415,
+            "sha256": "b6a43175bc631323e207ff33e2744d043e13987887fa6745d87ca0e7aa588f5f"
+          },
+          "vsnd_c": {
+            "from": "Minify/bin/blank-files/blank.vsnd_c",
+            "bytes": 1511,
+            "sha256": "73efd68e09e3bc625dbbf4cc40a6e7bfaa3213430d34a80b08aeb0b3fe3115be"
+          },
+          "vtex_c": {
+            "from": "Minify/bin/blank-files/blank.vtex_c",
+            "bytes": 11940,
+            "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+          },
+          "vxml_c": {
+            "from": "Minify/bin/blank-files/blank.vxml_c",
+            "bytes": 1045,
+            "sha256": "68b2e62e6fec2fcfbc0e551fd9a22331efc1d41d93710c7b9f50d9bc42342f91"
+          }
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "minify.mute-voice-line-sounds",
+      "catalogId": "minify-mute-voice-line-sounds",
+      "name": {
+        "ru": "Убрать реплики героев",
+        "en": "Mute Voice Line Sounds"
+      },
+      "author": "robbyz512",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Mute Voice Line Sounds",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "blacklist": {
+        "from": "Minify/mods/Mute Voice Line Sounds/blacklist.txt",
+        "bytes": 58699,
+        "sha256": "60c9c072597afcfbf6068d10eff6cb7bf260b12913274323b904eb47d5882a4d",
+        "blanks": {
+          "vcss_c": {
+            "from": "Minify/bin/blank-files/blank.vcss_c",
+            "bytes": 978,
+            "sha256": "c639e26a6fd733f9d56c9835feaaa25374b8b955ef957f5b153ea2c4cd255f55"
+          },
+          "vmat_c": {
+            "from": "Minify/bin/blank-files/blank.vmat_c",
+            "bytes": 1551,
+            "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f"
+          },
+          "vmdl_c": {
+            "from": "Minify/bin/blank-files/blank.vmdl_c",
+            "bytes": 3249,
+            "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2"
+          },
+          "vpcf_c": {
+            "from": "Minify/bin/blank-files/blank.vpcf_c",
+            "bytes": 415,
+            "sha256": "b6a43175bc631323e207ff33e2744d043e13987887fa6745d87ca0e7aa588f5f"
+          },
+          "vsnd_c": {
+            "from": "Minify/bin/blank-files/blank.vsnd_c",
+            "bytes": 1511,
+            "sha256": "73efd68e09e3bc625dbbf4cc40a6e7bfaa3213430d34a80b08aeb0b3fe3115be"
+          },
+          "vtex_c": {
+            "from": "Minify/bin/blank-files/blank.vtex_c",
+            "bytes": 11940,
+            "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+          },
+          "vxml_c": {
+            "from": "Minify/bin/blank-files/blank.vxml_c",
+            "bytes": 1045,
+            "sha256": "68b2e62e6fec2fcfbc0e551fd9a22331efc1d41d93710c7b9f50d9bc42342f91"
+          }
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "minify.remove-foilage",
+      "catalogId": "minify-remove-foilage",
+      "name": {
+        "ru": "Убрать растительность",
+        "en": "Remove Foilage"
+      },
+      "author": "robbyz512",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Remove Foilage",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "blacklist": {
+        "from": "Minify/mods/Remove Foilage/blacklist.txt",
+        "bytes": 29536,
+        "sha256": "3ae95ce065dc019b157a7940f110d2ec431108aa35cf262a787e32c9c9ecf8c0",
+        "blanks": {
+          "vcss_c": {
+            "from": "Minify/bin/blank-files/blank.vcss_c",
+            "bytes": 978,
+            "sha256": "c639e26a6fd733f9d56c9835feaaa25374b8b955ef957f5b153ea2c4cd255f55"
+          },
+          "vmat_c": {
+            "from": "Minify/bin/blank-files/blank.vmat_c",
+            "bytes": 1551,
+            "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f"
+          },
+          "vmdl_c": {
+            "from": "Minify/bin/blank-files/blank.vmdl_c",
+            "bytes": 3249,
+            "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2"
+          },
+          "vpcf_c": {
+            "from": "Minify/bin/blank-files/blank.vpcf_c",
+            "bytes": 415,
+            "sha256": "b6a43175bc631323e207ff33e2744d043e13987887fa6745d87ca0e7aa588f5f"
+          },
+          "vsnd_c": {
+            "from": "Minify/bin/blank-files/blank.vsnd_c",
+            "bytes": 1511,
+            "sha256": "73efd68e09e3bc625dbbf4cc40a6e7bfaa3213430d34a80b08aeb0b3fe3115be"
+          },
+          "vtex_c": {
+            "from": "Minify/bin/blank-files/blank.vtex_c",
+            "bytes": 11940,
+            "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+          },
+          "vxml_c": {
+            "from": "Minify/bin/blank-files/blank.vxml_c",
+            "bytes": 1045,
+            "sha256": "68b2e62e6fec2fcfbc0e551fd9a22331efc1d41d93710c7b9f50d9bc42342f91"
+          }
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "minify.remove-pings",
+      "catalogId": "minify-remove-pings",
+      "name": {
+        "ru": "Убрать пинги",
+        "en": "Remove Pings"
+      },
+      "author": "robbyz512",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Remove Pings",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "conflicts": [
+        "minify.revert-ping-sounds"
+      ],
+      "blacklist": {
+        "from": "Minify/mods/Remove Pings/blacklist.txt",
+        "bytes": 73,
+        "sha256": "6c283b260d8a562ab741759b70be6bba7fe4629451c6a1fb89fbc35ba1b17266",
+        "blanks": {
+          "vcss_c": {
+            "from": "Minify/bin/blank-files/blank.vcss_c",
+            "bytes": 978,
+            "sha256": "c639e26a6fd733f9d56c9835feaaa25374b8b955ef957f5b153ea2c4cd255f55"
+          },
+          "vmat_c": {
+            "from": "Minify/bin/blank-files/blank.vmat_c",
+            "bytes": 1551,
+            "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f"
+          },
+          "vmdl_c": {
+            "from": "Minify/bin/blank-files/blank.vmdl_c",
+            "bytes": 3249,
+            "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2"
+          },
+          "vpcf_c": {
+            "from": "Minify/bin/blank-files/blank.vpcf_c",
+            "bytes": 415,
+            "sha256": "b6a43175bc631323e207ff33e2744d043e13987887fa6745d87ca0e7aa588f5f"
+          },
+          "vsnd_c": {
+            "from": "Minify/bin/blank-files/blank.vsnd_c",
+            "bytes": 1511,
+            "sha256": "73efd68e09e3bc625dbbf4cc40a6e7bfaa3213430d34a80b08aeb0b3fe3115be"
+          },
+          "vtex_c": {
+            "from": "Minify/bin/blank-files/blank.vtex_c",
+            "bytes": 11940,
+            "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+          },
+          "vxml_c": {
+            "from": "Minify/bin/blank-files/blank.vxml_c",
+            "bytes": 1045,
+            "sha256": "68b2e62e6fec2fcfbc0e551fd9a22331efc1d41d93710c7b9f50d9bc42342f91"
+          }
+        }
+      }
+    },
     {
       "schemaVersion": 1,
       "id": "minify.remove-river",
@@ -153,6 +2219,126 @@
     },
     {
       "schemaVersion": 1,
+      "id": "minify.remove-sprays",
+      "catalogId": "minify-remove-sprays",
+      "name": {
+        "ru": "Убрать граффити",
+        "en": "Remove Sprays"
+      },
+      "author": "robbyz512",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Remove Sprays",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "blacklist": {
+        "from": "Minify/mods/Remove Sprays/blacklist.txt",
+        "bytes": 48,
+        "sha256": "1e40fa8b92980e2e61a831d5f10516c57b90925874ed2255f9b8c489db3c1338",
+        "blanks": {
+          "vcss_c": {
+            "from": "Minify/bin/blank-files/blank.vcss_c",
+            "bytes": 978,
+            "sha256": "c639e26a6fd733f9d56c9835feaaa25374b8b955ef957f5b153ea2c4cd255f55"
+          },
+          "vmat_c": {
+            "from": "Minify/bin/blank-files/blank.vmat_c",
+            "bytes": 1551,
+            "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f"
+          },
+          "vmdl_c": {
+            "from": "Minify/bin/blank-files/blank.vmdl_c",
+            "bytes": 3249,
+            "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2"
+          },
+          "vpcf_c": {
+            "from": "Minify/bin/blank-files/blank.vpcf_c",
+            "bytes": 415,
+            "sha256": "b6a43175bc631323e207ff33e2744d043e13987887fa6745d87ca0e7aa588f5f"
+          },
+          "vsnd_c": {
+            "from": "Minify/bin/blank-files/blank.vsnd_c",
+            "bytes": 1511,
+            "sha256": "73efd68e09e3bc625dbbf4cc40a6e7bfaa3213430d34a80b08aeb0b3fe3115be"
+          },
+          "vtex_c": {
+            "from": "Minify/bin/blank-files/blank.vtex_c",
+            "bytes": 11940,
+            "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+          },
+          "vxml_c": {
+            "from": "Minify/bin/blank-files/blank.vxml_c",
+            "bytes": 1045,
+            "sha256": "68b2e62e6fec2fcfbc0e551fd9a22331efc1d41d93710c7b9f50d9bc42342f91"
+          }
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "minify.remove-weather-effects",
+      "catalogId": "minify-remove-weather-effects",
+      "name": {
+        "ru": "Убрать погодные эффекты",
+        "en": "Remove Weather Effects"
+      },
+      "author": "robbyz512",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Remove Weather Effects",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "blacklist": {
+        "from": "Minify/mods/Remove Weather Effects/blacklist.txt",
+        "bytes": 448,
+        "sha256": "cfe63ac05526f1be732732f5c9b3db377308f512594cfd24c0a7eedcc8c29aa3",
+        "blanks": {
+          "vcss_c": {
+            "from": "Minify/bin/blank-files/blank.vcss_c",
+            "bytes": 978,
+            "sha256": "c639e26a6fd733f9d56c9835feaaa25374b8b955ef957f5b153ea2c4cd255f55"
+          },
+          "vmat_c": {
+            "from": "Minify/bin/blank-files/blank.vmat_c",
+            "bytes": 1551,
+            "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f"
+          },
+          "vmdl_c": {
+            "from": "Minify/bin/blank-files/blank.vmdl_c",
+            "bytes": 3249,
+            "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2"
+          },
+          "vpcf_c": {
+            "from": "Minify/bin/blank-files/blank.vpcf_c",
+            "bytes": 415,
+            "sha256": "b6a43175bc631323e207ff33e2744d043e13987887fa6745d87ca0e7aa588f5f"
+          },
+          "vsnd_c": {
+            "from": "Minify/bin/blank-files/blank.vsnd_c",
+            "bytes": 1511,
+            "sha256": "73efd68e09e3bc625dbbf4cc40a6e7bfaa3213430d34a80b08aeb0b3fe3115be"
+          },
+          "vtex_c": {
+            "from": "Minify/bin/blank-files/blank.vtex_c",
+            "bytes": 11940,
+            "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+          },
+          "vxml_c": {
+            "from": "Minify/bin/blank-files/blank.vxml_c",
+            "bytes": 1045,
+            "sha256": "68b2e62e6fec2fcfbc0e551fd9a22331efc1d41d93710c7b9f50d9bc42342f91"
+          }
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
       "id": "minify.repopulate-unit-query-hud",
       "catalogId": "minify-repopulate-unit-query-hud",
       "name": {
@@ -188,6 +2374,111 @@
           "sha256": "55efe3ff6bee15030c4016f6b18580d5d0877bfc8fbdcb3550beef4f23b70730"
         }
       ]
+    },
+    {
+      "schemaVersion": 1,
+      "id": "minify.revert-ping-sounds",
+      "catalogId": "minify-revert-ping-sounds",
+      "name": {
+        "ru": "Вернуть классические звуки пингов",
+        "en": "Revert Ping Sounds"
+      },
+      "author": "Egezenn",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Revert Ping Sounds/files",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "conflicts": [
+        "minify.remove-pings"
+      ],
+      "resources": [
+        {
+          "path": "sounds/ui/ping.vsnd_c",
+          "bytes": 353847,
+          "sha256": "4b09254addb74372b6e332d10a2f79bd3ae60f2b0414509c8be290a6dcc68575"
+        },
+        {
+          "path": "sounds/ui/ping_attack.vsnd_c",
+          "bytes": 204131,
+          "sha256": "3a82616dd362808c75cf4dc7271d28481f8c0086042404330795620f87fb2dde"
+        },
+        {
+          "path": "sounds/ui/ping_defense.vsnd_c",
+          "bytes": 380087,
+          "sha256": "a512da1459d80c46af86d28e9d0347412fab684ee2ddf4cb53fcd9fceff7ce98"
+        },
+        {
+          "path": "sounds/ui/ping_enemy_ward.vsnd_c",
+          "bytes": 125899,
+          "sha256": "830b9cf2fba4afef6447e6fa8952ec5c20659284a2fa4e4cf99015b85379f532"
+        },
+        {
+          "path": "sounds/ui/ping_heart.vsnd_c",
+          "bytes": 353847,
+          "sha256": "b151f5d7d36d77f185d5594f45a3a036e01f9f7bff5a40f7c68e4fae14d1f2d0"
+        },
+        {
+          "path": "sounds/ui/ping_need_ward.vsnd_c",
+          "bytes": 353847,
+          "sha256": "4b09254addb74372b6e332d10a2f79bd3ae60f2b0414509c8be290a6dcc68575"
+        },
+        {
+          "path": "sounds/ui/ping_rune.vsnd_c",
+          "bytes": 353847,
+          "sha256": "97d7cb602306fb353806c327d10deef4ae13de6bc9d4f5fb8623797979b427da"
+        },
+        {
+          "path": "sounds/ui/ping_warning.vsnd_c",
+          "bytes": 125899,
+          "sha256": "830b9cf2fba4afef6447e6fa8952ec5c20659284a2fa4e4cf99015b85379f532"
+        }
+      ],
+      "blacklist": {
+        "from": "Minify/mods/Revert Ping Sounds/blacklist.txt",
+        "bytes": 70,
+        "sha256": "e1e294157044fd078285923f28507c5dcc646abe988dc7d1906ae6aa2db92921",
+        "blanks": {
+          "vcss_c": {
+            "from": "Minify/bin/blank-files/blank.vcss_c",
+            "bytes": 978,
+            "sha256": "c639e26a6fd733f9d56c9835feaaa25374b8b955ef957f5b153ea2c4cd255f55"
+          },
+          "vmat_c": {
+            "from": "Minify/bin/blank-files/blank.vmat_c",
+            "bytes": 1551,
+            "sha256": "b32a0a23a793383c6d1f389fe7260260fac98afc3c92efa76ccf36e20780641f"
+          },
+          "vmdl_c": {
+            "from": "Minify/bin/blank-files/blank.vmdl_c",
+            "bytes": 3249,
+            "sha256": "486322ca84667ff90c47b967f64dbb9e9849229c008e7c9319e0ad0654b0a6b2"
+          },
+          "vpcf_c": {
+            "from": "Minify/bin/blank-files/blank.vpcf_c",
+            "bytes": 415,
+            "sha256": "b6a43175bc631323e207ff33e2744d043e13987887fa6745d87ca0e7aa588f5f"
+          },
+          "vsnd_c": {
+            "from": "Minify/bin/blank-files/blank.vsnd_c",
+            "bytes": 1511,
+            "sha256": "73efd68e09e3bc625dbbf4cc40a6e7bfaa3213430d34a80b08aeb0b3fe3115be"
+          },
+          "vtex_c": {
+            "from": "Minify/bin/blank-files/blank.vtex_c",
+            "bytes": 11940,
+            "sha256": "104dcc43956f4250c27da84da3ff8109117741d154e7f4ce30112f1c9edf764b"
+          },
+          "vxml_c": {
+            "from": "Minify/bin/blank-files/blank.vxml_c",
+            "bytes": 1045,
+            "sha256": "68b2e62e6fec2fcfbc0e551fd9a22331efc1d41d93710c7b9f50d9bc42342f91"
+          }
+        }
+      }
     },
     {
       "schemaVersion": 1,
