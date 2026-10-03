@@ -6,6 +6,8 @@ import type { Language } from "../i18n";
 type PackageManifest = {
   id: string;
   catalogId: string;
+  /** Replaced by a newer package; kept only so existing builds stay verifiable. */
+  supersededBy?: string | null;
   name: Record<Language, string>;
   author: string;
   verifiedLanguages?: string[];
@@ -18,19 +20,20 @@ const manifests = import.meta.glob<PackageManifest>("../../src-tauri/packages/*.
   import: "default",
 });
 
-export const installablePackages: PackageManifest[] = Object.values(manifests).sort((a, b) =>
-  a.catalogId.localeCompare(b.catalogId),
-);
+export const installablePackages: PackageManifest[] = Object.values(manifests)
+  .filter((manifest) => !manifest.supersededBy)
+  .sort((a, b) => a.catalogId.localeCompare(b.catalogId));
 
 const byAnyId = new Map<string, PackageManifest>();
 /** Catalog IDs of every installable package; shared with the catalog model. */
 export const pilotCatalogIds = new Set<string>();
 function index(manifest: PackageManifest) {
   byAnyId.set(manifest.id, manifest);
+  if (manifest.supersededBy) return;
   byAnyId.set(manifest.catalogId, manifest);
   pilotCatalogIds.add(manifest.catalogId);
 }
-installablePackages.forEach(index);
+Object.values(manifests).forEach(index);
 
 // The engine may activate a newer signed catalog at runtime. Its summaries
 // replace or extend the embedded list; subscribers re-render.
@@ -46,8 +49,9 @@ export function applyInstallablePackages(summaries: PackageManifest[]) {
         byAnyId.delete(previous.catalogId);
         pilotCatalogIds.delete(previous.catalogId);
       }
-      installablePackages[existing] = summary;
-    } else installablePackages.push(summary);
+      if (summary.supersededBy) installablePackages.splice(existing, 1);
+      else installablePackages[existing] = summary;
+    } else if (!summary.supersededBy) installablePackages.push(summary);
     index(summary);
   }
   installablePackages.sort((a, b) => a.catalogId.localeCompare(b.catalogId));

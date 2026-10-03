@@ -15,6 +15,7 @@ const MANIFESTS: &[&str] = &[
     include_str!("../packages/minify-tree-mod.json"),
     include_str!("../packages/minify-show-networth.json"),
     include_str!("../packages/minify-repopulate-unit-query-hud.json"),
+    include_str!("../packages/minify-repopulate-unit-query-hud-v2.json"),
     include_str!("../packages/minify-remove-river.json"),
     include_str!("../packages/minify-minify-base-attacks.json"),
     include_str!("../packages/minify-minify-spells-and-items.json"),
@@ -198,6 +199,12 @@ pub struct PackageManifest {
     pub schema_version: u32,
     pub id: String,
     pub catalog_id: String,
+    /// A published package whose contract cannot change (see
+    /// `contract_hash`) is replaced by a new ID instead. The old one stays
+    /// so builds that already include it remain verifiable and restorable;
+    /// the interface no longer offers it.
+    #[serde(default)]
+    pub superseded_by: Option<String>,
     pub name: LocalizedName,
     pub author: String,
     pub source: PackageSource,
@@ -228,6 +235,7 @@ pub struct PackageManifest {
 pub struct PackageSummary {
     pub id: String,
     pub catalog_id: String,
+    pub superseded_by: Option<String>,
     pub name: LocalizedName,
     pub author: String,
     pub license: String,
@@ -374,6 +382,7 @@ impl PackageManifest {
         PackageSummary {
             id: self.id.clone(),
             catalog_id: self.catalog_id.clone(),
+            superseded_by: self.superseded_by.clone(),
             name: self.name.clone(),
             author: self.author.clone(),
             license: self.source.license.clone(),
@@ -484,6 +493,7 @@ fn validate(manifest: &PackageManifest) -> Result<(), String> {
         .conflicts
         .iter()
         .chain(&manifest.requires)
+        .chain(&manifest.superseded_by)
         .any(|id| !valid_package_id(id) || *id == manifest.id)
     {
         return invalid("relations");
@@ -817,6 +827,29 @@ mod tests {
             "duplicate IDs"
         );
         assert!(parse_all(&[MANIFESTS[1]]).is_ok());
+    }
+
+    #[test]
+    fn superseded_packages_stay_resolvable_by_engine_id_only() {
+        let old = find("minify.repopulate-unit-query-hud").expect("old id still resolves");
+        assert_eq!(
+            old.superseded_by.as_deref(),
+            Some("minify.repopulate-unit-query-hud-v2")
+        );
+        assert!(
+            old.panorama_layouts.is_none(),
+            "published contract unchanged"
+        );
+        let current = find("minify-repopulate-unit-query-hud").expect("catalog id");
+        assert_eq!(current.id, "minify.repopulate-unit-query-hud-v2");
+        assert!(current.panorama_layouts.is_some());
+        assert_eq!(current.resources.len(), old.resources.len());
+        assert!(
+            parse_all(&[&package_with("minify.repopulate-unit-query-hud", |v| {
+                v["supersededBy"] = "minify.repopulate-unit-query-hud".into()
+            })])
+            .is_err()
+        );
     }
 
     fn package_with(id: &str, edit: impl FnOnce(&mut serde_json::Value)) -> String {

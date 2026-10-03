@@ -1,8 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "minify.repopulate-unit-query-hud",
-  "catalogId": "minify-repopulate-unit-query-hud-legacy",
-  "supersededBy": "minify.repopulate-unit-query-hud-v2",
+  "id": "minify.repopulate-unit-query-hud-v2",
+  "catalogId": "minify-repopulate-unit-query-hud",
   "name": {
     "ru": "Вернуть расширенный HUD цели",
     "en": "Repopulate Unit Query HUD"
@@ -15,10 +14,7 @@
     "license": "GPL-3.0"
   },
   "distribution": "internal_pilot",
-  "verifiedLanguages": [
-    "dutch",
-    "russian"
-  ],
+  "verifiedLanguages": [],
   "resources": [
     {
       "path": "panorama/styles/hud/dota_hud_query_unit_overrides.vcss_c",
@@ -35,5 +31,13 @@
       "bytes": 1458,
       "sha256": "55efe3ff6bee15030c4016f6b18580d5d0877bfc8fbdcb3550beef4f23b70730"
     }
+  ],
+  "panoramaLayouts": {
+    "from": "Minify/mods/Repopulate Unit Query HUD/xml.json",
+    "bytes": 1741,
+    "sha256": "839dea7b08428a19ef96647cc4d89c4a1ee26ed9e8d8ef18f7edac738132b907"
+  },
+  "conflicts": [
+    "minify.repopulate-unit-query-hud"
   ]
 }

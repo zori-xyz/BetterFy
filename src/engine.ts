@@ -218,6 +218,7 @@ export type TreePilotDownloadStatus = {
 export type CatalogPackage = {
   id: string;
   catalogId: string;
+  supersededBy: string | null;
   name: { ru: string; en: string };
   author: string;
   license: string;

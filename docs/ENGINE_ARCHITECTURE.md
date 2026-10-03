@@ -525,9 +525,16 @@ four Valve-compiled layouts (KV3 v2 with LZ4 and v5), the Rust output read back 
 independent Python parser, and Minify's Auto Accept edits applied to a Valve-compiled
 `popup_accept_match.vxml_c`. Not yet run on Windows or in game.
 
-Auto Accept Match and Stat Site Buttons use this. Repopulate Unit Query HUD's `xml.json`
-is audited too, but its published package has a fixed contract without it (see
-"Signed package catalog"), so wiring it needs a new package ID.
+Auto Accept Match, Stat Site Buttons and Repopulate Unit Query HUD use this. The first
+published Repopulate package shipped only the override styles, which nothing loads
+without the `xml.json` edits that include them. Its contract cannot change (see "Signed
+package catalog"), so the full version is a new package,
+`minify.repopulate-unit-query-hud-v2`, which takes over the catalog entry. The old
+package keeps its ID and contract, so builds that include it stay verifiable and
+restorable; it carries `supersededBy` and a `-legacy` catalog ID, and the interface no
+longer offers it. A remote catalog that still lists the old package under its original
+catalog ID collides with the new one and is rejected by this build, so the catalog and
+the app release ship together.
 
 ### Installed profile
 
