@@ -384,6 +384,154 @@ pub fn plan_launch_option_for_language(
     })
 }
 
+/// The decoded Dota 2 `LaunchOptions` value, or `None` when the entry is absent.
+pub fn launch_options_value(contents: &str) -> Result<Option<String>, String> {
+    let root = parse(contents)?;
+    match find_value(&root, &DOTA_CONFIG_PATH) {
+        Some(Value::Text(value)) => Ok(Some(value.decoded.clone())),
+        Some(Value::Object(_)) => Err("steam_config_invalid".to_string()),
+        None => Ok(None),
+    }
+}
+
+/// The `-language` argument in a launch-option value: its language and the
+/// byte span of the whole `-language <value>` pair.
+fn language_argument(value: &str) -> Result<Option<(String, usize, usize, usize)>, String> {
+    let tokens = command_token_spans(value)?;
+    let mut found = None;
+    for (index, (token, start, _)) in tokens.iter().enumerate() {
+        if token.eq_ignore_ascii_case("-language") {
+            let Some((language, language_start, end)) = tokens.get(index + 1) else {
+                return Err("launch_options_invalid".to_string());
+            };
+            if found.is_some() {
+                return Err("launch_options_invalid".to_string());
+            }
+            found = Some((language.clone(), *start, *language_start, *end));
+        }
+    }
+    Ok(found)
+}
+
+/// An absent entry and an empty value launch Dota the same way.
+fn same_launch_options(left: Option<&str>, right: Option<&str>) -> bool {
+    left.unwrap_or("").trim() == right.unwrap_or("").trim()
+}
+
+/// Result of undoing BetterFy's own `-language` change in the current file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LaunchOptionRestore {
+    /// The file with BetterFy's change undone, or `None` when nothing needs
+    /// to be written.
+    pub updated_contents: Option<String>,
+    /// The `LaunchOptions` value the file holds afterwards.
+    pub restored_value: Option<String>,
+    /// The value differs from the one before installation because someone
+    /// changed it after BetterFy did; BetterFy leaves those changes alone.
+    pub kept_user_change: bool,
+}
+
+/// Undoes only the `-language` argument BetterFy set, leaving the rest of the
+/// file as Steam last wrote it. Steam rewrites `localconfig.vdf` on every
+/// start (play time, window state and more), so the file as a whole cannot be
+/// returned to its bytes from before installation without discarding those
+/// changes.
+///
+/// `before` is the value before installation and `applied` the language
+/// BetterFy set. When the current value no longer carries `-language
+/// <applied>`, someone already changed it and it is left as it is.
+pub fn plan_language_restore(
+    contents: &str,
+    before: Option<&str>,
+    applied: GameLanguage,
+) -> Result<LaunchOptionRestore, String> {
+    let root = parse(contents)?;
+    let current = match find_value(&root, &DOTA_CONFIG_PATH) {
+        Some(Value::Text(value)) => value.clone(),
+        Some(Value::Object(_)) => return Err("steam_config_invalid".to_string()),
+        None => {
+            return Ok(LaunchOptionRestore {
+                updated_contents: None,
+                restored_value: None,
+                kept_user_change: !same_launch_options(before, None),
+            })
+        }
+    };
+    let unchanged = |value: &str| LaunchOptionRestore {
+        updated_contents: None,
+        restored_value: Some(value.to_string()),
+        kept_user_change: !same_launch_options(before, Some(value)),
+    };
+    let Some((language, pair_start, language_start, end)) = language_argument(&current.decoded)?
+    else {
+        return Ok(unchanged(&current.decoded));
+    };
+    if !language.eq_ignore_ascii_case(applied.suffix()) {
+        return Ok(unchanged(&current.decoded));
+    }
+    let before_language = match before {
+        Some(value) => language_argument(value)?.map(|(language, ..)| language),
+        None => None,
+    };
+    let value = &current.decoded;
+    let restored = match &before_language {
+        Some(previous) => format!("{}{}{}", &value[..language_start], previous, &value[end..]),
+        None => {
+            // Remove the pair and one separating space, the way it was added.
+            let (start, end) =
+                if pair_start > 0 && value.as_bytes()[pair_start - 1].is_ascii_whitespace() {
+                    (pair_start - 1, end)
+                } else if value
+                    .as_bytes()
+                    .get(end)
+                    .is_some_and(u8::is_ascii_whitespace)
+                {
+                    (pair_start, end + 1)
+                } else {
+                    (pair_start, end)
+                };
+            format!("{}{}", &value[..start], &value[end..])
+        }
+    };
+    if before.is_none() && restored.trim().is_empty() {
+        // BetterFy created the entry; remove its line if it holds nothing else.
+        let line = line_start(contents, current.content_start);
+        let line_end = contents[current.content_end..]
+            .find('\n')
+            .map_or(contents.len(), |offset| current.content_end + offset + 1);
+        let text = contents[line..line_end].trim();
+        let quoted_value = format!(
+            "\"{}\"",
+            &contents[current.content_start..current.content_end]
+        );
+        if let Some(rest) = text
+            .get(..15)
+            .filter(|key| key.eq_ignore_ascii_case("\"LaunchOptions\""))
+            .map(|_| text[15..].trim())
+        {
+            if rest == quoted_value {
+                let updated = format!("{}{}", &contents[..line], &contents[line_end..]);
+                return Ok(LaunchOptionRestore {
+                    updated_contents: Some(updated),
+                    restored_value: None,
+                    kept_user_change: false,
+                });
+            }
+        }
+    }
+    let updated = format!(
+        "{}{}{}",
+        &contents[..current.content_start],
+        encode_vdf(&restored),
+        &contents[current.content_end..]
+    );
+    Ok(LaunchOptionRestore {
+        kept_user_change: !same_launch_options(before, Some(&restored)),
+        updated_contents: Some(updated),
+        restored_value: Some(restored),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,6 +543,50 @@ mod tests {
         format!(
             "\"UserLocalConfigStore\"\n{{\n\t\"Software\"\n\t{{\n\t\t\"Valve\"\n\t\t{{\n\t\t\t\"Steam\"\n\t\t\t{{\n\t\t\t\t\"apps\"\n\t\t\t\t{{\n\t\t\t\t\t\"570\"\n\t\t\t\t\t{{\n{options}\t\t\t\t\t}}\n\t\t\t\t}}\n\t\t\t}}\n\t\t}}\n\t}}\n}}\n"
         )
+    }
+
+    #[test]
+    fn language_restore_undoes_only_betterfys_argument() {
+        // Appended to existing options.
+        let added = local_config(Some("-novid -language dutch"));
+        let plan =
+            plan_language_restore(&added, Some("-novid"), GameLanguage::Dutch).expect("plan");
+        assert_eq!(
+            plan.updated_contents.as_deref(),
+            Some(local_config(Some("-novid")).as_str())
+        );
+        assert!(!plan.kept_user_change);
+        // Replaced a previous language.
+        let switched = local_config(Some("-novid -language russian +exec a.cfg"));
+        let plan = plan_language_restore(
+            &switched,
+            Some("-novid -language dutch +exec a.cfg"),
+            GameLanguage::Russian,
+        )
+        .expect("plan");
+        assert_eq!(
+            plan.updated_contents.as_deref(),
+            Some(local_config(Some("-novid -language dutch +exec a.cfg")).as_str())
+        );
+        // An entry BetterFy created is removed again, byte for byte.
+        let without = local_config(None);
+        let created = plan_launch_option_for_language(&without, GameLanguage::Dutch)
+            .expect("insert")
+            .updated_contents;
+        let plan = plan_language_restore(&created, None, GameLanguage::Dutch).expect("plan");
+        assert_eq!(plan.updated_contents.as_deref(), Some(without.as_str()));
+        assert_eq!(plan.restored_value, None);
+        assert!(!plan.kept_user_change);
+        // An argument the player already changed is left alone.
+        let other = local_config(Some("-novid -language koreana"));
+        let plan =
+            plan_language_restore(&other, Some("-novid"), GameLanguage::Dutch).expect("plan");
+        assert_eq!(plan.updated_contents, None);
+        assert!(plan.kept_user_change);
+        let gone = local_config(Some("-novid"));
+        let plan = plan_language_restore(&gone, Some("-novid"), GameLanguage::Dutch).expect("plan");
+        assert_eq!(plan.updated_contents, None);
+        assert!(!plan.kept_user_change);
     }
 
     #[test]

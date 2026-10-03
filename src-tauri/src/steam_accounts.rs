@@ -1,5 +1,7 @@
 use crate::game_language::GameLanguage;
-use crate::steam_config::{plan_launch_option_for_language, LaunchOptionPlan};
+use crate::steam_config::{
+    launch_options_value, plan_language_restore, plan_launch_option_for_language, LaunchOptionPlan,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
@@ -13,6 +15,9 @@ const JOURNAL_SCHEMA_VERSION: u32 = 1;
 const MAX_LOCALCONFIG_BYTES: u64 = 16 * 1024 * 1024;
 const PROFILE_TOKEN_PREFIX: &str = "steam-profile-v1:";
 const CONFIRMATION_DOMAIN: &[u8] = b"betterfy-steam-launch-options-v1";
+/// Journal note: the rollback undid BetterFy's argument but kept launch-option
+/// changes someone made after it.
+const KEPT_USER_CHANGE: &str = "steam_launch_options_kept_user_change";
 static OPERATION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug)]
@@ -89,6 +94,9 @@ pub struct SteamConfigReceipt {
     backup_verified: bool,
     committed: bool,
     rolled_back: bool,
+    /// The rollback found launch options changed after BetterFy's change and
+    /// left those changes in place.
+    kept_user_change: bool,
 }
 
 impl SteamConfigReceipt {
@@ -950,7 +958,8 @@ fn verify_activation(
 
     let profile = resolve_profile(roots, profile_token)?;
     let contents = read_localconfig(&profile.localconfig_path)?;
-    let current_hash = sha256(contents.as_bytes());
+    // Steam rewrites localconfig.vdf whenever it runs, so the file is checked
+    // for BetterFy's language argument, not for the bytes BetterFy wrote.
     let current_plan = plan_launch_option_for_language(&contents, language)?;
     if current_plan.changed {
         return Err("steam_activation_not_ready".to_string());
@@ -965,7 +974,6 @@ fn verify_activation(
         || journal.profile_token != profile_token
         || journal.language != language
         || journal.phase != SteamConfigPhase::Committed
-        || journal.after_sha256 != current_hash
     {
         return Err("steam_activation_not_ready".to_string());
     }
@@ -1008,6 +1016,7 @@ fn apply_profile_with_failure(
             backup_verified: false,
             committed: true,
             rolled_back: false,
+            kept_user_change: false,
         });
     }
 
@@ -1126,6 +1135,7 @@ fn apply_profile_with_failure(
         backup_verified: true,
         committed: true,
         rolled_back: false,
+        kept_user_change: false,
     })
 }
 
@@ -1206,34 +1216,60 @@ fn rollback_operation_locked(
     if sha256(&backup_bytes) != journal.before_sha256 {
         return Err("backup_verification_failed".to_string());
     }
-    let current = read_localconfig(&profile.localconfig_path)?;
-    let current_hash = sha256(current.as_bytes());
-    if journal.phase == SteamConfigPhase::RolledBack && current_hash == journal.before_sha256 {
+    if journal.phase == SteamConfigPhase::RolledBack {
         return Ok(receipt_from_journal(&journal, true));
     }
-    if current_hash != journal.after_sha256 && current_hash != journal.before_sha256 {
-        return Err("steam_config_rollback_conflict".to_string());
-    }
+    let before_contents = String::from_utf8(backup_bytes.clone())
+        .map_err(|_| "backup_verification_failed".to_string())?;
+    let before_value = launch_options_value(&before_contents)?;
+    let current = read_localconfig(&profile.localconfig_path)?;
+    let current_hash = sha256(current.as_bytes());
+    let temporary = temp_path(&profile.localconfig_path, &journal.operation_id)?;
+    let mut kept_user_change = false;
     if current_hash == journal.after_sha256 {
+        // Nothing has touched the file since BetterFy's change: put back the
+        // exact bytes from before installation.
         restore_bytes(
             &profile.localconfig_path,
             &journal.operation_id,
             &backup_bytes,
         )?;
+        let restored = read_localconfig(&profile.localconfig_path)?;
+        if sha256(restored.as_bytes()) != journal.before_sha256 {
+            return Err("rollback_failed".to_string());
+        }
+    } else if current_hash != journal.before_sha256 {
+        // Steam rewrites localconfig.vdf on every start, so after any Steam
+        // session the file no longer matches either hash. Undo only
+        // BetterFy's own `-language` argument and keep everything else.
+        let plan = plan_language_restore(&current, before_value.as_deref(), journal.language)?;
+        if let Some(updated) = &plan.updated_contents {
+            reject_symlink(&profile.localconfig_path, "steam_profile_invalid")?;
+            if sha256(read_localconfig(&profile.localconfig_path)?.as_bytes()) != current_hash {
+                return Err("steam_config_plan_stale".to_string());
+            }
+            restore_bytes(
+                &profile.localconfig_path,
+                &journal.operation_id,
+                updated.as_bytes(),
+            )?;
+            let restored = read_localconfig(&profile.localconfig_path)?;
+            if sha256(restored.as_bytes()) != sha256(updated.as_bytes())
+                || launch_options_value(&restored)? != plan.restored_value
+            {
+                return Err("rollback_failed".to_string());
+            }
+        }
+        kept_user_change = plan.kept_user_change;
     }
-    let temporary = temp_path(&profile.localconfig_path, &journal.operation_id)?;
     if temporary.exists() {
         reject_symlink(&temporary, "rollback_failed")?;
         fs::remove_file(&temporary).map_err(|_| "rollback_failed".to_string())?;
     }
-    let restored = read_localconfig(&profile.localconfig_path)?;
-    if sha256(restored.as_bytes()) != journal.before_sha256 {
-        return Err("rollback_failed".to_string());
-    }
     journal.phase = SteamConfigPhase::RolledBack;
     journal.updated_at_ms = now_ms()?;
     journal.rollback_verified = true;
-    journal.error_code = None;
+    journal.error_code = kept_user_change.then(|| KEPT_USER_CHANGE.to_string());
     write_journal(&journal_path, &journal)?;
     Ok(receipt_from_journal(&journal, true))
 }
@@ -1297,6 +1333,7 @@ fn receipt_from_journal(journal: &SteamConfigJournal, rolled_back: bool) -> Stea
         backup_verified: true,
         committed: journal.phase == SteamConfigPhase::Committed,
         rolled_back,
+        kept_user_change: journal.error_code.as_deref() == Some(KEPT_USER_CHANGE),
     }
 }
 
@@ -1451,8 +1488,127 @@ mod tests {
         fs::remove_dir_all(base).expect("cleanup");
     }
 
+    /// Steam's own rewrite of localconfig.vdf, as after any Steam session.
+    fn steam_rewrite(contents: &str) -> String {
+        contents.replacen(
+            "\"UserLocalConfigStore\"\n{\n",
+            "\"UserLocalConfigStore\"\n{\n\t\"streaming_v2\"\n\t{\n\t\t\"EnableStreaming\"\t\t\"0\"\n\t}\n",
+            1,
+        )
+    }
+
+    fn rollback(
+        app_data: &Path,
+        steam: &Path,
+        operation_id: &str,
+    ) -> Result<SteamConfigReceipt, String> {
+        rollback_operation(
+            app_data,
+            &[steam.to_path_buf()],
+            SteamConfigOperationRequest {
+                operation_id: operation_id.to_string(),
+                confirmed: true,
+            },
+        )
+    }
+
     #[test]
-    fn activation_requires_the_committed_profile_and_current_hash() {
+    fn rollback_after_steam_rewrote_the_file_undoes_only_the_language() {
+        // Founder's EA.24 Windows report: before "-language dutch", BetterFy
+        // set russian, Steam then ran and rewrote the file; restore failed
+        // with steam_config_rollback_conflict.
+        let original = local_config("-language dutch");
+        let (base, steam, app_data) = fixture("rewrite", "44", &original);
+        let roots = vec![steam.clone()];
+        let profiles = discover_profiles_in_roots(&roots).expect("profiles");
+        let preview =
+            preview_profile(&roots, &profiles[0].token, GameLanguage::Russian).expect("preview");
+        let receipt = apply_profile_with_failure(
+            &app_data,
+            &roots,
+            ApplySteamLaunchOptionRequest {
+                profile_token: preview.profile_token,
+                confirmation_token: preview.confirmation_token,
+                language: GameLanguage::Russian,
+                confirmed: true,
+                linked_deployment_id: None,
+            },
+            FailurePoint::None,
+        )
+        .expect("apply");
+        let operation_id = receipt.operation_id.expect("operation");
+        let target = steam.join("userdata/44/config/localconfig.vdf");
+        let applied = fs::read_to_string(&target).expect("applied");
+        assert!(applied.contains("\"-language russian\""));
+        fs::write(&target, steam_rewrite(&applied)).expect("steam rewrite");
+
+        let restored = rollback(&app_data, &steam, &operation_id).expect("rollback");
+        assert!(restored.rolled_back);
+        assert!(!restored.kept_user_change);
+        let after = fs::read_to_string(&target).expect("restored");
+        assert_eq!(
+            after,
+            steam_rewrite(&original),
+            "Steam's own changes are kept"
+        );
+        let again = rollback(&app_data, &steam, &operation_id).expect("idempotent");
+        assert!(again.rolled_back);
+        assert_eq!(fs::read_to_string(&target).expect("unchanged"), after);
+        fs::remove_dir_all(base).expect("cleanup");
+    }
+
+    #[test]
+    fn rollback_keeps_launch_options_the_player_changed_later() {
+        let original = local_config("-novid");
+        let (base, steam, app_data) = fixture("player", "45", &original);
+        let receipt = apply_profile_with_failure(
+            &app_data,
+            std::slice::from_ref(&steam),
+            request_for(&steam),
+            FailurePoint::None,
+        )
+        .expect("apply");
+        let operation_id = receipt.operation_id.expect("operation");
+        let target = steam.join("userdata/45/config/localconfig.vdf");
+        fs::write(
+            &target,
+            steam_rewrite(&local_config("-novid -language dutch +fps_max 144")),
+        )
+        .expect("player edit");
+        let restored = rollback(&app_data, &steam, &operation_id).expect("rollback");
+        assert!(restored.rolled_back);
+        assert!(restored.kept_user_change);
+        assert_eq!(
+            fs::read_to_string(&target).expect("restored"),
+            steam_rewrite(&local_config("-novid +fps_max 144"))
+        );
+
+        // A player who already removed or replaced the argument is left alone.
+        let (base2, steam2, app_data2) = fixture("player2", "46", &original);
+        let receipt = apply_profile_with_failure(
+            &app_data2,
+            std::slice::from_ref(&steam2),
+            request_for(&steam2),
+            FailurePoint::None,
+        )
+        .expect("apply");
+        let target2 = steam2.join("userdata/46/config/localconfig.vdf");
+        let edited = steam_rewrite(&local_config("-novid -language koreana"));
+        fs::write(&target2, &edited).expect("player switched language");
+        let restored = rollback(
+            &app_data2,
+            &steam2,
+            &receipt.operation_id.expect("operation"),
+        )
+        .expect("rollback");
+        assert!(restored.rolled_back && restored.kept_user_change);
+        assert_eq!(fs::read_to_string(&target2).expect("untouched"), edited);
+        fs::remove_dir_all(base).expect("cleanup");
+        fs::remove_dir_all(base2).expect("cleanup");
+    }
+
+    #[test]
+    fn activation_requires_the_committed_profile_and_language() {
         let original = local_config("-novid");
         let (base, steam, app_data) = fixture("activation", "43", &original);
         let request = request_for(&steam);
@@ -1487,9 +1643,20 @@ mod tests {
             Some("steam_profile_not_found")
         );
 
+        // Steam and the player may change the file; BetterFy's argument is
+        // what activation depends on.
         let target = steam.join("userdata/43/config/localconfig.vdf");
         fs::write(&target, local_config("-novid -language dutch -console"))
             .expect("external change");
+        verify_activation(
+            &app_data,
+            std::slice::from_ref(&steam),
+            &profile_token,
+            Some(&operation_id),
+            GameLanguage::Dutch,
+        )
+        .expect("other changes keep the activation");
+        fs::write(&target, local_config("-novid -console")).expect("argument removed");
         assert_eq!(
             verify_activation(
                 &app_data,

@@ -165,6 +165,8 @@ export type SteamConfigReceipt = {
   backupVerified: boolean;
   committed: boolean;
   rolledBack: boolean;
+  /** Launch-option changes made after BetterFy's were kept by the rollback. */
+  keptUserChange?: boolean;
 };
 
 export type GameDeploymentReceipt = {
