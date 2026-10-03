@@ -1,9 +1,44 @@
 {
   "schemaVersion": 1,
-  "sequence": 5,
-  "issuedAt": "2026-10-03T08:14:25Z",
-  "expiresAt": "2027-04-01T08:14:25Z",
+  "sequence": 6,
+  "issuedAt": "2026-10-03T08:33:42Z",
+  "expiresAt": "2027-04-01T08:33:42Z",
   "packages": [
+    {
+      "schemaVersion": 1,
+      "id": "minify.auto-accept-match",
+      "catalogId": "minify-auto-accept-match",
+      "name": {
+        "ru": "Автопринятие матча",
+        "en": "Auto Accept Match"
+      },
+      "author": "MeGaNeKoS",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Auto Accept Match/files",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "resources": [
+        {
+          "path": "panorama/scripts/popups/popup_auto_accept_match.vjs_c",
+          "bytes": 1266,
+          "sha256": "65fd30ea2b419c0ff2d746d0ad8f8ccd4a4dedb3cdf0e08eaf2e0edf47e08dc6"
+        }
+      ],
+      "panoramaLayouts": {
+        "from": "Minify/mods/Auto Accept Match/xml.json",
+        "bytes": 385,
+        "sha256": "ef6426e6d6caecc1a7e3fb857a45ff9d0369e96b2c4d3af43350cac30338d593",
+        "menu": {
+          "from": "Minify/mods/Auto Accept Match/menu.xml",
+          "bytes": 598,
+          "sha256": "038f3d7f5b4183de00ad3175d45c63d308aeb66146c7d5c32c4f2f0772c31e3a"
+        }
+      }
+    },
     {
       "schemaVersion": 1,
       "id": "minify.dark-terrain",
@@ -2664,6 +2699,41 @@
           "sha256": "91193b3e5ced7d0d4122cfd5910aa3e16d7e2e3a38864f4146e8c9af1075a13d"
         }
       ]
+    },
+    {
+      "schemaVersion": 1,
+      "id": "minify.stat-site-buttons",
+      "catalogId": "minify-stat-site-buttons",
+      "name": {
+        "ru": "Кнопки сервисов статистики",
+        "en": "Stat Site Buttons"
+      },
+      "author": "Egezenn",
+      "source": {
+        "repository": "Egezenn/dota2-minify",
+        "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+        "directory": "Minify/mods/Stat Site Buttons/files",
+        "license": "GPL-3.0"
+      },
+      "distribution": "internal_pilot",
+      "verifiedLanguages": [],
+      "resources": [
+        {
+          "path": "panorama/scripts/ssb.vjs_c",
+          "bytes": 1756,
+          "sha256": "34939a9a235d2bba6baade70841b9f8b21681ba2cc728a37be5272986dcf3131"
+        }
+      ],
+      "panoramaStyles": {
+        "from": "Minify/mods/Stat Site Buttons/styling.css",
+        "bytes": 1532,
+        "sha256": "c333c93166ecc5ed3e230d7d8ceafdf2b36ff21b627582eef5fd5669ee655d5a"
+      },
+      "panoramaLayouts": {
+        "from": "Minify/mods/Stat Site Buttons/xml.json",
+        "bytes": 5033,
+        "sha256": "206c2437af444129cdf372255442b0ae7b9ce563ae440b9607064ed4e1b3be4b"
+      }
     },
     {
       "schemaVersion": 1,

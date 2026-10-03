@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "minify.auto-accept-match",
+  "catalogId": "minify-auto-accept-match",
+  "name": {
+    "ru": "Автопринятие матча",
+    "en": "Auto Accept Match"
+  },
+  "author": "MeGaNeKoS",
+  "source": {
+    "repository": "Egezenn/dota2-minify",
+    "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+    "directory": "Minify/mods/Auto Accept Match/files",
+    "license": "GPL-3.0"
+  },
+  "distribution": "internal_pilot",
+  "verifiedLanguages": [],
+  "resources": [
+    {
+      "path": "panorama/scripts/popups/popup_auto_accept_match.vjs_c",
+      "bytes": 1266,
+      "sha256": "65fd30ea2b419c0ff2d746d0ad8f8ccd4a4dedb3cdf0e08eaf2e0edf47e08dc6"
+    }
+  ],
+  "panoramaLayouts": {
+    "from": "Minify/mods/Auto Accept Match/xml.json",
+    "bytes": 385,
+    "sha256": "ef6426e6d6caecc1a7e3fb857a45ff9d0369e96b2c4d3af43350cac30338d593",
+    "menu": {
+      "from": "Minify/mods/Auto Accept Match/menu.xml",
+      "bytes": 598,
+      "sha256": "038f3d7f5b4183de00ad3175d45c63d308aeb66146c7d5c32c4f2f0772c31e3a"
+    }
+  }
+}

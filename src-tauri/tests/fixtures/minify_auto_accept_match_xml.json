@@ -1,0 +1,15 @@
+{
+  "panorama/layout/popups/popup_accept_match.xml": [
+    {
+      "action": "add_script",
+      "src": "s2r://panorama/scripts/popups/popup_auto_accept_match.vjs_c"
+    },
+    {
+      "action": "set_attribute",
+      "selector": "PopupAcceptMatch",
+      "attribute": "onload",
+      "value": "AcceptMatchPopup()"
+    }
+  ],
+  "panorama/layout/popups/popup_settings_reborn.xml": []
+}

@@ -473,11 +473,61 @@ several packages extend the same style, their CSS is joined lowest priority firs
 highest-priority package's rules come last, and the result belongs to that package in
 the bundle.
 
-Six packages use this: Remove Hero Renders, Remove Main Menu Background, Remove
-Showcases, Reposition & Rescale HUD, Transparent HUD and Revamp Hero Grid Layout (also
-a blacklist). Stat Site Buttons still needs an XML change and a compiled script, and
-the remaining packages need Panorama XML or Minify's script hooks; they are not
-installable.
+Seven packages use this: Remove Hero Renders, Remove Main Menu Background, Remove
+Showcases, Reposition & Rescale HUD, Transparent HUD, Revamp Hero Grid Layout (also a
+blacklist) and Stat Site Buttons (also a layout package, below).
+
+### Panorama layout packages
+
+A manifest may carry a Minify `xml.json` in `panoramaLayouts` (repository path, size,
+SHA-256), optionally with a settings `menu.xml`. Each key names a game layout
+(`panorama/layout/....xml`, compiled as `.vxml_c` in `game/dota/pak01_dir.vpk`); each
+value is a list of Minify actions: `add_script`, `add_style_include`, `set_attribute`,
+`add_child`, `insert_after`, `insert_before` and `move_into`. Minify decompiles the
+layout to XML, applies the actions with ElementTree and recompiles with the Workshop
+Tools. BetterFy edits the compiled layout directly (`src-tauri/src/panorama_layout.rs`,
+`src-tauri/src/kv3.rs`):
+
+- A compiled layout keeps its tree as binary KeyValues3 in the `LaCo` block
+  (`m_AST.m_pRoot`; nodes with `eType`, `name`, `child`/`vecChildren`,
+  `sourceLineColumn`). The reader handles KV3 versions 2 to 5, uncompressed or LZ4;
+  the edited tree is written back as uncompressed version 5. Every other block is kept
+  byte for byte.
+- Selectors follow Minify's grammar (`tag#id.class[attr=value]`) and its two different
+  "first match" orders: document order for `set_attribute`, `add_child` and the
+  `move_into` destination; parent-by-parent for `insert_*` and the moved element.
+- The compiler leaves `m_ChildResourceList` empty even for layouts that include scripts
+  and styles, so includes resolve by path at load time and editing the tree alone
+  matches the compiler's output. New nodes reuse the source position of the place they
+  are inserted at; the `DATA` CRC of the source XML is kept, as with styles.
+- A settings `menu.xml` goes into a "Minify" section appended to
+  `PopupSettingsRebornSettingsBody` in `popup_settings_reborn`, as Minify's Auto Accept
+  Match script does. BetterFy needs no Workshop Tools, so the slider is always added.
+
+Layout actions can carry script in event attributes (`onload`, `onactivate`), and
+`add_script` loads a compiled Panorama script. Both are accepted only from an
+allowlist compiled into the app: `xml.json`/`menu.xml` files by exact repository path,
+size and SHA-256, and `vjs_c` resources by exact path, size and SHA-256. A signed
+catalog cannot extend either list. The two audited scripts are Auto Accept Match's
+`popup_auto_accept_match.vjs_c` (waits the slider's delay, then dispatches
+`DOTAPlayAcceptMatch`) and Stat Site Buttons' `ssb.vjs_c` (opens the match or profile
+on Dotabuff, OpenDota or Stratz through Dota's own browser events).
+
+When a build is prepared, the game layouts each package edits are read, every action is
+applied once as a check, and the originals are stored under `engine-v1/layout/`. A target
+that a Dota update moved or removed fails preparation with
+`panorama_layout_target_missing` instead of producing a half-edited layout. When several
+packages edit the same layout, the lowest priority edits first and the result belongs to
+the highest-priority package.
+
+Verified on this Mac only: exact tree round trips through the Rust reader and writer on
+four Valve-compiled layouts (KV3 v2 with LZ4 and v5), the Rust output read back by an
+independent Python parser, and Minify's Auto Accept edits applied to a Valve-compiled
+`popup_accept_match.vxml_c`. Not yet run on Windows or in game.
+
+Auto Accept Match and Stat Site Buttons use this. Repopulate Unit Query HUD's `xml.json`
+is audited too, but its published package has a fixed contract without it (see
+"Signed package catalog"), so wiring it needs a new package ID.
 
 ### Installed profile
 

@@ -35,6 +35,8 @@ const MANIFESTS: &[&str] = &[
     include_str!("../packages/minify-reposition-and-rescale-hud.json"),
     include_str!("../packages/minify-transparent-hud.json"),
     include_str!("../packages/minify-revamp-hero-grid-layout.json"),
+    include_str!("../packages/minify-auto-accept-match.json"),
+    include_str!("../packages/minify-stat-site-buttons.json"),
 ];
 
 /// Only this repository is trusted as a source, and only through
@@ -47,10 +49,60 @@ const MAX_PACKAGE_BYTES: usize = 64 * 1024 * 1024;
 const MAX_BLACKLIST_BYTES: usize = 2 * 1024 * 1024;
 /// Compiled Source 2 data resources only. Compiled Panorama scripts
 /// (`vjs_c`) and anything else are not data and are never accepted, even from
-/// a validly signed catalog.
+/// a validly signed catalog, except the audited scripts below.
 pub(crate) const ALLOWED_EXTENSIONS: &[&str] = &[
     "vcss_c", "vmat_c", "vmdl_c", "vpcf_c", "vsnd_c", "vtex_c", "vxml_c",
 ];
+
+/// Compiled Panorama scripts that were read in full and are accepted by exact
+/// path, size and SHA-256. The list is part of the app binary: a signed
+/// catalog cannot extend it.
+/// - `popup_auto_accept_match.vjs_c` waits the delay set in a settings slider,
+///   then dispatches `DOTAPlayAcceptMatch`;
+/// - `ssb.vjs_c` opens the current match or profile on Dotabuff, OpenDota or
+///   Stratz through Dota's own browser events.
+const AUDITED_SCRIPTS: &[(&str, usize, &str)] = &[
+    (
+        "panorama/scripts/popups/popup_auto_accept_match.vjs_c",
+        1266,
+        "65fd30ea2b419c0ff2d746d0ad8f8ccd4a4dedb3cdf0e08eaf2e0edf47e08dc6",
+    ),
+    (
+        "panorama/scripts/ssb.vjs_c",
+        1756,
+        "34939a9a235d2bba6baade70841b9f8b21681ba2cc728a37be5272986dcf3131",
+    ),
+];
+
+/// Layout edits can carry script in event attributes (`onload`,
+/// `onactivate`), so like scripts they are accepted only when audited, by
+/// exact repository path, size and SHA-256. Part of the app binary.
+const AUDITED_LAYOUT_SOURCES: &[(&str, usize, &str)] = &[
+    (
+        "Minify/mods/Auto Accept Match/xml.json",
+        385,
+        "ef6426e6d6caecc1a7e3fb857a45ff9d0369e96b2c4d3af43350cac30338d593",
+    ),
+    (
+        "Minify/mods/Auto Accept Match/menu.xml",
+        598,
+        "038f3d7f5b4183de00ad3175d45c63d308aeb66146c7d5c32c4f2f0772c31e3a",
+    ),
+    (
+        "Minify/mods/Stat Site Buttons/xml.json",
+        5033,
+        "206c2437af444129cdf372255442b0ae7b9ce563ae440b9607064ed4e1b3be4b",
+    ),
+    (
+        "Minify/mods/Repopulate Unit Query HUD/xml.json",
+        1741,
+        "839dea7b08428a19ef96647cc4d89c4a1ee26ed9e8d8ef18f7edac738132b907",
+    ),
+];
+
+fn audited(list: &[(&str, usize, &str)], path: &str, bytes: usize, sha256: &str) -> bool {
+    list.contains(&(path, bytes, sha256))
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -119,6 +171,19 @@ pub struct PanoramaStylesSpec {
     pub sha256: String,
 }
 
+/// A Minify `xml.json`: edits to the game's own compiled Panorama layouts
+/// (see `panorama_layout.rs`), plus the optional settings `menu.xml` Minify's
+/// Auto Accept Match adds to the game settings. Audited files only.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PanoramaLayoutsSpec {
+    pub from: String,
+    pub bytes: usize,
+    pub sha256: String,
+    #[serde(default)]
+    pub menu: Option<BlankSpec>,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BlankSpec {
@@ -147,6 +212,8 @@ pub struct PackageManifest {
     pub blacklist: Option<BlacklistSpec>,
     #[serde(default)]
     pub panorama_styles: Option<PanoramaStylesSpec>,
+    #[serde(default)]
+    pub panorama_layouts: Option<PanoramaLayoutsSpec>,
     /// Packages that must not be installed together with this one.
     #[serde(default)]
     pub conflicts: Vec<String>,
@@ -167,6 +234,7 @@ pub struct PackageSummary {
     pub resource_count: usize,
     pub uses_blacklist: bool,
     pub uses_panorama_styles: bool,
+    pub uses_panorama_layouts: bool,
     pub conflicts: Vec<String>,
     pub requires: Vec<String>,
     pub verified_languages: Vec<String>,
@@ -215,6 +283,18 @@ impl PackageManifest {
                 styles.from, styles.bytes, styles.sha256
             ));
         }
+        if let Some(layouts) = &self.panorama_layouts {
+            hasher.update(format!(
+                "layouts|{}|{}|{}\n",
+                layouts.from, layouts.bytes, layouts.sha256
+            ));
+            if let Some(menu) = &layouts.menu {
+                hasher.update(format!(
+                    "menu|{}|{}|{}\n",
+                    menu.from, menu.bytes, menu.sha256
+                ));
+            }
+        }
         format!("{:x}", hasher.finalize())
     }
 
@@ -231,6 +311,22 @@ impl PackageManifest {
                 sha256: styles.sha256.clone(),
                 from: Some(styles.from.clone()),
             });
+        }
+        if let Some(layouts) = &self.panorama_layouts {
+            downloads.push(Resource {
+                path: "xml.json".to_string(),
+                bytes: layouts.bytes,
+                sha256: layouts.sha256.clone(),
+                from: Some(layouts.from.clone()),
+            });
+            if let Some(menu) = &layouts.menu {
+                downloads.push(Resource {
+                    path: "menu.xml".to_string(),
+                    bytes: menu.bytes,
+                    sha256: menu.sha256.clone(),
+                    from: Some(menu.from.clone()),
+                });
+            }
         }
         let Some(blacklist) = &self.blacklist else {
             return downloads;
@@ -284,6 +380,7 @@ impl PackageManifest {
             resource_count: self.resources.len(),
             uses_blacklist: self.blacklist.is_some(),
             uses_panorama_styles: self.panorama_styles.is_some(),
+            uses_panorama_layouts: self.panorama_layouts.is_some(),
             conflicts: self.conflicts.clone(),
             requires: self.requires.clone(),
             verified_languages: self.verified_languages.clone(),
@@ -401,9 +498,27 @@ fn validate(manifest: &PackageManifest) -> Result<(), String> {
             return invalid("panorama_styles");
         }
     }
+    if let Some(layouts) = &manifest.panorama_layouts {
+        let menu_ok = layouts.menu.as_ref().is_none_or(|menu| {
+            menu.from.ends_with("/menu.xml")
+                && audited(AUDITED_LAYOUT_SOURCES, &menu.from, menu.bytes, &menu.sha256)
+        });
+        if !layouts.from.ends_with("/xml.json")
+            || !audited(
+                AUDITED_LAYOUT_SOURCES,
+                &layouts.from,
+                layouts.bytes,
+                &layouts.sha256,
+            )
+            || !menu_ok
+        {
+            return invalid("panorama_layouts");
+        }
+    }
     if (manifest.resources.is_empty()
         && manifest.blacklist.is_none()
-        && manifest.panorama_styles.is_none())
+        && manifest.panorama_styles.is_none()
+        && manifest.panorama_layouts.is_none())
         || manifest.resources.len() > MAX_RESOURCES_PER_PACKAGE
     {
         return invalid("resources");
@@ -435,7 +550,13 @@ fn validate(manifest: &PackageManifest) -> Result<(), String> {
     for resource in &manifest.resources {
         if !valid_resource_path(&resource.path)
             || !paths.insert(resource.path.as_str())
-            || !extension(&resource.path).is_some_and(|ext| ALLOWED_EXTENSIONS.contains(&ext))
+            || !(extension(&resource.path).is_some_and(|ext| ALLOWED_EXTENSIONS.contains(&ext))
+                || audited(
+                    AUDITED_SCRIPTS,
+                    &resource.path,
+                    resource.bytes,
+                    &resource.sha256,
+                ))
         {
             return invalid("resource_path");
         }
@@ -696,5 +817,50 @@ mod tests {
             "duplicate IDs"
         );
         assert!(parse_all(&[MANIFESTS[1]]).is_ok());
+    }
+
+    fn package_with(id: &str, edit: impl FnOnce(&mut serde_json::Value)) -> String {
+        let source = MANIFESTS
+            .iter()
+            .find(|source| source.contains(&format!("\"id\": \"{id}\"")))
+            .expect("embedded");
+        let mut value: serde_json::Value = serde_json::from_str(source).expect("json");
+        edit(&mut value);
+        value.to_string()
+    }
+
+    #[test]
+    fn only_audited_scripts_and_layout_edits_are_accepted() {
+        let auto = "minify.auto-accept-match";
+        let stat = "minify.stat-site-buttons";
+        assert!(parse_all(&[&package_with(auto, |_| {})]).is_ok());
+        assert!(parse_all(&[&package_with(stat, |_| {})]).is_ok());
+        let cases = [
+            // An unaudited script, or an audited one changed in any way.
+            package_with(auto, |v| {
+                v["resources"][0]["path"] = "panorama/scripts/popups/other.vjs_c".into()
+            }),
+            package_with(auto, |v| {
+                v["resources"][0]["sha256"] =
+                    "0000000000000000000000000000000000000000000000000000000000000000".into()
+            }),
+            package_with(auto, |v| v["resources"][0]["bytes"] = 1267.into()),
+            // Layout edits can carry script in event attributes.
+            package_with(stat, |v| {
+                v["panoramaLayouts"]["from"] = "Minify/mods/#base/xml.json".into()
+            }),
+            package_with(stat, |v| {
+                v["panoramaLayouts"]["sha256"] =
+                    "0000000000000000000000000000000000000000000000000000000000000000".into()
+            }),
+            package_with(auto, |v| {
+                v["panoramaLayouts"]["menu"]["from"] =
+                    "Minify/mods/Auto Accept Match/xml.json".into()
+            }),
+            package_with(auto, |v| v["panoramaLayouts"]["extra"] = 1.into()),
+        ];
+        for case in &cases {
+            assert!(parse_all(&[case.as_str()]).is_err(), "accepted: {case}");
+        }
     }
 }

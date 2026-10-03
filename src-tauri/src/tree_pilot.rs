@@ -295,6 +295,215 @@ fn apply_panorama_styles(
     Ok(())
 }
 
+fn layout_resolution_path(app_data_root: &Path, package_id: &str) -> std::path::PathBuf {
+    app_data_root
+        .join("engine-v1")
+        .join("layout")
+        .join(format!("{package_id}.json"))
+}
+
+/// The game's own compiled layouts a package's `xml.json` (and settings menu)
+/// edits, captured when the build is prepared.
+#[derive(serde::Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LayoutResolution {
+    package_id: String,
+    edits_sha256: String,
+    menu_sha256: Option<String>,
+    originals: BTreeMap<String, StoredOriginal>,
+}
+
+struct PackageLayouts {
+    edits: BTreeMap<String, Vec<crate::panorama_layout::Edit>>,
+    menu: Option<String>,
+}
+
+fn read_layouts(
+    app_data_root: &Path,
+    manifest: &PackageManifest,
+) -> Result<Option<PackageLayouts>, String> {
+    let Some(layouts) = &manifest.panorama_layouts else {
+        return Ok(None);
+    };
+    let text =
+        crate::content_store::read_pinned_resource(app_data_root, layouts.bytes, &layouts.sha256)?;
+    let text = String::from_utf8(text).map_err(|_| "panorama_layout_invalid".to_string())?;
+    let mut edits = crate::panorama_layout::parse_edits(&text)?;
+    let menu = match &layouts.menu {
+        Some(menu) => {
+            let text = crate::content_store::read_pinned_resource(
+                app_data_root,
+                menu.bytes,
+                &menu.sha256,
+            )?;
+            edits
+                .entry(crate::panorama_layout::MENU_TARGET.to_string())
+                .or_default();
+            Some(String::from_utf8(text).map_err(|_| "panorama_layout_invalid".to_string())?)
+        }
+        None => None,
+    };
+    Ok(Some(PackageLayouts { edits, menu }))
+}
+
+fn edit_layout(
+    bytes: &[u8],
+    edits: &[(&[crate::panorama_layout::Edit], Option<&String>)],
+) -> Result<Vec<u8>, String> {
+    let mut layout = crate::panorama_layout::read(bytes)?;
+    let mut menus = Vec::new();
+    for (actions, menu) in edits {
+        for action in *actions {
+            crate::panorama_layout::apply(&mut layout.root, action)?;
+        }
+        menus.extend(menu.cloned());
+    }
+    crate::panorama_layout::apply_menus(&mut layout.root, &menus)?;
+    crate::panorama_layout::write(&layout)
+}
+
+/// Captures the game layouts every selected `xml.json` edits and checks that
+/// each package's edits apply to them, so a Dota update that moved a target
+/// fails here with a clear code instead of producing a half-edited layout.
+fn resolve_layouts(
+    app_data_root: &Path,
+    package_ids: &[String],
+    game_path: Option<&Path>,
+) -> Result<(), String> {
+    for package_id in package_ids {
+        let manifest = contract(package_id)?;
+        let Some(layouts) = read_layouts(app_data_root, manifest)? else {
+            continue;
+        };
+        let spec = manifest
+            .panorama_layouts
+            .as_ref()
+            .ok_or_else(|| "panorama_layout_invalid".to_string())?;
+        let game_path = game_path.ok_or_else(|| "game_path_required".to_string())?;
+        let wanted = layouts.edits.keys().cloned().collect::<BTreeSet<_>>();
+        let found = vpk::read_game_resources(
+            &game_path.join("game").join("dota").join("pak01_dir.vpk"),
+            &wanted,
+        )?;
+        let mut originals = BTreeMap::new();
+        for (path, actions) in &layouts.edits {
+            let bytes = found
+                .get(path)
+                .ok_or_else(|| "panorama_layout_target_missing".to_string())?;
+            let menu = (path == crate::panorama_layout::MENU_TARGET)
+                .then_some(layouts.menu.as_ref())
+                .flatten();
+            edit_layout(bytes, &[(actions.as_slice(), menu)])?;
+            let sha256 = format!("{:x}", Sha256::digest(bytes));
+            crate::content_store::store_pinned_resource(
+                app_data_root,
+                bytes.len(),
+                &sha256,
+                bytes,
+            )?;
+            originals.insert(
+                path.clone(),
+                StoredOriginal {
+                    bytes: bytes.len(),
+                    sha256,
+                },
+            );
+        }
+        write_json_atomically(
+            &layout_resolution_path(app_data_root, package_id),
+            &LayoutResolution {
+                package_id: package_id.clone(),
+                edits_sha256: spec.sha256.clone(),
+                menu_sha256: spec.menu.as_ref().map(|menu| menu.sha256.clone()),
+                originals,
+            },
+        )?;
+    }
+    Ok(())
+}
+
+/// Applies every selected package's layout edits to the captured game
+/// layouts, lowest priority first, so the highest-priority package edits
+/// last; the result belongs to that package in the bundle.
+fn apply_panorama_layouts(
+    app_data_root: &Path,
+    package_ids: &[String],
+    packages: &mut [BundlePackage],
+) -> Result<(), String> {
+    let mut selected = Vec::new();
+    for (index, package_id) in package_ids.iter().enumerate() {
+        let manifest = contract(package_id)?;
+        let Some(layouts) = read_layouts(app_data_root, manifest)? else {
+            continue;
+        };
+        let spec = manifest
+            .panorama_layouts
+            .as_ref()
+            .ok_or_else(|| "panorama_layout_invalid".to_string())?;
+        let bytes = std::fs::read(layout_resolution_path(app_data_root, package_id))
+            .map_err(|_| "panorama_resolution_missing".to_string())?;
+        let resolution: LayoutResolution = serde_json::from_slice(&bytes)
+            .map_err(|_| "panorama_resolution_invalid".to_string())?;
+        if resolution.package_id != *package_id
+            || resolution.edits_sha256 != spec.sha256
+            || resolution.menu_sha256 != spec.menu.as_ref().map(|menu| menu.sha256.clone())
+        {
+            return Err("panorama_resolution_stale".to_string());
+        }
+        if resolution.originals.keys().ne(layouts.edits.keys()) {
+            return Err("panorama_resolution_invalid".to_string());
+        }
+        selected.push((index, layouts, resolution));
+    }
+    let mut targets: BTreeMap<String, (StoredOriginal, Vec<usize>)> = BTreeMap::new();
+    for (position, (_, _, resolution)) in selected.iter().enumerate() {
+        for (path, original) in &resolution.originals {
+            let entry = targets
+                .entry(path.clone())
+                .or_insert_with(|| (original.clone(), Vec::new()));
+            if entry.0.sha256 != original.sha256 {
+                return Err("panorama_resolution_invalid".to_string());
+            }
+            entry.1.push(position);
+        }
+    }
+    for (path, (original, mut users)) in targets {
+        let bytes = crate::content_store::read_pinned_resource(
+            app_data_root,
+            original.bytes,
+            &original.sha256,
+        )?;
+        if bytes.len() != original.bytes
+            || format!("{:x}", Sha256::digest(&bytes)) != original.sha256
+        {
+            return Err("tree_resource_unverified".to_string());
+        }
+        // `selected` is in priority order; apply from the lowest priority.
+        users.reverse();
+        let edits = users
+            .iter()
+            .map(|position| {
+                let (_, layouts, _) = &selected[*position];
+                let menu = (path == crate::panorama_layout::MENU_TARGET)
+                    .then_some(layouts.menu.as_ref())
+                    .flatten();
+                (layouts.edits[&path].as_slice(), menu)
+            })
+            .collect::<Vec<_>>();
+        let patched = edit_layout(&bytes, &edits)?;
+        let owner = selected[*users
+            .last()
+            .ok_or_else(|| "panorama_resolution_invalid".to_string())?]
+        .0;
+        packages
+            .get_mut(owner)
+            .ok_or_else(|| "panorama_resolution_invalid".to_string())?
+            .resources
+            .insert(path, patched);
+    }
+    Ok(())
+}
+
 fn stored_expansion(
     app_data_root: &Path,
     manifest: &PackageManifest,
@@ -523,7 +732,9 @@ pub(crate) fn begin_download(
     if game_path.is_none()
         && package_ids.iter().any(|id| {
             contract(id).is_ok_and(|manifest| {
-                manifest.blacklist.is_some() || manifest.panorama_styles.is_some()
+                manifest.blacklist.is_some()
+                    || manifest.panorama_styles.is_some()
+                    || manifest.panorama_layouts.is_some()
             })
         })
     {
@@ -579,6 +790,7 @@ pub(crate) fn begin_download(
             }
             resolve_blacklists(&app_data_root, &package_ids, game_path.as_deref())?;
             resolve_styles(&app_data_root, &package_ids, game_path.as_deref())?;
+            resolve_layouts(&app_data_root, &package_ids, game_path.as_deref())?;
             plan_from_verified_store(&app_data_root, &package_ids)
         });
         if let Ok(mut status) = operation.status.lock() {
@@ -706,6 +918,7 @@ pub(crate) fn build_from_verified_store(
         .collect::<Result<Vec<_>, String>>()?;
     let mut packages = packages;
     apply_panorama_styles(app_data_root, &package_ids, &mut packages)?;
+    apply_panorama_layouts(app_data_root, &package_ids, &mut packages)?;
     build_verified_bundle(packages)
 }
 

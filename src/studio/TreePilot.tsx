@@ -95,6 +95,22 @@ const explainError = (code: string, isRu: boolean) => {
       "Сборку нужно подготовить заново: список изменений устарел.",
       "Prepare the build again: the change list is out of date.",
     ],
+    panorama_resolution_missing: [
+      "Сборку нужно подготовить заново: снимок интерфейса игры не найден.",
+      "Prepare the build again: the snapshot of the game interface is missing.",
+    ],
+    panorama_resolution_stale: [
+      "Сборку нужно подготовить заново: снимок интерфейса игры устарел.",
+      "Prepare the build again: the snapshot of the game interface is out of date.",
+    ],
+    panorama_layout_target_missing: [
+      "Мод не подходит к текущей версии Dota 2: нужного элемента интерфейса больше нет. Убери мод из сборки.",
+      "This mod does not fit the current Dota 2 version: the interface element it changes is gone. Remove it from the build.",
+    ],
+    panorama_layout_unsupported: [
+      "Файл интерфейса этой версии Dota 2 в непривычном формате. BetterFy не будет его менять.",
+      "This Dota 2 version stores the interface file in an unfamiliar format. BetterFy will not change it.",
+    ],
     build_plan_stale: [
       "План устарел. Подготовь сборку заново.",
       "The plan is stale. Prepare the build again.",
