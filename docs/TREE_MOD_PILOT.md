@@ -111,6 +111,7 @@ is shadowed.
 The founder observed this third package's HUD change in Dota 2 on Windows in
 the same session as Tree Mod and Show Net Worth (see the Windows evidence
 section below); a recorded compatibility result is still open.
+
 - The internal pilot exposes only the pinned Tree Mod, Show Net Worth, and
   Repopulate Unit Query HUD paths. Generic staged-VPK
   deployment remains debug-only. The fixed pilot command rechecks the exact
