@@ -16,6 +16,9 @@ disagreement as a bug and verify the behavior before changing either side.
    and the release gates ahead.
 5. [EA.18 Windows baseline](EA18_WINDOWS_BASELINE.md) — immutable release
    identity, CI evidence, founder-observed Windows behavior, and retained gaps.
+6. [EA.24 Windows test plan](EA24_WINDOWS_TEST_PLAN.md) — the first native
+   pass of the package engine: every package, combinations, interruptions, and
+   a results table that separates observed from reported behavior.
 
 ## Engine
 
