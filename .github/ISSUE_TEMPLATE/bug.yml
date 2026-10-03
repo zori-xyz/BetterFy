@@ -7,13 +7,15 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping us make BetterFy more reliable. Remove tokens, personal paths, Steam account data, and Telegram identifiers from logs and screenshots.
+        Thanks for helping make BetterFy more reliable. Remove tokens, sign-in codes, challenge links, personal paths, Steam account data, and Telegram identifiers from logs and screenshots.
+
+        Suspected security problems do not belong here; follow [SECURITY.md](https://github.com/zori-xyz/BetterFy/blob/main/.github/SECURITY.md) instead.
   - type: input
     id: version
     attributes:
-      label: BetterFy version
-      description: Use the version shown in the application or the workflow artifact name.
-      placeholder: 0.3.0 / commit / workflow run
+      label: Release tag or build
+      description: The exact tag from the Releases page, or the workflow run URL or commit for an internal CI artifact.
+      placeholder: v0.1.4-ea.24
     validations:
       required: true
   - type: dropdown
@@ -62,9 +64,16 @@ body:
   - type: textarea
     id: actual
     attributes:
-      label: Actual result
+      label: Observed result
+      description: What you saw yourself. Mark anything that was reported to you rather than observed.
     validations:
       required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics report
+      description: In BetterFy, open Settings → Game & files → Diagnostics → Check, expand Technical details, and paste the JSON here. The report contains check codes and counts rather than paths or account data; read it before posting anyway.
+      render: json
   - type: textarea
     id: context
     attributes:
@@ -75,6 +84,5 @@ body:
     attributes:
       label: Privacy check
       options:
-        - label: I removed secrets, account identifiers, and personal filesystem paths.
+        - label: I removed secrets, sign-in codes, account identifiers, and personal filesystem paths.
           required: true
-

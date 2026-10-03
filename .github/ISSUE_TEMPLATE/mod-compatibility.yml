@@ -1,0 +1,96 @@
+name: Mod compatibility report
+description: Record how a pinned pilot package behaved in Dota 2 on Windows
+title: "[Compatibility] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Only the pinned internal pilot packages listed below can be installed. Other catalog items are preview-and-save content and do not write Dota files, so they cannot produce a compatibility result yet.
+
+        One report describes one session on one machine. It is evidence for that session, not a general compatibility result. See the [Tree Mod pilot ledger](https://github.com/zori-xyz/BetterFy/blob/main/docs/TREE_MOD_PILOT.md) for what has already been observed.
+  - type: input
+    id: version
+    attributes:
+      label: Release tag or build
+      description: The exact tag from the Releases page, or the workflow run URL or commit for an internal CI artifact.
+      placeholder: v0.1.4-ea.24
+    validations:
+      required: true
+  - type: dropdown
+    id: packages
+    attributes:
+      label: Packages installed
+      description: Select every package that was part of the build.
+      multiple: true
+      options:
+        - Tree Mod
+        - Show Net Worth
+        - Repopulate Unit Query HUD
+    validations:
+      required: true
+  - type: input
+    id: order
+    attributes:
+      label: Package order
+      description: The order shown in My build, first to last. The first package wins a same-path collision.
+      placeholder: Tree Mod, Show Net Worth, Repopulate Unit Query HUD
+  - type: dropdown
+    id: language
+    attributes:
+      label: Game language slot
+      options:
+        - Dutch (dota_dutch)
+        - Russian (dota_russian)
+        - Korean (dota_koreana)
+        - Simplified Chinese (dota_schinese)
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Windows version
+      options:
+        - Windows 11
+        - Windows 10
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed in Dota 2
+      description: What you saw in the game yourself, per package. Note anything that did not change, and mark anything reported to you rather than observed.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+      description: What the package should have changed, if it differed from what you saw.
+  - type: dropdown
+    id: rollback
+    attributes:
+      label: Rollback
+      options:
+        - Not attempted
+        - Attempted; the game returned to its normal state
+        - Attempted; something remained changed or failed
+    validations:
+      required: true
+  - type: textarea
+    id: rollback_detail
+    attributes:
+      label: Rollback details
+      description: If rollback failed or left something changed, describe what you saw and any message BetterFy showed.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics report
+      description: In BetterFy, open Settings → Game & files → Diagnostics → Check, expand Technical details, and paste the JSON here. Read it before posting.
+      render: json
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed secrets, sign-in codes, account identifiers, and personal filesystem paths.
+          required: true
