@@ -29,6 +29,12 @@ const MANIFESTS: &[&str] = &[
     include_str!("../packages/minify-remove-weather-effects.json"),
     include_str!("../packages/minify-revert-ping-sounds.json"),
     include_str!("../packages/minify-dark-terrain.json"),
+    include_str!("../packages/minify-remove-hero-renders.json"),
+    include_str!("../packages/minify-remove-main-menu-background.json"),
+    include_str!("../packages/minify-remove-showcases.json"),
+    include_str!("../packages/minify-reposition-and-rescale-hud.json"),
+    include_str!("../packages/minify-transparent-hud.json"),
+    include_str!("../packages/minify-revamp-hero-grid-layout.json"),
 ];
 
 /// Only this repository is trusted as a source, and only through
@@ -103,6 +109,16 @@ pub struct BlacklistSpec {
     pub blanks: BTreeMap<String, BlankSpec>,
 }
 
+/// A Minify `styling.css`: CSS appended, section by section, to the game's
+/// own compiled Panorama styles (see `panorama.rs`).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PanoramaStylesSpec {
+    pub from: String,
+    pub bytes: usize,
+    pub sha256: String,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BlankSpec {
@@ -129,6 +145,8 @@ pub struct PackageManifest {
     pub resources: Vec<Resource>,
     #[serde(default)]
     pub blacklist: Option<BlacklistSpec>,
+    #[serde(default)]
+    pub panorama_styles: Option<PanoramaStylesSpec>,
     /// Packages that must not be installed together with this one.
     #[serde(default)]
     pub conflicts: Vec<String>,
@@ -148,6 +166,7 @@ pub struct PackageSummary {
     pub license: String,
     pub resource_count: usize,
     pub uses_blacklist: bool,
+    pub uses_panorama_styles: bool,
     pub conflicts: Vec<String>,
     pub requires: Vec<String>,
     pub verified_languages: Vec<String>,
@@ -190,6 +209,12 @@ impl PackageManifest {
                 ));
             }
         }
+        if let Some(styles) = &self.panorama_styles {
+            hasher.update(format!(
+                "styles|{}|{}|{}\n",
+                styles.from, styles.bytes, styles.sha256
+            ));
+        }
         format!("{:x}", hasher.finalize())
     }
 
@@ -198,15 +223,24 @@ impl PackageManifest {
     /// as resources so they travel through the same pinned download and
     /// content-addressed store.
     pub fn auxiliary_downloads(&self) -> Vec<Resource> {
+        let mut downloads = Vec::new();
+        if let Some(styles) = &self.panorama_styles {
+            downloads.push(Resource {
+                path: "styling.css".to_string(),
+                bytes: styles.bytes,
+                sha256: styles.sha256.clone(),
+                from: Some(styles.from.clone()),
+            });
+        }
         let Some(blacklist) = &self.blacklist else {
-            return Vec::new();
+            return downloads;
         };
-        let mut downloads = vec![Resource {
+        downloads.push(Resource {
             path: "blacklist.txt".to_string(),
             bytes: blacklist.bytes,
             sha256: blacklist.sha256.clone(),
             from: Some(blacklist.from.clone()),
-        }];
+        });
         downloads.extend(blacklist.blanks.iter().map(|(extension, blank)| Resource {
             path: format!("blank.{extension}"),
             bytes: blank.bytes,
@@ -249,6 +283,7 @@ impl PackageManifest {
             license: self.source.license.clone(),
             resource_count: self.resources.len(),
             uses_blacklist: self.blacklist.is_some(),
+            uses_panorama_styles: self.panorama_styles.is_some(),
             conflicts: self.conflicts.clone(),
             requires: self.requires.clone(),
             verified_languages: self.verified_languages.clone(),
@@ -356,7 +391,19 @@ fn validate(manifest: &PackageManifest) -> Result<(), String> {
     {
         return invalid("relations");
     }
-    if (manifest.resources.is_empty() && manifest.blacklist.is_none())
+    if let Some(styles) = &manifest.panorama_styles {
+        if !valid_repository_path(&styles.from)
+            || !styles.from.ends_with("/styling.css")
+            || styles.bytes == 0
+            || styles.bytes > MAX_BLACKLIST_BYTES
+            || !valid_sha256(&styles.sha256)
+        {
+            return invalid("panorama_styles");
+        }
+    }
+    if (manifest.resources.is_empty()
+        && manifest.blacklist.is_none()
+        && manifest.panorama_styles.is_none())
         || manifest.resources.len() > MAX_RESOURCES_PER_PACKAGE
     {
         return invalid("resources");

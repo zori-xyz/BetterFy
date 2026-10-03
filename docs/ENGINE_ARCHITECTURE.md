@@ -445,8 +445,39 @@ Attacks, Minify Spells & Items, Misc Optimization, Mute Ambient Sounds, Mute Def
 Announcer, Mute Taunt Sounds, Mute Voice Line Sounds, Remove Foilage, Remove Pings,
 Remove Sprays, Remove Weather Effects, Revert Ping Sounds (8 files plus its
 blacklist) and Dark Terrain (300 files). None of them has been checked in game yet,
-so their manifests record no verified language. Packages that need Panorama CSS or
-XML changes or Minify's script hooks are still not installable.
+so their manifests record no verified language.
+
+### Panorama style packages
+
+A manifest may carry a Minify `styling.css` in `panoramaStyles` (repository path, size,
+SHA-256). The file is split into sections by its `/* g:panorama/styles/... */` (from
+`game/dota/pak01_dir.vpk`) and `/* c:... */` (from `game/core/pak01_dir.vpk`) headers;
+each section is CSS that Minify appends to that compiled style.
+
+BetterFy does this without Valve's resource compiler (`src-tauri/src/panorama.rs`). A
+compiled style is a Source 2 resource: a 16-byte header, a block table with offsets
+relative to each entry, and 16-byte-aligned blocks. Its `DATA` block holds a CRC, an
+image table and the plain CSS text. The engine appends the package's CSS to that text
+and rebuilds the container; every other block (dependencies, source map, image table,
+the CRC) is kept byte for byte, and appending keeps the source map's offsets valid. New
+`url(...)` images cannot be added this way, and none of the pinned `styling.css` files
+uses them. Whether the game client accepts a style whose text no longer matches the
+kept CRC is the open question; Valve ships styles where the two already differ, and the
+first in-game check on Windows answers it.
+
+When a build is prepared, the game's own styles named by the selected packages are read
+from the installation's archives, including numbered side archives (`pak01_NNN.vpk`),
+checked against the directory CRC, stored by SHA-256, and listed per package under
+`engine-v1/panorama/`. Rebuilds use these stored originals, as with blacklists. When
+several packages extend the same style, their CSS is joined lowest priority first so the
+highest-priority package's rules come last, and the result belongs to that package in
+the bundle.
+
+Six packages use this: Remove Hero Renders, Remove Main Menu Background, Remove
+Showcases, Reposition & Rescale HUD, Transparent HUD and Revamp Hero Grid Layout (also
+a blacklist). Stat Site Buttons still needs an XML change and a compiled script, and
+the remaining packages need Panorama XML or Minify's script hooks; they are not
+installable.
 
 ### Installed profile
 

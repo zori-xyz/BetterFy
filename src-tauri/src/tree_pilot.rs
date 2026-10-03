@@ -106,6 +106,195 @@ fn resolve_blacklists(
     Ok(())
 }
 
+fn style_resolution_path(app_data_root: &Path, package_id: &str) -> std::path::PathBuf {
+    app_data_root
+        .join("engine-v1")
+        .join("panorama")
+        .join(format!("{package_id}.json"))
+}
+
+#[derive(serde::Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct StoredOriginal {
+    bytes: usize,
+    sha256: String,
+}
+
+/// The game's own compiled styles a package's `styling.css` extends, captured
+/// when the build is prepared. Keys are `game:path` or `core:path`.
+#[derive(serde::Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StyleResolution {
+    package_id: String,
+    styling_sha256: String,
+    originals: BTreeMap<String, StoredOriginal>,
+    missing: Vec<String>,
+}
+
+fn write_json_atomically(target: &Path, value: &impl Serialize) -> Result<(), String> {
+    let parent = target
+        .parent()
+        .ok_or_else(|| "engine_store_failed".to_string())?;
+    std::fs::create_dir_all(parent).map_err(|_| "engine_store_failed".to_string())?;
+    let bytes = serde_json::to_vec(value).map_err(|_| "engine_store_failed".to_string())?;
+    let temporary = target.with_extension("json.tmp");
+    std::fs::write(&temporary, bytes).map_err(|_| "engine_store_failed".to_string())?;
+    std::fs::rename(&temporary, target).map_err(|_| "engine_store_failed".to_string())
+}
+
+fn read_styling(
+    app_data_root: &Path,
+    manifest: &PackageManifest,
+) -> Result<Option<BTreeMap<String, String>>, String> {
+    let Some(styles) = &manifest.panorama_styles else {
+        return Ok(None);
+    };
+    let bytes =
+        crate::content_store::read_pinned_resource(app_data_root, styles.bytes, &styles.sha256)?;
+    let text = String::from_utf8(bytes).map_err(|_| "panorama_styling_invalid".to_string())?;
+    crate::panorama::split_styling(&text).map(Some)
+}
+
+/// Captures the game styles every selected `styling.css` extends.
+fn resolve_styles(
+    app_data_root: &Path,
+    package_ids: &[String],
+    game_path: Option<&Path>,
+) -> Result<(), String> {
+    for package_id in package_ids {
+        let manifest = contract(package_id)?;
+        let Some(sections) = read_styling(app_data_root, manifest)? else {
+            continue;
+        };
+        let game_path = game_path.ok_or_else(|| "game_path_required".to_string())?;
+        let mut originals = BTreeMap::new();
+        let mut missing = Vec::new();
+        for archive in ["game", "core"] {
+            let wanted = sections
+                .keys()
+                .filter_map(|key| key.strip_prefix(&format!("{archive}:")))
+                .map(String::from)
+                .collect::<BTreeSet<_>>();
+            if wanted.is_empty() {
+                continue;
+            }
+            let directory = if archive == "game" { "dota" } else { "core" };
+            let found = vpk::read_game_resources(
+                &game_path.join("game").join(directory).join("pak01_dir.vpk"),
+                &wanted,
+            )?;
+            for path in wanted {
+                let key = format!("{archive}:{path}");
+                match found.get(&path) {
+                    Some(bytes) => {
+                        crate::panorama::style_text(bytes)?;
+                        let sha256 = format!("{:x}", Sha256::digest(bytes));
+                        crate::content_store::store_pinned_resource(
+                            app_data_root,
+                            bytes.len(),
+                            &sha256,
+                            bytes,
+                        )?;
+                        originals.insert(
+                            key,
+                            StoredOriginal {
+                                bytes: bytes.len(),
+                                sha256,
+                            },
+                        );
+                    }
+                    None => missing.push(key),
+                }
+            }
+        }
+        let styles = manifest
+            .panorama_styles
+            .as_ref()
+            .ok_or_else(|| "panorama_styling_invalid".to_string())?;
+        write_json_atomically(
+            &style_resolution_path(app_data_root, package_id),
+            &StyleResolution {
+                package_id: package_id.clone(),
+                styling_sha256: styles.sha256.clone(),
+                originals,
+                missing,
+            },
+        )?;
+    }
+    Ok(())
+}
+
+/// Extends the captured game styles with every selected package's CSS. When
+/// several packages extend the same style their CSS is joined lowest priority
+/// first, so the highest-priority package's rules come last and win; the
+/// result belongs to that package in the bundle.
+fn apply_panorama_styles(
+    app_data_root: &Path,
+    package_ids: &[String],
+    packages: &mut [BundlePackage],
+) -> Result<(), String> {
+    let mut targets: BTreeMap<String, (StoredOriginal, Vec<(usize, String)>)> = BTreeMap::new();
+    for (index, package_id) in package_ids.iter().enumerate() {
+        let manifest = contract(package_id)?;
+        let Some(sections) = read_styling(app_data_root, manifest)? else {
+            continue;
+        };
+        let styles = manifest
+            .panorama_styles
+            .as_ref()
+            .ok_or_else(|| "panorama_styling_invalid".to_string())?;
+        let bytes = std::fs::read(style_resolution_path(app_data_root, package_id))
+            .map_err(|_| "panorama_resolution_missing".to_string())?;
+        let resolution: StyleResolution = serde_json::from_slice(&bytes)
+            .map_err(|_| "panorama_resolution_invalid".to_string())?;
+        if resolution.package_id != *package_id || resolution.styling_sha256 != styles.sha256 {
+            return Err("panorama_resolution_stale".to_string());
+        }
+        for (key, css) in sections {
+            let Some(original) = resolution.originals.get(&key) else {
+                continue;
+            };
+            let path = key
+                .split_once(':')
+                .map(|(_, path)| path.to_string())
+                .ok_or_else(|| "panorama_resolution_invalid".to_string())?;
+            let entry = targets
+                .entry(path)
+                .or_insert_with(|| (original.clone(), Vec::new()));
+            if entry.0.sha256 != original.sha256 {
+                return Err("panorama_resolution_invalid".to_string());
+            }
+            entry.1.push((index, css));
+        }
+    }
+    for (path, (original, mut additions)) in targets {
+        let bytes = crate::content_store::read_pinned_resource(
+            app_data_root,
+            original.bytes,
+            &original.sha256,
+        )?;
+        if bytes.len() != original.bytes
+            || format!("{:x}", Sha256::digest(&bytes)) != original.sha256
+        {
+            return Err("tree_resource_unverified".to_string());
+        }
+        additions.sort_by_key(|(index, _)| std::cmp::Reverse(*index));
+        let owner = additions.last().map(|(index, _)| *index).unwrap_or(0);
+        let css = additions
+            .iter()
+            .map(|(_, css)| css.trim())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        let patched = crate::panorama::append_style(&bytes, &css)?;
+        packages
+            .get_mut(owner)
+            .ok_or_else(|| "panorama_resolution_invalid".to_string())?
+            .resources
+            .insert(path, patched);
+    }
+    Ok(())
+}
+
 fn stored_expansion(
     app_data_root: &Path,
     manifest: &PackageManifest,
@@ -332,9 +521,11 @@ pub(crate) fn begin_download(
         contract(id).map(|manifest| total + manifest.downloads().len())
     })?;
     if game_path.is_none()
-        && package_ids
-            .iter()
-            .any(|id| contract(id).is_ok_and(|manifest| manifest.blacklist.is_some()))
+        && package_ids.iter().any(|id| {
+            contract(id).is_ok_and(|manifest| {
+                manifest.blacklist.is_some() || manifest.panorama_styles.is_some()
+            })
+        })
     {
         return Err("game_path_required".to_string());
     }
@@ -387,6 +578,7 @@ pub(crate) fn begin_download(
                 status.phase = "verifying";
             }
             resolve_blacklists(&app_data_root, &package_ids, game_path.as_deref())?;
+            resolve_styles(&app_data_root, &package_ids, game_path.as_deref())?;
             plan_from_verified_store(&app_data_root, &package_ids)
         });
         if let Ok(mut status) = operation.status.lock() {
@@ -512,6 +704,8 @@ pub(crate) fn build_from_verified_store(
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
+    let mut packages = packages;
+    apply_panorama_styles(app_data_root, &package_ids, &mut packages)?;
     build_verified_bundle(packages)
 }
 

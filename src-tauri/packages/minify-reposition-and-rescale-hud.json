@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "minify.reposition-and-rescale-hud",
+  "catalogId": "minify-reposition-and-rescale-hud",
+  "name": {
+    "ru": "Позиция и масштаб HUD",
+    "en": "Reposition & Rescale HUD"
+  },
+  "author": "robbyz512",
+  "source": {
+    "repository": "Egezenn/dota2-minify",
+    "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+    "directory": "Minify/mods/Reposition & Rescale HUD",
+    "license": "GPL-3.0"
+  },
+  "distribution": "internal_pilot",
+  "verifiedLanguages": [],
+  "panoramaStyles": {
+    "from": "Minify/mods/Reposition & Rescale HUD/styling.css",
+    "bytes": 430,
+    "sha256": "76f4dfc563ef5116e70ba70243b2bf1f2f8b1a36d35b6248838be76bbdd39ad6"
+  }
+}

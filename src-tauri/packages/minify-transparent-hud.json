@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "minify.transparent-hud",
+  "catalogId": "minify-transparent-hud",
+  "name": {
+    "ru": "Прозрачный HUD",
+    "en": "Transparent HUD"
+  },
+  "author": "ZerdacK / Egezenn",
+  "source": {
+    "repository": "Egezenn/dota2-minify",
+    "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+    "directory": "Minify/mods/Transparent HUD",
+    "license": "GPL-3.0"
+  },
+  "distribution": "internal_pilot",
+  "verifiedLanguages": [],
+  "panoramaStyles": {
+    "from": "Minify/mods/Transparent HUD/styling.css",
+    "bytes": 11015,
+    "sha256": "ba4d4995a429c04f6caa9e64dc7ca597dc7cb3162ab95b9825ba7130ea6281ee"
+  }
+}

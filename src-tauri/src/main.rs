@@ -12,6 +12,7 @@ mod game_language;
 mod installed_profile;
 mod mod_bundle;
 mod package_registry;
+mod panorama;
 mod presets;
 mod remote_intake;
 mod runtime_control;
