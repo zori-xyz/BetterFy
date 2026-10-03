@@ -1,0 +1,176 @@
+/* Sign-in screens: entrance, pointer light, code entry, the Telegram wait and
+   the success moment. Global motion-disabled and prefers-reduced-motion rules
+   stop every animation here; final states are the resting styles, so nothing
+   is left half-drawn when motion is off. */
+
+.auth-stage > :is(.auth-header, .auth-workspace) { position: relative; z-index: 1; }
+
+/* Content arrives in a short cascade instead of all at once. */
+.auth-view.view-enter > *,
+.auth-login-layout.view-enter > *,
+.auth-login-card > * { animation: auth-rise .6s var(--s-ease-out) both; }
+.auth-view.view-enter > :nth-child(2), .auth-login-card > :nth-child(2) { animation-delay: .05s; }
+.auth-view.view-enter > :nth-child(3), .auth-login-card > :nth-child(3) { animation-delay: .1s; }
+.auth-view.view-enter > :nth-child(4), .auth-login-card > :nth-child(4) { animation-delay: .15s; }
+.auth-view.view-enter > :nth-child(5), .auth-login-card > :nth-child(5) { animation-delay: .2s; }
+.auth-view.view-enter > :nth-child(6), .auth-login-card > :nth-child(6) { animation-delay: .25s; }
+.auth-view.view-enter > :nth-child(n+7) { animation-delay: .3s; }
+.auth-login-layout.view-enter > :nth-child(2) { animation-delay: .12s; }
+@keyframes auth-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* Headline: lines rise in, and "ID" catches a sweep of light now and then. */
+.auth-id-main-title > span { display: block; animation: auth-line .8s var(--s-ease-out) both; }
+.auth-id-main-title > span:nth-child(2) { animation-delay: .12s; }
+@keyframes auth-line { from { opacity: 0; transform: translateY(.35em); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+.auth-id-main-title b {
+  background: linear-gradient(100deg, var(--auth-violet) 42%, #f3dcff 50%, var(--auth-violet) 58%) 100% 0 / 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: auth-ink 6s var(--s-ease-out) 1.4s infinite;
+}
+@keyframes auth-ink { 0%, 65% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+/* Sign-in card: leans slightly toward the pointer and lights up under it. */
+.auth-login-card[data-spotlight] {
+  position: relative;
+  transform: perspective(1000px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transition: transform .7s var(--s-ease-spring), border-color .3s;
+}
+.auth-login-card[data-spotlight]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(380px circle at var(--spot-x, 50%) var(--spot-y, 0%), rgb(196 120 239 / .11), transparent 62%);
+  opacity: 0;
+  transition: opacity .4s;
+  pointer-events: none;
+}
+.auth-login-card[data-spot-active]::after { opacity: 1; }
+.auth-login-card[data-spot-active] { border-color: #5a4566; }
+.auth-stage .auth-login-card::before { transform-origin: left; animation: auth-bar 1s var(--s-ease-out) .25s both; }
+@keyframes auth-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+.auth-telegram-choice { position: relative; overflow: hidden; }
+.auth-telegram-choice::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 45%;
+  background: linear-gradient(100deg, transparent, rgb(255 255 255 / .2), transparent);
+  pointer-events: none;
+  transition: left .8s var(--s-ease-out);
+}
+.auth-telegram-choice:hover::after { left: 120%; }
+.auth-choice-icon { transition: transform .5s var(--s-ease-spring); }
+.auth-choice-actions > button:hover:not(:disabled) .auth-choice-icon { transform: rotate(-6deg) scale(1.08); }
+
+/* The bot message that carries the code. */
+.auth-bot-hint { display: flex; align-items: flex-end; gap: 10px; margin: 18px 0 4px; }
+.auth-bot-avatar { flex: none; width: 34px; height: 34px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 1px var(--s-line); }
+.auth-bot-bubble { position: relative; display: grid; gap: 3px; padding: 9px 13px 10px; min-width: 150px; border-radius: 14px 14px 14px 4px; background: #22212b; border: 1px solid var(--s-line); animation: auth-bubble .5s var(--s-ease-spring) .2s both; }
+.auth-bot-bubble strong { font-size: var(--s-text-xs); color: #5fb4e6; }
+.auth-bot-typing { display: flex; gap: 4px; height: 18px; align-items: center; }
+.auth-bot-typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--s-muted); animation: auth-typing 1s ease-in-out infinite; }
+.auth-bot-typing i:nth-child(2) { animation-delay: .15s; }
+.auth-bot-typing i:nth-child(3) { animation-delay: .3s; }
+.auth-bot-message { display: flex; align-items: baseline; gap: 8px; font-size: var(--s-text-md); color: var(--s-text); animation: auth-rise .35s var(--s-ease-out) both; }
+.auth-bot-message b { font-family: "JetBrains Mono", monospace; letter-spacing: .08em; color: var(--auth-violet); }
+.auth-bot-message b i { font-style: normal; display: inline-block; animation: auth-mask 2.4s ease-in-out infinite; }
+.auth-bot-message b i:nth-child(2) { animation-delay: .1s; }
+.auth-bot-message b i:nth-child(3) { animation-delay: .2s; }
+.auth-bot-message b i:nth-child(4) { animation-delay: .3s; }
+.auth-bot-message b i:nth-child(5) { animation-delay: .4s; }
+.auth-bot-message b i:nth-child(6) { animation-delay: .5s; }
+@keyframes auth-bubble { from { opacity: 0; transform: translateY(8px) scale(.94); transform-origin: 0 100%; } to { opacity: 1; transform: none; } }
+@keyframes auth-typing { 0%, 60%, 100% { transform: none; opacity: .5; } 30% { transform: translateY(-4px); opacity: 1; } }
+@keyframes auth-mask { 0%, 70%, 100% { transform: none; opacity: .6; } 35% { transform: translateY(-2px); opacity: 1; } }
+:root[data-theme=light] .auth-bot-bubble { background: #fff; border-color: #d7c3dc; }
+
+/* Code cells: digits pop in, the empty cell shows a caret, a wrong code
+   shakes, a complete code runs a wave of light across the cells. */
+.otp-cells i { position: relative; transition: border-color .2s, background-color .2s, box-shadow .2s; }
+.otp-cells i.filled { animation: otp-pop .4s var(--s-ease-spring); }
+.otp-field:focus-within .otp-cells i.current::after { content: ""; width: 2px; height: 26px; border-radius: 2px; background: var(--s-accent); animation: otp-caret 1.05s steps(1) infinite; }
+.is-error .otp-cells { animation: otp-shake .45s var(--s-ease-out); }
+.is-complete:not(.is-error) .otp-cells i { border-color: var(--s-accent); background: var(--s-tint); animation: otp-wave .7s var(--s-ease-out) both; }
+.is-complete:not(.is-error) .otp-cells i:nth-child(2) { animation-delay: .05s; }
+.is-complete:not(.is-error) .otp-cells i:nth-child(3) { animation-delay: .1s; }
+.is-complete:not(.is-error) .otp-cells i:nth-child(4) { animation-delay: .15s; }
+.is-complete:not(.is-error) .otp-cells i:nth-child(5) { animation-delay: .2s; }
+.is-complete:not(.is-error) .otp-cells i:nth-child(6) { animation-delay: .25s; }
+.confirm-code { transition: transform .5s var(--s-ease-spring), filter .2s, box-shadow .3s; }
+.is-complete:not(.is-error) .confirm-code:not(:disabled) { box-shadow: 0 10px 30px rgb(180 92 239 / .3); animation: otp-ready .6s var(--s-ease-spring) .25s both; }
+@keyframes otp-pop { 0% { transform: scale(.82); } 100% { transform: none; } }
+@keyframes otp-caret { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+@keyframes otp-shake { 0%, 100% { transform: none; } 20% { transform: translateX(-7px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(2px); } }
+@keyframes otp-wave { 0% { transform: none; } 40% { transform: translateY(-4px); box-shadow: 0 6px 18px rgb(180 92 239 / .35); } 100% { transform: none; } }
+@keyframes otp-ready { from { transform: scale(.97); } to { transform: none; } }
+
+/* Waiting for the Telegram confirmation: radar rings around the mark and the
+   match number rolling into place. */
+.telegram-wait-mark { position: relative; color: #5fb4e6; }
+.telegram-wait-mark > i, .telegram-wait-mark::after { content: ""; display: block; position: absolute; inset: -1px; border: 1px solid #5fb4e6; border-radius: inherit; animation: auth-radar 2.4s var(--s-ease-out) infinite; pointer-events: none; }
+.telegram-wait-mark::after { animation-delay: 1.2s; }
+.telegram-wait-mark > svg { animation: s-icon-wiggle 2.4s var(--s-ease-out) infinite; }
+@keyframes auth-radar { from { transform: scale(1); opacity: .7; } to { transform: scale(1.9); opacity: 0; } }
+.rolling-digits { display: inline-flex; }
+.rolling-digit { display: inline-block; height: 1em; overflow: hidden; line-height: 1; }
+.rolling-digit > span { display: flex; flex-direction: column; transform: translateY(-10em); animation: auth-roll 1.2s cubic-bezier(.2, .85, .25, 1.08) both; }
+.rolling-digit i { display: block; height: 1em; font-style: normal; }
+@keyframes auth-roll { from { transform: translateY(0); } to { transform: translateY(-10em); } }
+.auth-view > .challenge-match { animation: auth-rise .6s var(--s-ease-out) .2s both; }
+
+/* Checking: two orbits around the spinner and a bar that keeps moving. */
+.verification-orbit { position: relative; }
+.verification-orbit > i { display: block; position: absolute; inset: -9px; border-radius: 50%; border: 1px dashed rgb(196 120 239 / .45); animation: s-spin 7s linear infinite; }
+.verification-orbit > i:nth-child(2) { inset: -18px; border-style: dotted; animation-duration: 11s; animation-direction: reverse; }
+.verify-progress > i { background: linear-gradient(90deg, #7d3bb0, var(--s-accent), #e1a6ff, var(--s-accent)) 0 0 / 200% 100%; animation: s-boot .8s ease both, s-flow 1.4s linear infinite; }
+
+/* Success: the mark springs in and throws a burst of brand-coloured sparks. */
+.auth-view > .verification-success { position: relative; animation: auth-success .7s var(--s-ease-spring) both; }
+.verification-success::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; border: 2px solid var(--s-ready); animation: auth-radar 1s var(--s-ease-out) .1s both; }
+.verification-success svg { width: 26px; height: 26px; stroke-width: 2.4; }
+.success-burst { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.success-burst i { position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 2px; background: var(--s-accent); opacity: 0; animation: auth-spark .9s var(--s-ease-out) .15s both; }
+.success-burst i:nth-child(3n+1) { background: var(--s-ready); }
+.success-burst i:nth-child(3n+2) { background: #cf4bc9; border-radius: 50%; }
+@keyframes auth-success { from { transform: scale(.5); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes auth-spark {
+  0% { opacity: 1; transform: rotate(var(--angle)) translateY(0) scale(1); }
+  100% { opacity: 0; transform: rotate(var(--angle)) translateY(calc(-1 * var(--distance))) scale(.3) rotate(120deg); }
+}
+
+/* Fields light up softly when focused. */
+.auth-stage input { transition: border-color .2s, box-shadow .3s var(--s-ease-out); }
+.auth-stage input:focus-visible { box-shadow: 0 0 0 4px var(--s-tint); }
+
+/* Catalog cards share the pointer light. */
+.s-mod-card[data-spotlight] { position: relative; }
+.s-mod-card[data-spotlight]::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(260px circle at var(--spot-x, 50%) var(--spot-y, 0%), rgb(196 120 239 / .1), transparent 65%); opacity: 0; transition: opacity .35s; pointer-events: none; }
+.s-mod-card[data-spot-active]::after { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) { .auth-login-card[data-spotlight] { transform: none !important; } }
+.motion-disabled .auth-login-card[data-spotlight] { transform: none !important; }
+
+/* Game setup shares the sign-in background. While BetterFy looks for the
+   game, a scan line passes over the map and the current step pulses. */
+.setup-shell { isolation: isolate; overflow: hidden; }
+.setup-shell > :not(.auth-id-ambient) { position: relative; z-index: 1; }
+.setup-enter > * { animation: auth-rise .6s var(--s-ease-out) both; }
+.setup-enter > :nth-child(2) { animation-delay: .05s; }
+.setup-enter > :nth-child(3) { animation-delay: .1s; }
+.setup-enter > :nth-child(4) { animation-delay: .15s; }
+.setup-enter > :nth-child(n+5) { animation-delay: .2s; }
+.setup-map { position: relative; overflow: hidden; }
+.setup-scanning .setup-map::after { content: ""; position: absolute; left: 0; right: 0; top: -90px; height: 90px; background: linear-gradient(transparent, rgb(196 120 239 / .12), transparent); animation: setup-sweep 1.7s linear infinite; pointer-events: none; }
+@keyframes setup-sweep { to { top: 100%; } }
+.setup-scanning .setup-map-head > svg { animation: s-icon-wiggle 1.2s var(--s-ease-out) infinite; }
+.setup-found .setup-map-head > svg { color: var(--s-ready); border-color: var(--s-ready); animation: otp-pop .5s var(--s-ease-spring); }
+.setup-map li > i { transition: border-color .3s, color .3s, background-color .3s; }
+.setup-map li.active > i { animation: s-step-pulse 1.8s var(--s-ease-out) infinite; }
+.setup-map li.done > i { background: rgb(165 205 177 / .08); }
+.setup-alert-icon { margin-left: .22em; animation: s-icon-shake .5s var(--s-ease-out) .4s both; }

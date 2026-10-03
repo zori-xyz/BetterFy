@@ -17,6 +17,7 @@ import BetterFyWordmark from "./BetterFyWordmark";
 import AccentTitle from "./AccentTitle";
 import { engineBridge, type GameInstallation } from "./engine";
 import { useLocale } from "./i18n";
+import AuthAmbient from "./studio/AuthAmbient";
 
 type Stage = "intro" | "scanning" | "found" | "manual" | "not-found" | "error";
 
@@ -183,6 +184,7 @@ export default function OnboardingFlow({
 
   return (
     <main className={`setup-shell setup-${stage} ${game?.verified ? "setup-verified" : "setup-unverified"}`}>
+      <AuthAmbient />
       <header className="setup-header" data-tauri-drag-region>
         <div className="setup-brand">
           <BetterFyWordmark compact />

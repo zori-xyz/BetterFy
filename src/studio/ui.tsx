@@ -149,6 +149,7 @@ export function ModCard({
   return (
     <article
       className={`s-mod-card ${selected ? "is-selected" : ""} ${mod.domain === "game" ? "is-game" : ""}`}
+      data-spotlight
     >
       <button
         className="s-mod-image"

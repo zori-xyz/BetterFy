@@ -858,18 +858,40 @@ export default function TreePilot({
           : "BetterFy downloads only verified mod files, checks each one and combines them into a single file in your chosen order. If two mods change the same thing, the higher one wins."}
       </p>
       <div className="s-tree-pilot-steps">
-        <span className={plan ? "done" : ""}>
-          01 <b>{isRu ? "Скачать и сверить ресурсы" : "Download and verify resources"}</b>
-        </span>
-        <span className={operationId ? "done" : ""}>
-          02 <b>{isRu ? "Собрать и записать с откатом" : "Build and install with rollback"}</b>
-        </span>
-        <span className={steamRestarted ? "done" : ""}>
-          03 <b>{isRu ? "Открыть Steam" : "Open Steam"}</b>
-        </span>
-        <span>
-          04 <b>{isRu ? "Проверить в Dota 2" : "Check in Dota 2"}</b>
-        </span>
+        {(() => {
+          const steps = [
+            {
+              done: Boolean(plan),
+              busy: phase === "download",
+              label: isRu ? "Скачать и сверить ресурсы" : "Download and verify resources",
+            },
+            {
+              done: Boolean(operationId),
+              busy: phase === "install",
+              label: isRu ? "Собрать и записать с откатом" : "Build and install with rollback",
+            },
+            {
+              done: steamRestarted,
+              busy: phase === "steam",
+              label: isRu ? "Открыть Steam" : "Open Steam",
+            },
+            { done: false, busy: false, label: isRu ? "Проверить в Dota 2" : "Check in Dota 2" },
+          ];
+          const current = steps.findIndex((step) => !step.done);
+          return steps.map((step, index) => (
+            <span
+              key={index}
+              className={[
+                step.done ? "done" : "",
+                index === current ? "is-current" : "",
+                step.busy ? "is-busy" : "",
+              ].join(" ")}
+            >
+              <i aria-hidden="true">{step.done ? <Check /> : String(index + 1).padStart(2, "0")}</i>
+              <b>{step.label}</b>
+            </span>
+          ));
+        })()}
       </div>
       {(!canManage || (ids.length > 0 && !supportedBundle)) && (
         <div className="s-inline-note warning">
@@ -923,8 +945,8 @@ export default function TreePilot({
             </strong>
             <p>
               {isRu
-                ? "Моды подключаются через языковую папку Dota: игра будет запускаться с выбранным языком интерфейса. Нидерландский проверен на Windows для модов с отметкой о проверке; остальные языки ещё не проверены."
-                : "Mods are loaded through a Dota language folder: the game will start with the chosen interface language. Dutch was verified on Windows for the mods marked as verified; the other languages have not been tested yet."}
+                ? "Моды подключаются через языковую папку Dota: игра будет запускаться с выбранным языком интерфейса. Нидерландский и русский проверены на Windows для модов с отметкой о проверке; корейский и китайский ещё не проверены."
+                : "Mods are loaded through a Dota language folder: the game will start with the chosen interface language. Dutch and Russian were verified on Windows for the mods marked as verified; Korean and Chinese have not been tested yet."}
             </p>
           </div>
           <select
@@ -933,16 +955,14 @@ export default function TreePilot({
             onChange={(event) => setSelectedLanguage(event.target.value as GameLanguage | "")}
           >
             <option value="">{isRu ? "Выбери язык" : "Choose language"}</option>
-            <option value="russian">
-              {isRu ? "Русский · проверка нужна" : "Russian · needs testing"}
-            </option>
+            <option value="russian">{isRu ? "Русский · проверен" : "Russian · verified"}</option>
+            <option value="dutch">{isRu ? "Нидерландский · проверен" : "Dutch · verified"}</option>
             <option value="koreana">
               {isRu ? "Корейский · проверка нужна" : "Korean · needs testing"}
             </option>
             <option value="schinese">
               {isRu ? "Китайский · проверка нужна" : "Chinese · needs testing"}
             </option>
-            <option value="dutch">{isRu ? "Нидерландский · проверен" : "Dutch · verified"}</option>
           </select>
         </div>
       )}
@@ -1416,8 +1436,8 @@ export default function TreePilot({
       )}
       <small className="s-tree-pilot-foot">
         {isRu
-          ? "Источник: Egezenn/dota2-minify. Tree Mod, Show NetWorth и Unit Query HUD проверены в игре на одном Windows-компьютере с нидерландским языком; другие языки и компьютеры не проверены. Параметр -language меняет язык текста и может повлиять на озвучку. BetterFy мягко закрывает Dota 2 и Steam и после установки или отката снова запускает Steam."
-          : "Source: Egezenn/dota2-minify. Tree Mod, Show NetWorth and Unit Query HUD were verified in game on one Windows computer with Dutch; other languages and computers are untested. The -language option changes text language and may affect audio. BetterFy closes Dota 2 and Steam gracefully and starts Steam again after install or restore."}
+          ? "Источник: Egezenn/dota2-minify. Tree Mod, Show NetWorth, Unit Query HUD и Remove River проверены в игре на одном Windows-компьютере с нидерландским и русским языком; другие языки и компьютеры не проверены. Параметр -language меняет язык текста и может повлиять на озвучку. BetterFy мягко закрывает Dota 2 и Steam и после установки или отката снова запускает Steam."
+          : "Source: Egezenn/dota2-minify. Tree Mod, Show NetWorth, Unit Query HUD and Remove River were verified in game on one Windows computer with Dutch and Russian; other languages and computers are untested. The -language option changes text language and may affect audio. BetterFy closes Dota 2 and Steam gracefully and starts Steam again after install or restore."}
       </small>
     </section>
   );
