@@ -222,8 +222,9 @@ and remains mandatory immediately before future production deploy.
 
 Steam launch-option planning now has a BetterFy-owned, lossless VDF boundary.
 The parser walks the nested KeyValues path for app `570`, preserves every byte
-outside the `LaunchOptions` value, and adds only `-language dutch`. An existing
-foreign `-language` argument is reported as a conflict instead of being replaced.
+outside the `LaunchOptions` value, and adds or replaces only the `-language`
+argument for the selected slot. Restore undoes only that argument (see "Language
+slots and Steam language detection").
 Missing launch options are inserted into the existing Dota app object, and the
 updated document is parsed again in tests. Plans expose before/after SHA-256
 values. Steam profile discovery exposes only an opaque path-derived token and a
