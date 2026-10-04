@@ -13,7 +13,8 @@ npm run site:check
 ```
 
 `site:check` expects the local dev server at
-`http://127.0.0.1:4174/BetterFy/` and checks RU/EN at desktop and mobile widths.
+`http://127.0.0.1:4174/BetterFy/` and checks RU/EN at desktop and mobile widths,
+the dark and light themes, and that the status journal and the 25-mod list render.
 
 ## Deployment
 
