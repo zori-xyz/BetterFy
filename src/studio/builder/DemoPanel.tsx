@@ -1,5 +1,7 @@
+import { useId } from "react";
 import { FlaskConical } from "lucide-react";
 import { useLocale } from "../../i18n";
+import { ChoiceCards } from "./Choice";
 import { setDemoSettings, useDemoSettings, type DemoScenario } from "./demo";
 
 // Controls for the browser preview: which way the simulated install goes,
@@ -7,11 +9,13 @@ import { setDemoSettings, useDemoSettings, type DemoScenario } from "./demo";
 export function DemoPanel() {
   const { isRu } = useLocale();
   const settings = useDemoSettings();
-  const scenarios: Array<[DemoScenario, string, string]> = [
+  const labelId = useId();
+  // A failing scenario names the engine code the demo bridge throws for it.
+  const scenarios: Array<[DemoScenario, string, string, string?]> = [
     ["success", "Всё проходит", "Everything works"],
-    ["dota_open", "Dota не закрывается", "Dota will not close"],
-    ["download_fails", "Обрыв загрузки", "Download drops"],
-    ["steam_fails", "Steam меняет настройки", "Steam changes settings"],
+    ["dota_open", "Dota не закрывается", "Dota will not close", "runtime_busy"],
+    ["download_fails", "Обрыв загрузки", "Download drops", "download_transport_failed"],
+    ["steam_fails", "Steam меняет настройки", "Steam changes settings", "steam_config_plan_stale"],
   ];
   return (
     <div className="b-demo">
@@ -20,19 +24,21 @@ export function DemoPanel() {
           ? "Демо в браузере: шаги и тайминги изображены, файлы игры не меняются."
           : "Browser demo: steps and timings are simulated; no game files change."}
       </p>
-      <label>
-        <span>{isRu ? "Сценарий" : "Scenario"}</span>
-        <select
+      <div className="b-demo-field">
+        <span id={labelId}>{isRu ? "Сценарий" : "Scenario"}</span>
+        <ChoiceCards
+          size="chip"
+          label={isRu ? "Сценарий демо" : "Demo scenario"}
+          labelledBy={labelId}
           value={settings.scenario}
-          onChange={(event) => setDemoSettings({ scenario: event.target.value as DemoScenario })}
-        >
-          {scenarios.map(([value, ru, en]) => (
-            <option key={value} value={value}>
-              {isRu ? ru : en}
-            </option>
-          ))}
-        </select>
-      </label>
+          options={scenarios.map(([value, ru, en, code]) => ({
+            value,
+            label: isRu ? ru : en,
+            meta: code,
+          }))}
+          onChange={(scenario) => setDemoSettings({ scenario })}
+        />
+      </div>
       <label className="b-switch">
         <input
           type="checkbox"

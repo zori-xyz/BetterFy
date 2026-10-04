@@ -23,7 +23,7 @@ import {
   type StudioMod,
 } from "./model";
 import { Empty } from "./ui";
-import TreePilot, { type PilotState } from "./TreePilot";
+import TreePilot, { type PilotState, type RelationFix } from "./TreePilot";
 import { useEngineActive } from "./engineActivity";
 import type { GameInstallation } from "../engine";
 import { CountUp } from "./delight";
@@ -31,7 +31,7 @@ import { useBuildName } from "./builder/buildName";
 import { BuildJournal } from "./builder/BuildJournal";
 import { journal } from "./builder/journal";
 import { demoActive } from "./builder/demo";
-import { findPackage } from "./packages";
+import { findPackage, packageName } from "./packages";
 import "./builder/builder.css";
 
 const emptyLines: Array<[string, string, string, string]> = [
@@ -90,6 +90,8 @@ export default function Build({
   onSave,
   onResolve,
   onRemoveMissing,
+  onSetSelection,
+  onConnectDota,
 }: {
   ids: string[];
   variants: Record<string, number>;
@@ -102,6 +104,10 @@ export default function Build({
   onSave: () => void;
   onResolve: (keep: StudioMod, alternatives: StudioMod[]) => void;
   onRemoveMissing: () => void;
+  /** Replaces the whole selection; the one-click relation fixes use it. */
+  onSetSelection?: (ids: string[]) => void;
+  /** Opens the Dota 2 connection screen. */
+  onConnectDota?: () => void;
 }) {
   const { language, isRu } = useLocale();
   const chosen = ids.flatMap((id) => (modById.has(id) ? [modById.get(id)!] : []));
@@ -131,6 +137,41 @@ export default function Build({
     }
     if (!pilot?.installed) wasInstalled.current = false;
   }, [pilot?.justInstalled, pilot?.installed]);
+  // A mod added by a one-click fix lights up once in the list.
+  const [fresh, setFresh] = useState<string | null>(null);
+  useEffect(() => {
+    if (!fresh) return;
+    const timer = window.setTimeout(() => setFresh(null), 1800);
+    return () => window.clearTimeout(timer);
+  }, [fresh]);
+  const nameIn = (id: string, lang: "ru" | "en") =>
+    modById.get(id)?.name[lang] ?? packageName(id, lang);
+  const fixRelation = onSetSelection
+    ? (fix: RelationFix) => {
+        if (busy || pilot?.busy) return;
+        if (fix.kind === "add") {
+          if (ids.includes(fix.add)) return;
+          // Right under the mod that needs it, so that mod stays on top.
+          const at = ids.indexOf(fix.requiredBy);
+          const next = [...ids];
+          next.splice(at < 0 ? next.length : at + 1, 0, fix.add);
+          journal.log(
+            "step",
+            `Добавлен в сборку: ${nameIn(fix.add, "ru")}. Его требует ${nameIn(fix.requiredBy, "ru")}.`,
+            `Added to the build: ${nameIn(fix.add, "en")}, required by ${nameIn(fix.requiredBy, "en")}.`,
+          );
+          setFresh(fix.add);
+          onSetSelection(next);
+          return;
+        }
+        journal.log(
+          "step",
+          `Оставлен ${nameIn(fix.keep, "ru")}, убран ${nameIn(fix.drop, "ru")}: вместе их не поставить.`,
+          `Kept ${nameIn(fix.keep, "en")}, removed ${nameIn(fix.drop, "en")}: they do not install together.`,
+        );
+        onSetSelection(ids.filter((id) => id !== fix.drop));
+      }
+    : undefined;
   const installed = Boolean(pilot?.installed);
   const plan = pilot?.plan ?? null;
   const muted = plan
@@ -204,7 +245,7 @@ export default function Build({
         <ol>
           {items.map((mod, index) => (
             <li
-              className="b-row"
+              className={`b-row ${fresh === mod.id ? "is-fresh" : ""}`}
               key={mod.id}
               style={{ ["--i" as string]: index }}
               data-delivery={isPilotMod(mod.id) ? "pilot" : "preview"}
@@ -469,6 +510,8 @@ export default function Build({
             installation={installation}
             preview={preview}
             onState={setPilot}
+            onFixRelation={fixRelation}
+            onConnectDota={onConnectDota}
           />
         </aside>
       </div>

@@ -220,13 +220,61 @@ export default function Workspace({
     const second = setStorageItem("betterfy:selected-mods", JSON.stringify(wardrobe));
     setStorageError(!first || !second);
   };
+  const waitForEngine = () =>
+    notify(
+      isRu
+        ? "Дождись, пока BetterFy закончит работу с файлами игры"
+        : "Wait until BetterFy finishes working on game files",
+    );
+  const reconnect = () => {
+    if (busy) waitForEngine();
+    else onReconnect();
+  };
+  // The build screen's one-click fixes replace the whole selection; the toast
+  // names what changed, and a removal can be undone like any other.
+  const replaceSelection = (ids: string[]) => {
+    if (busy) {
+      waitForEngine();
+      return;
+    }
+    const before = selectedRef.current;
+    const added = ids.filter((id) => !before.includes(id));
+    const removed = before.filter((id) => !ids.includes(id));
+    if (!added.length && !removed.length) return;
+    saveSelection(ids);
+    const names = (list: string[]) =>
+      list.map((id) => {
+        const name = modById.get(id)?.name[language] ?? id;
+        return isRu ? `«${name}»` : name;
+      });
+    const text = [
+      added.length ? `${isRu ? "Добавлено" : "Added"}: ${names(added).join(", ")}` : "",
+      removed.length
+        ? `${isRu ? "Убрано из сборки" : "Removed from build"}: ${names(removed).join(", ")}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    notify(
+      text,
+      removed.length
+        ? {
+            label: isRu ? "Вернуть" : "Undo",
+            run: () => {
+              if (selectedRef.current.join("|") !== ids.join("|")) {
+                notify(isRu ? "Сборка уже изменилась" : "The build has changed since");
+                return;
+              }
+              saveSelection(before);
+              notify(isRu ? "Вернули как было" : "Back as it was");
+            },
+          }
+        : undefined,
+    );
+  };
   const toggle = (mod: StudioMod) => {
     if (busy) {
-      notify(
-        isRu
-          ? "Дождись, пока BetterFy закончит работу с файлами игры"
-          : "Wait until BetterFy finishes working on game files",
-      );
+      waitForEngine();
       return;
     }
     if (selected.includes(mod.id)) {
@@ -520,6 +568,8 @@ export default function Workspace({
                 onCatalog={() => openCatalog()}
                 onSave={openSave}
                 onRemoveMissing={() => saveSelection(selected.filter((id) => modById.has(id)))}
+                onSetSelection={replaceSelection}
+                onConnectDota={reconnect}
                 onResolve={(keep, alternatives) =>
                   saveSelection(
                     selected.filter(
@@ -545,15 +595,7 @@ export default function Workspace({
                 motion={motion}
                 setMotion={setMotion}
                 installation={installation}
-                onReconnect={() => {
-                  if (busy)
-                    notify(
-                      isRu
-                        ? "Дождись, пока BetterFy закончит работу с файлами игры"
-                        : "Wait until BetterFy finishes working on game files",
-                    );
-                  else onReconnect();
-                }}
+                onReconnect={reconnect}
               />
             )}
             {route === "profile" && (

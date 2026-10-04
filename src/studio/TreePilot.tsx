@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Check,
+  CircleDashed,
   Copy,
   Download,
   FileCheck2,
   FlaskConical,
+  Gamepad2,
   LoaderCircle,
+  Plus,
   RotateCcw,
   ShieldCheck,
   TriangleAlert,
@@ -16,6 +19,7 @@ import {
   engineBridge,
   type DeploymentEvidenceReport,
   type DeploymentStressFailurePoint,
+  type DetectedLanguage,
   type GameInstallation,
   type GameLanguage,
   type SteamProfileSummary,
@@ -40,9 +44,31 @@ import { usePhrase } from "./builder/phrases";
 import { NoticeCard } from "./builder/NoticeCard";
 import { DemoPanel } from "./builder/DemoPanel";
 import { buildLanguages, languageLabel as languageName } from "./builder/languages";
+import { Choice, ChoiceCards, ChoiceMenu, type ChoiceOption } from "./builder/Choice";
 import { getStorageItem, setStorageItem } from "../storage";
 
 const LANGUAGE_KEY = "betterfy:build-language";
+// "auto" follows the language Steam starts Dota in, "manual" keeps the
+// player's own pick. Nothing stored means auto.
+const LANGUAGE_MODE_KEY = "betterfy:build-language-mode";
+// English first, then the two slots checked on Windows; the rest sit in a menu.
+const PINNED_LANGUAGES: GameLanguage[] = ["betterfy", "russian", "dutch"];
+const isBuildLanguage = (value: string | null): value is GameLanguage =>
+  buildLanguages.some((option) => option.value === value);
+
+type LanguagePick = GameLanguage | "auto";
+type Detection =
+  | { status: "idle" | "loading" }
+  | { status: "done"; result: DetectedLanguage | null }
+  | { status: "failed"; code: string };
+// Detection runs on every visit to the build screen; the journal only hears
+// about it when the answer changes.
+let loggedDetection = "";
+
+/** A one-click fix for a mod relation, in catalog IDs. */
+export type RelationFix =
+  | { kind: "add"; add: string; requiredBy: string }
+  | { kind: "keep"; keep: string; drop: string };
 
 /** What the builder screen around the pilot card needs to know. */
 export type PilotState = {
@@ -68,11 +94,17 @@ export default function TreePilot({
   installation,
   preview,
   onState,
+  onFixRelation,
+  onConnectDota,
 }: {
   ids: string[];
   installation: GameInstallation;
   preview: boolean;
   onState?: (state: PilotState) => void;
+  /** Adds a required mod or drops a conflicting one, next to the message. */
+  onFixRelation?: (fix: RelationFix) => void;
+  /** Opens the Dota 2 connection screen. */
+  onConnectDota?: () => void;
 }) {
   const { isRu, language } = useLocale();
   const demo = demoActive();
@@ -95,18 +127,39 @@ export default function TreePilot({
   const [recoveryMessage, setRecoveryMessage] = useState("");
   const [profiles, setProfiles] = useState<SteamProfileSummary[]>([]);
   const [selectedProfile, setSelectedProfile] = useState("");
-  // The language last used for a build, or Russian for a Russian interface:
-  // the player confirms it rather than starting from an empty choice.
-  const [selectedLanguage, setSelectedLanguageState] = useState<GameLanguage | "">(() => {
+  // By default the build follows the language Steam starts Dota in. The
+  // language last picked or installed, or Russian for a Russian interface,
+  // is the fallback when Steam cannot tell.
+  const [followDota, setFollowDota] = useState(
+    () => getStorageItem(LANGUAGE_MODE_KEY) !== "manual",
+  );
+  const [chosenLanguage, setChosenLanguage] = useState<GameLanguage | "">(() => {
     const stored = getStorageItem(LANGUAGE_KEY);
-    if (stored && buildLanguages.some((option) => option.value === stored))
-      return stored as GameLanguage;
+    if (isBuildLanguage(stored)) return stored;
     return isRu ? "russian" : "";
   });
-  const setSelectedLanguage = (value: GameLanguage | "") => {
-    setSelectedLanguageState(value);
-    if (value) setStorageItem(LANGUAGE_KEY, value);
+  const [detection, setDetection] = useState<Detection>({ status: "idle" });
+  const detected = detection.status === "done" ? (detection.result?.language ?? null) : null;
+  // Steam's own name for it, e.g. "english" for the BetterFy slot.
+  const steamName = detection.status === "done" ? (detection.result?.steamLanguage ?? null) : null;
+  // Empty while Steam is still being asked, so Install never runs on a guess.
+  const selectedLanguage: GameLanguage | "" = followDota
+    ? detection.status === "loading"
+      ? ""
+      : (detected ?? chosenLanguage)
+    : chosenLanguage;
+  const chooseLanguage = (value: LanguagePick) => {
+    if (value === "auto" || value === detected) {
+      setFollowDota(true);
+      setStorageItem(LANGUAGE_MODE_KEY, "auto");
+      return;
+    }
+    setFollowDota(false);
+    setChosenLanguage(value);
+    setStorageItem(LANGUAGE_MODE_KEY, "manual");
+    setStorageItem(LANGUAGE_KEY, value);
   };
+  const languageFieldRef = useRef<HTMLDivElement>(null);
   const [installedLanguage, setInstalledLanguage] = useState<GameLanguage | null>(null);
   const [installedPackageIds, setInstalledPackageIds] = useState<string[]>([]);
   const [steamStarted, setSteamStarted] = useState(false);
@@ -292,6 +345,57 @@ export default function TreePilot({
       active = false;
     };
   }, [canManage]);
+  // Reads Steam's own manifest for Dota (read-only) so the build can keep the
+  // language the player already runs the game in.
+  const wantsLanguage = canManage && ids.length > 0;
+  useEffect(() => {
+    if (!wantsLanguage) return;
+    let active = true;
+    setDetection({ status: "loading" });
+    const note = (key: string, ...entry: Parameters<typeof journal.log>) => {
+      if (key === loggedDetection) return;
+      loggedDetection = key;
+      journal.log(...entry);
+    };
+    bridge
+      .detectDotaLanguage(installation.path)
+      .then((result) => {
+        if (!active) return;
+        setDetection({ status: "done", result });
+        const key = `${installation.path}|${result?.steamLanguage ?? ""}`;
+        if (result?.language)
+          note(
+            key,
+            "ok",
+            `Steam запускает Dota на языке: ${languageName(result.language, true)}.`,
+            `Steam starts Dota in ${languageName(result.language, false)}.`,
+            `steam: ${result.steamLanguage}`,
+          );
+        else if (result)
+          note(
+            key,
+            "warn",
+            `Steam запускает Dota на языке «${result.steamLanguage}», а папки для него у BetterFy нет.`,
+            `Steam starts Dota in "${result.steamLanguage}", and BetterFy has no folder for it.`,
+          );
+        else note(key, "warn", "Steam не указал язык Dota.", "Steam lists no language for Dota.");
+      })
+      .catch((cause) => {
+        if (!active) return;
+        const code = codeOf(cause);
+        setDetection({ status: "failed", code });
+        note(
+          `${installation.path}|${code}`,
+          "warn",
+          "Не удалось узнать язык Dota из Steam.",
+          "Could not read Dota's language from Steam.",
+          code,
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [wantsLanguage, installation.path]);
   useEffect(() => {
     if (!canManage) return;
     let active = true;
@@ -937,36 +1041,85 @@ export default function TreePilot({
   const activePhrase = usePhrase(phase === "idle" ? (recovering ? "restore" : null) : phase, isRu);
   if (!ids.length && !operationId && !steamOperationId && !steamRecoveryRequired) return null;
   const notice = error ? noticeFor(error, isRu) : null;
-  const blocker =
+  // Relation fixes act on catalog IDs; a package the catalog does not list
+  // (a superseded one) gets the message without a button.
+  const catalogIdOf = (packageId: string) => {
+    const catalogId = findPackage(packageId)?.catalogId;
+    return catalogId && modById.has(catalogId) ? catalogId : null;
+  };
+  const relationFixes: Array<{ fix: RelationFix; label: string }> = [];
+  if (relation && onFixRelation) {
+    const first = catalogIdOf(relation.packageId);
+    const other = catalogIdOf(relation.otherId);
+    const firstName = packageLabel(relation.packageId);
+    const otherName = packageLabel(relation.otherId);
+    if (first && other && relation.kind === "missing")
+      relationFixes.push({
+        fix: { kind: "add", add: other, requiredBy: first },
+        label: isRu ? `Добавить «${otherName}»` : `Add ${otherName}`,
+      });
+    else if (first && other)
+      relationFixes.push(
+        {
+          fix: { kind: "keep", keep: first, drop: other },
+          label: isRu ? `Оставить «${firstName}»` : `Keep ${firstName}`,
+        },
+        {
+          fix: { kind: "keep", keep: other, drop: first },
+          label: isRu ? `Оставить «${otherName}»` : `Keep ${otherName}`,
+        },
+      );
+  }
+  const blockerKind =
     !canManage || (ids.length > 0 && !supportedBundle)
       ? !desktop
-        ? isRu
-          ? "Реальная подготовка доступна только в приложении BetterFy."
-          : "Real preparation is only available in the BetterFy desktop app."
+        ? "desktop"
         : preview && !demo
-          ? isRu
-            ? "В гостевом просмотре запись в игру недоступна."
-            : "Game installation is unavailable in guest preview."
+          ? "preview"
           : !windows
-            ? isRu
-              ? "Установка доступна только на Windows. На Mac можно посмотреть интерфейс и подготовить ресурсы."
-              : "Installation is Windows-only. On Mac you can inspect the UI and prepare resources."
+            ? "windows"
             : !installation.verified && !demo
+              ? "connect"
+              : relation
+                ? "relation"
+                : "pilot"
+      : null;
+  const canConnect = blockerKind === "connect" && Boolean(onConnectDota);
+  const canFixRelation = blockerKind === "relation" && relationFixes.length > 0;
+  const blocker =
+    blockerKind === "desktop"
+      ? isRu
+        ? "Реальная подготовка доступна только в приложении BetterFy."
+        : "Real preparation is only available in the BetterFy desktop app."
+      : blockerKind === "preview"
+        ? isRu
+          ? "В гостевом просмотре запись в игру недоступна."
+          : "Game installation is unavailable in guest preview."
+        : blockerKind === "windows"
+          ? isRu
+            ? "Установка доступна только на Windows. На Mac можно посмотреть интерфейс и подготовить ресурсы."
+            : "Installation is Windows-only. On Mac you can inspect the UI and prepare resources."
+          : blockerKind === "connect"
+            ? canConnect
               ? isRu
+                ? "Сначала подключи настоящую установку Dota 2: без неё сборку некуда ставить."
+                : "Connect a real Dota 2 installation first: without it there is nowhere to install the build."
+              : isRu
                 ? "Сначала подключи настоящую установку Dota 2 в настройках."
                 : "Connect a real Dota 2 installation in Settings first."
-              : relation
-                ? relation.kind === "conflict"
-                  ? isRu
-                    ? `«${packageLabel(relation.packageId)}» и «${packageLabel(relation.otherId)}» нельзя ставить вместе. Оставь в сборке один из них.`
-                    : `${packageLabel(relation.packageId)} and ${packageLabel(relation.otherId)} cannot be installed together. Keep one of them.`
-                  : isRu
-                    ? `Для «${packageLabel(relation.packageId)}» нужен мод «${packageLabel(relation.otherId)}». Добавь его в сборку.`
-                    : `${packageLabel(relation.packageId)} needs ${packageLabel(relation.otherId)}. Add it to the build.`
+            : blockerKind === "relation" && relation
+              ? relation.kind === "conflict"
+                ? isRu
+                  ? `«${packageLabel(relation.packageId)}» и «${packageLabel(relation.otherId)}» нельзя ставить вместе.${canFixRelation ? "" : " Оставь в сборке один из них."}`
+                  : `${packageLabel(relation.packageId)} and ${packageLabel(relation.otherId)} cannot be installed together.${canFixRelation ? "" : " Keep one of them."}`
                 : isRu
+                  ? `Для «${packageLabel(relation.packageId)}» нужен мод «${packageLabel(relation.otherId)}»${canFixRelation ? ": без него рецепт не соберётся." : ". Добавь его в сборку."}`
+                  : `${packageLabel(relation.packageId)} needs ${packageLabel(relation.otherId)}${canFixRelation ? ": the recipe does not build without it." : ". Add it to the build."}`
+              : blockerKind === "pilot"
+                ? isRu
                   ? "Ставятся только моды с отметкой «Windows-пилот». Убери остальные игровые моды из сборки."
                   : "Only mods marked Windows pilot install. Remove other game mods from the build."
-      : "";
+                : "";
   const steps = [
     {
       done: Boolean(plan) || Boolean(operationId),
@@ -999,9 +1152,11 @@ export default function TreePilot({
         ? isRu
           ? "Язык задан в профиле"
           : "Language set in the profile"
-        : isRu
-          ? "Параметр -language"
-          : "The -language option",
+        : (installedLanguage ?? selectedLanguage)
+          ? `-language ${installedLanguage ?? selectedLanguage}`
+          : isRu
+            ? "Параметр -language"
+            : "The -language option",
     },
     {
       done: false,
@@ -1039,7 +1194,28 @@ export default function TreePilot({
       void prepare();
     } else if (notice.action === "report") void refreshEvidence(true);
     else if (notice.action === "steam" && installedLanguage) void copyLaunchOption();
+    else if (notice.action === "settings") {
+      const field = languageFieldRef.current;
+      if (notice.code === "language_folder_unavailable")
+        (
+          field?.querySelector<HTMLElement>('[role="radio"][tabindex="0"]') ??
+          field?.querySelector<HTMLElement>("button")
+        )?.focus();
+      else if (notice.code === "game_path_required") onConnectDota?.();
+    }
   };
+  // "settings" notices get a button only where this screen can act itself:
+  // the language choice is right here, and Dota is connected in one click.
+  const settingsActionLabel =
+    notice?.code === "language_folder_unavailable" && plan && !operationId
+      ? isRu
+        ? "Выбрать другой язык"
+        : "Choose another language"
+      : notice?.code === "game_path_required" && onConnectDota
+        ? isRu
+          ? "Подключить Dota 2"
+          : "Connect Dota 2"
+        : null;
   const noticeActionLabel =
     notice?.action === "retry"
       ? isRu
@@ -1065,36 +1241,167 @@ export default function TreePilot({
               : isRu
                 ? "Скопировать -language"
                 : "Copy -language"
-            : null;
-  const profileSelect = (
-    <select
-      aria-label={isRu ? "Steam-профиль" : "Steam profile"}
-      value={selectedProfile}
-      onChange={(event) => setSelectedProfile(event.target.value)}
-    >
-      <option value="">{isRu ? "Вручную" : "Manual setup"}</option>
-      {profiles.map((profile) => (
-        <option
-          key={profile.profileToken}
-          value={profile.profileToken}
-          disabled={profile.status !== "ready" && profile.status !== "already_managed"}
-        >
-          {isRu ? "Профиль" : "Profile"} {profile.profileIndex} ·{" "}
-          {profile.status === "ready"
+            : notice?.action === "settings"
+              ? settingsActionLabel
+              : null;
+  // Profiles are numbered, never named: the report and the screen carry no
+  // Steam IDs or account names.
+  const profileOptions: ChoiceOption<string>[] = [
+    {
+      value: "manual",
+      label: isRu ? "Вручную" : "Manual",
+      hint: isRu ? "-language вставишь сам" : "you paste -language",
+    },
+    ...profiles.map((profile): ChoiceOption<string> => {
+      const usable = profile.status === "ready" || profile.status === "already_managed";
+      return {
+        value: profile.profileToken,
+        label: `${isRu ? "Профиль" : "Profile"} ${profile.profileIndex}`,
+        hint:
+          profile.status === "ready"
             ? isRu
-              ? "готов"
-              : "ready"
+              ? "BetterFy добавит сам"
+              : "BetterFy adds it"
             : profile.status === "already_managed"
               ? isRu
-                ? "язык задан"
-                : "language set"
+                ? "язык уже задан"
+                : "language already set"
               : isRu
-                ? "конфликт"
-                : "conflict"}
-        </option>
-      ))}
-    </select>
+                ? "конфликт, не трогаем"
+                : "conflict, left alone",
+        tone: profile.status === "ready" ? "ready" : usable ? undefined : "warn",
+        hintIcon: usable ? undefined : <TriangleAlert />,
+        disabled: !usable,
+      };
+    }),
+  ];
+  const profileChoice = (
+    <Choice
+      label={isRu ? "Steam-профиль" : "Steam profile"}
+      value={selectedProfile || "manual"}
+      options={profileOptions}
+      onChange={(value) => setSelectedProfile(value === "manual" ? "" : value)}
+      placeholder={isRu ? "Выбери профиль" : "Choose a profile"}
+      disabled={phase !== "idle"}
+    />
   );
+  const languageOption = (value: GameLanguage): ChoiceOption<LanguagePick> => {
+    const option = buildLanguages.find((item) => item.value === value);
+    const experimental = value === "betterfy";
+    return {
+      value,
+      label: languageLabel(value),
+      hint: experimental
+        ? isRu
+          ? "эксперимент"
+          : "experimental"
+        : option?.verified
+          ? isRu
+            ? "проверен в игре"
+            : "checked in game"
+          : isRu
+            ? "не проверен"
+            : "not checked",
+      hintIcon: experimental ? (
+        <FlaskConical />
+      ) : option?.verified ? (
+        <ShieldCheck />
+      ) : (
+        <CircleDashed />
+      ),
+      tone: experimental ? "warn" : option?.verified ? "ready" : "quiet",
+    };
+  };
+  const autoOption: ChoiceOption<LanguagePick> | null =
+    detection.status === "idle"
+      ? null
+      : detection.status === "loading"
+        ? {
+            value: "auto",
+            label: isRu ? "Как в Dota сейчас" : "Same as Dota now",
+            hint: isRu ? "смотрим, что стоит в Steam…" : "checking Steam…",
+            hintIcon: <LoaderCircle className="s-spin" />,
+            disabled: true,
+            wide: true,
+          }
+        : detected
+          ? {
+              ...languageOption(detected),
+              value: "auto",
+              label: isRu
+                ? `Как в Dota сейчас · ${languageLabel(detected)}`
+                : `Same as Dota now · ${languageLabel(detected)}`,
+              // English is the BetterFy slot and not proven since the patch.
+              badge: detected === "betterfy" ? undefined : isRu ? "рекомендуем" : "recommended",
+              meta: steamName ? `steam: ${steamName}` : undefined,
+              wide: true,
+            }
+          : {
+              value: "auto",
+              label: isRu ? "Как в Dota сейчас" : "Same as Dota now",
+              hint:
+                detection.status === "failed"
+                  ? isRu
+                    ? "не удалось прочитать Steam"
+                    : "could not read Steam"
+                  : steamName
+                    ? isRu
+                      ? "для этого языка у BetterFy нет папки"
+                      : "BetterFy has no folder for this language"
+                    : isRu
+                      ? "Steam не указал язык"
+                      : "Steam lists no language",
+              hintIcon: <CircleDashed />,
+              tone: "quiet",
+              meta: steamName ? `steam: ${steamName}` : undefined,
+              disabled: true,
+              wide: true,
+            };
+  const languageCards = [
+    ...(autoOption ? [autoOption] : []),
+    ...PINNED_LANGUAGES.filter((value) => value !== detected).map(languageOption),
+  ];
+  const otherLanguages = buildLanguages
+    .filter((option) => !PINNED_LANGUAGES.includes(option.value))
+    .map(
+      (option): ChoiceOption<LanguagePick> => ({
+        value: option.value,
+        label: languageLabel(option.value),
+        hint: option.native,
+        badge: option.value === detected ? (isRu ? "в Dota сейчас" : "in Dota now") : undefined,
+        keywords: `${option.ru} ${option.en} ${option.value}`,
+      }),
+    );
+  // The detected language is shown on the "as in Dota" card wherever it was
+  // picked from.
+  const shownLanguage: LanguagePick | "" =
+    selectedLanguage && selectedLanguage === detected ? "auto" : selectedLanguage;
+  const followFallback =
+    followDota && (detection.status === "failed" || (detection.status === "done" && !detected));
+  const languageNote = (() => {
+    if (!selectedLanguage)
+      return followDota && detection.status === "loading"
+        ? isRu
+          ? "Смотрим, на каком языке Steam запускает Dota."
+          : "Checking which language Steam starts Dota in."
+        : isRu
+          ? "Моды подключаются через папку языка: Dota запустится с этим языком интерфейса."
+          : "Mods load through a language folder: Dota starts with this interface language.";
+    const fallback = followFallback
+      ? isRu
+        ? `Steam не подсказал язык — выбран: ${languageLabel(selectedLanguage)}. `
+        : `Steam did not say, so ${languageLabel(selectedLanguage)} is selected. `
+      : "";
+    if (selectedLanguage === "betterfy")
+      return (
+        fallback +
+        (isRu
+          ? "Текст Dota останется английским. С патча 23.07.2026 Dota может не принять язык, которого нет у Valve, — поэтому Minify ушёл от своей папки. Если язык окажется не тот, откат в один клик."
+          : "Dota text stays English. Since the 23 July 2026 patch Dota may refuse a language Valve does not ship, which is why Minify dropped its own folder. If the language is wrong, restore in one click.")
+      );
+    const option = buildLanguages.find((item) => item.value === selectedLanguage);
+    return fallback + (option ? (isRu ? option.noteRu : option.noteEn) : "");
+  })();
   return (
     <section
       className={`b-pilot ${busy ? "is-busy" : ""} ${operationId ? "is-installed" : ""}`}
@@ -1173,10 +1480,36 @@ export default function TreePilot({
         />
       )}
       {blocker && (
-        <p className="b-pilot-blocker">
+        <div className="b-pilot-blocker">
           <TriangleAlert />
-          {blocker}
-        </p>
+          <div>
+            <p>{blocker}</p>
+            {canFixRelation && (
+              <div className="b-fix">
+                {relationFixes.map(({ fix, label }) => (
+                  <button
+                    key={label}
+                    className="s-btn"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onFixRelation?.(fix)}
+                  >
+                    {fix.kind === "add" ? <Plus /> : <Check />}
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {canConnect && (
+              <div className="b-fix">
+                <button className="s-btn" type="button" disabled={busy} onClick={onConnectDota}>
+                  <Gamepad2 />
+                  {isRu ? "Подключить Dota 2" : "Connect Dota 2"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
       {operationId && dotaPatched && (
         <p className="b-pilot-blocker is-warning" role="alert">
@@ -1195,35 +1528,55 @@ export default function TreePilot({
       )}
       {plan && !operationId && (
         <div className="b-fields">
-          <label>
-            <span>{isRu ? "Язык Dota" : "Dota language"}</span>
-            <select
-              aria-label={isRu ? "Язык Dota для установки" : "Dota language for installation"}
-              value={selectedLanguage}
-              onChange={(event) => setSelectedLanguage(event.target.value as GameLanguage | "")}
-            >
-              <option value="">{isRu ? "Выбери язык" : "Choose language"}</option>
-              <option value="russian">{isRu ? "Русский · проверен" : "Russian · verified"}</option>
-              <option value="dutch">
-                {isRu ? "Нидерландский · проверен" : "Dutch · verified"}
-              </option>
-              <option value="koreana">
-                {isRu ? "Корейский · не проверен" : "Korean · untested"}
-              </option>
-              <option value="schinese">
-                {isRu ? "Китайский · не проверен" : "Chinese · untested"}
-              </option>
-            </select>
-            <small>
-              {isRu
-                ? "Моды подключаются через папку языка: Dota запустится с этим языком интерфейса."
-                : "Mods load through a language folder: Dota starts with this interface language."}
-            </small>
-          </label>
+          <div className="b-field" ref={languageFieldRef}>
+            <div className="b-field-head">
+              <span id="tree-pilot-language">{isRu ? "Язык Dota" : "Dota language"}</span>
+              {selectedLanguage && (
+                <code title={`game/dota_${selectedLanguage}/${plan.targetFile}`}>
+                  -language {selectedLanguage}
+                </code>
+              )}
+            </div>
+            <ChoiceCards
+              label={isRu ? "Язык Dota" : "Dota language"}
+              labelledBy="tree-pilot-language"
+              value={
+                languageCards.some((option) => option.value === shownLanguage) ? shownLanguage : ""
+              }
+              options={languageCards}
+              onChange={chooseLanguage}
+              disabled={phase !== "idle"}
+            />
+            <ChoiceMenu
+              label={isRu ? "Другие языки Dota" : "Other Dota languages"}
+              value={
+                otherLanguages.some((option) => option.value === shownLanguage) ? shownLanguage : ""
+              }
+              options={otherLanguages}
+              onChange={chooseLanguage}
+              placeholder={isRu ? "Другие языки" : "Other languages"}
+              placeholderHint={
+                isRu
+                  ? `остальные языки Dota из Steam · ${otherLanguages.length}`
+                  : `the rest of Dota's Steam languages · ${otherLanguages.length}`
+              }
+              caption={
+                isRu ? "Ещё не проверены в игре на Windows" : "Not checked in game on Windows yet"
+              }
+              searchPlaceholder={
+                isRu ? "Найти: français, Deutsch, 日本語…" : "Find: français, Deutsch, 日本語…"
+              }
+              emptyText={isRu ? "Такого языка в Dota нет." : "Dota has no such language."}
+              disabled={phase !== "idle"}
+            />
+            <small aria-live="polite">{languageNote}</small>
+          </div>
           {canInstall && (
-            <label>
-              <span>{isRu ? "Профиль Steam" : "Steam profile"}</span>
-              {profileSelect}
+            <div className="b-field">
+              <div className="b-field-head">
+                <span>{isRu ? "Профиль Steam" : "Steam profile"}</span>
+              </div>
+              {profileChoice}
               <small>
                 {selectedProfile
                   ? isRu
@@ -1233,7 +1586,7 @@ export default function TreePilot({
                     ? "Параметр запуска нужно будет вставить вручную."
                     : "You will paste the launch option yourself."}
               </small>
-            </label>
+            </div>
           )}
         </div>
       )}
@@ -1241,7 +1594,9 @@ export default function TreePilot({
         <div className="b-installed">
           {installedLanguage && (
             <div className="b-command">
-              <span>{isRu ? "Параметр запуска" : "Launch option"}</span>
+              <span>
+                {isRu ? "Параметр запуска" : "Launch option"} · {languageLabel(installedLanguage)}
+              </span>
               <code>-language {installedLanguage}</code>
               <button className="s-btn" type="button" onClick={() => void copyLaunchOption()}>
                 {copied ? <Check /> : <Copy />}
@@ -1270,9 +1625,17 @@ export default function TreePilot({
                       ? "Файл записан, но Steam не настроен до конца. Выбери профиль и повтори."
                       : "The file is written, but Steam setup did not finish. Pick a profile and retry."}
           </p>
+          {installedLanguage === "betterfy" && (
+            <p className="b-pilot-blocker is-warning">
+              <FlaskConical />
+              {isRu
+                ? "Английский — эксперимент. Если Dota запустилась не на английском, откати сборку: BetterFy вернёт файл и параметры Steam."
+                : "English is experimental. If Dota starts in another language, restore the build: BetterFy puts back the file and the Steam options."}
+            </p>
+          )}
           {canManage && !steamStarted && packageVerified && (
             <div className="b-steam-retry">
-              {profileSelect}
+              {profileChoice}
               <button
                 className="s-btn"
                 disabled={phase !== "idle" || !selectedProfile}
@@ -1328,7 +1691,11 @@ export default function TreePilot({
             <button
               className="s-btn s-btn-primary b-primary"
               disabled={!canInstall || !selectedLanguage || phase !== "idle" || !plan.deployEnabled}
-              onClick={() => void install()}
+              onClick={() => {
+                // The language that went in becomes the fallback next time.
+                if (selectedLanguage) setStorageItem(LANGUAGE_KEY, selectedLanguage);
+                void install();
+              }}
             >
               {phase === "install" || phase === "steam" ? (
                 <LoaderCircle className="s-spin" />
@@ -1340,9 +1707,13 @@ export default function TreePilot({
                   ? "Ставим…"
                   : "Installing…"
                 : !selectedLanguage
-                  ? isRu
-                    ? "Сначала выбери язык"
-                    : "Pick a language first"
+                  ? followDota && detection.status === "loading"
+                    ? isRu
+                      ? "Смотрим язык Dota…"
+                      : "Checking Dota's language…"
+                    : isRu
+                      ? "Сначала выбери язык"
+                      : "Pick a language first"
                   : isRu
                     ? "Поставить в Dota 2"
                     : "Install to Dota 2"}

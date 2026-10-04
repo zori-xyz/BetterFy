@@ -224,6 +224,28 @@
     background: var(--s-tint);
   }
 }
+/* A mod added by a one-click fix: one lime pass, then the usual row. */
+.b-row.is-fresh {
+  position: relative;
+}
+.b-row.is-fresh::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-left: 3px solid var(--s-ready);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--s-ready) 18%, transparent), transparent 70%);
+  pointer-events: none;
+  animation: b-fresh 1.8s var(--s-ease-out) both;
+}
+@keyframes b-fresh {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
 .b-row-priority {
   width: 22px;
   color: var(--s-quiet);
@@ -714,34 +736,58 @@
 .b-pilot-hint {
   color: var(--s-muted);
 }
+.b-pilot-blocker > div {
+  min-width: 0;
+}
+/* The fix sits right under the message that asks for it. */
+.b-fix {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.b-fix .s-btn {
+  min-height: 34px;
+  padding: 6px 12px;
+  white-space: normal;
+  text-align: left;
+}
+.b-fix .s-btn svg {
+  width: 15px;
+  height: 15px;
+}
 
 .b-fields {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
-.b-fields label {
+.b-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
-.b-fields label > span {
+.b-field-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.b-field-head > span {
   font-size: var(--s-text-md);
   font-weight: 700;
 }
-.b-fields select,
-.b-steam-retry select,
-.b-demo select {
-  min-height: 40px;
-  padding: 0 12px;
-  border: 1px solid var(--s-line);
-  border-radius: var(--s-radius-control);
-  background: var(--s-input);
-  color: var(--s-text);
-  font: inherit;
-  font-size: var(--s-text-base);
+/* The launch option the choice turns into, live. */
+.b-field-head code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--s-quiet);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: var(--s-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.b-fields small {
+.b-field > small {
   color: var(--s-quiet);
   font-size: var(--s-text-sm);
   line-height: 1.45;
@@ -789,9 +835,12 @@
   min-height: 36px;
 }
 .b-steam-retry {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+}
+.b-steam-retry > .s-btn {
+  align-self: flex-start;
 }
 .b-restore {
   justify-content: center;
@@ -989,6 +1038,346 @@
   line-height: 1.5;
 }
 
+/* ---------- Choice: radio cards and the listbox menu (Choice.tsx) ---------- */
+
+.b-choice {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.b-choice.is-chip {
+  gap: 6px;
+}
+.b-choice-option,
+.b-choice-trigger {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  min-height: 50px;
+  padding: 9px 36px 9px 12px;
+  border: 1px solid var(--s-line);
+  border-radius: var(--s-radius-control);
+  background: var(--s-input);
+  color: var(--s-text);
+  text-align: left;
+  transition:
+    border-color var(--s-motion-fast),
+    background var(--s-motion-fast),
+    transform var(--s-motion-fast) var(--s-ease-out);
+}
+.b-choice-option.is-wide {
+  grid-column: 1 / -1;
+}
+.b-choice.is-chip .b-choice-option {
+  min-height: 38px;
+  padding: 7px 30px 7px 10px;
+}
+@media (hover: hover) {
+  .b-choice-option:not(.is-checked):not([aria-disabled="true"]):hover,
+  .b-choice-trigger:not(:disabled):hover {
+    border-color: var(--s-muted);
+  }
+}
+.b-choice-option:active:not([aria-disabled="true"]),
+.b-choice-trigger:active:not(:disabled) {
+  transform: scale(0.97);
+}
+/* Selected: lime edge, tinted card and a check, never colour alone. */
+.b-choice-option.is-checked,
+.b-choice-menu.is-checked .b-choice-trigger {
+  border-color: color-mix(in srgb, var(--s-ready) 70%, var(--s-line));
+  background: color-mix(in srgb, var(--s-ready) 9%, var(--s-input));
+}
+.b-choice-option[aria-disabled="true"] {
+  cursor: default;
+}
+.b-choice-option[aria-disabled="true"]:not(.is-checked) .b-choice-text b {
+  color: var(--s-muted);
+}
+.b-choice[aria-disabled="true"] .b-choice-option:not(.is-checked) {
+  opacity: 0.55;
+}
+.b-choice-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.b-choice-text b {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: var(--s-text-base);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.b-choice.is-chip .b-choice-text b {
+  font-size: var(--s-text-md);
+}
+.b-choice-text small {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--s-quiet);
+  font-size: var(--s-text-sm);
+  line-height: 1.35;
+}
+.b-choice-text small svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+.b-choice-text small.is-ready {
+  color: var(--s-ready);
+}
+.b-choice-text small.is-warn {
+  color: var(--s-hero-accent);
+}
+.b-choice-text small.is-accent {
+  color: var(--s-accent);
+}
+.b-choice-text code {
+  color: var(--s-quiet);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: var(--s-text-xs);
+  overflow-wrap: anywhere;
+}
+.b-choice-badge {
+  padding: 1px 6px;
+  border-radius: var(--s-radius-tag);
+  background: var(--s-tint);
+  color: var(--s-accent);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: var(--s-text-2xs);
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.b-choice-badge.is-warn {
+  background: color-mix(in srgb, var(--s-hero-accent) 16%, transparent);
+  color: var(--s-hero-accent);
+}
+.b-choice-badge.is-ready {
+  background: color-mix(in srgb, var(--s-ready) 16%, transparent);
+  color: var(--s-ready);
+}
+/* The radio dot: an empty ring, then a lime disc with a check. */
+.b-choice-mark {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--s-line);
+  border-radius: 50%;
+  color: var(--s-panel);
+  transition:
+    border-color var(--s-motion-fast),
+    background var(--s-motion-fast);
+}
+.b-choice.is-chip .b-choice-mark {
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+}
+.is-checked > .b-choice-mark,
+.b-choice-menu.is-checked .b-choice-mark {
+  border-color: transparent;
+  background: var(--s-ready);
+  animation: b-pop 0.42s var(--s-ease-spring);
+}
+.b-choice-mark svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 3;
+}
+
+/* Menu: a trigger that looks like a card and opens a listbox below it. */
+.b-choice-menu {
+  position: relative;
+}
+.b-choice-trigger {
+  width: 100%;
+  align-items: center;
+  padding-right: 58px;
+  border-style: dashed;
+}
+.b-choice-menu.is-checked .b-choice-trigger,
+.b-choice-menu.is-open .b-choice-trigger {
+  border-style: solid;
+}
+.b-choice-menu.is-open .b-choice-trigger {
+  border-color: var(--s-accent);
+}
+.b-choice-menu .b-choice-mark {
+  top: 50%;
+  right: 34px;
+  margin-top: -9px;
+}
+.b-choice-chevron {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  color: var(--s-quiet);
+  transition: transform var(--s-motion-base) var(--s-ease-out);
+}
+.b-choice-menu.is-open .b-choice-chevron {
+  transform: rotate(180deg);
+}
+.b-choice-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100vw - 32px);
+  border: 1px solid var(--s-line);
+  border-radius: var(--s-radius-card);
+  background: var(--s-panel);
+  box-shadow: var(--s-shadow);
+  overflow: hidden;
+  animation: b-choice-down var(--s-motion-fast) var(--s-ease-out) both;
+}
+.b-choice-pop.is-up {
+  top: auto;
+  bottom: calc(100% + 6px);
+  animation-name: b-choice-up;
+}
+.b-choice-pop.is-right {
+  left: auto;
+  right: 0;
+}
+@keyframes b-choice-down {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes b-choice-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+/* A sticky panel paints in its own layer; lift it over the sticky journal
+   while one of its menus is open. */
+.b-side:has(.b-choice-menu.is-open) {
+  z-index: 6;
+}
+.b-choice-search {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--s-line-soft);
+  color: var(--s-quiet);
+}
+.b-choice-search:focus-within {
+  box-shadow: inset 0 -2px var(--s-accent);
+}
+.b-choice-search svg {
+  width: 15px;
+  height: 15px;
+}
+.b-choice-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  border: 0;
+  background: none;
+  color: var(--s-text);
+  font-size: var(--s-text-base);
+  outline: none;
+}
+.b-choice-search input::placeholder {
+  color: var(--s-quiet);
+}
+.b-choice-caption {
+  flex: none;
+  padding: 9px 14px 2px;
+  color: var(--s-quiet);
+  font-size: var(--s-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.b-choice-list {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  outline: none;
+}
+.b-choice-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--s-radius-inner);
+  cursor: pointer;
+}
+.b-choice-list li[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.5;
+}
+/* The active option is the keyboard position: tint plus a violet bar. */
+.b-choice-list li.is-active {
+  background: var(--s-tint);
+  box-shadow: inset 2px 0 var(--s-accent);
+}
+.b-choice-list:focus-visible li.is-active,
+.b-choice-search:focus-within + .b-choice-list li.is-active,
+.b-choice-search:focus-within ~ .b-choice-list li.is-active {
+  box-shadow: inset 3px 0 var(--s-accent);
+}
+.b-choice-tick {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--s-ready);
+}
+.b-choice-empty {
+  padding: 4px 14px 14px;
+  color: var(--s-quiet);
+  font-size: var(--s-text-md);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .b-choice-option,
+  .b-choice-trigger,
+  .b-choice-pop,
+  .b-choice-mark,
+  .b-choice-chevron {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+:root.motion-disabled .b-choice-option,
+:root.motion-disabled .b-choice-trigger,
+:root.motion-disabled .b-choice-pop,
+:root.motion-disabled .b-choice-mark,
+:root.motion-disabled .b-choice-chevron {
+  animation: none !important;
+  transition: none !important;
+}
+
 /* ---------- Notices ---------- */
 
 .b-notice {
@@ -1100,16 +1489,14 @@
   font-size: var(--s-text-sm);
   line-height: 1.5;
 }
-.b-demo label:not(.b-switch) {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
+.b-demo-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.b-demo-field > span {
   font-size: var(--s-text-md);
   font-weight: 700;
-}
-.b-demo select {
-  min-height: 34px;
 }
 .b-switch {
   display: inline-flex;
@@ -1339,6 +1726,11 @@
   .b-journal-bar b,
   .b-journal-bar small {
     display: none;
+  }
+}
+@media (max-width: 420px) {
+  .b-choice:not(.is-chip) {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
