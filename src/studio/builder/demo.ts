@@ -134,14 +134,28 @@ function downloadStatus(): TreePilotDownloadStatus | null {
   const total = download.totalResources;
   const verified = Math.min(total, Math.round((elapsed / 4200) * total));
   if (settings.scenario === "download_fails" && verified > total * 0.45) {
-    download = { ...download, phase: "failed", verifiedResources: verified, errorCode: "download_transport_failed" };
+    download = {
+      ...download,
+      phase: "failed",
+      verifiedResources: verified,
+      errorCode: "download_transport_failed",
+    };
     return download;
   }
   if (verified >= total) {
-    download = { ...download, phase: "ready", verifiedResources: total, plan: demoPlan(download.ids) };
+    download = {
+      ...download,
+      phase: "ready",
+      verifiedResources: total,
+      plan: demoPlan(download.ids),
+    };
     return download;
   }
-  return { ...download, phase: verified > total * 0.7 ? "verifying" : "downloading", verifiedResources: verified };
+  return {
+    ...download,
+    phase: verified > total * 0.7 ? "verifying" : "downloading",
+    verifiedResources: verified,
+  };
 }
 
 export const demoBridge: EngineBridge = {
@@ -151,7 +165,8 @@ export const demoBridge: EngineBridge = {
   },
   async prepareRuntimeForPatch() {
     await wait(900);
-    if (settings.scenario === "dota_open") throw new EngineFault("runtime_busy", "prepare_runtime_for_patch");
+    if (settings.scenario === "dota_open")
+      throw new EngineFault("runtime_busy", "prepare_runtime_for_patch");
     return { platformSupported: true, steamRunning: false, dotaRunning: false, patchReady: true };
   },
   async listSteamProfiles() {
@@ -320,7 +335,8 @@ export const demoBridge: EngineBridge = {
   },
   async installTreePilotStress(_path, _ids, _plan, _language, failurePoint) {
     await wait(1400);
-    if (!settings.developer) throw new EngineFault("stress_test_disabled", "install_tree_pilot_stress");
+    if (!settings.developer)
+      throw new EngineFault("stress_test_disabled", "install_tree_pilot_stress");
     stressPoint = failurePoint;
     throw new EngineFault("injected_failure", "install_tree_pilot_stress");
   },

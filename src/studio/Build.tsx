@@ -32,6 +32,7 @@ import { BuildJournal } from "./builder/BuildJournal";
 import { journal } from "./builder/journal";
 import { demoActive } from "./builder/demo";
 import { findPackage } from "./packages";
+import "./builder/builder.css";
 
 const emptyLines: Array<[string, string, string, string]> = [
   [
@@ -308,8 +309,8 @@ export default function Build({
                 : "The build is in Dota 2. You can restore the game any time."
               : verifiedPilotSelected
                 ? isRu
-                  ? "Справа — путь в игру: проверка файлов, запись с бэкапом, Steam."
-                  : "On the right is the way into the game: check files, write with a backup, Steam."
+                  ? "Путь в игру: проверка файлов, запись с бэкапом, Steam. Откат — в один клик."
+                  : "The way into the game: check files, write with a backup, Steam. Restore in one click."
                 : isRu
                   ? "Имя придумано по составу. Нажми на кубик, если не нравится."
                   : "Named after what is inside. Roll the dice if you want another."}
@@ -362,11 +363,7 @@ export default function Build({
                     : `${modCount(installedMods.length || pilotIds.length, language)} in one file${pilot?.installedLanguage ? ` · -language ${pilot.installedLanguage}` : ""}`}
                 </p>
               </div>
-              <button
-                className="s-btn s-btn-primary b-play"
-                disabled={busy}
-                onClick={launchDota}
-              >
+              <button className="s-btn s-btn-primary b-play" disabled={busy} onClick={launchDota}>
                 <Play />
                 {isRu ? "Запустить Dota 2" : "Launch Dota 2"}
               </button>
@@ -461,11 +458,18 @@ export default function Build({
                 {isRu ? "Сохранить в библиотеку" : "Save to library"}
               </button>
               {conflicts.length > 0 && (
-                <small>{isRu ? "Сначала реши конфликт слотов" : "Resolve the slot conflict first"}</small>
+                <small>
+                  {isRu ? "Сначала реши конфликт слотов" : "Resolve the slot conflict first"}
+                </small>
               )}
             </div>
           )}
-          <TreePilot ids={pilotIds} installation={installation} preview={preview} onState={setPilot} />
+          <TreePilot
+            ids={pilotIds}
+            installation={installation}
+            preview={preview}
+            onState={setPilot}
+          />
         </aside>
       </div>
       <BuildJournal busy={busy || Boolean(pilot?.busy)} developer={Boolean(pilot?.developer)} />

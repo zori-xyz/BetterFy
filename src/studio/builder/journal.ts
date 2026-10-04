@@ -27,9 +27,10 @@ function emit() {
 export const journal = {
   log(tone: JournalTone, ru: string, en: string, detail?: string) {
     sequence += 1;
-    entries = [...entries, { id: sequence, at: Date.now(), tone, text: [ru, en] as [string, string], detail }].slice(
-      -LIMIT,
-    );
+    entries = [
+      ...entries,
+      { id: sequence, at: Date.now(), tone, text: [ru, en] as [string, string], detail },
+    ].slice(-LIMIT);
     emit();
   },
   clear() {

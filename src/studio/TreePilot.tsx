@@ -39,6 +39,9 @@ import { demoActive, demoBridge, isDesktopRuntime, useDemoSettings } from "./bui
 import { usePhrase } from "./builder/phrases";
 import { NoticeCard } from "./builder/NoticeCard";
 import { DemoPanel } from "./builder/DemoPanel";
+import { getStorageItem, setStorageItem } from "../storage";
+
+const LANGUAGE_KEY = "betterfy:build-language";
 
 /** What the builder screen around the pilot card needs to know. */
 export type PilotState = {
@@ -98,7 +101,17 @@ export default function TreePilot({
   const [recoveryMessage, setRecoveryMessage] = useState("");
   const [profiles, setProfiles] = useState<SteamProfileSummary[]>([]);
   const [selectedProfile, setSelectedProfile] = useState("");
-  const [selectedLanguage, setSelectedLanguage] = useState<GameLanguage | "">("");
+  // The language last used for a build, or Russian for a Russian interface:
+  // the player confirms it rather than starting from an empty choice.
+  const [selectedLanguage, setSelectedLanguageState] = useState<GameLanguage | "">(() => {
+    const stored = getStorageItem(LANGUAGE_KEY);
+    if (stored && stored in languageNames) return stored as GameLanguage;
+    return isRu ? "russian" : "";
+  });
+  const setSelectedLanguage = (value: GameLanguage | "") => {
+    setSelectedLanguageState(value);
+    if (value) setStorageItem(LANGUAGE_KEY, value);
+  };
   const [installedLanguage, setInstalledLanguage] = useState<GameLanguage | null>(null);
   const [installedPackageIds, setInstalledPackageIds] = useState<string[]>([]);
   const [steamStarted, setSteamStarted] = useState(false);
@@ -154,7 +167,11 @@ export default function TreePilot({
     if (!status) return;
     setVerifiedResources(status.verifiedResources);
     setTotalResources(status.totalResources);
-    if (phaseRef.current === "download" && status.phase !== "downloading" && status.phase !== "verifying") {
+    if (
+      phaseRef.current === "download" &&
+      status.phase !== "downloading" &&
+      status.phase !== "verifying"
+    ) {
       if (status.phase === "ready")
         say(
           "ok",
@@ -163,9 +180,18 @@ export default function TreePilot({
           status.plan?.planId.slice(0, 19),
         );
       else if (status.phase === "cancelled")
-        say("warn", "Подготовку остановили. Проверенные файлы сохранены.", "Preparation stopped. Verified files are kept.");
+        say(
+          "warn",
+          "Подготовку остановили. Проверенные файлы сохранены.",
+          "Preparation stopped. Verified files are kept.",
+        );
       else
-        say("error", "Подготовка не удалась.", "Preparation failed.", status.errorCode ?? "download_failed");
+        say(
+          "error",
+          "Подготовка не удалась.",
+          "Preparation failed.",
+          status.errorCode ?? "download_failed",
+        );
     }
     if (status.phase === "ready") {
       const expectedIds = ids.map(engineIdFor);
@@ -383,10 +409,7 @@ export default function TreePilot({
           `Добавляем -language ${receipt.language} в профиль Steam.`,
           `Adding -language ${receipt.language} to the Steam profile.`,
         );
-        const steamPlan = await bridge.previewSteamLaunchOptions(
-          selectedProfile,
-          receipt.language,
-        );
+        const steamPlan = await bridge.previewSteamLaunchOptions(selectedProfile, receipt.language);
         const steamReceipt = await bridge.applyTreeSteamLaunchOptions({
           gamePath: installation.path,
           deploymentOperationId: receipt.operationId,
@@ -399,7 +422,11 @@ export default function TreePilot({
         if (steamReceipt.operationId) {
           setSteamOperationId(steamReceipt.operationId);
         }
-        say("ok", "Параметр запуска добавлен, копия настроек Steam сохранена.", "Launch option added; Steam settings backed up.");
+        say(
+          "ok",
+          "Параметр запуска добавлен, копия настроек Steam сохранена.",
+          "Launch option added; Steam settings backed up.",
+        );
         say("step", "Запускаем Steam.", "Starting Steam.");
         await bridge.startSteamAfterTreePilot({
           gamePath: installation.path,
@@ -419,8 +446,12 @@ export default function TreePilot({
       }
       say(
         "ok",
-        selectedProfile ? "Steam запущен с нужным языком." : "Steam запущен. Осталось вставить параметр запуска.",
-        selectedProfile ? "Steam is running with the right language." : "Steam is running. Paste the launch option to finish.",
+        selectedProfile
+          ? "Steam запущен с нужным языком."
+          : "Steam запущен. Осталось вставить параметр запуска.",
+        selectedProfile
+          ? "Steam is running with the right language."
+          : "Steam is running. Paste the launch option to finish.",
       );
       setJustInstalled(true);
     } catch (cause) {
@@ -446,7 +477,11 @@ export default function TreePilot({
     let steamProblem = "";
     let keptUserChange = false;
     setJustInstalled(false);
-    say("step", "Откат: мягко закрываем Dota 2 и Steam.", "Restore: closing Dota 2 and Steam gracefully.");
+    say(
+      "step",
+      "Откат: мягко закрываем Dota 2 и Steam.",
+      "Restore: closing Dota 2 and Steam gracefully.",
+    );
     try {
       if (steamRecoveryRequired) throw new Error("steam_recovery_required");
       const runtime = await bridge.prepareRuntimeForPatch();
@@ -466,8 +501,17 @@ export default function TreePilot({
         }
       }
       if (steamProblem)
-        say("warn", "Параметры Steam вернуть не удалось.", "Steam launch options were not restored.", steamProblem);
-      say("step", "Возвращаем исходный файл из бэкапа.", "Restoring the original file from the backup.");
+        say(
+          "warn",
+          "Параметры Steam вернуть не удалось.",
+          "Steam launch options were not restored.",
+          steamProblem,
+        );
+      say(
+        "step",
+        "Возвращаем исходный файл из бэкапа.",
+        "Restoring the original file from the backup.",
+      );
       const receipt = await bridge.rollbackGameDeployment(installation.path, operationId);
       if (!receipt.rolledBack) throw new Error("rollback_failed");
       buildRestored = true;
@@ -478,7 +522,6 @@ export default function TreePilot({
       setVerifiedInstall(false);
       setPackageVerified(false);
       setPlan(null);
-      setSelectedLanguage("");
       setSteamStarted(false);
       setSteamRecoveryRequired(false);
       if (steamProblem) setError(steamProblem);
@@ -496,7 +539,12 @@ export default function TreePilot({
         }
         setSteamRestarted(steamRunning);
         if (steamRunning) say("ok", "Steam снова запущен.", "Steam is running again.");
-        else say("warn", "Steam не запустился сам — запусти его вручную.", "Steam did not start; start it manually.");
+        else
+          say(
+            "warn",
+            "Steam не запустился сам — запусти его вручную.",
+            "Steam did not start; start it manually.",
+          );
         const parts: string[] = [];
         if (buildRestored) {
           parts.push(isRu ? "Сборка удалена из игры." : "The build was removed from the game.");
@@ -549,7 +597,11 @@ export default function TreePilot({
       return;
     setError("");
     setPhase("steam");
-    say("step", "Настраиваем Steam для установленной сборки.", "Setting up Steam for the installed build.");
+    say(
+      "step",
+      "Настраиваем Steam для установленной сборки.",
+      "Setting up Steam for the installed build.",
+    );
     try {
       const profile = profiles.find((item) => item.profileToken === selectedProfile);
       if (!profile || !["ready", "already_managed"].includes(profile.status))
@@ -567,10 +619,7 @@ export default function TreePilot({
         setSteamRestarted(true);
         return;
       }
-      const preview = await bridge.previewSteamLaunchOptions(
-        selectedProfile,
-        installedLanguage,
-      );
+      const preview = await bridge.previewSteamLaunchOptions(selectedProfile, installedLanguage);
       const receipt = await bridge.applyTreeSteamLaunchOptions({
         gamePath: installation.path,
         deploymentOperationId: operationId,
@@ -659,8 +708,12 @@ export default function TreePilot({
       );
       say(
         "ok",
-        result.inspected === 0 ? "Прерванных операций нет." : `Проверено ${result.inspected}, откачено ${result.rolledBack}.`,
-        result.inspected === 0 ? "No interrupted operations." : `Inspected ${result.inspected}, restored ${result.rolledBack}.`,
+        result.inspected === 0
+          ? "Прерванных операций нет."
+          : `Проверено ${result.inspected}, откачено ${result.rolledBack}.`,
+        result.inspected === 0
+          ? "No interrupted operations."
+          : `Inspected ${result.inspected}, restored ${result.rolledBack}.`,
       );
       const current = await bridge.currentTreePilot(installation.path);
       setOperationId(current?.operationId ?? null);
@@ -734,7 +787,12 @@ export default function TreePilot({
     setStressMessage("");
     setStressPhase(failurePoint);
     setEngineActive(true);
-    say("dev", `Стресс-тест: обрыв ${failurePoint === "after_prepared" ? "до" : "после"} записи.`, `Stress test: interrupt ${failurePoint === "after_prepared" ? "before" : "after"} publish.`, failurePoint);
+    say(
+      "dev",
+      `Стресс-тест: обрыв ${failurePoint === "after_prepared" ? "до" : "после"} записи.`,
+      `Stress test: interrupt ${failurePoint === "after_prepared" ? "before" : "after"} publish.`,
+      failurePoint,
+    );
     try {
       const runtime = await bridge.prepareRuntimeForPatch();
       if (!runtime.patchReady) throw new Error("runtime_busy");
@@ -795,7 +853,12 @@ export default function TreePilot({
     setStressMessage("");
     setStressPhase(failurePoint);
     setEngineActive(true);
-    say("dev", `Стресс-тест Steam: обрыв ${failurePoint === "after_prepared" ? "до" : "после"} записи.`, `Steam stress test: interrupt ${failurePoint === "after_prepared" ? "before" : "after"} publish.`, failurePoint);
+    say(
+      "dev",
+      `Стресс-тест Steam: обрыв ${failurePoint === "after_prepared" ? "до" : "после"} записи.`,
+      `Steam stress test: interrupt ${failurePoint === "after_prepared" ? "before" : "after"} publish.`,
+      failurePoint,
+    );
     try {
       const profile = profiles.find((item) => item.profileToken === selectedProfile);
       if (!profile || !["ready", "already_managed"].includes(profile.status))
@@ -866,11 +929,17 @@ export default function TreePilot({
       steamReady: steamStarted,
       developer: stressEnabled,
     });
-  }, [plan, operationId, installedPackageIds, installedLanguage, justInstalled, busy, steamStarted, stressEnabled]);
-  const activePhrase = usePhrase(
-    phase === "idle" ? (recovering ? "restore" : null) : phase,
-    isRu,
-  );
+  }, [
+    plan,
+    operationId,
+    installedPackageIds,
+    installedLanguage,
+    justInstalled,
+    busy,
+    steamStarted,
+    stressEnabled,
+  ]);
+  const activePhrase = usePhrase(phase === "idle" ? (recovering ? "restore" : null) : phase, isRu);
   if (!ids.length && !operationId && !steamOperationId && !steamRecoveryRequired) return null;
   const notice = error ? noticeFor(error, isRu) : null;
   const blocker =
@@ -920,11 +989,12 @@ export default function TreePilot({
       done: Boolean(operationId),
       busy: phase === "install",
       label: isRu ? "Записать с бэкапом" : "Write with a backup",
-      hint: operationId && installedLanguage
-        ? `dota_${installedLanguage}/pak66_dir.vpk`
-        : isRu
-          ? "Исходный файл можно вернуть"
-          : "The original can be restored",
+      hint:
+        operationId && installedLanguage
+          ? `dota_${installedLanguage}/pak66_dir.vpk`
+          : isRu
+            ? "Исходный файл можно вернуть"
+            : "The original can be restored",
     },
     {
       done: steamRestarted || steamStarted,
@@ -1047,7 +1117,10 @@ export default function TreePilot({
         </small>
         <h2 id="tree-pilot-title">{title}</h2>
         <span className="b-pilot-count" title={isRu ? "Моды для установки" : "Mods to install"}>
-          {String(operationId ? installedPackageIds.length || ids.length : ids.length).padStart(2, "0")}
+          {String(operationId ? installedPackageIds.length || ids.length : ids.length).padStart(
+            2,
+            "0",
+          )}
           <i>/{String(installablePackages.length).padStart(2, "0")}</i>
         </span>
       </header>
@@ -1136,7 +1209,9 @@ export default function TreePilot({
             >
               <option value="">{isRu ? "Выбери язык" : "Choose language"}</option>
               <option value="russian">{isRu ? "Русский · проверен" : "Russian · verified"}</option>
-              <option value="dutch">{isRu ? "Нидерландский · проверен" : "Dutch · verified"}</option>
+              <option value="dutch">
+                {isRu ? "Нидерландский · проверен" : "Dutch · verified"}
+              </option>
               <option value="koreana">
                 {isRu ? "Корейский · не проверен" : "Korean · untested"}
               </option>
@@ -1234,7 +1309,9 @@ export default function TreePilot({
             <>
               <button
                 className="s-btn s-btn-primary b-primary"
-                disabled={phase !== "idle" || !desktop || !supportedBundle || Boolean(blocker && !demo)}
+                disabled={
+                  phase !== "idle" || !desktop || !supportedBundle || Boolean(blocker && !demo)
+                }
                 onClick={() => void prepare()}
               >
                 {phase === "download" ? <LoaderCircle className="s-spin" /> : <Download />}
@@ -1333,7 +1410,9 @@ export default function TreePilot({
                 <dt>{isRu ? "Файл" : "File"}</dt>
                 <dd>
                   <code>
-                    {selectedLanguage ? `game/dota_${selectedLanguage}/${plan.targetFile}` : plan.targetFile}
+                    {selectedLanguage
+                      ? `game/dota_${selectedLanguage}/${plan.targetFile}`
+                      : plan.targetFile}
                   </code>
                 </dd>
               </div>
@@ -1345,7 +1424,9 @@ export default function TreePilot({
               </div>
               <div>
                 <dt>{isRu ? "Совпадения" : "Overlaps"}</dt>
-                <dd>{plan.duplicateResources + plan.overriddenResources || (isRu ? "нет" : "none")}</dd>
+                <dd>
+                  {plan.duplicateResources + plan.overriddenResources || (isRu ? "нет" : "none")}
+                </dd>
               </div>
               <div>
                 <dt>{isRu ? "Размер" : "Size"}</dt>
@@ -1434,7 +1515,9 @@ export default function TreePilot({
                     ? "Только версии, этапы, языки, пакеты и SHA-256. Без путей, Steam ID и данных аккаунта."
                     : "Only versions, phases, languages, packages and SHA-256. No paths, Steam IDs or account data."}
                 {reportError &&
-                  (isRu ? ` Не удалось сохранить (${reportError}).` : ` Could not save (${reportError}).`)}
+                  (isRu
+                    ? ` Не удалось сохранить (${reportError}).`
+                    : ` Could not save (${reportError}).`)}
               </p>
             </div>
             <span className="b-more-buttons">

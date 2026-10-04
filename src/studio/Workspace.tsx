@@ -239,7 +239,9 @@ export default function Workspace({
           const current = selectedRef.current;
           if (current.includes(mod.id)) return;
           if (mod.slot && current.some((id) => modById.get(id)?.slot === mod.slot)) {
-            notify(isRu ? "Этот слот уже занят другим модом" : "Another mod already took that slot");
+            notify(
+              isRu ? "Этот слот уже занят другим модом" : "Another mod already took that slot",
+            );
             return;
           }
           const at = before.indexOf(mod.id);
@@ -566,7 +568,7 @@ export default function Workspace({
       </section>
       <div className="s-toast-region" role="status" aria-live="polite">
         {toast && (
-          <div className="s-toast" key={toast.key}>
+          <div className={`s-toast ${toast.action ? "has-action" : ""}`} key={toast.key}>
             <Check />
             <span>{toast.text}</span>
             {toast.action && (

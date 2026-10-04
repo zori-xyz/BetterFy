@@ -176,7 +176,6 @@ export const explainError = (code: string, isRu: boolean) => {
   );
 };
 
-
 const groups: Array<{
   codes: string[];
   title: [string, string];
@@ -281,11 +280,7 @@ export function noticeFor(code: string, isRu: boolean): Notice {
   return {
     code,
     tone: group?.tone ?? "error",
-    title: group
-      ? group.title[isRu ? 0 : 1]
-      : isRu
-        ? "Операция остановлена"
-        : "Operation stopped",
+    title: group ? group.title[isRu ? 0 : 1] : isRu ? "Операция остановлена" : "Operation stopped",
     body: explainError(code, isRu),
     action: group?.action ?? "report",
   };
