@@ -1558,6 +1558,52 @@ mod tests {
     }
 
     #[test]
+    fn new_language_slots_apply_and_roll_back_through_the_journal() {
+        for (index, language) in [
+            GameLanguage::Betterfy,
+            GameLanguage::Tchinese,
+            GameLanguage::Latam,
+            GameLanguage::Brazilian,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let account = format!("5{index}");
+            let original = local_config("-novid -language russian");
+            let (base, steam, app_data) = fixture(language.suffix(), &account, &original);
+            let roots = vec![steam.clone()];
+            let profiles = discover_profiles_in_roots(&roots).expect("profiles");
+            let preview = preview_profile(&roots, &profiles[0].token, language).expect("preview");
+            assert_eq!(preview.language, language);
+            let receipt = apply_profile_with_failure(
+                &app_data,
+                &roots,
+                ApplySteamLaunchOptionRequest {
+                    profile_token: preview.profile_token,
+                    confirmation_token: preview.confirmation_token,
+                    language,
+                    confirmed: true,
+                    linked_deployment_id: None,
+                },
+                FailurePoint::None,
+            )
+            .expect("apply");
+            let target = steam.join(format!("userdata/{account}/config/localconfig.vdf"));
+            let applied = fs::read_to_string(&target).expect("applied");
+            assert!(applied.contains(&format!("\"-novid -language {}\"", language.suffix())));
+            fs::write(&target, steam_rewrite(&applied)).expect("steam rewrite");
+            let restored = rollback(&app_data, &steam, &receipt.operation_id.expect("operation"))
+                .expect("rollback");
+            assert!(restored.rolled_back && !restored.kept_user_change);
+            assert_eq!(
+                fs::read_to_string(&target).expect("restored"),
+                steam_rewrite(&original)
+            );
+            fs::remove_dir_all(base).expect("cleanup");
+        }
+    }
+
+    #[test]
     fn rollback_keeps_launch_options_the_player_changed_later() {
         let original = local_config("-novid");
         let (base, steam, app_data) = fixture("player", "45", &original);

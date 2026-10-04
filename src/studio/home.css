@@ -1,0 +1,895 @@
+/* Home below the hero: the build dock (inventory + way into the game), the
+   BetterFy sets, the Windows-pilot shelf and the community note. The hero,
+   carousel and shelf above keep their own styles. Hover motion is limited
+   to fine pointers and switched off by reduced motion and the in-app motion
+   switch. */
+
+.h-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.h-section {
+  margin-top: 38px;
+}
+
+/* Build dock */
+
+.h-dock {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px 36px;
+  margin-top: 20px;
+  padding: 24px 26px 0;
+  border: 1px solid var(--s-line);
+  border-radius: var(--s-radius-panel);
+  background:
+    radial-gradient(90% 130% at 100% 0%, var(--s-tint), transparent 62%),
+    var(--s-panel);
+  overflow: hidden;
+}
+.h-dock.is-blocked {
+  border-color: color-mix(in srgb, var(--s-danger) 38%, var(--s-line));
+}
+.h-dock.is-installed {
+  border-color: color-mix(in srgb, var(--s-ready) 40%, var(--s-line));
+}
+.h-dock-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+.h-dock-copy .s-eyebrow {
+  font-size: var(--s-text-2xs);
+  letter-spacing: 0.14em;
+  color: var(--s-accent);
+}
+.h-dock-copy .s-eyebrow svg {
+  width: 13px;
+  height: 13px;
+}
+.h-dock-copy h2 {
+  margin-top: 12px;
+  font: 400 clamp(23px, 2.4vw, 31px) / 1.15 "Days One BetterFy", Manrope, system-ui, sans-serif;
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+}
+.h-dock-copy > p:not(.h-dock-status) {
+  margin-top: 9px;
+  max-width: 540px;
+  font-size: var(--s-text-base);
+  line-height: 1.6;
+  color: var(--s-muted);
+}
+.h-dock-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  max-width: 560px;
+  margin-top: 16px;
+  font-size: var(--s-text-md);
+  font-weight: 600;
+  line-height: 1.55;
+  color: var(--s-text);
+}
+.h-dock-status > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}
+.h-dock-status > i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin: 5px 4px 0;
+  border-radius: 50%;
+  background: var(--s-muted);
+}
+.h-dock-status.is-ready > i,
+.h-dock-status.is-ready > svg {
+  color: var(--s-ready);
+  background: var(--s-ready);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--s-ready) 18%, transparent);
+}
+.h-dock-status.is-ready > svg {
+  background: none;
+  box-shadow: none;
+}
+.h-dock-status.is-accent > i {
+  background: var(--s-accent);
+  box-shadow: 0 0 0 4px var(--s-tint);
+}
+.h-dock-status.is-risk > svg {
+  color: var(--s-danger);
+}
+.h-dock-status.is-busy > svg {
+  color: var(--s-accent);
+}
+.h-dock-status.is-quiet {
+  font-weight: 500;
+  color: var(--s-muted);
+}
+.h-dock-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: 100%;
+  margin-top: 20px;
+}
+.h-dock-actions .s-btn {
+  max-width: 100%;
+}
+.h-dock-actions .s-btn > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Inventory: six slots with Dota's item hotkeys, then a greyed backpack. */
+.h-inv {
+  align-self: start;
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--s-line);
+  border-radius: var(--s-radius-card);
+  background: color-mix(in srgb, var(--s-bg) 72%, var(--s-panel));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.03);
+}
+.h-inv-main,
+.h-inv-pack {
+  display: grid;
+  grid-template-columns: repeat(3, 78px);
+  gap: 6px;
+}
+.h-inv-label {
+  margin-top: 4px;
+  font-size: var(--s-text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--s-quiet);
+}
+.h-slot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 88 / 64;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--s-line-soft);
+  border-radius: var(--s-radius-inner);
+  background: linear-gradient(160deg, var(--s-panel-high), var(--s-input));
+  color: var(--s-accent);
+  font: 600 var(--s-text-md) / 1 "JetBrains Mono", monospace;
+  transition:
+    border-color 0.2s ease,
+    transform 0.5s var(--s-ease-spring),
+    box-shadow 0.2s ease;
+}
+.h-slot > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.35s var(--s-ease-out);
+}
+.h-slot > svg {
+  width: 18px;
+  height: 18px;
+}
+.h-slot kbd {
+  position: absolute;
+  top: 4px;
+  left: 5px;
+  z-index: 1;
+  font: 500 var(--s-text-2xs) / 1 "JetBrains Mono", monospace;
+  color: var(--s-quiet);
+}
+.h-slot.is-filled {
+  border-color: var(--s-line);
+}
+.h-slot.is-filled kbd {
+  color: #fff;
+  text-shadow: 0 1px 3px #000d;
+}
+.h-slot.is-next {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--s-accent) 55%, var(--s-line));
+  background: var(--s-tint);
+}
+.h-slot.is-next > svg {
+  width: 16px;
+  height: 16px;
+}
+.h-inv-pack .h-slot {
+  aspect-ratio: 88 / 46;
+  background: color-mix(in srgb, var(--s-input) 70%, transparent);
+}
+.h-inv-pack .h-slot.is-filled > img,
+.h-inv-pack .h-slot.is-filled > svg {
+  filter: grayscale(0.85) brightness(0.8);
+  transition:
+    filter 0.25s ease,
+    transform 0.35s var(--s-ease-out);
+}
+.h-slot.is-more {
+  border-color: var(--s-line);
+  color: var(--s-text);
+}
+
+/* The way into the game, mirroring the steps on the build screen. */
+.h-lane {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 2px -26px 0;
+  padding: 14px 26px 16px;
+  list-style: none;
+  border-top: 1px solid var(--s-line-soft);
+  background: color-mix(in srgb, var(--s-bg) 40%, transparent);
+}
+.h-lane li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  font-size: var(--s-text-sm);
+  font-weight: 600;
+  color: var(--s-quiet);
+  white-space: nowrap;
+}
+.h-lane li > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.h-lane li:not(:last-child)::after {
+  content: "";
+  flex: 1;
+  min-width: 12px;
+  height: 1px;
+  margin: 0 12px 0 3px;
+  background: var(--s-line);
+}
+.h-lane-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--s-line);
+  border-radius: 50%;
+  font: 500 var(--s-text-2xs) / 1 "JetBrains Mono", monospace;
+}
+.h-lane-mark > svg {
+  width: 12px;
+  height: 12px;
+}
+.h-lane li.is-done {
+  color: var(--s-muted);
+}
+.h-lane li.is-done .h-lane-mark {
+  border-color: color-mix(in srgb, var(--s-ready) 60%, transparent);
+  background: color-mix(in srgb, var(--s-ready) 14%, transparent);
+  color: var(--s-ready);
+}
+.h-lane li.is-done::after {
+  background: color-mix(in srgb, var(--s-ready) 45%, var(--s-line));
+}
+.h-lane li:is(.is-current, .is-busy) {
+  color: var(--s-text);
+}
+.h-lane li:is(.is-current, .is-busy) .h-lane-mark {
+  border-color: var(--s-accent);
+  background: var(--s-tint);
+  color: var(--s-accent);
+  box-shadow: 0 0 0 4px var(--s-tint);
+}
+.h-dock.is-blocked .h-lane li.is-current .h-lane-mark {
+  border-color: var(--s-danger);
+  color: var(--s-danger);
+  background: color-mix(in srgb, var(--s-danger) 12%, transparent);
+  box-shadow: none;
+}
+.h-lane li.is-off {
+  opacity: 0.5;
+}
+.h-lane li.is-off .h-lane-mark {
+  border-style: dashed;
+}
+
+/* BetterFy sets */
+
+.h-sets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.h-set {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--s-line);
+  border-radius: var(--s-radius-card);
+  background: var(--s-panel);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.5s var(--s-ease-spring);
+}
+.h-set::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  background: radial-gradient(
+    260px circle at var(--spot-x, 50%) var(--spot-y, 0%),
+    rgb(196 120 239 / 0.1),
+    transparent 65%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+}
+.h-set[data-spot-active]::before {
+  opacity: 1;
+}
+.h-set.is-complete {
+  border-color: color-mix(in srgb, var(--s-ready) 38%, var(--s-line));
+}
+.h-set:has(.h-set-open:focus-visible) {
+  outline: 2px solid var(--s-accent);
+  outline-offset: 2px;
+}
+.h-set-art {
+  position: relative;
+  isolation: isolate;
+  height: 128px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--s-line-soft);
+  background:
+    radial-gradient(80% 110% at 50% 115%, var(--s-tint), transparent 70%),
+    linear-gradient(160deg, var(--s-panel-high), var(--s-panel));
+}
+.h-set-fan {
+  position: absolute;
+  inset: 0;
+}
+/* Three previews held like cards; they fan out on hover. */
+.h-set-fan > span {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  width: 112px;
+  aspect-ratio: 1.3;
+  overflow: hidden;
+  border: 2px solid color-mix(in srgb, var(--s-text) 22%, transparent);
+  border-radius: var(--s-radius-control);
+  background: var(--s-input);
+  box-shadow:
+    -8px 6px 18px #0008,
+    0 14px 30px #0006;
+  transform: translate(-50%, -50%) translateX(calc(var(--o) * 74%))
+    translateY(calc(var(--a) * 10px)) rotate(calc(var(--o) * 10deg));
+  transform-origin: 50% 140%;
+  transition: transform 0.6s var(--s-ease-spring);
+}
+.h-set-fan img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* The audio set has no art: an equaliser that falls silent on hover. */
+.h-set-bars {
+  position: absolute;
+  inset: auto 26px 20px 70px;
+  height: 62px;
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+}
+.h-set-bars > i {
+  flex: 1;
+  height: calc(var(--h) * 100%);
+  border-radius: 2px 2px 0 0;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--s-accent) 80%, transparent),
+    color-mix(in srgb, var(--s-accent) 22%, transparent)
+  );
+  transition: height 0.45s var(--s-ease-out) calc(var(--d) * 22ms);
+}
+.h-set-icon {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--s-line);
+  border-radius: var(--s-radius-control);
+  background: color-mix(in srgb, var(--s-panel) 86%, transparent);
+  color: var(--s-accent);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+.h-set-icon > svg {
+  width: 18px;
+  height: 18px;
+}
+.h-set-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: 16px 16px 14px;
+}
+.h-set-kicker {
+  font-size: var(--s-text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--s-quiet);
+}
+.h-set h3 {
+  margin-top: 6px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+}
+.h-set-body > p {
+  margin-top: 6px;
+  font-size: var(--s-text-md);
+  line-height: 1.6;
+  color: var(--s-muted);
+}
+.h-set-list {
+  display: grid;
+  gap: 6px;
+  margin: 13px 0 0;
+  padding: 12px 0 0;
+  list-style: none;
+  border-top: 1px dashed var(--s-line);
+}
+.h-set-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--s-text-sm);
+  color: var(--s-muted);
+}
+.h-set-list li > span:not(.h-visually-hidden) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.h-set-list li > i {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin: 0 3px;
+  border: 1px solid var(--s-quiet);
+  border-radius: 50%;
+}
+.h-set-list li > svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--s-ready);
+}
+.h-set-list li.is-in {
+  color: var(--s-text);
+}
+.h-set footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 16px;
+}
+.h-set-meta {
+  font-size: var(--s-text-xs);
+  color: var(--s-quiet);
+}
+.h-set.is-complete .h-set-meta {
+  color: var(--s-ready);
+}
+.h-pilot-tag {
+  padding: 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--s-ready) 42%, var(--s-line));
+  border-radius: var(--s-radius-tag);
+  color: var(--s-ready);
+  font-size: var(--s-status-font-size);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+}
+.h-set-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 4px 0;
+  color: var(--s-accent);
+  font-size: var(--s-text-md);
+  font-weight: 700;
+}
+.h-set-open > svg {
+  width: 15px;
+  height: 15px;
+}
+/* The whole card opens the set; the button stays the one control. */
+.h-set-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+}
+.h-set-open:focus-visible {
+  outline: none;
+}
+
+/* Windows-pilot shelf */
+
+.h-pilot-lead {
+  max-width: 660px;
+  margin: -6px 0 16px;
+  font-size: var(--s-text-md);
+  line-height: 1.65;
+  color: var(--s-muted);
+}
+.h-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.h-tabs::-webkit-scrollbar {
+  display: none;
+}
+.h-tabs [role="tab"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 1px solid var(--s-line);
+  border-radius: var(--s-radius-control);
+  color: var(--s-muted);
+  font-size: var(--s-text-md);
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+.h-tabs [role="tab"] > svg {
+  width: 14px;
+  height: 14px;
+}
+.h-tabs [role="tab"] small {
+  padding: 3px 5px;
+  border-radius: var(--s-radius-tag);
+  background: var(--s-panel-high);
+  color: var(--s-quiet);
+  font: 500 var(--s-text-2xs) / 1 "JetBrains Mono", monospace;
+}
+.h-tabs [role="tab"] small.is-some {
+  color: var(--s-ready);
+}
+.h-tabs [role="tab"][aria-selected="true"] {
+  border-color: color-mix(in srgb, var(--s-accent) 60%, var(--s-line));
+  background: var(--s-tint);
+  color: var(--s-text);
+}
+.h-tabs [role="tab"][aria-selected="true"] > svg {
+  color: var(--s-accent);
+}
+.h-items {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.h-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 10px 8px 8px;
+  border: 1px solid var(--s-line);
+  border-radius: var(--s-radius-card);
+  background: var(--s-panel);
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+.h-item.is-in {
+  border-color: color-mix(in srgb, var(--s-ready) 42%, var(--s-line));
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--s-ready) 8%, var(--s-panel)),
+    var(--s-panel) 62%
+  );
+}
+.h-item-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  border-radius: var(--s-radius-control);
+}
+.h-item-thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 60px;
+  height: 46px;
+  overflow: hidden;
+  border-radius: var(--s-radius-inner);
+  background: linear-gradient(160deg, var(--s-panel-high), var(--s-input));
+  color: var(--s-accent);
+}
+.h-item-thumb > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.35s var(--s-ease-out);
+}
+.h-item-thumb > svg {
+  width: 18px;
+  height: 18px;
+}
+.h-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.h-item-text strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--s-text-md);
+  font-weight: 700;
+  line-height: 1.35;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.h-item-text small {
+  overflow: hidden;
+  font-size: var(--s-text-xs);
+  line-height: 1.45;
+  color: var(--s-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.h-item-text em {
+  font: 500 var(--s-text-2xs) / 1.4 "JetBrains Mono", monospace;
+  font-style: normal;
+  color: var(--s-quiet);
+}
+.h-item-text em.is-risk {
+  color: var(--s-danger);
+}
+
+/* Community note */
+
+.h-community {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px 28px;
+  margin-top: 38px;
+  padding: 20px 22px;
+  border: 1px solid var(--s-line-soft);
+  border-radius: var(--s-radius-card);
+  background: linear-gradient(110deg, var(--s-tint), transparent 58%);
+}
+.h-community > div:first-child {
+  min-width: 0;
+  max-width: 560px;
+}
+.h-community .s-eyebrow {
+  font-size: var(--s-text-2xs);
+  color: var(--s-quiet);
+}
+.h-community h2 {
+  margin-top: 7px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.h-community p {
+  margin-top: 6px;
+  font-size: var(--s-text-sm);
+  line-height: 1.6;
+  color: var(--s-muted);
+}
+.h-community-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.h-community-links .s-btn svg:first-child {
+  width: 14px;
+  height: 14px;
+  color: var(--s-accent);
+}
+.h-community-links code {
+  font: 500 var(--s-text-xs) / 1 "JetBrains Mono", monospace;
+  color: var(--s-muted);
+}
+
+/* Motion */
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  :root:not(.motion-disabled) .h-slot.is-filled:hover,
+  :root:not(.motion-disabled) .h-slot.is-next:hover {
+    transform: translateY(-2px);
+  }
+  :root:not(.motion-disabled) .h-slot.is-filled:hover > img,
+  :root:not(.motion-disabled) .h-item-main:hover .h-item-thumb > img {
+    transform: scale(1.07);
+  }
+  :root:not(.motion-disabled) .h-set:hover {
+    transform: translateY(-2px);
+  }
+  :root:not(.motion-disabled) .h-set:hover .h-set-fan > span {
+    transform: translate(-50%, -50%) translateX(calc(var(--o) * 92%))
+      translateY(calc(var(--a) * 10px - 6px)) rotate(calc(var(--o) * 14deg));
+  }
+  :root:not(.motion-disabled) .h-set:hover .h-set-bars > i {
+    height: 3px;
+  }
+  :root:not(.motion-disabled) .h-slot.is-new {
+    animation: h-slot-in 0.5s var(--s-ease-spring) both;
+  }
+  :root:not(.motion-disabled) .h-items {
+    animation: h-items-in 0.24s var(--s-ease-out) both;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .h-slot.is-filled:hover,
+  .h-slot.is-next:hover {
+    border-color: var(--s-accent);
+  }
+  .h-inv-pack .h-slot.is-filled:hover > :is(img, svg) {
+    filter: none;
+  }
+  .h-set:hover {
+    border-color: var(--s-muted);
+    box-shadow: 0 12px 32px #0003;
+  }
+  .h-tabs [role="tab"]:hover {
+    border-color: var(--s-muted);
+    color: var(--s-text);
+  }
+  .h-item:hover {
+    border-color: var(--s-muted);
+  }
+}
+@keyframes h-slot-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+@keyframes h-items-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* Light theme: softer, tinted shadows for the held cards. */
+:root[data-theme="light"] .h-set-fan > span {
+  border-color: #fff;
+  box-shadow:
+    -6px 6px 16px #2713321f,
+    0 12px 24px #2713321f;
+}
+:root[data-theme="light"] .h-set:hover {
+  box-shadow: 0 12px 30px #2713321c;
+}
+:root[data-theme="light"] .h-inv {
+  box-shadow: inset 0 1px 0 #fff;
+}
+
+/* Layout */
+
+@media (max-width: 1080px) {
+  .h-sets {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .h-set {
+    flex-direction: row;
+  }
+  .h-set-art {
+    flex: none;
+    width: 230px;
+    height: auto;
+    min-height: 168px;
+    border-right: 1px solid var(--s-line-soft);
+    border-bottom: 0;
+  }
+  .h-set-fan > span {
+    width: 98px;
+  }
+  .h-set-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .h-items {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .h-dock {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 20px 18px 0;
+  }
+  .h-inv {
+    justify-self: start;
+  }
+  .h-inv-main,
+  .h-inv-pack {
+    grid-template-columns: repeat(3, 66px);
+  }
+  .h-lane {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0 -18px;
+    padding: 14px 18px;
+  }
+  .h-lane li::after {
+    display: none;
+  }
+  .h-set {
+    flex-direction: column;
+  }
+  .h-set-art {
+    width: auto;
+    min-height: 0;
+    height: 110px;
+    border-right: 0;
+    border-bottom: 1px solid var(--s-line-soft);
+  }
+  .h-set-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .h-items {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .h-community-links {
+    width: 100%;
+  }
+  .h-community-links .s-btn {
+    flex: 1;
+  }
+}

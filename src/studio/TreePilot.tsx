@@ -39,6 +39,7 @@ import { demoActive, demoBridge, isDesktopRuntime, useDemoSettings } from "./bui
 import { usePhrase } from "./builder/phrases";
 import { NoticeCard } from "./builder/NoticeCard";
 import { DemoPanel } from "./builder/DemoPanel";
+import { buildLanguages, languageLabel as languageName } from "./builder/languages";
 import { getStorageItem, setStorageItem } from "../storage";
 
 const LANGUAGE_KEY = "betterfy:build-language";
@@ -54,13 +55,6 @@ export type PilotState = {
   steamReady: boolean;
   /** The signed-in account may run stress tests. */
   developer: boolean;
-};
-
-const languageNames: Record<GameLanguage, [string, string]> = {
-  russian: ["русский", "Russian"],
-  dutch: ["нидерландский", "Dutch"],
-  koreana: ["корейский", "Korean"],
-  schinese: ["китайский", "Chinese"],
 };
 
 const codeOf = (error: unknown) =>
@@ -86,7 +80,7 @@ export default function TreePilot({
   const demoDeveloper = useDemoSettings().developer;
   const say = (tone: Parameters<typeof journal.log>[0], ru: string, en: string, detail?: string) =>
     journal.log(tone, ru, en, detail);
-  const languageLabel = (value: GameLanguage) => languageNames[value][isRu ? 0 : 1];
+  const languageLabel = (value: GameLanguage) => languageName(value, isRu);
   const [justInstalled, setJustInstalled] = useState(false);
   const [plan, setPlan] = useState<TreePilotPlan | null>(null);
   const [operationId, setOperationId] = useState<string | null>(null);
@@ -105,7 +99,8 @@ export default function TreePilot({
   // the player confirms it rather than starting from an empty choice.
   const [selectedLanguage, setSelectedLanguageState] = useState<GameLanguage | "">(() => {
     const stored = getStorageItem(LANGUAGE_KEY);
-    if (stored && stored in languageNames) return stored as GameLanguage;
+    if (stored && buildLanguages.some((option) => option.value === stored))
+      return stored as GameLanguage;
     return isRu ? "russian" : "";
   });
   const setSelectedLanguage = (value: GameLanguage | "") => {

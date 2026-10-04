@@ -1305,6 +1305,60 @@ mod tests {
     }
 
     #[test]
+    fn betterfy_slot_is_created_owned_and_removed_on_restore() {
+        let base = root("betterfy-slot");
+        let app = base.join("app");
+        let dota = game(&base);
+        let locale = dota.join("game/dota_betterfy");
+        // Minify's former English slot is someone else's folder.
+        let minify = dota.join("game/dota_minify").join(OWNED_VPK_NAME);
+        fs::create_dir_all(minify.parent().expect("minify parent")).expect("minify folder");
+        fs::write(&minify, b"minify data").expect("minify file");
+        preview_language_destination(&app, &dota, GameLanguage::Betterfy).expect("preview");
+        assert!(!locale.exists(), "preview must remain read-only");
+        let bytes = package(b"english tree");
+        let receipt = deploy_verified_vpk_for_language(
+            &app,
+            &dota,
+            &bytes,
+            &sha256(&bytes),
+            GameLanguage::Betterfy,
+        )
+        .expect("deploy into the BetterFy slot");
+        assert_eq!(receipt.language, GameLanguage::Betterfy);
+        assert_eq!(
+            fs::read(locale.join(OWNED_VPK_NAME)).expect("installed"),
+            bytes
+        );
+        assert_eq!(
+            deploy_verified_vpk_for_language(
+                &app,
+                &dota,
+                &bytes,
+                &sha256(&bytes),
+                GameLanguage::Russian,
+            )
+            .err()
+            .as_deref(),
+            Some("deployment_language_change_requires_restore")
+        );
+        rollback(&app, &dota, &receipt.operation_id).expect("rollback");
+        assert!(!locale.exists(), "restore removes the folder BetterFy made");
+        assert_eq!(fs::read(&minify).expect("minify unchanged"), b"minify data");
+
+        // A VPK BetterFy did not write blocks the slot instead of being replaced.
+        fs::create_dir_all(&locale).expect("foreign slot");
+        fs::write(locale.join(OWNED_VPK_NAME), b"foreign").expect("foreign file");
+        assert_eq!(
+            preview_language_destination(&app, &dota, GameLanguage::Betterfy)
+                .err()
+                .as_deref(),
+            Some("deployment_target_foreign")
+        );
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
     fn preview_does_not_create_a_dutch_language_folder() {
         let base = root("preview-no-game-write");
         let app = base.join("app");

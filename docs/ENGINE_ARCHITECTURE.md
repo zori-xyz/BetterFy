@@ -317,6 +317,59 @@ records, and commits JSON records through a temporary file and rollback-aware
 rename. Import creates a new local preset and cannot overwrite built-in
 workshop entries.
 
+### Language slots and Steam language detection
+
+The language allowlist is Valve's Steam API code for each of the 27 languages
+besides English that Dota 2's store entry lists (`supported_languages` from the
+Steam store API for app 570, matched against the Steamworks language table):
+`brazilian`, `bulgarian`, `czech`, `danish`, `dutch`, `finnish`, `french`,
+`german`, `greek`, `hungarian`, `italian`, `japanese`, `koreana`, `latam`,
+`norwegian`, `polish`, `portuguese`, `romanian`, `russian`, `schinese`, `spanish`,
+`swedish`, `tchinese`, `thai`, `turkish`, `ukrainian`, `vietnamese`, plus
+`betterfy`. Deserialization accepts only these exact lowercase names; `english`
+stays rejected because no `dota_english` slot exists. Dutch remains the default
+for journals that predate the choice. Every slot uses the same backup, ownership,
+rollback and targeted Steam restore, and changing slot still requires a restore
+first. Only `russian` and `dutch` have been observed in game on Windows.
+
+`betterfy` stands in for English: `game/dota_betterfy/pak66_dir.vpk` with
+`-language betterfy`. The folder holds nothing but BetterFy's VPK and is removed on
+restore when BetterFy created it. Evidence from the pinned Minify commit
+`3a85572029f2c264e2a17cee1c9b54ce93e4fd93`:
+
+- Minify writes only VPKs into a language folder (`pak65`, `pak66`, `pak67` and
+  `pak99_dir.vpk`, plus `maps/dota.vpk` from its `d2pfx` browser). `gameinfo.gi`
+  appears only in a copy Minify makes for its resource-compiler tools, never in a
+  language folder, so BetterFy writes no extra file there either.
+- At that commit Minify no longer uses its own slot. Its commit `a9ef0592bb`
+  ("Base dynamic fix for 2026-07-23 patch") removed `dota_minify`, and
+  `db8c43d7df` moves a saved `minify` choice and `dota_minify` path to an
+  `english` option that writes into `dota_dutch` and forces its `#English Fix`
+  mod. That mod's notes call it a workaround for a Dota patch that enforces valid
+  languages. It packs every `*_english.txt` and `*_english.vtt` from
+  `game/dota/pak01_dir.vpk`, renamed to `*_dutch`, into `pak99_dir.vpk`, and
+  overwrites `*_dutch.txt` files under `game/core` and `game/dota_addons` with
+  their English copies.
+- The `betterfy` slot therefore mirrors Minify before that patch (the setup that
+  left a populated `dota_minify` on the founder's PC), not Minify now. Whether the
+  current Dota client still mounts a non-Valve `-language` folder has not been
+  observed on Windows. Minify's current workaround is not copied: it rewrites
+  Valve's own files in `game/core` outside the single BetterFy-owned VPK, and it
+  needs Valve's multi-part VPKs, which this engine rejects.
+
+`detect_dota_language` is read-only. It validates the Dota folder like manual
+selection, then reads `steamapps/appmanifest_570.acf` of the library holding it:
+no symlink, at most 256 KiB, `appid` must be `570`. It uses the same strict
+KeyValues parser as `localconfig.vdf`, now limited to 64 nesting levels. It
+returns Valve's raw name from `AppState/UserConfig/language`, falling back to
+`AppState/MountedConfig/language` (the language still installed while a switch
+downloads), and the matching slot: `english` → `betterfy`, a Dota language →
+itself, anything else → no slot. A missing manifest or language returns nothing;
+an unreadable or malformed one returns `steam_manifest_invalid`. The parser was
+run once against a published Dota 2 manifest fixture with LF and CRLF line ends.
+The founder reported `russian` in his manifest; detection itself has not been run
+on Windows.
+
 ### Implemented Windows readiness report
 
 `collect_system_diagnostics` gives the interface one factual preflight before a

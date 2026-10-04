@@ -145,7 +145,46 @@ export type SteamProfileSummary = {
   status: "ready" | "already_managed" | "launch_option_conflict" | "invalid_config";
 };
 
-export type GameLanguage = "russian" | "koreana" | "schinese" | "dutch";
+// Valve's Steam API names for the languages Dota 2 ships, plus "betterfy":
+// BetterFy's own slot that stands in for English, which has no Dota folder.
+// Must match the Rust GameLanguage enum exactly.
+export type GameLanguage =
+  | "betterfy"
+  | "brazilian"
+  | "bulgarian"
+  | "czech"
+  | "danish"
+  | "dutch"
+  | "finnish"
+  | "french"
+  | "german"
+  | "greek"
+  | "hungarian"
+  | "italian"
+  | "japanese"
+  | "koreana"
+  | "latam"
+  | "norwegian"
+  | "polish"
+  | "portuguese"
+  | "romanian"
+  | "russian"
+  | "schinese"
+  | "spanish"
+  | "swedish"
+  | "tchinese"
+  | "thai"
+  | "turkish"
+  | "ukrainian"
+  | "vietnamese";
+
+// The language Steam has set for Dota 2. `steamLanguage` is Valve's raw name;
+// `language` is null when BetterFy has no slot for it. English maps to
+// "betterfy".
+export type DetectedLanguage = {
+  steamLanguage: string;
+  language: GameLanguage | null;
+};
 
 export type SteamLaunchOptionPreview = {
   profileToken: string;
@@ -331,6 +370,7 @@ export interface EngineBridge {
   inspectRuntime(): Promise<RuntimeState>;
   prepareRuntimeForPatch(): Promise<RuntimeState>;
   validateGamePath(path: string): Promise<GameInstallation>;
+  detectDotaLanguage(gamePath: string): Promise<DetectedLanguage | null>;
   planBuild(modIds: string[]): Promise<BuildPlan>;
   buildProfile(
     modIds: string[],
@@ -509,6 +549,9 @@ export const mockEngine: EngineBridge = {
     const normalized = path.trim();
     if (!normalized) throw new Error("invalid_game_path");
     return { ...demoInstallation, path: normalized, source: "demo" };
+  },
+  async detectDotaLanguage() {
+    return null;
   },
   async planBuild(modIds) {
     await wait(780);
@@ -758,6 +801,14 @@ export const engineBridge: EngineBridge = {
     return guardedEngineCall(
       "validate_game_path",
       invoke<GameInstallation>("validate_game_path", { path: normalizedPath }),
+    );
+  },
+  async detectDotaLanguage(gamePath) {
+    if (!isTauriRuntime()) return mockEngine.detectDotaLanguage(gamePath);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "detect_dota_language",
+      invoke<DetectedLanguage | null>("detect_dota_language", { gamePath }),
     );
   },
   async planBuild(modIds) {

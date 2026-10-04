@@ -12,6 +12,10 @@ const DOTA_CONFIG_PATH: [&str; 7] = [
     "LaunchOptions",
 ];
 
+/// Steam's own files nest a handful of levels; a deeper file is not one of
+/// them, and the bound keeps the recursive parser off the end of the stack.
+const MAX_DEPTH: usize = 64;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchOptionPlan {
@@ -160,8 +164,12 @@ fn parse_entries(
     contents: &str,
     tokens: &[Token],
     mut index: usize,
-    nested: bool,
+    depth: usize,
 ) -> Result<(ObjectValue, usize), String> {
+    let nested = depth > 0;
+    if depth > MAX_DEPTH {
+        return Err("steam_config_invalid".to_string());
+    }
     let mut entries = Vec::new();
     while index < tokens.len() {
         if matches!(tokens[index].kind, TokenKind::Close) {
@@ -190,7 +198,7 @@ fn parse_entries(
                 Value::Text(value.clone())
             }
             TokenKind::Open => {
-                let (object, next) = parse_entries(contents, tokens, index + 1, true)?;
+                let (object, next) = parse_entries(contents, tokens, index + 1, depth + 1)?;
                 index = next;
                 Value::Object(object)
             }
@@ -216,7 +224,7 @@ fn parse_entries(
 
 fn parse(contents: &str) -> Result<ObjectValue, String> {
     let tokens = tokenize(contents)?;
-    let (root, consumed) = parse_entries(contents, &tokens, 0, false)?;
+    let (root, consumed) = parse_entries(contents, &tokens, 0, 0)?;
     if consumed != tokens.len() {
         return Err("steam_config_invalid".to_string());
     }
@@ -392,6 +400,28 @@ pub fn launch_options_value(contents: &str) -> Result<Option<String>, String> {
         Some(Value::Object(_)) => Err("steam_config_invalid".to_string()),
         None => Ok(None),
     }
+}
+
+/// The language Steam has set for Dota 2 in `appmanifest_570.acf`: the
+/// player's choice under `UserConfig`, else the one installed under
+/// `MountedConfig`. `None` when the manifest records neither.
+pub fn app_manifest_language(contents: &str) -> Result<Option<String>, String> {
+    let invalid = || "steam_manifest_invalid".to_string();
+    let root = parse(contents).map_err(|_| invalid())?;
+    match find_value(&root, &["AppState", "appid"]) {
+        Some(Value::Text(value)) if value.decoded == "570" => {}
+        _ => return Err(invalid()),
+    }
+    for section in ["UserConfig", "MountedConfig"] {
+        match find_value(&root, &["AppState", section, "language"]) {
+            Some(Value::Text(value)) if !value.decoded.trim().is_empty() => {
+                return Ok(Some(value.decoded.trim().to_string()));
+            }
+            Some(Value::Object(_)) => return Err(invalid()),
+            _ => {}
+        }
+    }
+    Ok(None)
 }
 
 /// The `-language` argument in a launch-option value: its language and the
@@ -587,6 +617,80 @@ mod tests {
         let plan = plan_language_restore(&gone, Some("-novid"), GameLanguage::Dutch).expect("plan");
         assert_eq!(plan.updated_contents, None);
         assert!(!plan.kept_user_change);
+    }
+
+    #[test]
+    fn every_language_is_applied_and_restored_exactly() {
+        let before = "-novid -language russian +exec a.cfg";
+        let foreign = local_config(Some(before));
+        let without = local_config(None);
+        for language in GameLanguage::ALL {
+            let created = plan_launch_option_for_language(&without, language)
+                .expect("insert")
+                .updated_contents;
+            assert!(created.contains(&format!("\"-language {}\"", language.suffix())));
+            let plan = plan_language_restore(&created, None, language).expect("restore");
+            assert_eq!(plan.updated_contents.as_deref(), Some(without.as_str()));
+            assert!(!plan.kept_user_change);
+            if language == GameLanguage::Russian {
+                continue;
+            }
+            let switched = plan_launch_option_for_language(&foreign, language)
+                .expect("switch")
+                .updated_contents;
+            assert!(switched.contains(&format!(
+                "-novid -language {} +exec a.cfg",
+                language.suffix()
+            )));
+            let plan = plan_language_restore(&switched, Some(before), language).expect("restore");
+            assert_eq!(plan.updated_contents.as_deref(), Some(foreign.as_str()));
+            assert!(!plan.kept_user_change);
+        }
+        // Minify's old `-language minify` is foreign to BetterFy: replaced on
+        // apply, given back on restore.
+        let minify = local_config(Some("-language minify -novid"));
+        let applied = plan_launch_option_for_language(&minify, GameLanguage::Betterfy)
+            .expect("apply")
+            .updated_contents;
+        assert!(applied.contains("\"-language betterfy -novid\""));
+        let plan = plan_language_restore(
+            &applied,
+            Some("-language minify -novid"),
+            GameLanguage::Betterfy,
+        )
+        .expect("restore");
+        assert_eq!(plan.updated_contents.as_deref(), Some(minify.as_str()));
+    }
+
+    #[test]
+    fn rejects_nesting_deeper_than_steam_writes() {
+        let nested = |depth: usize| format!("{}{}", "\"a\" { ".repeat(depth), "} ".repeat(depth));
+        assert!(parse(&nested(MAX_DEPTH)).is_ok());
+        assert_eq!(
+            parse(&nested(MAX_DEPTH + 1)).err().as_deref(),
+            Some("steam_config_invalid")
+        );
+    }
+
+    #[test]
+    fn reads_the_dota_language_from_the_app_manifest() {
+        let manifest = "\"AppState\"\n{\n\t\"appid\"\t\t\"570\"\n\t\"UserConfig\"\n\t{\n\t\t\"language\"\t\t\"russian\"\n\t}\n\t\"MountedConfig\"\n\t{\n\t\t\"language\"\t\t\"english\"\n\t}\n}\n";
+        assert_eq!(
+            app_manifest_language(manifest),
+            Ok(Some("russian".to_string()))
+        );
+        assert_eq!(
+            app_manifest_language("\"AppState\" { \"appid\" \"570\" }"),
+            Ok(None)
+        );
+        assert_eq!(
+            app_manifest_language("\"AppState\" { \"appid\" \"570\"").err(),
+            Some("steam_manifest_invalid".to_string())
+        );
+        assert_eq!(
+            app_manifest_language("\"UserLocalConfigStore\" { }").err(),
+            Some("steam_manifest_invalid".to_string())
+        );
     }
 
     #[test]

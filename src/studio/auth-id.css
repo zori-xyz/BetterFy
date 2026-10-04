@@ -105,15 +105,19 @@
 }
 .motion-disabled .auth-choice-actions > button, .motion-disabled .auth-choice-actions > button > svg:last-child { transition: none; transform: none !important; }
 
+/* "Your BetterFy ID" and the ID seal are set in Days One, the face of the
+   "Better" wordmark, as the website sets the same title. Days One ships one
+   400 weight and font-synthesis is off, so a heavier weight here would fall
+   back to Manrope's 700 face instead of the brand font. */
 .auth-stage .auth-login-copy .auth-id-main-title {
-  font-family: Manrope, sans-serif; font-weight: 800; letter-spacing: -.055em;
+  font-family: "Days One BetterFy", Manrope, sans-serif; font-weight: 400; letter-spacing: -.03em;
   color: #f7f5fb; font-size: clamp(44px, 4.55vw, 68px); line-height: 1.08;
 }
 .betterfy-id-mark { display: inline-flex; align-items: center; gap: 17px; width: max-content; max-width: 100%; }
 .betterfy-id-mark .wordmark-better { font-size: 23px; color: #f7f5fb; }
 .betterfy-id-mark .wordmark-fy { font-size: 36px; }
 .betterfy-id-seal { display: block; width: 61px; height: 39px; flex: 0 0 auto; overflow: visible; fill: #f7f5fb; }
-.betterfy-id-seal text { fill: #19191f; font: 900 21px/1 Manrope,sans-serif; letter-spacing: -.09em; }
+.betterfy-id-seal text { fill: #19191f; font: 400 21px/1 "Days One BetterFy",Manrope,sans-serif; letter-spacing: -.03em; }
 .auth-stage .auth-id-heading { margin-bottom: 24px; }
 .auth-id-form { padding: 26px 30px 30px; background: #19191f; border: 1px solid #3b3844; border-radius: var(--s-radius-panel); box-shadow: 0 26px 70px #08070c50; }
 .auth-stage .auth-id-form { max-width: 470px; margin-top: clamp(20px, 5vh, 60px); }
@@ -182,7 +186,7 @@
 .auth-stage-login .auth-login-copy { padding: 0 0 72px; }
 .auth-stage-login .auth-login-copy .section-label { display: flex; align-items: center; gap: 11px; margin-bottom: 24px; font-size: var(--s-text-sm); letter-spacing: .16em; }
 .auth-stage-login .auth-login-copy .section-label::before { content: ""; width: 18px; height: 1px; background: currentColor; }
-.auth-stage-login .auth-login-copy .auth-id-main-title { display: grid; gap: 2px; max-width: none; font-size: clamp(50px, 4.7vw, 84px); line-height: 1.025; letter-spacing: -.075em; }
+.auth-stage-login .auth-login-copy .auth-id-main-title { display: grid; gap: 2px; max-width: none; font-size: clamp(50px, 4.7vw, 84px); line-height: 1.025; letter-spacing: -.03em; }
 .auth-stage-login .auth-id-main-title span:last-child { white-space: nowrap; }
 .auth-stage-login .auth-id-main-title b { display: inline-block; margin-left: .29em; font-weight: inherit; }
 .auth-stage-login .auth-login-copy > p { max-width: 470px; margin-top: 30px; color: #bdb8c4; font-size: 15px; line-height: 1.75; }
@@ -255,6 +259,10 @@
 .challenge-match > small { grid-column: 2; font-size: var(--s-text-md); line-height: 1.5; color: var(--s-quiet); }
 :root[data-theme=light] .auth-choice-actions > .auth-id-choice { background: transparent; color: var(--s-text); }
 :root[data-theme=light] .auth-choice-actions > .auth-id-choice .auth-choice-icon { background: #7835a914; color: #7835a9; }
+/* On the pale light tile the white dark-theme seal disappears; it takes the tile's violet. */
+:root[data-theme=light] .auth-stage-login .auth-id-choice .auth-choice-icon .betterfy-id-seal { fill: var(--s-accent); }
+:root[data-theme=light] .auth-stage-login .auth-id-choice .auth-choice-icon .betterfy-id-seal text { fill: #fffafd; }
+:root[data-theme=light] .auth-choice-actions > .auth-id-choice .auth-choice-label small { color: var(--s-muted); }
 
 /* The first screen must fit the default 1180x760 window: the layout, footer
    included, fills exactly the space below the header instead of adding to it. */

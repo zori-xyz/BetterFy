@@ -43,7 +43,7 @@ use game_deployment::{
     DeploymentReceipt, DeploymentRecoveryRequest, DeploymentStressCapabilities,
     DeploymentStressFailurePoint, RecoveryReceipt,
 };
-use game_language::GameLanguage;
+use game_language::{DetectedLanguage, GameLanguage};
 use presets::{delete_preset, export_preset, import_preset, list_presets, save_preset};
 use remote_intake::ContentDownloadStatus;
 use runtime_control::{RuntimePrepareRequest, RuntimeState, SteamStartRequest};
@@ -419,6 +419,22 @@ async fn discover_game() -> Result<Vec<GameInstallation>, String> {
 #[tauri::command(async)]
 fn validate_game_path(path: String) -> Result<GameInstallation, String> {
     validate_candidate(Path::new(&path), "manual")
+}
+
+/// The language Steam has set for this Dota installation, read from its
+/// library's `appmanifest_570.acf`. Read-only; `None` when Steam records none.
+#[tauri::command]
+async fn detect_dota_language(game_path: String) -> Result<Option<DetectedLanguage>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = Path::new(&game_path);
+        if fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+            return Err("invalid_game_path".to_string());
+        }
+        let installation = validate_candidate(path, "manual")?;
+        game_language::detect_for_game_root(Path::new(&installation.path))
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
 }
 
 #[tauri::command]
@@ -1244,6 +1260,7 @@ fn main() {
             list_installable_packages,
             refresh_catalog,
             validate_game_path,
+            detect_dota_language,
             collect_system_diagnostics,
             intake_fixture_content,
             begin_content_download,

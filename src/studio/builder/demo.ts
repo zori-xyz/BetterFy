@@ -195,6 +195,11 @@ export const demoBridge: EngineBridge = {
   async previewTreeLanguage() {
     await wait(300);
   },
+  // The founder's Steam reports Russian for Dota, so the demo does too.
+  async detectDotaLanguage() {
+    await wait(450);
+    return { steamLanguage: "russian", language: "russian" };
+  },
   async previewSteamLaunchOptions(profileToken, language = "russian") {
     return {
       profileToken,
