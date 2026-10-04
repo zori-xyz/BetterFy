@@ -44,7 +44,7 @@
 
 Состав сборок:
 
-- № 1 — без списка пакетов (одиночная установка Tree Mod до сборок из нескольких модов).
+- № 1 — без списка пакетов и плана: запись старого формата, до сборок из нескольких модов (по времени это EA.18, вероятно одиночный Tree Mod).
 - № 2 — Tree Mod, Show NetWorth, Repopulate Unit Query HUD.
 - № 3 — то же + Remove River.
 - № 4 — 23 мода: Tree Mod, Show NetWorth, Remove River, Remove Foilage, Dark Terrain,
