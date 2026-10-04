@@ -69,10 +69,13 @@ jobs:
       # tauri-plugin-updater config expects a `.nsis.zip`/`.sig` pair, and it
       # runs this exact installer, in passive mode, to apply updates. This
       # build is no longer the user-facing download; see BetterFy Setup below.
+      # The stress stop points are compiled in, but the app offers them only to
+      # an account the auth service marks as a developer
+      # (BETTERFY_DEVELOPER_LOGINS on the Worker).
       - name: Build unsigned NSIS installer (for the updater)
         uses: tauri-apps/tauri-action@v1
         with:
-          args: --bundles nsis --config src-tauri/tauri.ci.conf.json
+          args: --bundles nsis --config src-tauri/tauri.ci.conf.json --features internal-stress-test
 
       - name: Stage the built app as the installer's payload
         shell: pwsh

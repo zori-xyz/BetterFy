@@ -60,6 +60,11 @@ file; it must never enter this repository or a client bundle.
    - `npx wrangler secret put AUTH_PASSWORD_PEPPER` (a different, independent secret)
    - `npx wrangler secret put RESEND_API_KEY`
    - `npx wrangler secret put EMAIL_FROM` (a sender on a verified email domain)
+   - optional: `npx wrangler secret put BETTERFY_DEVELOPER_LOGINS`, a
+     comma-separated list of BetterFy ID logins that see the desktop stress
+     tests. Only BetterFy ID logins match, never Telegram usernames. It is a
+     secret rather than a `wrangler.jsonc` var so the list stays out of the
+     repository and survives `npm run deploy`.
 4. Review `BETTERFY_PLAN_3D_STARS`, `BETTERFY_PLAN_15D_STARS`, and
    `BETTERFY_PLAN_30D_STARS` in `wrangler.jsonc` before charging users.
 5. Run `npm run db:migrate:remote` and `npm run deploy`.

@@ -368,6 +368,7 @@ async function sessionProfile(request, env, origin) {
   const avatarFileId = await refreshAvatar(env, user.telegram_user_id, now);
   const entitlement = await subscriptionRecord(env, user.user_id);
   const plan = planBySku(entitlement?.sku);
+  const developer = await isDeveloperAccount(env, user.user_id);
   return json({
     userId: user.user_id,
     displayName: user.display_name,
@@ -380,7 +381,25 @@ async function sessionProfile(request, env, origin) {
     accessRecurring: isEntitlementActive(entitlement, now) ? Boolean(plan?.recurring && entitlement.canceled_at == null) : false,
     sessionExpiresAt: user.expires_at,
     sessionId: user.session_id ?? undefined,
+    developer,
   }, 200, headers);
+}
+
+// Developer accounts see the controlled stress tests in the desktop app. The
+// list lives in the BETTERFY_DEVELOPER_LOGINS Worker setting (comma-separated
+// BetterFy ID logins), never in the repository. Only BetterFy ID credentials
+// match: a Telegram username is chosen by its owner and proves nothing here.
+export function developerLogins(env) {
+  const raw = typeof env.BETTERFY_DEVELOPER_LOGINS === "string" ? env.BETTERFY_DEVELOPER_LOGINS : "";
+  return new Set(raw.split(",").map((value) => normalizeIdUsername(value.trim())).filter(Boolean));
+}
+
+async function isDeveloperAccount(env, userId) {
+  const logins = developerLogins(env);
+  if (logins.size === 0) return false;
+  const credential = await env.AUTH_DB.prepare("SELECT username_key FROM betterfy_id_credentials WHERE user_id = ?")
+    .bind(userId).first();
+  return Boolean(credential && logins.has(credential.username_key));
 }
 
 async function emailIdentityStatus(request, env, origin) {
