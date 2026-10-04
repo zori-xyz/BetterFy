@@ -129,6 +129,35 @@ async function assertReducedMotionAndObserverFallback() {
   await fallbackPage.close();
 }
 
+async function assertThemeAndStatus() {
+  for (const colorScheme of ["dark", "light"]) {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, colorScheme });
+    await page.goto(origin, { waitUntil: "networkidle" });
+    const initial = await page.evaluate(() => document.documentElement.dataset.theme);
+    if (initial !== colorScheme) throw new Error(`System ${colorScheme} preference produced theme ${initial}`);
+    const next = colorScheme === "dark" ? "light" : "dark";
+    await page.getByRole("button", { name: next === "light" ? "Включить светлую тему" : "Включить тёмную тему" }).click();
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== next) throw new Error(`Theme button did not switch to ${next}`);
+    const rootColors = await page.evaluate(() => {
+      const root = getComputedStyle(document.getElementById("root"));
+      const body = getComputedStyle(document.body);
+      return root.backgroundColor === body.backgroundColor && root.color === body.color;
+    });
+    if (!rootColors) throw new Error(`#root kept the pre-load colours after switching to ${next}`);
+    await page.reload({ waitUntil: "networkidle" });
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== next) throw new Error(`Theme ${next} was not remembered`);
+    await page.close();
+  }
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.goto(origin, { waitUntil: "networkidle" });
+  const verified = await page.locator("#status .console-list li.is-ok").count();
+  const unverified = await page.locator("#status .console-list li:not(.is-ok)").count();
+  if (verified === 0 || unverified === 0) throw new Error("Status journal must list both verified and unverified facts");
+  const mods = await page.locator("#mods .mod-group li").count();
+  if (mods !== 25) throw new Error(`Mod catalog lists ${mods} packages, expected 25`);
+  await page.close();
+}
+
 try {
   for (const testCase of cases) {
     const page = await browser.newPage({ viewport: { width: testCase.width, height: testCase.height } });
@@ -197,7 +226,8 @@ try {
   await assertIdSignInFlow();
   await assertReleaseStates();
   await assertReducedMotionAndObserverFallback();
-  console.log(`BetterFy website: ${cases.length} responsive checks, mobile navigation, modal focus, auth/release failures, FAQ disclosure, reduced motion, and storage fallbacks passed.`);
+  await assertThemeAndStatus();
+  console.log(`BetterFy website: ${cases.length} responsive checks, mobile navigation, modal focus, auth/release failures, FAQ disclosure, reduced motion, storage fallbacks, theme switching and the status journal passed.`);
 } finally {
   await browser.close();
 }
