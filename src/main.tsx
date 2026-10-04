@@ -17,6 +17,7 @@ import "./studio/studio-finish.css";
 import "./studio/auth-id.css";
 import "./studio/studio-motion.css";
 import "./studio/auth-motion.css";
+import "./studio/studio-type.css";
 import "./spotlight";
 import App from "./studio/StudioApp";
 import AppErrorBoundary from "./AppErrorBoundary";

@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Check,
+  CircleDashed,
   Copy,
   Download,
   FileCheck2,
   FlaskConical,
+  Gamepad2,
   LoaderCircle,
+  Plus,
   RotateCcw,
   ShieldCheck,
   TriangleAlert,
@@ -16,6 +19,7 @@ import {
   engineBridge,
   type DeploymentEvidenceReport,
   type DeploymentStressFailurePoint,
+  type DetectedLanguage,
   type GameInstallation,
   type GameLanguage,
   type SteamProfileSummary,
@@ -33,6 +37,51 @@ import {
   packageName,
 } from "./packages";
 import { setEngineActive } from "./engineActivity";
+import { journal } from "./builder/journal";
+import { noticeFor } from "./builder/notices";
+import { demoActive, demoBridge, isDesktopRuntime, useDemoSettings } from "./builder/demo";
+import { usePhrase } from "./builder/phrases";
+import { NoticeCard } from "./builder/NoticeCard";
+import { DemoPanel } from "./builder/DemoPanel";
+import { buildLanguages, languageLabel as languageName } from "./builder/languages";
+import { Choice, ChoiceCards, ChoiceMenu, type ChoiceOption } from "./builder/Choice";
+import { getStorageItem, setStorageItem } from "../storage";
+
+const LANGUAGE_KEY = "betterfy:build-language";
+// "auto" follows the language Steam starts Dota in, "manual" keeps the
+// player's own pick. Nothing stored means auto.
+const LANGUAGE_MODE_KEY = "betterfy:build-language-mode";
+// English first, then the two slots checked on Windows; the rest sit in a menu.
+const PINNED_LANGUAGES: GameLanguage[] = ["betterfy", "russian", "dutch"];
+const isBuildLanguage = (value: string | null): value is GameLanguage =>
+  buildLanguages.some((option) => option.value === value);
+
+type LanguagePick = GameLanguage | "auto";
+type Detection =
+  | { status: "idle" | "loading" }
+  | { status: "done"; result: DetectedLanguage | null }
+  | { status: "failed"; code: string };
+// Detection runs on every visit to the build screen; the journal only hears
+// about it when the answer changes.
+let loggedDetection = "";
+
+/** A one-click fix for a mod relation, in catalog IDs. */
+export type RelationFix =
+  | { kind: "add"; add: string; requiredBy: string }
+  | { kind: "keep"; keep: string; drop: string };
+
+/** What the builder screen around the pilot card needs to know. */
+export type PilotState = {
+  plan: TreePilotPlan | null;
+  installed: boolean;
+  installedPackageIds: string[];
+  installedLanguage: GameLanguage | null;
+  justInstalled: boolean;
+  busy: boolean;
+  steamReady: boolean;
+  /** The signed-in account may run stress tests. */
+  developer: boolean;
+};
 
 const codeOf = (error: unknown) =>
   error instanceof EngineFault
@@ -40,180 +89,31 @@ const codeOf = (error: unknown) =>
     : error instanceof Error
       ? error.message
       : String(error);
-const explainError = (code: string, isRu: boolean) => {
-  const messages: Record<string, [string, string]> = {
-    runtime_busy: ["Закрой Dota 2 и Steam, затем повтори.", "Close Dota 2 and Steam, then retry."],
-    dota_close_unavailable: [
-      "Не удалось мягко закрыть Dota 2. Закрой игру вручную и повтори.",
-      "Dota 2 could not be closed gracefully. Close it manually and retry.",
-    ],
-    shutdown_timeout: [
-      "Dota 2 или Steam не завершились за 30 секунд. Закрой их вручную и повтори.",
-      "Dota 2 or Steam did not close within 30 seconds. Close them manually and retry.",
-    ],
-    steam_start_failed: [
-      "Файл установлен, но Steam не запустился. Запусти Steam вручную и проверь параметры запуска.",
-      "The file was installed, but Steam did not start. Open Steam manually and check launch options.",
-    ],
-    steam_start_timeout: [
-      "Файл установлен, но BetterFy не дождался запуска Steam. Проверь Steam вручную.",
-      "The file was installed, but BetterFy did not detect Steam starting. Check Steam manually.",
-    ],
-    platform_not_supported: [
-      "Установка доступна только на Windows.",
-      "Installation is Windows-only.",
-    ],
-    download_dns_failed: [
-      "Нет доступа к источнику. Проверь подключение к сети.",
-      "The source is unreachable. Check your connection.",
-    ],
-    download_transport_failed: [
-      "Не удалось скачать ресурс. Повтори подготовку — проверенные файлы сохранятся.",
-      "A resource could not be downloaded. Retry; verified files are kept.",
-    ],
-    package_conflict: [
-      "Эти моды конфликтуют между собой. Оставь в сборке только один из них.",
-      "These mods conflict. Keep only one of them in the build.",
-    ],
-    package_dependency_missing: [
-      "Одному из модов нужен другой мод. Добавь его в сборку.",
-      "One of the mods needs another mod. Add it to the build.",
-    ],
-    game_path_required: [
-      "Для этой сборки нужна подключённая Dota 2: BetterFy сверяется с файлами твоей игры.",
-      "This build needs a connected Dota 2: BetterFy checks it against your game files.",
-    ],
-    game_archive_unreadable: [
-      "Не удалось прочитать архивы Dota 2. Проверь файлы игры в Steam и повтори.",
-      "Dota 2 archives could not be read. Verify game files in Steam and retry.",
-    ],
-    blacklist_resolution_missing: [
-      "Сборку нужно подготовить заново: список изменений для этой версии игры не найден.",
-      "Prepare the build again: the change list for this game version is missing.",
-    ],
-    blacklist_resolution_stale: [
-      "Сборку нужно подготовить заново: список изменений устарел.",
-      "Prepare the build again: the change list is out of date.",
-    ],
-    steam_rollback_failed: [
-      "Параметры запуска Steam вернуть не удалось. Проверь их в свойствах Dota 2 в Steam.",
-      "Steam launch options could not be restored. Check them in Dota 2's properties in Steam.",
-    ],
-    steam_config_plan_stale: [
-      "Steam изменил свои настройки во время операции. Закрой Steam и повтори.",
-      "Steam changed its settings during the operation. Close Steam and retry.",
-    ],
-    steam_config_invalid: [
-      "Файл настроек Steam не удалось прочитать. BetterFy не будет его менять.",
-      "Steam's settings file could not be read. BetterFy will not change it.",
-    ],
-    rollback_failed: [
-      "Откат не подтвердился проверкой. Сохрани отчёт и не меняй файлы вручную.",
-      "The restore did not pass verification. Save the report and do not change files manually.",
-    ],
-    panorama_resolution_missing: [
-      "Сборку нужно подготовить заново: снимок интерфейса игры не найден.",
-      "Prepare the build again: the snapshot of the game interface is missing.",
-    ],
-    panorama_resolution_stale: [
-      "Сборку нужно подготовить заново: снимок интерфейса игры устарел.",
-      "Prepare the build again: the snapshot of the game interface is out of date.",
-    ],
-    panorama_layout_target_missing: [
-      "Мод не подходит к текущей версии Dota 2: нужного элемента интерфейса больше нет. Убери мод из сборки.",
-      "This mod does not fit the current Dota 2 version: the interface element it changes is gone. Remove it from the build.",
-    ],
-    panorama_layout_unsupported: [
-      "Файл интерфейса этой версии Dota 2 в непривычном формате. BetterFy не будет его менять.",
-      "This Dota 2 version stores the interface file in an unfamiliar format. BetterFy will not change it.",
-    ],
-    build_plan_stale: [
-      "План устарел. Подготовь сборку заново.",
-      "The plan is stale. Prepare the build again.",
-    ],
-    deployment_target_foreign: [
-      "Целевой файл занят другой модификацией. BetterFy не будет его заменять.",
-      "Another modification owns the target. BetterFy will not overwrite it.",
-    ],
-    deployment_language_change_requires_restore: [
-      "Сначала откати установленную сборку, затем выбери другой язык.",
-      "Restore the installed build before choosing another language.",
-    ],
-    language_folder_unavailable: [
-      "В установке Dota нет папки выбранного языка с gameinfo.gi. Выбери другой язык или восстанови файлы игры через Steam.",
-      "This Dota installation lacks the selected language folder with gameinfo.gi. Choose another language or verify game files in Steam.",
-    ],
-    launch_option_conflict: [
-      "В Steam уже указан другой язык. Восстанови прежние параметры BetterFy или измени их вручную перед установкой.",
-      "Steam already specifies a different language. Restore BetterFy's previous settings or change them manually before installing.",
-    ],
-    deployment_conflict: [
-      "Файл игры изменился после установки. Автоматический откат остановлен.",
-      "The game file changed after installation. Automatic restore was stopped.",
-    ],
-    backup_failed: [
-      "Резервная копия BetterFy недоступна. Автоматический откат заблокирован; не заменяй файл вручную, пока не проверишь состояние установки.",
-      "BetterFy's backup is unavailable. Automatic restore is blocked; inspect the installation before changing the file manually.",
-    ],
-    backup_verification_failed: [
-      "Резервная копия не прошла проверку. BetterFy не будет восстанавливать её поверх файла игры.",
-      "The backup failed verification. BetterFy will not restore it over the game file.",
-    ],
-    rollback_conflict: [
-      "Файл игры изменился после установки. Автоматический откат остановлен.",
-      "The game file changed after installation. Automatic restore was stopped.",
-    ],
-    steam_profile_conflict: [
-      "Этот Steam-профиль нельзя менять автоматически. Выбери другой или проверь параметры запуска вручную.",
-      "This Steam profile cannot be changed automatically. Choose another or inspect its launch options.",
-    ],
-    steam_activation_not_ready: [
-      "Параметры Steam не подтверждены. Не считай мод активным в игре.",
-      "Steam settings were not verified. Do not assume the mod is active in game.",
-    ],
-    steam_recovery_required: [
-      "Найдено прерванное изменение Steam. Сначала восстанови его в диагностике.",
-      "An interrupted Steam change was found. Recover it in diagnostics first.",
-    ],
-    clipboard_unavailable: [
-      "Не удалось скопировать параметр. Выдели и скопируй его вручную.",
-      "Could not copy the option. Select and copy it manually.",
-    ],
-    stress_requires_unmanaged_profile: [
-      "Для этого теста выбери Steam-профиль, где BetterFy ещё не добавлял выбранный язык.",
-      "Choose a Steam profile where BetterFy has not already added the selected language.",
-    ],
-    stress_recovery_unverified: [
-      "Тестовое восстановление не дало ожидаемого подтверждения. Не запускай Dota и скопируй отчёт.",
-      "Test recovery did not produce the expected proof. Do not launch Dota; copy the report.",
-    ],
-    stress_injection_did_not_fire: [
-      "Тестовая точка отказа не сработала. Обычная установка не подтверждена этим тестом.",
-      "The test failure point did not fire. This test did not verify the normal installation.",
-    ],
-    stress_test_disabled: [
-      "Контролируемый стресс-тест доступен только аккаунту разработчика.",
-      "Controlled stress testing is available only to a developer account.",
-    ],
-  };
-  return (
-    messages[code]?.[isRu ? 0 : 1] ??
-    (isRu
-      ? `Операция остановлена (${code}). Проверь состояние установки перед запуском игры.`
-      : `Operation stopped (${code}). Check installation state before launching the game.`)
-  );
-};
-
 export default function TreePilot({
   ids,
   installation,
   preview,
+  onState,
+  onFixRelation,
+  onConnectDota,
 }: {
   ids: string[];
   installation: GameInstallation;
   preview: boolean;
+  onState?: (state: PilotState) => void;
+  /** Adds a required mod or drops a conflicting one, next to the message. */
+  onFixRelation?: (fix: RelationFix) => void;
+  /** Opens the Dota 2 connection screen. */
+  onConnectDota?: () => void;
 }) {
   const { isRu, language } = useLocale();
+  const demo = demoActive();
+  const bridge = demo ? demoBridge : engineBridge;
+  const demoDeveloper = useDemoSettings().developer;
+  const say = (tone: Parameters<typeof journal.log>[0], ru: string, en: string, detail?: string) =>
+    journal.log(tone, ru, en, detail);
+  const languageLabel = (value: GameLanguage) => languageName(value, isRu);
+  const [justInstalled, setJustInstalled] = useState(false);
   const [plan, setPlan] = useState<TreePilotPlan | null>(null);
   const [operationId, setOperationId] = useState<string | null>(null);
   const [verifiedInstall, setVerifiedInstall] = useState(false);
@@ -227,7 +127,39 @@ export default function TreePilot({
   const [recoveryMessage, setRecoveryMessage] = useState("");
   const [profiles, setProfiles] = useState<SteamProfileSummary[]>([]);
   const [selectedProfile, setSelectedProfile] = useState("");
-  const [selectedLanguage, setSelectedLanguage] = useState<GameLanguage | "">("");
+  // By default the build follows the language Steam starts Dota in. The
+  // language last picked or installed, or Russian for a Russian interface,
+  // is the fallback when Steam cannot tell.
+  const [followDota, setFollowDota] = useState(
+    () => getStorageItem(LANGUAGE_MODE_KEY) !== "manual",
+  );
+  const [chosenLanguage, setChosenLanguage] = useState<GameLanguage | "">(() => {
+    const stored = getStorageItem(LANGUAGE_KEY);
+    if (isBuildLanguage(stored)) return stored;
+    return isRu ? "russian" : "";
+  });
+  const [detection, setDetection] = useState<Detection>({ status: "idle" });
+  const detected = detection.status === "done" ? (detection.result?.language ?? null) : null;
+  // Steam's own name for it, e.g. "english" for the BetterFy slot.
+  const steamName = detection.status === "done" ? (detection.result?.steamLanguage ?? null) : null;
+  // Empty while Steam is still being asked, so Install never runs on a guess.
+  const selectedLanguage: GameLanguage | "" = followDota
+    ? detection.status === "loading"
+      ? ""
+      : (detected ?? chosenLanguage)
+    : chosenLanguage;
+  const chooseLanguage = (value: LanguagePick) => {
+    if (value === "auto" || value === detected) {
+      setFollowDota(true);
+      setStorageItem(LANGUAGE_MODE_KEY, "auto");
+      return;
+    }
+    setFollowDota(false);
+    setChosenLanguage(value);
+    setStorageItem(LANGUAGE_MODE_KEY, "manual");
+    setStorageItem(LANGUAGE_KEY, value);
+  };
+  const languageFieldRef = useRef<HTMLDivElement>(null);
   const [installedLanguage, setInstalledLanguage] = useState<GameLanguage | null>(null);
   const [installedPackageIds, setInstalledPackageIds] = useState<string[]>([]);
   const [steamStarted, setSteamStarted] = useState(false);
@@ -242,6 +174,8 @@ export default function TreePilot({
   const [reportError, setReportError] = useState("");
   const [error, setError] = useState("");
   const [dotaPatched, setDotaPatched] = useState(false);
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
   // Only work that touches game files or Steam blocks the rest of the app.
   // Set on start and cleared in each operation's `finally`, so leaving this
   // screen mid-operation cannot clear it early.
@@ -267,12 +201,13 @@ export default function TreePilot({
         ? `Сборка · ${ids.length} мода`
         : `Build · ${ids.length} mods`
       : (catalogName(ids[0]) ?? "Tree Mod");
-  const windows = /Windows/i.test(navigator.userAgent);
-  const desktop = "__TAURI_INTERNALS__" in window;
+  // The browser preview runs the same screens against the demo bridge.
+  const windows = demo || /Windows/i.test(navigator.userAgent);
+  const desktop = demo || isDesktopRuntime();
   // Managing an existing installation (restore, Steam, recovery, evidence)
   // must not depend on what is currently selected: changing the selection
   // after installing would otherwise hide the only way back.
-  const canManage = desktop && windows && !preview && installation.verified;
+  const canManage = desktop && windows && (demo || (!preview && installation.verified));
   const canInstall = canManage && supportedBundle;
   // Packages whose manifest records no in-game verification yet.
   const unverified = ids.filter((id) => !findPackage(id)?.verifiedLanguages?.length);
@@ -280,6 +215,32 @@ export default function TreePilot({
     if (!status) return;
     setVerifiedResources(status.verifiedResources);
     setTotalResources(status.totalResources);
+    if (
+      phaseRef.current === "download" &&
+      status.phase !== "downloading" &&
+      status.phase !== "verifying"
+    ) {
+      if (status.phase === "ready")
+        say(
+          "ok",
+          `Файлы проверены: ${status.verifiedResources} из ${status.totalResources}. Сборка собрана в план.`,
+          `Files verified: ${status.verifiedResources} of ${status.totalResources}. The build plan is ready.`,
+          status.plan?.planId.slice(0, 19),
+        );
+      else if (status.phase === "cancelled")
+        say(
+          "warn",
+          "Подготовку остановили. Проверенные файлы сохранены.",
+          "Preparation stopped. Verified files are kept.",
+        );
+      else
+        say(
+          "error",
+          "Подготовка не удалась.",
+          "Preparation failed.",
+          status.errorCode ?? "download_failed",
+        );
+    }
     if (status.phase === "ready") {
       const expectedIds = ids.map(engineIdFor);
       if (
@@ -306,7 +267,7 @@ export default function TreePilot({
       setTotalResources(0);
     }
     let active = true;
-    engineBridge
+    bridge
       .treePilotDownloadStatus()
       .then((status) => {
         if (active) applyDownloadStatus(status);
@@ -320,7 +281,7 @@ export default function TreePilot({
     if (phase !== "download") return;
     let active = true;
     const timer = window.setInterval(() => {
-      engineBridge
+      bridge
         .treePilotDownloadStatus()
         .then((status) => {
           if (active) applyDownloadStatus(status);
@@ -338,9 +299,9 @@ export default function TreePilot({
     };
   }, [phase]);
   useEffect(() => {
-    if (!desktop || !windows || preview || !installation.verified) return;
+    if (!canManage) return;
     let active = true;
-    engineBridge
+    bridge
       .currentTreePilot(installation.path)
       .then((receipt) => {
         if (!active) return;
@@ -360,11 +321,11 @@ export default function TreePilot({
     return () => {
       active = false;
     };
-  }, [desktop, windows, preview, installation.verified, installation.path]);
+  }, [canManage, installation.path]);
   useEffect(() => {
     if (!canManage) return;
     let active = true;
-    engineBridge
+    bridge
       .listSteamProfiles()
       .then((found) => {
         if (!active) return;
@@ -384,10 +345,61 @@ export default function TreePilot({
       active = false;
     };
   }, [canManage]);
+  // Reads Steam's own manifest for Dota (read-only) so the build can keep the
+  // language the player already runs the game in.
+  const wantsLanguage = canManage && ids.length > 0;
+  useEffect(() => {
+    if (!wantsLanguage) return;
+    let active = true;
+    setDetection({ status: "loading" });
+    const note = (key: string, ...entry: Parameters<typeof journal.log>) => {
+      if (key === loggedDetection) return;
+      loggedDetection = key;
+      journal.log(...entry);
+    };
+    bridge
+      .detectDotaLanguage(installation.path)
+      .then((result) => {
+        if (!active) return;
+        setDetection({ status: "done", result });
+        const key = `${installation.path}|${result?.steamLanguage ?? ""}`;
+        if (result?.language)
+          note(
+            key,
+            "ok",
+            `Steam запускает Dota на языке: ${languageName(result.language, true)}.`,
+            `Steam starts Dota in ${languageName(result.language, false)}.`,
+            `steam: ${result.steamLanguage}`,
+          );
+        else if (result)
+          note(
+            key,
+            "warn",
+            `Steam запускает Dota на языке «${result.steamLanguage}», а папки для него у BetterFy нет.`,
+            `Steam starts Dota in "${result.steamLanguage}", and BetterFy has no folder for it.`,
+          );
+        else note(key, "warn", "Steam не указал язык Dota.", "Steam lists no language for Dota.");
+      })
+      .catch((cause) => {
+        if (!active) return;
+        const code = codeOf(cause);
+        setDetection({ status: "failed", code });
+        note(
+          `${installation.path}|${code}`,
+          "warn",
+          "Не удалось узнать язык Dota из Steam.",
+          "Could not read Dota's language from Steam.",
+          code,
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [wantsLanguage, installation.path]);
   useEffect(() => {
     if (!canManage) return;
     let active = true;
-    engineBridge
+    bridge
       .treePilotStressCapabilities()
       .then((capabilities) => {
         if (active) setStressEnabled(capabilities.enabled);
@@ -395,7 +407,7 @@ export default function TreePilot({
       .catch(() => {
         if (active) setStressEnabled(false);
       });
-    engineBridge
+    bridge
       .collectTreePilotEvidence(installation.path)
       .then((report) => {
         if (active) setEvidence(report);
@@ -404,15 +416,21 @@ export default function TreePilot({
     return () => {
       active = false;
     };
-  }, [canManage, installation.path]);
+  }, [canManage, installation.path, demoDeveloper]);
 
   async function prepare() {
     if (!desktop || phase !== "idle") return;
     setError("");
     setPhase("download");
+    phaseRef.current = "download";
+    say(
+      "step",
+      `Скачиваем и сверяем файлы: ${ids.length} ${ids.length === 1 ? "мод" : ids.length < 5 ? "мода" : "модов"}.`,
+      `Downloading and checking files for ${ids.length} ${ids.length === 1 ? "mod" : "mods"}.`,
+    );
     try {
       applyDownloadStatus(
-        await engineBridge.beginTreePilotDownload(
+        await bridge.beginTreePilotDownload(
           ids,
           installation.verified ? installation.path : undefined,
         ),
@@ -425,7 +443,7 @@ export default function TreePilot({
 
   async function cancelPrepare() {
     try {
-      await engineBridge.cancelTreePilotDownload();
+      await bridge.cancelTreePilotDownload();
     } catch (cause) {
       setError(codeOf(cause));
     }
@@ -435,18 +453,32 @@ export default function TreePilot({
     if (!plan || !canInstall || !selectedLanguage || phase !== "idle") return;
     setError("");
     setPhase("install");
+    setJustInstalled(false);
     let installed = false;
+    say(
+      "step",
+      `Проверяем папку языка: ${languageLabel(selectedLanguage)}.`,
+      `Checking the ${languageLabel(selectedLanguage)} language folder.`,
+      `game/dota_${selectedLanguage}`,
+    );
     try {
-      await engineBridge.previewTreeLanguage(installation.path, selectedLanguage);
+      await bridge.previewTreeLanguage(installation.path, selectedLanguage);
       if (selectedProfile) {
         const profile = profiles.find((item) => item.profileToken === selectedProfile);
         if (!profile || !["ready", "already_managed"].includes(profile.status))
           throw new Error("steam_profile_conflict");
-        await engineBridge.previewSteamLaunchOptions(selectedProfile, selectedLanguage);
+        await bridge.previewSteamLaunchOptions(selectedProfile, selectedLanguage);
       }
-      const runtime = await engineBridge.prepareRuntimeForPatch();
+      say("step", "Мягко закрываем Dota 2 и Steam.", "Closing Dota 2 and Steam gracefully.");
+      const runtime = await bridge.prepareRuntimeForPatch();
       if (!runtime.patchReady) throw new Error("runtime_busy");
-      const receipt = await engineBridge.installTreePilot(
+      say(
+        "step",
+        "Сохраняем исходный файл и записываем сборку.",
+        "Backing up the original file and writing the build.",
+        plan.targetFile,
+      );
+      const receipt = await bridge.installTreePilot(
         installation.path,
         ids,
         plan.planId,
@@ -454,6 +486,12 @@ export default function TreePilot({
       );
       if (!receipt.committed || !receipt.backupVerified) throw new Error("deployment_unverified");
       installed = true;
+      say(
+        "ok",
+        "Сборка записана, бэкап проверен.",
+        "Build written, backup verified.",
+        `dota_${receipt.language}/${plan.targetFile}`,
+      );
       setDotaPatched(false);
       setOperationId(receipt.operationId);
       setInstalledLanguage(receipt.language);
@@ -465,11 +503,13 @@ export default function TreePilot({
         const profile = profiles.find((item) => item.profileToken === selectedProfile);
         if (!profile || !["ready", "already_managed"].includes(profile.status))
           throw new Error("steam_profile_conflict");
-        const steamPlan = await engineBridge.previewSteamLaunchOptions(
-          selectedProfile,
-          receipt.language,
+        say(
+          "step",
+          `Добавляем -language ${receipt.language} в профиль Steam.`,
+          `Adding -language ${receipt.language} to the Steam profile.`,
         );
-        const steamReceipt = await engineBridge.applyTreeSteamLaunchOptions({
+        const steamPlan = await bridge.previewSteamLaunchOptions(selectedProfile, receipt.language);
+        const steamReceipt = await bridge.applyTreeSteamLaunchOptions({
           gamePath: installation.path,
           deploymentOperationId: receipt.operationId,
           profileToken: selectedProfile,
@@ -481,7 +521,13 @@ export default function TreePilot({
         if (steamReceipt.operationId) {
           setSteamOperationId(steamReceipt.operationId);
         }
-        await engineBridge.startSteamAfterTreePilot({
+        say(
+          "ok",
+          "Параметр запуска добавлен, копия настроек Steam сохранена.",
+          "Launch option added; Steam settings backed up.",
+        );
+        say("step", "Запускаем Steam.", "Starting Steam.");
+        await bridge.startSteamAfterTreePilot({
           gamePath: installation.path,
           operationId: receipt.operationId,
           profileToken: selectedProfile,
@@ -490,14 +536,27 @@ export default function TreePilot({
         setSteamStarted(true);
         setSteamRestarted(true);
       } else {
-        await engineBridge.startSteamAfterTreePilot({
+        say("step", "Запускаем Steam.", "Starting Steam.");
+        await bridge.startSteamAfterTreePilot({
           gamePath: installation.path,
           operationId: receipt.operationId,
         });
         setSteamRestarted(true);
       }
+      say(
+        "ok",
+        selectedProfile
+          ? "Steam запущен с нужным языком."
+          : "Steam запущен. Осталось вставить параметр запуска.",
+        selectedProfile
+          ? "Steam is running with the right language."
+          : "Steam is running. Paste the launch option to finish.",
+      );
+      setJustInstalled(true);
     } catch (cause) {
-      setError(codeOf(cause));
+      const code = codeOf(cause);
+      setError(code);
+      say("error", "Установка остановлена.", "Installation stopped.", code);
     } finally {
       setEngineActive(false);
       setPhase("idle");
@@ -516,16 +575,23 @@ export default function TreePilot({
     let buildRestored = false;
     let steamProblem = "";
     let keptUserChange = false;
+    setJustInstalled(false);
+    say(
+      "step",
+      "Откат: мягко закрываем Dota 2 и Steam.",
+      "Restore: closing Dota 2 and Steam gracefully.",
+    );
     try {
       if (steamRecoveryRequired) throw new Error("steam_recovery_required");
-      const runtime = await engineBridge.prepareRuntimeForPatch();
+      const runtime = await bridge.prepareRuntimeForPatch();
       if (!runtime.patchReady) throw new Error("runtime_busy");
       steamClosed = true;
       if (steamOperationId) {
+        say("step", "Возвращаем параметры запуска Steam.", "Restoring Steam launch options.");
         // The game file does not depend on Steam's launch options, so a
         // Steam problem is reported but does not keep the build installed.
         try {
-          const steamReceipt = await engineBridge.rollbackSteamLaunchOptions(steamOperationId);
+          const steamReceipt = await bridge.rollbackSteamLaunchOptions(steamOperationId);
           if (!steamReceipt.rolledBack) throw new Error("steam_rollback_failed");
           keptUserChange = Boolean(steamReceipt.keptUserChange);
           setSteamOperationId(null);
@@ -533,30 +599,51 @@ export default function TreePilot({
           steamProblem = codeOf(cause);
         }
       }
-      const receipt = await engineBridge.rollbackGameDeployment(installation.path, operationId);
+      if (steamProblem)
+        say(
+          "warn",
+          "Параметры Steam вернуть не удалось.",
+          "Steam launch options were not restored.",
+          steamProblem,
+        );
+      say(
+        "step",
+        "Возвращаем исходный файл из бэкапа.",
+        "Restoring the original file from the backup.",
+      );
+      const receipt = await bridge.rollbackGameDeployment(installation.path, operationId);
       if (!receipt.rolledBack) throw new Error("rollback_failed");
       buildRestored = true;
+      say("ok", "Исходные файлы Dota 2 на месте.", "Original Dota 2 files are back.");
       setOperationId(null);
       setInstalledLanguage(null);
       setInstalledPackageIds([]);
       setVerifiedInstall(false);
       setPackageVerified(false);
       setPlan(null);
-      setSelectedLanguage("");
       setSteamStarted(false);
       setSteamRecoveryRequired(false);
       if (steamProblem) setError(steamProblem);
     } catch (cause) {
-      setError(codeOf(cause));
+      const code = codeOf(cause);
+      setError(code);
+      say("error", "Откат остановлен.", "Restore stopped.", code);
     } finally {
       if (steamClosed) {
         let steamRunning = false;
         try {
-          steamRunning = (await engineBridge.startSteamAfterRestore()).steamRunning;
+          steamRunning = (await bridge.startSteamAfterRestore()).steamRunning;
         } catch {
           steamRunning = false;
         }
         setSteamRestarted(steamRunning);
+        if (steamRunning) say("ok", "Steam снова запущен.", "Steam is running again.");
+        else
+          say(
+            "warn",
+            "Steam не запустился сам — запусти его вручную.",
+            "Steam did not start; start it manually.",
+          );
         const parts: string[] = [];
         if (buildRestored) {
           parts.push(isRu ? "Сборка удалена из игры." : "The build was removed from the game.");
@@ -609,14 +696,19 @@ export default function TreePilot({
       return;
     setError("");
     setPhase("steam");
+    say(
+      "step",
+      "Настраиваем Steam для установленной сборки.",
+      "Setting up Steam for the installed build.",
+    );
     try {
       const profile = profiles.find((item) => item.profileToken === selectedProfile);
       if (!profile || !["ready", "already_managed"].includes(profile.status))
         throw new Error("steam_profile_conflict");
-      const runtime = await engineBridge.prepareRuntimeForPatch();
+      const runtime = await bridge.prepareRuntimeForPatch();
       if (!runtime.patchReady) throw new Error("runtime_busy");
       if (steamOperationId) {
-        await engineBridge.startSteamAfterTreePilot({
+        await bridge.startSteamAfterTreePilot({
           gamePath: installation.path,
           operationId,
           profileToken: selectedProfile,
@@ -626,11 +718,8 @@ export default function TreePilot({
         setSteamRestarted(true);
         return;
       }
-      const preview = await engineBridge.previewSteamLaunchOptions(
-        selectedProfile,
-        installedLanguage,
-      );
-      const receipt = await engineBridge.applyTreeSteamLaunchOptions({
+      const preview = await bridge.previewSteamLaunchOptions(selectedProfile, installedLanguage);
+      const receipt = await bridge.applyTreeSteamLaunchOptions({
         gamePath: installation.path,
         deploymentOperationId: operationId,
         profileToken: selectedProfile,
@@ -642,7 +731,7 @@ export default function TreePilot({
       if (receipt.operationId) {
         setSteamOperationId(receipt.operationId);
       }
-      await engineBridge.startSteamAfterTreePilot({
+      await bridge.startSteamAfterTreePilot({
         gamePath: installation.path,
         operationId,
         profileToken: selectedProfile,
@@ -650,8 +739,11 @@ export default function TreePilot({
       });
       setSteamStarted(true);
       setSteamRestarted(true);
+      say("ok", "Steam настроен и запущен.", "Steam is set up and running.");
     } catch (cause) {
-      setError(codeOf(cause));
+      const code = codeOf(cause);
+      setError(code);
+      say("error", "Настройка Steam остановлена.", "Steam setup stopped.", code);
     } finally {
       setEngineActive(false);
       setPhase("idle");
@@ -663,14 +755,17 @@ export default function TreePilot({
     setPhase("restore");
     setError("");
     try {
-      const runtime = await engineBridge.prepareRuntimeForPatch();
+      const runtime = await bridge.prepareRuntimeForPatch();
       if (!runtime.patchReady) throw new Error("runtime_busy");
-      const receipt = await engineBridge.rollbackSteamLaunchOptions(steamOperationId);
+      const receipt = await bridge.rollbackSteamLaunchOptions(steamOperationId);
       if (!receipt.rolledBack) throw new Error("steam_rollback_failed");
       setSteamOperationId(null);
       setSteamStarted(false);
+      say("ok", "Параметры запуска Steam восстановлены.", "Steam launch options restored.");
     } catch (cause) {
-      setError(codeOf(cause));
+      const code = codeOf(cause);
+      setError(code);
+      say("error", "Параметры Steam не восстановлены.", "Steam settings were not restored.", code);
     } finally {
       setEngineActive(false);
       setPhase("idle");
@@ -693,13 +788,14 @@ export default function TreePilot({
     setError("");
     setRecoveryMessage("");
     setRecovering(true);
+    say("step", "Ищем прерванные операции.", "Looking for interrupted operations.");
     try {
       if (steamRecoveryRequired) {
-        const runtime = await engineBridge.prepareRuntimeForPatch();
+        const runtime = await bridge.prepareRuntimeForPatch();
         if (!runtime.patchReady) throw new Error("runtime_busy");
-        await engineBridge.recoverSteamLaunchOptions();
+        await bridge.recoverSteamLaunchOptions();
       }
-      const result = await engineBridge.recoverGameDeployments(installation.path);
+      const result = await bridge.recoverGameDeployments(installation.path);
       setRecoveryMessage(
         result.inspected === 0
           ? isRu
@@ -709,7 +805,16 @@ export default function TreePilot({
             ? `Проверено ${result.inspected}; откат выполнен для ${result.rolledBack}.`
             : `Inspected ${result.inspected}; restored ${result.rolledBack}.`,
       );
-      const current = await engineBridge.currentTreePilot(installation.path);
+      say(
+        "ok",
+        result.inspected === 0
+          ? "Прерванных операций нет."
+          : `Проверено ${result.inspected}, откачено ${result.rolledBack}.`,
+        result.inspected === 0
+          ? "No interrupted operations."
+          : `Inspected ${result.inspected}, restored ${result.rolledBack}.`,
+      );
+      const current = await bridge.currentTreePilot(installation.path);
       setOperationId(current?.operationId ?? null);
       setInstalledLanguage(current?.language ?? null);
       setInstalledPackageIds(current?.packageIds ?? []);
@@ -731,7 +836,7 @@ export default function TreePilot({
   async function refreshEvidence(copy = false) {
     if (!canManage) return;
     try {
-      const report = await engineBridge.collectTreePilotEvidence(installation.path);
+      const report = await bridge.collectTreePilotEvidence(installation.path);
       setEvidence(report);
       if (copy) {
         await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
@@ -748,18 +853,19 @@ export default function TreePilot({
   // section and never interrupts the operation that triggered it.
   function saveEvidenceReport() {
     if (!canManage) return;
-    engineBridge
+    bridge
       .saveTreePilotEvidence(installation.path)
       .then((saved) => {
         setSavedReport(saved.fileName);
         setReportError("");
+        say("ok", "Отчёт сохранён.", "Report saved.", saved.fileName);
       })
       .catch((cause) => setReportError(codeOf(cause)));
   }
 
   async function openReportsFolder() {
     try {
-      await engineBridge.openReportsFolder();
+      await bridge.openReportsFolder();
     } catch (cause) {
       setReportError(codeOf(cause));
     }
@@ -780,11 +886,17 @@ export default function TreePilot({
     setStressMessage("");
     setStressPhase(failurePoint);
     setEngineActive(true);
+    say(
+      "dev",
+      `Стресс-тест: обрыв ${failurePoint === "after_prepared" ? "до" : "после"} записи.`,
+      `Stress test: interrupt ${failurePoint === "after_prepared" ? "before" : "after"} publish.`,
+      failurePoint,
+    );
     try {
-      const runtime = await engineBridge.prepareRuntimeForPatch();
+      const runtime = await bridge.prepareRuntimeForPatch();
       if (!runtime.patchReady) throw new Error("runtime_busy");
       try {
-        await engineBridge.installTreePilotStress(
+        await bridge.installTreePilotStress(
           installation.path,
           ids,
           plan.planId,
@@ -795,7 +907,7 @@ export default function TreePilot({
       } catch (cause) {
         if (codeOf(cause) !== "injected_failure") throw cause;
       }
-      const recovery = await engineBridge.recoverGameDeployments(installation.path);
+      const recovery = await bridge.recoverGameDeployments(installation.path);
       const passed =
         failurePoint === "after_prepared"
           ? recovery.markedFailed > 0 && recovery.rolledBack === 0
@@ -811,9 +923,12 @@ export default function TreePilot({
             ? "PASS · Обрыв после публикации восстановлен из проверенного состояния."
             : "PASS · Interruption after publish was restored from verified state.",
       );
+      say("dev", "PASS · восстановление подтверждено.", "PASS · recovery verified.");
       saveEvidenceReport();
     } catch (cause) {
-      setError(codeOf(cause));
+      const code = codeOf(cause);
+      setError(code);
+      say("error", "Стресс-тест не прошёл.", "Stress test failed.", code);
     } finally {
       setEngineActive(false);
       setStressPhase(null);
@@ -837,19 +952,25 @@ export default function TreePilot({
     setStressMessage("");
     setStressPhase(failurePoint);
     setEngineActive(true);
+    say(
+      "dev",
+      `Стресс-тест Steam: обрыв ${failurePoint === "after_prepared" ? "до" : "после"} записи.`,
+      `Steam stress test: interrupt ${failurePoint === "after_prepared" ? "before" : "after"} publish.`,
+      failurePoint,
+    );
     try {
       const profile = profiles.find((item) => item.profileToken === selectedProfile);
       if (!profile || !["ready", "already_managed"].includes(profile.status))
         throw new Error("steam_profile_conflict");
-      const runtime = await engineBridge.prepareRuntimeForPatch();
+      const runtime = await bridge.prepareRuntimeForPatch();
       if (!runtime.patchReady) throw new Error("runtime_busy");
-      const previewPlan = await engineBridge.previewSteamLaunchOptions(
+      const previewPlan = await bridge.previewSteamLaunchOptions(
         selectedProfile,
         installedLanguage,
       );
       if (!previewPlan.changed) throw new Error("stress_requires_unmanaged_profile");
       try {
-        await engineBridge.applyTreeSteamLaunchOptionsStress(
+        await bridge.applyTreeSteamLaunchOptionsStress(
           {
             gamePath: installation.path,
             deploymentOperationId: operationId,
@@ -863,7 +984,7 @@ export default function TreePilot({
       } catch (cause) {
         if (codeOf(cause) !== "injected_failure") throw cause;
       }
-      const receipts = await engineBridge.recoverSteamLaunchOptions();
+      const receipts = await bridge.recoverSteamLaunchOptions();
       if (
         !receipts.some(
           (receipt) => receipt.rolledBack && receipt.beforeSha256 === previewPlan.beforeSha256,
@@ -881,9 +1002,12 @@ export default function TreePilot({
             ? "PASS · Изменение Steam после записи восстановлено byte-for-byte."
             : "PASS · Steam change after publish was restored byte-for-byte.",
       );
+      say("dev", "PASS · восстановление подтверждено.", "PASS · recovery verified.");
       saveEvidenceReport();
     } catch (cause) {
-      setError(codeOf(cause));
+      const code = codeOf(cause);
+      setError(code);
+      say("error", "Стресс-тест не прошёл.", "Stress test failed.", code);
     } finally {
       setEngineActive(false);
       setStressPhase(null);
@@ -892,313 +1016,667 @@ export default function TreePilot({
 
   // Mounted even without pilot mods selected so an existing installation can
   // still be found and restored; renders nothing when there is none.
+  const busy = phase !== "idle" || recovering || Boolean(stressPhase);
+  useEffect(() => {
+    onState?.({
+      plan,
+      installed: Boolean(operationId),
+      installedPackageIds,
+      installedLanguage,
+      justInstalled,
+      busy,
+      steamReady: steamStarted,
+      developer: stressEnabled,
+    });
+  }, [
+    plan,
+    operationId,
+    installedPackageIds,
+    installedLanguage,
+    justInstalled,
+    busy,
+    steamStarted,
+    stressEnabled,
+  ]);
+  const activePhrase = usePhrase(phase === "idle" ? (recovering ? "restore" : null) : phase, isRu);
   if (!ids.length && !operationId && !steamOperationId && !steamRecoveryRequired) return null;
-  return (
-    <section className="s-tree-pilot" aria-labelledby="tree-pilot-title">
-      <div className="s-tree-pilot-head">
-        <span className="s-tree-pilot-symbol">
-          <ShieldCheck />
-        </span>
-        <div>
-          <small>
-            {isRu ? "ПРОВЕРЯЕМАЯ СБОРКА" : "VERIFIABLE BUILD"} · {deliveryLabel("pilot", language)}
-          </small>
-          <h2 id="tree-pilot-title">{bundleName}</h2>
-        </div>
-        <span className="s-tree-pilot-mark">
-          {String(ids.length).padStart(2, "0")} /{" "}
-          {String(installablePackages.length).padStart(2, "0")}
-        </span>
-      </div>
-      <p>
-        {isRu
-          ? "BetterFy скачивает только проверенные файлы модов, сверяет каждый и собирает из них один файл в выбранном тобой порядке. Если два мода меняют одно и то же, побеждает верхний."
-          : "BetterFy downloads only verified mod files, checks each one and combines them into a single file in your chosen order. If two mods change the same thing, the higher one wins."}
-      </p>
-      <div className="s-tree-pilot-steps">
-        {(() => {
-          const steps = [
-            {
-              done: Boolean(plan),
-              busy: phase === "download",
-              label: isRu ? "Скачать и сверить ресурсы" : "Download and verify resources",
-            },
-            {
-              done: Boolean(operationId),
-              busy: phase === "install",
-              label: isRu ? "Собрать и записать с откатом" : "Build and install with rollback",
-            },
-            {
-              done: steamRestarted,
-              busy: phase === "steam",
-              label: isRu ? "Открыть Steam" : "Open Steam",
-            },
-            { done: false, busy: false, label: isRu ? "Проверить в Dota 2" : "Check in Dota 2" },
-          ];
-          const current = steps.findIndex((step) => !step.done);
-          return steps.map((step, index) => (
-            <span
-              key={index}
-              className={[
-                step.done ? "done" : "",
-                index === current ? "is-current" : "",
-                step.busy ? "is-busy" : "",
-              ].join(" ")}
-            >
-              <i aria-hidden="true">{step.done ? <Check /> : String(index + 1).padStart(2, "0")}</i>
-              <b>{step.label}</b>
-            </span>
-          ));
-        })()}
-      </div>
-      {(!canManage || (ids.length > 0 && !supportedBundle)) && (
-        <div className="s-inline-note warning">
-          <TriangleAlert />
-          <p>
-            {!desktop
+  const notice = error ? noticeFor(error, isRu) : null;
+  // Relation fixes act on catalog IDs; a package the catalog does not list
+  // (a superseded one) gets the message without a button.
+  const catalogIdOf = (packageId: string) => {
+    const catalogId = findPackage(packageId)?.catalogId;
+    return catalogId && modById.has(catalogId) ? catalogId : null;
+  };
+  const relationFixes: Array<{ fix: RelationFix; label: string }> = [];
+  if (relation && onFixRelation) {
+    const first = catalogIdOf(relation.packageId);
+    const other = catalogIdOf(relation.otherId);
+    const firstName = packageLabel(relation.packageId);
+    const otherName = packageLabel(relation.otherId);
+    if (first && other && relation.kind === "missing")
+      relationFixes.push({
+        fix: { kind: "add", add: other, requiredBy: first },
+        label: isRu ? `Добавить «${otherName}»` : `Add ${otherName}`,
+      });
+    else if (first && other)
+      relationFixes.push(
+        {
+          fix: { kind: "keep", keep: first, drop: other },
+          label: isRu ? `Оставить «${firstName}»` : `Keep ${firstName}`,
+        },
+        {
+          fix: { kind: "keep", keep: other, drop: first },
+          label: isRu ? `Оставить «${otherName}»` : `Keep ${otherName}`,
+        },
+      );
+  }
+  const blockerKind =
+    !canManage || (ids.length > 0 && !supportedBundle)
+      ? !desktop
+        ? "desktop"
+        : preview && !demo
+          ? "preview"
+          : !windows
+            ? "windows"
+            : !installation.verified && !demo
+              ? "connect"
+              : relation
+                ? "relation"
+                : "pilot"
+      : null;
+  const canConnect = blockerKind === "connect" && Boolean(onConnectDota);
+  const canFixRelation = blockerKind === "relation" && relationFixes.length > 0;
+  const blocker =
+    blockerKind === "desktop"
+      ? isRu
+        ? "Реальная подготовка доступна только в приложении BetterFy."
+        : "Real preparation is only available in the BetterFy desktop app."
+      : blockerKind === "preview"
+        ? isRu
+          ? "В гостевом просмотре запись в игру недоступна."
+          : "Game installation is unavailable in guest preview."
+        : blockerKind === "windows"
+          ? isRu
+            ? "Установка доступна только на Windows. На Mac можно посмотреть интерфейс и подготовить ресурсы."
+            : "Installation is Windows-only. On Mac you can inspect the UI and prepare resources."
+          : blockerKind === "connect"
+            ? canConnect
               ? isRu
-                ? "Реальная подготовка доступна только в приложении BetterFy."
-                : "Real preparation is only available in the BetterFy desktop app."
-              : preview
+                ? "Сначала подключи настоящую установку Dota 2: без неё сборку некуда ставить."
+                : "Connect a real Dota 2 installation first: without it there is nowhere to install the build."
+              : isRu
+                ? "Сначала подключи настоящую установку Dota 2 в настройках."
+                : "Connect a real Dota 2 installation in Settings first."
+            : blockerKind === "relation" && relation
+              ? relation.kind === "conflict"
                 ? isRu
-                  ? "В гостевом просмотре запись в игру недоступна."
-                  : "Game installation is unavailable in guest preview."
-                : !windows
+                  ? `«${packageLabel(relation.packageId)}» и «${packageLabel(relation.otherId)}» нельзя ставить вместе.${canFixRelation ? "" : " Оставь в сборке один из них."}`
+                  : `${packageLabel(relation.packageId)} and ${packageLabel(relation.otherId)} cannot be installed together.${canFixRelation ? "" : " Keep one of them."}`
+                : isRu
+                  ? `Для «${packageLabel(relation.packageId)}» нужен мод «${packageLabel(relation.otherId)}»${canFixRelation ? ": без него рецепт не соберётся." : ". Добавь его в сборку."}`
+                  : `${packageLabel(relation.packageId)} needs ${packageLabel(relation.otherId)}${canFixRelation ? ": the recipe does not build without it." : ". Add it to the build."}`
+              : blockerKind === "pilot"
+                ? isRu
+                  ? "Ставятся только моды с отметкой «Windows-пилот». Убери остальные игровые моды из сборки."
+                  : "Only mods marked Windows pilot install. Remove other game mods from the build."
+                : "";
+  const steps = [
+    {
+      done: Boolean(plan) || Boolean(operationId),
+      busy: phase === "download",
+      label: isRu ? "Скачать и сверить файлы" : "Download and check files",
+      hint: plan
+        ? isRu
+          ? `${plan.resourceCount} файлов · ${(plan.vpkBytes / 1024).toFixed(1)} KB`
+          : `${plan.resourceCount} files · ${(plan.vpkBytes / 1024).toFixed(1)} KB`
+        : isRu
+          ? "Только проверенные файлы из каталога"
+          : "Only verified catalog files",
+    },
+    {
+      done: Boolean(operationId),
+      busy: phase === "install",
+      label: isRu ? "Записать с бэкапом" : "Write with a backup",
+      hint:
+        operationId && installedLanguage
+          ? `dota_${installedLanguage}/pak66_dir.vpk`
+          : isRu
+            ? "Исходный файл можно вернуть"
+            : "The original can be restored",
+    },
+    {
+      done: steamRestarted || steamStarted,
+      busy: phase === "steam",
+      label: isRu ? "Настроить Steam" : "Set up Steam",
+      hint: steamStarted
+        ? isRu
+          ? "Язык задан в профиле"
+          : "Language set in the profile"
+        : (installedLanguage ?? selectedLanguage)
+          ? `-language ${installedLanguage ?? selectedLanguage}`
+          : isRu
+            ? "Параметр -language"
+            : "The -language option",
+    },
+    {
+      done: false,
+      busy: false,
+      label: isRu ? "Играть" : "Play",
+      hint: isRu ? "Проверь моды в Dota 2" : "Check the mods in Dota 2",
+    },
+  ];
+  const current = steps.findIndex((step) => !step.done);
+  const progress = totalResources ? verifiedResources / totalResources : 0;
+  const title = operationId
+    ? isRu
+      ? "Сборка стоит в игре"
+      : "The build is in the game"
+    : phase === "download"
+      ? isRu
+        ? "Проверяем файлы"
+        : "Checking files"
+      : phase === "install"
+        ? isRu
+          ? "Ставим сборку"
+          : "Installing the build"
+        : plan
+          ? isRu
+            ? "Всё сверено. Выбери язык"
+            : "All checked. Pick a language"
+          : isRu
+            ? "Подготовь сборку"
+            : "Prepare the build";
+  const runNoticeAction = () => {
+    if (!notice) return;
+    if (notice.action === "retry") void (plan ? install() : prepare());
+    else if (notice.action === "prepare") {
+      setPlan(null);
+      void prepare();
+    } else if (notice.action === "report") void refreshEvidence(true);
+    else if (notice.action === "steam" && installedLanguage) void copyLaunchOption();
+    else if (notice.action === "settings") {
+      const field = languageFieldRef.current;
+      if (notice.code === "language_folder_unavailable")
+        (
+          field?.querySelector<HTMLElement>('[role="radio"][tabindex="0"]') ??
+          field?.querySelector<HTMLElement>("button")
+        )?.focus();
+      else if (notice.code === "game_path_required") onConnectDota?.();
+    }
+  };
+  // "settings" notices get a button only where this screen can act itself:
+  // the language choice is right here, and Dota is connected in one click.
+  const settingsActionLabel =
+    notice?.code === "language_folder_unavailable" && plan && !operationId
+      ? isRu
+        ? "Выбрать другой язык"
+        : "Choose another language"
+      : notice?.code === "game_path_required" && onConnectDota
+        ? isRu
+          ? "Подключить Dota 2"
+          : "Connect Dota 2"
+        : null;
+  const noticeActionLabel =
+    notice?.action === "retry"
+      ? isRu
+        ? "Повторить"
+        : "Retry"
+      : notice?.action === "prepare"
+        ? isRu
+          ? "Подготовить заново"
+          : "Prepare again"
+        : notice?.action === "report"
+          ? reportCopied
+            ? isRu
+              ? "Отчёт скопирован"
+              : "Report copied"
+            : isRu
+              ? "Скопировать отчёт"
+              : "Copy report"
+          : notice?.action === "steam" && installedLanguage
+            ? copied
+              ? isRu
+                ? "Скопировано"
+                : "Copied"
+              : isRu
+                ? "Скопировать -language"
+                : "Copy -language"
+            : notice?.action === "settings"
+              ? settingsActionLabel
+              : null;
+  // Profiles are numbered, never named: the report and the screen carry no
+  // Steam IDs or account names.
+  const profileOptions: ChoiceOption<string>[] = [
+    {
+      value: "manual",
+      label: isRu ? "Вручную" : "Manual",
+      hint: isRu ? "-language вставишь сам" : "you paste -language",
+    },
+    ...profiles.map((profile): ChoiceOption<string> => {
+      const usable = profile.status === "ready" || profile.status === "already_managed";
+      return {
+        value: profile.profileToken,
+        label: `${isRu ? "Профиль" : "Profile"} ${profile.profileIndex}`,
+        hint:
+          profile.status === "ready"
+            ? isRu
+              ? "BetterFy добавит сам"
+              : "BetterFy adds it"
+            : profile.status === "already_managed"
+              ? isRu
+                ? "язык уже задан"
+                : "language already set"
+              : isRu
+                ? "конфликт, не трогаем"
+                : "conflict, left alone",
+        tone: profile.status === "ready" ? "ready" : usable ? undefined : "warn",
+        hintIcon: usable ? undefined : <TriangleAlert />,
+        disabled: !usable,
+      };
+    }),
+  ];
+  const profileChoice = (
+    <Choice
+      label={isRu ? "Steam-профиль" : "Steam profile"}
+      value={selectedProfile || "manual"}
+      options={profileOptions}
+      onChange={(value) => setSelectedProfile(value === "manual" ? "" : value)}
+      placeholder={isRu ? "Выбери профиль" : "Choose a profile"}
+      disabled={phase !== "idle"}
+    />
+  );
+  const languageOption = (value: GameLanguage): ChoiceOption<LanguagePick> => {
+    const option = buildLanguages.find((item) => item.value === value);
+    const experimental = value === "betterfy";
+    return {
+      value,
+      label: languageLabel(value),
+      hint: experimental
+        ? isRu
+          ? "эксперимент"
+          : "experimental"
+        : option?.verified
+          ? isRu
+            ? "проверен в игре"
+            : "checked in game"
+          : isRu
+            ? "не проверен"
+            : "not checked",
+      hintIcon: experimental ? (
+        <FlaskConical />
+      ) : option?.verified ? (
+        <ShieldCheck />
+      ) : (
+        <CircleDashed />
+      ),
+      tone: experimental ? "warn" : option?.verified ? "ready" : "quiet",
+    };
+  };
+  const autoOption: ChoiceOption<LanguagePick> | null =
+    detection.status === "idle"
+      ? null
+      : detection.status === "loading"
+        ? {
+            value: "auto",
+            label: isRu ? "Как в Dota сейчас" : "Same as Dota now",
+            hint: isRu ? "смотрим, что стоит в Steam…" : "checking Steam…",
+            hintIcon: <LoaderCircle className="s-spin" />,
+            disabled: true,
+            wide: true,
+          }
+        : detected
+          ? {
+              ...languageOption(detected),
+              value: "auto",
+              label: isRu
+                ? `Как в Dota сейчас · ${languageLabel(detected)}`
+                : `Same as Dota now · ${languageLabel(detected)}`,
+              // English is the BetterFy slot and not proven since the patch.
+              badge: detected === "betterfy" ? undefined : isRu ? "рекомендуем" : "recommended",
+              meta: steamName ? `steam: ${steamName}` : undefined,
+              wide: true,
+            }
+          : {
+              value: "auto",
+              label: isRu ? "Как в Dota сейчас" : "Same as Dota now",
+              hint:
+                detection.status === "failed"
                   ? isRu
-                    ? "Установка доступна только на Windows. На Mac можно проверить интерфейс и подготовить ресурсы."
-                    : "Installation is Windows-only. On Mac you can inspect the UI and prepare resources."
-                  : !installation.verified
+                    ? "не удалось прочитать Steam"
+                    : "could not read Steam"
+                  : steamName
                     ? isRu
-                      ? "Сначала подключи настоящую установку Dota 2 в настройках."
-                      : "Connect a real Dota 2 installation in Settings first."
-                    : relation
-                      ? relation.kind === "conflict"
-                        ? isRu
-                          ? `«${packageLabel(relation.packageId)}» и «${packageLabel(relation.otherId)}» нельзя ставить вместе. Оставь в сборке один из них.`
-                          : `${packageLabel(relation.packageId)} and ${packageLabel(relation.otherId)} cannot be installed together. Keep one of them.`
-                        : isRu
-                          ? `Для «${packageLabel(relation.packageId)}» нужен мод «${packageLabel(relation.otherId)}». Добавь его в сборку.`
-                          : `${packageLabel(relation.packageId)} needs ${packageLabel(relation.otherId)}. Add it to the build.`
-                      : isRu
-                        ? "Устанавливаются только моды с отметкой «Windows-пилот». Убери остальные игровые моды из сборки."
-                        : "Only mods marked Windows pilot install. Remove other game mods from the build."}
-          </p>
-        </div>
-      )}
-      {unverified.length > 0 && !operationId && (
-        <div className="s-inline-note warning">
-          <TriangleAlert />
-          <p>
-            {isRu
-              ? `Ещё не проверено в игре: ${unverified.map(packageLabel).join(", ")}. Поставь, проверь в Dota и при проблеме откати.`
-              : `Not verified in game yet: ${unverified.map(packageLabel).join(", ")}. Install, check in Dota and restore if something is wrong.`}
-          </p>
-        </div>
-      )}
-      {plan && !operationId && (
-        <div className="s-tree-pilot-language">
-          <div>
-            <strong>
-              {isRu ? "Выбери язык Dota для сборки" : "Choose Dota language for the build"}
-            </strong>
-            <p>
-              {isRu
-                ? "Моды подключаются через языковую папку Dota: игра будет запускаться с выбранным языком интерфейса. Нидерландский и русский проверены на Windows для модов с отметкой о проверке; корейский и китайский ещё не проверены."
-                : "Mods are loaded through a Dota language folder: the game will start with the chosen interface language. Dutch and Russian were verified on Windows for the mods marked as verified; Korean and Chinese have not been tested yet."}
-            </p>
-          </div>
-          <select
-            aria-label={isRu ? "Язык Dota для установки" : "Dota language for installation"}
-            value={selectedLanguage}
-            onChange={(event) => setSelectedLanguage(event.target.value as GameLanguage | "")}
-          >
-            <option value="">{isRu ? "Выбери язык" : "Choose language"}</option>
-            <option value="russian">{isRu ? "Русский · проверен" : "Russian · verified"}</option>
-            <option value="dutch">{isRu ? "Нидерландский · проверен" : "Dutch · verified"}</option>
-            <option value="koreana">
-              {isRu ? "Корейский · проверка нужна" : "Korean · needs testing"}
-            </option>
-            <option value="schinese">
-              {isRu ? "Китайский · проверка нужна" : "Chinese · needs testing"}
-            </option>
-          </select>
-        </div>
-      )}
-      {plan && !operationId && (
-        <>
-          <div
-            className="s-tree-pilot-order"
-            aria-label={isRu ? "Порядок приоритета модов" : "Mod priority order"}
-          >
-            <div>
-              <strong>{isRu ? "Порядок модов" : "Mod order"}</strong>
-              <p>
-                {isRu
-                  ? "Если два мода меняют один ресурс, верхний остаётся в итоговой сборке."
-                  : "If two mods change the same resource, the higher one remains in the final build."}
-              </p>
-            </div>
-            <ol>
-              {plan.contributions.map((item, index) => (
-                <li
-                  key={item.packageId}
-                  title={
-                    isRu
-                      ? `${item.effectiveResources} из ${item.inputResources} файлов мода войдут в сборку`
-                      : `${item.effectiveResources} of ${item.inputResources} mod files remain in the build`
-                  }
-                >
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <b>{packageLabel(item.packageId)}</b>
-                  <em className={item.shadowedResources > 0 ? "has-overrides" : ""}>
-                    {item.effectiveResources}/{item.inputResources}
-                  </em>
-                </li>
-              ))}
-            </ol>
-          </div>
-          <div className="s-tree-pilot-plan">
-            <span>
-              <b>{isRu ? "Куда будет записан файл" : "File destination"}</b>
-              <code>
-                {selectedLanguage ? `game/dota_${selectedLanguage}/${plan.targetFile}` : "—"}
-              </code>
-            </span>
-            <span>
-              <b>{isRu ? "Состав" : "Bundle"}</b>
-              {plan.packageCount} · {plan.resourceCount} {isRu ? "ресурсов" : "resources"}
-            </span>
-            <span>
-              <b>{isRu ? "Совпадения" : "Overlaps"}</b>
-              {plan.duplicateResources + plan.overriddenResources || (isRu ? "Нет" : "None")}
-            </span>
-            <span>
-              <b>{isRu ? "Размер файла" : "File size"}</b>
-              {(plan.vpkBytes / 1024).toFixed(1)} KB
-            </span>
-            <span>
-              <b>SHA-256</b>
-              <code>{plan.vpkSha256.slice(0, 12)}…</code>
-            </span>
-          </div>
-          {(plan.duplicates.length > 0 || plan.overrides.length > 0) && (
-            <details className="s-tree-pilot-conflicts">
-              <summary>{isRu ? "Показать решение совпадений" : "Show overlap resolution"}</summary>
-              {plan.overrides.map((item) => (
-                <p key={`override-${item.path}`}>
-                  <code>{item.path}</code>
-                  <span>
-                    {packageLabel(item.winnerPackageId)} →{" "}
-                    {isRu ? "оставлен; ниже пропущены" : "kept; lower skipped"}:{" "}
-                    {item.shadowedPackageIds.map(packageLabel).join(", ")}
-                  </span>
-                </p>
-              ))}
-              {plan.duplicates.map((item) => (
-                <p key={`duplicate-${item.path}`}>
-                  <code>{item.path}</code>
-                  <span>
-                    {isRu
-                      ? "Одинаковый ресурс сохранён один раз"
-                      : "Identical resource stored once"}
-                    : {packageLabel(item.keptPackageId)}
-                  </span>
-                </p>
-              ))}
-            </details>
-          )}
-        </>
-      )}
-      {plan && !operationId && canInstall && (
-        <div className="s-tree-pilot-steam">
-          <div>
-            <strong>
-              {isRu ? "Steam-профиль для установки" : "Steam profile for installation"}
-            </strong>
-            <p>
-              {isRu
-                ? "BetterFy мягко закроет Dota 2 и Steam, запишет файл, добавит выбранный -language в этот профиль и снова откроет Steam. Если профиль не выбран, параметр нужно будет вставить вручную."
-                : "BetterFy will gracefully close Dota 2 and Steam, write the file, add the selected -language option to this profile, and reopen Steam. Without a profile, paste the option manually."}
-            </p>
-          </div>
-          <select
-            aria-label={isRu ? "Steam-профиль" : "Steam profile"}
-            value={selectedProfile}
-            onChange={(event) => setSelectedProfile(event.target.value)}
-          >
-            <option value="">{isRu ? "Вручную" : "Manual setup"}</option>
-            {profiles.map((profile) => (
-              <option
-                key={profile.profileToken}
-                value={profile.profileToken}
-                disabled={profile.status !== "ready" && profile.status !== "already_managed"}
-              >
-                {isRu ? "Профиль" : "Profile"} {profile.profileIndex} ·{" "}
-                {profile.status === "ready"
-                  ? isRu
-                    ? "готов"
-                    : "ready"
-                  : profile.status === "already_managed"
-                    ? isRu
-                      ? "язык задан"
-                      : "language set"
+                      ? "для этого языка у BetterFy нет папки"
+                      : "BetterFy has no folder for this language"
                     : isRu
-                      ? "конфликт"
-                      : "conflict"}
-              </option>
-            ))}
-          </select>
+                      ? "Steam не указал язык"
+                      : "Steam lists no language",
+              hintIcon: <CircleDashed />,
+              tone: "quiet",
+              meta: steamName ? `steam: ${steamName}` : undefined,
+              disabled: true,
+              wide: true,
+            };
+  const languageCards = [
+    ...(autoOption ? [autoOption] : []),
+    ...PINNED_LANGUAGES.filter((value) => value !== detected).map(languageOption),
+  ];
+  const otherLanguages = buildLanguages
+    .filter((option) => !PINNED_LANGUAGES.includes(option.value))
+    .map(
+      (option): ChoiceOption<LanguagePick> => ({
+        value: option.value,
+        label: languageLabel(option.value),
+        hint: option.native,
+        badge: option.value === detected ? (isRu ? "в Dota сейчас" : "in Dota now") : undefined,
+        keywords: `${option.ru} ${option.en} ${option.value}`,
+      }),
+    );
+  // The detected language is shown on the "as in Dota" card wherever it was
+  // picked from.
+  const shownLanguage: LanguagePick | "" =
+    selectedLanguage && selectedLanguage === detected ? "auto" : selectedLanguage;
+  const followFallback =
+    followDota && (detection.status === "failed" || (detection.status === "done" && !detected));
+  const languageNote = (() => {
+    if (!selectedLanguage)
+      return followDota && detection.status === "loading"
+        ? isRu
+          ? "Смотрим, на каком языке Steam запускает Dota."
+          : "Checking which language Steam starts Dota in."
+        : isRu
+          ? "Моды подключаются через папку языка: Dota запустится с этим языком интерфейса."
+          : "Mods load through a language folder: Dota starts with this interface language.";
+    const fallback = followFallback
+      ? isRu
+        ? `Steam не подсказал язык — выбран: ${languageLabel(selectedLanguage)}. `
+        : `Steam did not say, so ${languageLabel(selectedLanguage)} is selected. `
+      : "";
+    if (selectedLanguage === "betterfy")
+      return (
+        fallback +
+        (isRu
+          ? "Текст Dota останется английским. С патча 23.07.2026 Dota может не принять язык, которого нет у Valve, — поэтому Minify ушёл от своей папки. Если язык окажется не тот, откат в один клик."
+          : "Dota text stays English. Since the 23 July 2026 patch Dota may refuse a language Valve does not ship, which is why Minify dropped its own folder. If the language is wrong, restore in one click.")
+      );
+    const option = buildLanguages.find((item) => item.value === selectedLanguage);
+    return fallback + (option ? (isRu ? option.noteRu : option.noteEn) : "");
+  })();
+  return (
+    <section
+      className={`b-pilot ${busy ? "is-busy" : ""} ${operationId ? "is-installed" : ""}`}
+      aria-labelledby="tree-pilot-title"
+    >
+      <header className="b-pilot-head">
+        <small>
+          {demo && <b className="b-demo-chip">{isRu ? "ДЕМО" : "DEMO"}</b>}
+          {isRu ? "УСТАНОВКА В DOTA 2" : "INSTALL TO DOTA 2"} · {deliveryLabel("pilot", language)}
+          {stressEnabled && (
+            <b className="b-dev-chip" title={isRu ? "Аккаунт разработчика" : "Developer account"}>
+              DEV
+            </b>
+          )}
+        </small>
+        <h2 id="tree-pilot-title">{title}</h2>
+        <span className="b-pilot-count" title={isRu ? "Моды для установки" : "Mods to install"}>
+          {String(operationId ? installedPackageIds.length || ids.length : ids.length).padStart(
+            2,
+            "0",
+          )}
+          <i>/{String(installablePackages.length).padStart(2, "0")}</i>
+        </span>
+      </header>
+      {demo && <DemoPanel />}
+      <ol className="b-steps">
+        {steps.map((step, index) => (
+          <li
+            key={index}
+            className={[
+              step.done ? "is-done" : "",
+              index === current ? "is-current" : "",
+              step.busy ? "is-busy" : "",
+            ].join(" ")}
+          >
+            <i aria-hidden="true">
+              {step.done ? <Check /> : step.busy ? <LoaderCircle className="s-spin" /> : index + 1}
+            </i>
+            <div>
+              <b>{step.label}</b>
+              {step.busy && activePhrase ? (
+                <span className="b-phrase" key={activePhrase.key} aria-live="polite">
+                  {activePhrase.text}
+                </span>
+              ) : (
+                <span>{step.hint}</span>
+              )}
+              {step.busy && phase === "download" && (
+                <div
+                  className="b-progress"
+                  role="progressbar"
+                  aria-valuenow={verifiedResources}
+                  aria-valuemin={0}
+                  aria-valuemax={totalResources || 1}
+                  aria-label={isRu ? "Проверенные файлы" : "Verified files"}
+                >
+                  <div>
+                    <i style={{ transform: `scaleX(${progress})` }} />
+                  </div>
+                  <small>
+                    {verifiedResources}/{totalResources || "—"}
+                  </small>
+                </div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+      {notice && (
+        <NoticeCard
+          notice={notice}
+          actionLabel={noticeActionLabel}
+          onAction={noticeActionLabel ? runNoticeAction : undefined}
+          onDismiss={() => setError("")}
+          developer={stressEnabled}
+        />
+      )}
+      {blocker && (
+        <div className="b-pilot-blocker">
+          <TriangleAlert />
+          <div>
+            <p>{blocker}</p>
+            {canFixRelation && (
+              <div className="b-fix">
+                {relationFixes.map(({ fix, label }) => (
+                  <button
+                    key={label}
+                    className="s-btn"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onFixRelation?.(fix)}
+                  >
+                    {fix.kind === "add" ? <Plus /> : <Check />}
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {canConnect && (
+              <div className="b-fix">
+                <button className="s-btn" type="button" disabled={busy} onClick={onConnectDota}>
+                  <Gamepad2 />
+                  {isRu ? "Подключить Dota 2" : "Connect Dota 2"}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
       {operationId && dotaPatched && (
-        <div className="s-inline-note warning" role="alert">
+        <p className="b-pilot-blocker is-warning" role="alert">
           <TriangleAlert />
-          <p>
-            {isRu
-              ? "Dota 2 обновилась после установки этой сборки. Проверь игру: если интерфейс выглядит сломанным, откати сборку — BetterFy вернёт исходные файлы."
-              : "Dota 2 was updated after this build was installed. Check the game: if the interface looks broken, restore the build and BetterFy will put the original files back."}
-          </p>
+          {isRu
+            ? "Dota 2 обновилась после установки. Если интерфейс сломан, откати сборку — BetterFy вернёт исходные файлы."
+            : "Dota 2 updated after this install. If the interface looks broken, restore the build and BetterFy puts the original files back."}
+        </p>
+      )}
+      {unverified.length > 0 && !operationId && !blocker && (
+        <p className="b-pilot-hint">
+          {isRu
+            ? `Ещё не проверено в игре: ${unverified.map(packageLabel).join(", ")}. Если что-то не так — откат в один клик.`
+            : `Not checked in game yet: ${unverified.map(packageLabel).join(", ")}. If something is off, restore in one click.`}
+        </p>
+      )}
+      {plan && !operationId && (
+        <div className="b-fields">
+          <div className="b-field" ref={languageFieldRef}>
+            <div className="b-field-head">
+              <span id="tree-pilot-language">{isRu ? "Язык Dota" : "Dota language"}</span>
+              {selectedLanguage && (
+                <code title={`game/dota_${selectedLanguage}/${plan.targetFile}`}>
+                  -language {selectedLanguage}
+                </code>
+              )}
+            </div>
+            <ChoiceCards
+              label={isRu ? "Язык Dota" : "Dota language"}
+              labelledBy="tree-pilot-language"
+              value={
+                languageCards.some((option) => option.value === shownLanguage) ? shownLanguage : ""
+              }
+              options={languageCards}
+              onChange={chooseLanguage}
+              disabled={phase !== "idle"}
+            />
+            <ChoiceMenu
+              label={isRu ? "Другие языки Dota" : "Other Dota languages"}
+              value={
+                otherLanguages.some((option) => option.value === shownLanguage) ? shownLanguage : ""
+              }
+              options={otherLanguages}
+              onChange={chooseLanguage}
+              placeholder={isRu ? "Другие языки" : "Other languages"}
+              placeholderHint={
+                isRu
+                  ? `остальные языки Dota из Steam · ${otherLanguages.length}`
+                  : `the rest of Dota's Steam languages · ${otherLanguages.length}`
+              }
+              caption={
+                isRu ? "Ещё не проверены в игре на Windows" : "Not checked in game on Windows yet"
+              }
+              searchPlaceholder={
+                isRu ? "Найти: français, Deutsch, 日本語…" : "Find: français, Deutsch, 日本語…"
+              }
+              emptyText={isRu ? "Такого языка в Dota нет." : "Dota has no such language."}
+              disabled={phase !== "idle"}
+            />
+            <small aria-live="polite">{languageNote}</small>
+          </div>
+          {canInstall && (
+            <div className="b-field">
+              <div className="b-field-head">
+                <span>{isRu ? "Профиль Steam" : "Steam profile"}</span>
+              </div>
+              {profileChoice}
+              <small>
+                {selectedProfile
+                  ? isRu
+                    ? "BetterFy сам добавит -language и вернёт как было при откате."
+                    : "BetterFy adds -language itself and puts it back on restore."
+                  : isRu
+                    ? "Параметр запуска нужно будет вставить вручную."
+                    : "You will paste the launch option yourself."}
+              </small>
+            </div>
+          )}
         </div>
       )}
       {operationId ? (
-        <div className="s-tree-pilot-result">
-          {verifiedInstall && packageVerified ? <Check /> : <TriangleAlert />}
-          <span>
-            {verifiedInstall
-              ? packageVerified
+        <div className="b-installed">
+          {installedLanguage && (
+            <div className="b-command">
+              <span>
+                {isRu ? "Параметр запуска" : "Launch option"} · {languageLabel(installedLanguage)}
+              </span>
+              <code>-language {installedLanguage}</code>
+              <button className="s-btn" type="button" onClick={() => void copyLaunchOption()}>
+                {copied ? <Check /> : <Copy />}
+                {copied ? (isRu ? "Скопировано" : "Copied") : isRu ? "Копировать" : "Copy"}
+              </button>
+            </div>
+          )}
+          <p className="b-pilot-hint">
+            {!verifiedInstall
+              ? isRu
+                ? "Найдена сохранённая операция, но файл ещё не подтверждён. Проверь установку или откати."
+                : "A saved operation was found, but the file is not verified yet. Check or restore it."
+              : !packageVerified
                 ? isRu
-                  ? `BetterFy записал сборку из ${installedPackageIds.length || 1} модов. Проверь игру; при проблеме верни исходное состояние.`
-                  : `BetterFy installed a ${installedPackageIds.length || 1}-mod build. Check the game; restore the previous state if needed.`
-                : isRu
-                  ? "Файл и журнал BetterFy совпадают, но исходные ресурсы недоступны для повторной проверки. Откат остаётся доступен; для новой установки подготовь ресурсы заново."
-                  : "The installed file matches BetterFy's journal, but source resources are unavailable for another check. Restore remains available; prepare resources again before reinstalling."
-              : isRu
-                ? "Найдена сохранённая операция, но состояние файла ещё не подтверждено. Проверь установку или выполни откат."
-                : "A saved operation was found, but the file state is not verified yet. Check or restore the installation."}
-          </span>
+                  ? "Файл совпадает с журналом BetterFy, но исходные ресурсы недоступны для повторной проверки. Откат доступен."
+                  : "The file matches BetterFy's journal, but source resources cannot be re-checked. Restore is available."
+                : steamStarted
+                  ? isRu
+                    ? "Steam открыт и знает нужный язык. Запускай Dota 2 и проверь каждый мод."
+                    : "Steam is open and knows the language. Launch Dota 2 and check every mod."
+                  : steamRestarted
+                    ? isRu
+                      ? "Steam открыт. Вставь параметр в свойства Dota 2 → Параметры запуска."
+                      : "Steam is open. Paste the option into Dota 2 properties → Launch options."
+                    : isRu
+                      ? "Файл записан, но Steam не настроен до конца. Выбери профиль и повтори."
+                      : "The file is written, but Steam setup did not finish. Pick a profile and retry."}
+          </p>
+          {installedLanguage === "betterfy" && (
+            <p className="b-pilot-blocker is-warning">
+              <FlaskConical />
+              {isRu
+                ? "Английский — эксперимент. Если Dota запустилась не на английском, откати сборку: BetterFy вернёт файл и параметры Steam."
+                : "English is experimental. If Dota starts in another language, restore the build: BetterFy puts back the file and the Steam options."}
+            </p>
+          )}
+          {canManage && !steamStarted && packageVerified && (
+            <div className="b-steam-retry">
+              {profileChoice}
+              <button
+                className="s-btn"
+                disabled={phase !== "idle" || !selectedProfile}
+                onClick={() => void activateSteam()}
+              >
+                {phase === "steam" ? <LoaderCircle className="s-spin" /> : <ArrowRight />}
+                {isRu ? "Настроить Steam" : "Set up Steam"}
+              </button>
+            </div>
+          )}
           <button
-            className="s-btn"
+            className="s-btn b-restore"
             disabled={phase !== "idle" || !canManage || steamRecoveryRequired}
             onClick={() => void restore()}
           >
-            {phase === "restore" ? <LoaderCircle className="s-spin" /> : <RotateCcw />}
-            {isRu ? "Откатить" : "Restore"}
+            <RotateCcw className={`b-rewind ${phase === "restore" ? "is-spinning" : ""}`} />
+            {phase === "restore"
+              ? isRu
+                ? "Откатываем…"
+                : "Restoring…"
+              : isRu
+                ? "Откатить сборку"
+                : "Restore the game"}
           </button>
         </div>
       ) : (
-        <div className="s-tree-pilot-actions">
+        <div className="b-actions">
           {!plan ? (
             <>
               <button
-                className="s-btn s-btn-primary"
-                disabled={phase !== "idle" || !desktop || !supportedBundle}
+                className="s-btn s-btn-primary b-primary"
+                disabled={
+                  phase !== "idle" || !desktop || !supportedBundle || Boolean(blocker && !demo)
+                }
                 onClick={() => void prepare()}
               >
                 {phase === "download" ? <LoaderCircle className="s-spin" /> : <Download />}
                 {phase === "download"
                   ? isRu
-                    ? "Проверяем ресурсы…"
-                    : "Verifying resources…"
+                    ? "Проверяем…"
+                    : "Checking…"
                   : isRu
                     ? "Подготовить сборку"
                     : "Prepare build"}
@@ -1210,221 +1688,228 @@ export default function TreePilot({
               )}
             </>
           ) : (
-            <>
-              <span>
-                <Check />
-                {isRu ? "Файлы модов и сборка проверены" : "Mod files and build verified"}
-              </span>
-              <button
-                className="s-btn s-btn-primary"
-                disabled={
-                  !canInstall || !selectedLanguage || phase !== "idle" || !plan.deployEnabled
-                }
-                onClick={() => void install()}
-              >
-                {phase === "install" ? <LoaderCircle className="s-spin" /> : <ShieldCheck />}
-                {phase === "install"
-                  ? isRu
-                    ? "Устанавливаем…"
-                    : "Installing…"
-                  : isRu
-                    ? "Установить сборку"
-                    : "Install build"}
-                <ArrowRight />
-              </button>
-            </>
-          )}
-        </div>
-      )}
-      {phase === "download" && (
-        <div
-          className="s-tree-pilot-progress"
-          role="progressbar"
-          aria-valuenow={verifiedResources}
-          aria-valuemin={0}
-          aria-valuemax={totalResources || 1}
-          aria-label={isRu ? "Проверенные ресурсы" : "Verified resources"}
-        >
-          <span>
-            {isRu ? "Проверено ресурсов" : "Resources verified"} · {verifiedResources}/
-            {totalResources || "—"}
-          </span>
-          <div>
-            <i
-              style={{
-                width: `${totalResources ? (verifiedResources / totalResources) * 100 : 0}%`,
+            <button
+              className="s-btn s-btn-primary b-primary"
+              disabled={!canInstall || !selectedLanguage || phase !== "idle" || !plan.deployEnabled}
+              onClick={() => {
+                // The language that went in becomes the fallback next time.
+                if (selectedLanguage) setStorageItem(LANGUAGE_KEY, selectedLanguage);
+                void install();
               }}
-            />
-          </div>
-        </div>
-      )}
-      {operationId && installedLanguage && (
-        <div className="s-tree-pilot-steam">
-          <div>
-            <strong>{isRu ? "Где находится сборка" : "Where the build is installed"}</strong>
-            <p>
-              <code>game/dota_{installedLanguage}/pak66_dir.vpk</code>
-            </p>
-            {installedPackageIds.length > 0 && (
-              <p>{installedPackageIds.map(packageLabel).join(" · ")}</p>
-            )}
-            <p>
-              {!packageVerified
+            >
+              {phase === "install" || phase === "steam" ? (
+                <LoaderCircle className="s-spin" />
+              ) : (
+                <ShieldCheck />
+              )}
+              {phase === "install" || phase === "steam"
                 ? isRu
-                  ? "Исходные ресурсы сейчас не подтверждены. Настройка Steam заблокирована; можно откатить установленный файл."
-                  : "Source resources are not currently verified. Steam setup is blocked; the installed file can be restored."
-                : steamStarted
-                  ? isRu
-                    ? "Выбранный Steam-профиль использует нужный язык; Steam открыт. Запусти Dota 2 и проверь каждый мод сборки."
-                    : "The selected Steam profile uses the required language; Steam is open. Launch Dota 2 and check every mod in the build."
-                  : steamRestarted
+                  ? "Ставим…"
+                  : "Installing…"
+                : !selectedLanguage
+                  ? followDota && detection.status === "loading"
                     ? isRu
-                      ? "Steam открыт. Добавь параметр ниже в свойствах Dota 2 → параметры запуска, затем запусти игру."
-                      : "Steam is open. Add the option below in Dota 2 properties → launch options, then launch the game."
+                      ? "Смотрим язык Dota…"
+                      : "Checking Dota's language…"
                     : isRu
-                      ? "Файл записан, но запуск Steam или его настройка не завершились. Проверь профиль и повтори настройку."
-                      : "The file was written, but Steam startup or setup did not finish. Check the profile and retry setup."}
-            </p>
-            <p>
-              {isRu
-                ? "Чтобы выбрать другой язык, сначала откати эту установку."
-                : "Restore this installation before choosing another language."}
-            </p>
-          </div>
-          <div className="s-tree-pilot-command">
-            <code>-language {installedLanguage}</code>
-            <button className="s-btn" type="button" onClick={() => void copyLaunchOption()}>
-              <Copy />
-              {copied ? (isRu ? "Скопировано" : "Copied") : isRu ? "Копировать" : "Copy"}
+                      ? "Сначала выбери язык"
+                      : "Pick a language first"
+                  : isRu
+                    ? "Поставить в Dota 2"
+                    : "Install to Dota 2"}
+              <ArrowRight className="s-arrow-forward" />
             </button>
-          </div>
-          {canManage && !steamStarted && packageVerified && (
-            <>
-              <select
-                aria-label={isRu ? "Steam-профиль" : "Steam profile"}
-                value={selectedProfile}
-                onChange={(event) => setSelectedProfile(event.target.value)}
-              >
-                <option value="">{isRu ? "Вручную" : "Manual setup"}</option>
-                {profiles.map((profile) => (
-                  <option
-                    key={profile.profileToken}
-                    value={profile.profileToken}
-                    disabled={profile.status !== "ready" && profile.status !== "already_managed"}
-                  >
-                    {isRu ? "Профиль" : "Profile"} {profile.profileIndex} ·{" "}
-                    {profile.status === "ready"
-                      ? isRu
-                        ? "готов"
-                        : "ready"
-                      : profile.status === "already_managed"
-                        ? isRu
-                          ? "язык задан"
-                          : "language set"
-                        : isRu
-                          ? "конфликт"
-                          : "conflict"}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="s-btn"
-                disabled={phase !== "idle" || !selectedProfile}
-                onClick={() => void activateSteam()}
-              >
-                {phase === "steam" ? <LoaderCircle className="s-spin" /> : <ArrowRight />}
-                {isRu ? "Настроить Steam" : "Set up Steam"}
-              </button>
-            </>
           )}
         </div>
       )}
       {!operationId && steamOperationId && canManage && (
         <button className="s-btn" disabled={phase !== "idle"} onClick={() => void restoreSteam()}>
-          <RotateCcw />
+          <RotateCcw className="b-rewind" />
           {isRu ? "Восстановить параметры Steam" : "Restore Steam settings"}
         </button>
       )}
-      {canManage && (
-        <div className="s-tree-pilot-recovery">
-          {steamRecoveryRequired && (
-            <span role="alert">
-              {isRu
-                ? "Изменение Steam было прервано. Сначала восстанови Steam, затем откатывай файл игры."
-                : "A Steam change was interrupted. Recover Steam before restoring the game file."}
-            </span>
-          )}
-          <button
-            className="s-text-button"
-            disabled={phase !== "idle" || recovering}
-            onClick={() => void recover()}
-          >
-            {recovering ? <LoaderCircle className="s-spin" /> : <RotateCcw />}
-            {steamRecoveryRequired
-              ? isRu
-                ? "Восстановить Steam и проверить установку"
-                : "Recover Steam and check installation"
-              : isRu
-                ? "Проверить прерванную установку"
-                : "Check interrupted installation"}
-          </button>
-          {recoveryMessage && <span role="status">{recoveryMessage}</span>}
-        </div>
+      {steamRecoveryRequired && (
+        <p className="b-pilot-blocker" role="alert">
+          <TriangleAlert />
+          {isRu
+            ? "Изменение Steam было прервано. Сначала восстанови Steam, затем откатывай файл игры."
+            : "A Steam change was interrupted. Recover Steam before restoring the game file."}
+        </p>
       )}
-      {canManage && (
-        <details className="s-tree-pilot-evidence">
-          <summary>
-            <FileCheck2 />
-            {isRu ? "Отчёт Windows-теста" : "Windows test report"}
-            <span>{(evidence?.entries.length ?? 0) + (evidence?.steamEntries.length ?? 0)}</span>
-          </summary>
-          <div>
-            <p>
-              {isRu
-                ? "Отчёт содержит только версии, этапы, языки, пакеты, SHA-256 и результат точного отката Steam. Путей, Steam ID и данных аккаунта в нём нет."
-                : "The report contains only versions, phases, languages, packages, SHA-256 values, and exact Steam rollback results. It contains no paths, Steam IDs, or account data."}
-            </p>
-            <button className="s-btn" type="button" onClick={() => void refreshEvidence(true)}>
-              <Copy />
-              {reportCopied
-                ? isRu
-                  ? "Скопировано"
-                  : "Copied"
-                : isRu
-                  ? "Скопировать отчёт"
-                  : "Copy report"}
-            </button>
-          </div>
-          <div>
-            <p role="status">
-              {savedReport
-                ? isRu
-                  ? `Отчёт сохранён: ${savedReport}`
-                  : `Report saved: ${savedReport}`
-                : isRu
-                  ? "Отчёт сохраняется автоматически после установки, отката, проверки и стресс-теста."
-                  : "The report is saved automatically after install, restore, recovery, and stress tests."}
-              {reportError &&
-                (isRu
-                  ? ` Не удалось сохранить или открыть отчёт (${reportError}).`
-                  : ` Could not save or open the report (${reportError}).`)}
-            </p>
-            <button className="s-btn" type="button" onClick={() => void openReportsFolder()}>
-              {isRu ? "Открыть папку отчётов" : "Open reports folder"}
-            </button>
-          </div>
-          {stressEnabled && plan && !operationId && (
-            <section>
-              <strong>
-                <FlaskConical />
-                {isRu ? "Контролируемое восстановление" : "Controlled recovery"}
-              </strong>
+      {recoveryMessage && (
+        <p className="b-pilot-hint" role="status">
+          {recoveryMessage}
+        </p>
+      )}
+      <details className="b-more">
+        <summary>{isRu ? "Подробности" : "Details"}</summary>
+        {plan && !operationId && (
+          <>
+            <div className="b-more-block">
+              <strong>{isRu ? "Порядок модов" : "Mod order"}</strong>
               <p>
                 {isRu
-                  ? "Только для внутренней тестовой сборки. BetterFy намеренно останавливает транзакцию в безопасной точке и сразу запускает восстановление."
-                  : "Internal test build only. BetterFy intentionally stops the transaction at a safe boundary and immediately runs recovery."}
+                  ? "Если два мода меняют один файл, в сборке остаётся верхний."
+                  : "If two mods change the same file, the higher one stays in the build."}
               </p>
+              <ol className="b-order">
+                {plan.contributions.map((item, index) => (
+                  <li
+                    key={item.packageId}
+                    title={
+                      isRu
+                        ? `${item.effectiveResources} из ${item.inputResources} файлов мода войдут в сборку`
+                        : `${item.effectiveResources} of ${item.inputResources} mod files remain in the build`
+                    }
+                  >
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <b>{packageLabel(item.packageId)}</b>
+                    <em className={item.shadowedResources > 0 ? "has-overrides" : ""}>
+                      {item.effectiveResources}/{item.inputResources}
+                    </em>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <dl className="b-facts">
               <div>
+                <dt>{isRu ? "Файл" : "File"}</dt>
+                <dd>
+                  <code>
+                    {selectedLanguage
+                      ? `game/dota_${selectedLanguage}/${plan.targetFile}`
+                      : plan.targetFile}
+                  </code>
+                </dd>
+              </div>
+              <div>
+                <dt>{isRu ? "Состав" : "Bundle"}</dt>
+                <dd>
+                  {plan.packageCount} · {plan.resourceCount} {isRu ? "файлов" : "files"}
+                </dd>
+              </div>
+              <div>
+                <dt>{isRu ? "Совпадения" : "Overlaps"}</dt>
+                <dd>
+                  {plan.duplicateResources + plan.overriddenResources || (isRu ? "нет" : "none")}
+                </dd>
+              </div>
+              <div>
+                <dt>{isRu ? "Размер" : "Size"}</dt>
+                <dd>{(plan.vpkBytes / 1024).toFixed(1)} KB</dd>
+              </div>
+              <div>
+                <dt>SHA-256</dt>
+                <dd>
+                  <code>{plan.vpkSha256.slice(0, 16)}…</code>
+                </dd>
+              </div>
+            </dl>
+            {(plan.duplicates.length > 0 || plan.overrides.length > 0) && (
+              <div className="b-more-block b-overlaps">
+                {plan.overrides.map((item) => (
+                  <p key={`override-${item.path}`}>
+                    <code>{item.path}</code>
+                    <span>
+                      {packageLabel(item.winnerPackageId)} →{" "}
+                      {isRu ? "оставлен; ниже пропущены" : "kept; lower skipped"}:{" "}
+                      {item.shadowedPackageIds.map(packageLabel).join(", ")}
+                    </span>
+                  </p>
+                ))}
+                {plan.duplicates.map((item) => (
+                  <p key={`duplicate-${item.path}`}>
+                    <code>{item.path}</code>
+                    <span>
+                      {isRu ? "Одинаковый файл сохранён один раз" : "Identical file stored once"}:{" "}
+                      {packageLabel(item.keptPackageId)}
+                    </span>
+                  </p>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+        {operationId && installedPackageIds.length > 0 && (
+          <div className="b-more-block">
+            <strong>{isRu ? "Что стоит в игре" : "What is installed"}</strong>
+            <p>{installedPackageIds.map(packageLabel).join(" · ")}</p>
+          </div>
+        )}
+        {canManage && (
+          <div className="b-more-block b-more-row">
+            <div>
+              <strong>{isRu ? "Прерванная установка" : "Interrupted install"}</strong>
+              <p>
+                {isRu
+                  ? "Если BetterFy закрыли посреди записи, здесь можно довести откат до конца."
+                  : "If BetterFy was closed mid-write, finish the restore from here."}
+              </p>
+            </div>
+            <button
+              className="s-btn"
+              disabled={phase !== "idle" || recovering}
+              onClick={() => void recover()}
+            >
+              <RotateCcw className={`b-rewind ${recovering ? "is-spinning" : ""}`} />
+              {steamRecoveryRequired
+                ? isRu
+                  ? "Восстановить Steam и проверить"
+                  : "Recover Steam and check"
+                : isRu
+                  ? "Проверить"
+                  : "Check"}
+            </button>
+          </div>
+        )}
+        {canManage && (
+          <div className="b-more-block b-more-row">
+            <div>
+              <strong>
+                <FileCheck2 />
+                {isRu ? "Отчёт Windows-теста" : "Windows test report"}{" "}
+                <span className="b-count">
+                  {(evidence?.entries.length ?? 0) + (evidence?.steamEntries.length ?? 0)}
+                </span>
+              </strong>
+              <p>
+                {savedReport
+                  ? isRu
+                    ? `Сохранён: ${savedReport}`
+                    : `Saved: ${savedReport}`
+                  : isRu
+                    ? "Только версии, этапы, языки, пакеты и SHA-256. Без путей, Steam ID и данных аккаунта."
+                    : "Only versions, phases, languages, packages and SHA-256. No paths, Steam IDs or account data."}
+                {reportError &&
+                  (isRu
+                    ? ` Не удалось сохранить (${reportError}).`
+                    : ` Could not save (${reportError}).`)}
+              </p>
+            </div>
+            <span className="b-more-buttons">
+              <button className="s-btn" type="button" onClick={() => void refreshEvidence(true)}>
+                {reportCopied ? <Check /> : <Copy />}
+                {reportCopied ? (isRu ? "Скопировано" : "Copied") : isRu ? "Копировать" : "Copy"}
+              </button>
+              <button className="s-btn" type="button" onClick={() => void openReportsFolder()}>
+                {isRu ? "Папка" : "Folder"}
+              </button>
+            </span>
+          </div>
+        )}
+        {stressEnabled && (
+          <div className="b-more-block b-dev">
+            <strong>
+              <FlaskConical />
+              {isRu ? "Режим разработчика · стресс-тесты" : "Developer mode · stress tests"}
+            </strong>
+            <p>
+              {isRu
+                ? "BetterFy намеренно обрывает запись в безопасной точке и сразу проверяет восстановление."
+                : "BetterFy deliberately interrupts the write at a safe point and verifies recovery right away."}
+            </p>
+            {plan && !operationId ? (
+              <div className="b-more-buttons">
                 <button
                   className="s-btn"
                   disabled={!selectedLanguage || Boolean(stressPhase)}
@@ -1442,61 +1927,49 @@ export default function TreePilot({
                   {isRu ? "Обрыв после записи" : "Interrupt after publish"}
                 </button>
               </div>
-            </section>
-          )}
-          {stressEnabled &&
-            operationId &&
-            installedLanguage &&
-            selectedProfile &&
-            packageVerified &&
-            !steamOperationId && (
-              <section>
-                <strong>
-                  <FlaskConical />
-                  {isRu ? "Восстановление Steam" : "Steam recovery"}
-                </strong>
-                <p>
-                  {isRu
-                    ? "Проверяет обе стороны атомарной записи localconfig.vdf. Текущий профиль должен ещё не содержать выбранный параметр языка."
-                    : "Tests both sides of the atomic localconfig.vdf write. The current profile must not already contain the selected language option."}
-                </p>
-                <div>
-                  <button
-                    className="s-btn"
-                    disabled={Boolean(stressPhase)}
-                    onClick={() => void runSteamStressTest("after_prepared")}
-                  >
-                    {stressPhase === "after_prepared" && <LoaderCircle className="s-spin" />}
-                    {isRu ? "Steam · до записи" : "Steam · before publish"}
-                  </button>
-                  <button
-                    className="s-btn"
-                    disabled={Boolean(stressPhase)}
-                    onClick={() => void runSteamStressTest("after_replace")}
-                  >
-                    {stressPhase === "after_replace" && <LoaderCircle className="s-spin" />}
-                    {isRu ? "Steam · после записи" : "Steam · after publish"}
-                  </button>
-                </div>
-              </section>
+            ) : operationId &&
+              installedLanguage &&
+              selectedProfile &&
+              packageVerified &&
+              !steamOperationId ? (
+              <div className="b-more-buttons">
+                <button
+                  className="s-btn"
+                  disabled={Boolean(stressPhase)}
+                  onClick={() => void runSteamStressTest("after_prepared")}
+                >
+                  {stressPhase === "after_prepared" && <LoaderCircle className="s-spin" />}
+                  {isRu ? "Steam · до записи" : "Steam · before publish"}
+                </button>
+                <button
+                  className="s-btn"
+                  disabled={Boolean(stressPhase)}
+                  onClick={() => void runSteamStressTest("after_replace")}
+                >
+                  {stressPhase === "after_replace" && <LoaderCircle className="s-spin" />}
+                  {isRu ? "Steam · после записи" : "Steam · after publish"}
+                </button>
+              </div>
+            ) : (
+              <small>
+                {isRu
+                  ? "Тесты записи доступны после подготовки и выбора языка, тесты Steam — после установки без настроенного Steam."
+                  : "Write tests unlock after preparing and picking a language; Steam tests after an install without Steam set up."}
+              </small>
             )}
-          {stressMessage && (
-            <p className="s-tree-pilot-stress-pass" role="status">
-              {stressMessage}
-            </p>
-          )}
-        </details>
-      )}
-      {error && (
-        <p className="s-tree-pilot-error" role="alert">
-          {explainError(error, isRu)}
-        </p>
-      )}
-      <small className="s-tree-pilot-foot">
-        {isRu
-          ? "Источник: Egezenn/dota2-minify. Tree Mod, Show NetWorth, Unit Query HUD и Remove River проверены в игре на одном Windows-компьютере с нидерландским и русским языком; другие языки и компьютеры не проверены. Параметр -language меняет язык текста и может повлиять на озвучку. BetterFy мягко закрывает Dota 2 и Steam и после установки или отката снова запускает Steam."
-          : "Source: Egezenn/dota2-minify. Tree Mod, Show NetWorth, Unit Query HUD and Remove River were verified in game on one Windows computer with Dutch and Russian; other languages and computers are untested. The -language option changes text language and may affect audio. BetterFy closes Dota 2 and Steam gracefully and starts Steam again after install or restore."}
-      </small>
+            {stressMessage && (
+              <p className="b-pass" role="status">
+                {stressMessage}
+              </p>
+            )}
+          </div>
+        )}
+        <small className="b-source">
+          {isRu
+            ? "Источник: Egezenn/dota2-minify. Tree Mod, Show NetWorth, Unit Query HUD и Remove River проверены в игре на одном Windows-компьютере с нидерландским и русским языком; другие языки и компьютеры не проверены. Параметр -language меняет язык текста и может повлиять на озвучку."
+            : "Source: Egezenn/dota2-minify. Tree Mod, Show NetWorth, Unit Query HUD and Remove River were verified in game on one Windows computer with Dutch and Russian; other languages and computers are untested. The -language option changes text language and may affect audio."}
+        </small>
+      </details>
     </section>
   );
 }

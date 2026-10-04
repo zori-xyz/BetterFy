@@ -1,0 +1,25 @@
+/* Display headings in Days One, as on the website (website/src/site.css).
+   Days One has a single 400 weight; its own width carries the emphasis, so
+   these headings drop the 700 weight and the tight Manrope tracking. Small
+   card titles, labels and body copy stay in Manrope. */
+
+.s-page-head h1,
+.s-hero-copy h1,
+.s-section-head h2,
+.s-empty h2,
+.s-dialog-head h2,
+.b-hero h1,
+.b-sealed-copy h2,
+.b-pilot-head h2 {
+  font-family: "Days One BetterFy", "Manrope", system-ui, sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+}
+
+.s-hero-copy h1 {
+  letter-spacing: -0.035em;
+}
+
+.b-hero h1 {
+  font-size: clamp(24px, 2.6vw, 34px);
+}

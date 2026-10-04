@@ -43,10 +43,12 @@ through Steam without opening the patcher again.
 This describes the pinned Minify implementation, not proof that every custom
 `-language` suffix is mounted by the current Dota client. The founder has
 observed Tree Mod working with BetterFy's `dutch` pilot slot on Windows.
-The pilot now allows a pre-install choice of Dutch, Russian, Korean or Simplified
-Chinese; the latter three still need in-game Windows verification. A branded
-`dota_betterfy` directory is not used, and English has no separate language
-folder. The selected language may change Dota text and audio.
+The build can use any of the 27 non-English languages Dota 2 ships, preselected
+from the language Steam runs Dota in; only Dutch and Russian have been observed in
+game on Windows. English uses an experimental `dota_betterfy` folder with
+`-language betterfy`, mirroring Minify before the 2026-07-23 Dota patch; whether the
+current client mounts it is unverified (see `ENGINE_ARCHITECTURE.md`, "Language
+slots"). The selected language may change Dota text and audio.
 
 ## Supported transformation vocabulary
 

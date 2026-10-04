@@ -13,6 +13,7 @@ import {
   LoaderCircle,
   Search,
   Send,
+  RotateCcw,
   Settings,
   SlidersHorizontal,
   Sparkles,
@@ -35,6 +36,7 @@ import Library from "./Library";
 import { Preferences, Profile } from "./Preferences";
 import { deliveryLabel, getSelectionDelivery, modById, type Domain, type StudioMod } from "./model";
 import { Media, Modal } from "./ui";
+import { currentBuildName } from "./builder/buildName";
 
 type Route = "home" | "catalog" | "build" | "library" | "settings" | "profile";
 type Theme = "dark" | "light";
@@ -78,6 +80,8 @@ export default function Workspace({
       ...getStoredStringArray("betterfy:selected-minify-mods"),
     ]),
   ]);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
   const [favorites, setFavorites] = useState<string[]>(() =>
     getStoredStringArray("betterfy:studio-favorites"),
   );
@@ -95,7 +99,11 @@ export default function Workspace({
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [libraryRevision, setLibraryRevision] = useState(0);
-  const [toast, setToast] = useState<{ text: string; key: number } | null>(null);
+  const [toast, setToast] = useState<{
+    text: string;
+    key: number;
+    action?: { label: string; run: () => void };
+  } | null>(null);
   const [storageError, setStorageError] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -145,10 +153,12 @@ export default function Workspace({
     settings: isRu ? "Настройки" : "Settings",
     profile: isRu ? "Профиль" : "Profile",
   };
-  const notify = (text: string) => setToast({ text, key: Date.now() });
+  const notify = (text: string, action?: { label: string; run: () => void }) =>
+    setToast({ text, key: Date.now(), action });
   useEffect(() => {
     if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 3800);
+    // An undo needs a moment longer to be noticed and reached.
+    const timer = window.setTimeout(() => setToast(null), toast.action ? 6500 : 3800);
     return () => window.clearTimeout(timer);
   }, [toast]);
   useEffect(() => {
@@ -210,18 +220,85 @@ export default function Workspace({
     const second = setStorageItem("betterfy:selected-mods", JSON.stringify(wardrobe));
     setStorageError(!first || !second);
   };
+  const waitForEngine = () =>
+    notify(
+      isRu
+        ? "Дождись, пока BetterFy закончит работу с файлами игры"
+        : "Wait until BetterFy finishes working on game files",
+    );
+  const reconnect = () => {
+    if (busy) waitForEngine();
+    else onReconnect();
+  };
+  // The build screen's one-click fixes replace the whole selection; the toast
+  // names what changed, and a removal can be undone like any other.
+  const replaceSelection = (ids: string[]) => {
+    if (busy) {
+      waitForEngine();
+      return;
+    }
+    const before = selectedRef.current;
+    const added = ids.filter((id) => !before.includes(id));
+    const removed = before.filter((id) => !ids.includes(id));
+    if (!added.length && !removed.length) return;
+    saveSelection(ids);
+    const names = (list: string[]) =>
+      list.map((id) => {
+        const name = modById.get(id)?.name[language] ?? id;
+        return isRu ? `«${name}»` : name;
+      });
+    const text = [
+      added.length ? `${isRu ? "Добавлено" : "Added"}: ${names(added).join(", ")}` : "",
+      removed.length
+        ? `${isRu ? "Убрано из сборки" : "Removed from build"}: ${names(removed).join(", ")}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    notify(
+      text,
+      removed.length
+        ? {
+            label: isRu ? "Вернуть" : "Undo",
+            run: () => {
+              if (selectedRef.current.join("|") !== ids.join("|")) {
+                notify(isRu ? "Сборка уже изменилась" : "The build has changed since");
+                return;
+              }
+              saveSelection(before);
+              notify(isRu ? "Вернули как было" : "Back as it was");
+            },
+          }
+        : undefined,
+    );
+  };
   const toggle = (mod: StudioMod) => {
     if (busy) {
-      notify(
-        isRu
-          ? "Дождись, пока BetterFy закончит работу с файлами игры"
-          : "Wait until BetterFy finishes working on game files",
-      );
+      waitForEngine();
       return;
     }
     if (selected.includes(mod.id)) {
+      const before = selected;
       saveSelection(selected.filter((id) => id !== mod.id));
-      notify(isRu ? "Мод убран из сборки" : "Mod removed from build");
+      notify(isRu ? `«${mod.name.ru}» убран из сборки` : `${mod.name.en} removed from build`, {
+        label: isRu ? "Вернуть" : "Undo",
+        run: () => {
+          // Put it back in its old place, unless something else took its slot.
+          const current = selectedRef.current;
+          if (current.includes(mod.id)) return;
+          if (mod.slot && current.some((id) => modById.get(id)?.slot === mod.slot)) {
+            notify(
+              isRu ? "Этот слот уже занят другим модом" : "Another mod already took that slot",
+            );
+            return;
+          }
+          const at = before.indexOf(mod.id);
+          const next = [...current];
+          next.splice(Math.min(at, next.length), 0, mod.id);
+          saveSelection(next);
+          notify(isRu ? "Вернули на место" : "Back in its place");
+        },
+      });
       return;
     }
     const others = mod.slot
@@ -270,7 +347,7 @@ export default function Workspace({
       notify(isRu ? "Сначала добавь хотя бы один мод" : "Add at least one mod first");
       return;
     }
-    setSaveName(isRu ? "Моя Dota" : "My Dota");
+    setSaveName(currentBuildName(selected, language) ?? (isRu ? "Моя Dota" : "My Dota"));
     setSaveError(false);
     setSaving(true);
   };
@@ -491,6 +568,8 @@ export default function Workspace({
                 onCatalog={() => openCatalog()}
                 onSave={openSave}
                 onRemoveMissing={() => saveSelection(selected.filter((id) => modById.has(id)))}
+                onSetSelection={replaceSelection}
+                onConnectDota={reconnect}
                 onResolve={(keep, alternatives) =>
                   saveSelection(
                     selected.filter(
@@ -516,15 +595,7 @@ export default function Workspace({
                 motion={motion}
                 setMotion={setMotion}
                 installation={installation}
-                onReconnect={() => {
-                  if (busy)
-                    notify(
-                      isRu
-                        ? "Дождись, пока BetterFy закончит работу с файлами игры"
-                        : "Wait until BetterFy finishes working on game files",
-                    );
-                  else onReconnect();
-                }}
+                onReconnect={reconnect}
               />
             )}
             {route === "profile" && (
@@ -539,9 +610,22 @@ export default function Workspace({
       </section>
       <div className="s-toast-region" role="status" aria-live="polite">
         {toast && (
-          <div className="s-toast" key={toast.key}>
+          <div className={`s-toast ${toast.action ? "has-action" : ""}`} key={toast.key}>
             <Check />
             <span>{toast.text}</span>
+            {toast.action && (
+              <button
+                className="s-toast-action"
+                onClick={() => {
+                  const action = toast.action;
+                  setToast(null);
+                  action?.run();
+                }}
+              >
+                <RotateCcw className="b-rewind" />
+                {toast.action.label}
+              </button>
+            )}
             <button
               className="s-icon"
               onClick={() => setToast(null)}

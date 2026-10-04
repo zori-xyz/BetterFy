@@ -9,7 +9,7 @@
     "process:allow-restart",
     {
       "identifier": "opener:allow-open-url",
-      "allow": [{ "url": "https://*" }]
+      "allow": [{ "url": "https://*" }, { "url": "steam://rungameid/570" }]
     }
   ]
 }
