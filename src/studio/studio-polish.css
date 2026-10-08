@@ -208,3 +208,60 @@
 .s-domain-tabs > button > span {
   color: var(--s-muted);
 }
+
+/* Keyboard cheat sheet */
+.s-shortcuts p {
+  margin: 0 0 14px;
+  color: var(--s-muted);
+  font-size: var(--s-text-sm);
+}
+.s-shortcuts ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--s-line-soft);
+}
+.s-shortcuts li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--s-line-soft);
+  font-size: var(--s-text-md);
+}
+.s-shortcut-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.s-shortcut-keys i {
+  margin: 0 6px 0 2px;
+  color: var(--s-quiet);
+  font-size: var(--s-text-2xs);
+  font-style: normal;
+}
+.s-shortcuts kbd {
+  min-width: 26px;
+  padding: 3px 8px;
+  border: 1px solid var(--s-line);
+  border-bottom-width: 2px;
+  border-radius: var(--s-radius-hair);
+  background: var(--s-panel-high);
+  color: var(--s-text);
+  font: 600 var(--s-text-xs) / 1.3 inherit;
+  text-align: center;
+}
+.s-footer-keys {
+  color: var(--s-muted);
+  font-size: inherit;
+}
+.s-footer-keys:hover {
+  color: var(--s-text);
+}
+.s-footer-keys kbd {
+  padding: 0 5px;
+  border: 1px solid var(--s-line);
+  border-radius: var(--s-radius-hair);
+  font-family: inherit;
+}
