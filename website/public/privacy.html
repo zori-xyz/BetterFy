@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title data-ru="Приватность · BetterFy" data-en="Privacy · BetterFy">Приватность · BetterFy</title>
+<meta name="description" content="Что BetterFy хранит и чего не хранит: сайт, вход через Telegram и BetterFy ID, приложение для Windows. Ранний доступ.">
+<link rel="canonical" href="https://zori-xyz.github.io/BetterFy/privacy.html">
+<meta name="theme-color" content="#111116">
+<link rel="icon" href="/BetterFy/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="/BetterFy/apple-touch-icon.png">
+<link rel="stylesheet" href="/BetterFy/legal.css">
+<script src="/BetterFy/legal.js"></script>
+</head>
+<body>
+<a class="skip" href="#content"><span data-l="ru">К содержанию</span><span data-l="en">Skip to content</span></a>
+<header class="bar">
+  <a class="wordmark" href="/BetterFy/" aria-label="BetterFy"><span class="wordmark-better">Better</span><span class="wordmark-fy">Fy</span></a>
+  <div class="bar-actions">
+    <div class="pill" role="group" aria-label="Язык / Language"><button type="button" data-set-lang="ru" aria-pressed="true">RU</button><button type="button" data-set-lang="en" aria-pressed="false">EN</button></div>
+    <a class="back" href="/BetterFy/"><span data-l="ru">На сайт</span><span data-l="en">Back to site</span></a>
+  </div>
+</header>
+<main id="content">
+  <div data-l="ru">
+    <p class="meta">Обновлено 8 октября 2026 · ранний доступ</p>
+    <h1>Приватность</h1>
+    <p class="note">Это простая сводка того, что делают сайт, сервис входа и приложение сейчас. Это не юридически выверенный документ: он изменится, когда BetterFy выйдет из раннего доступа, и мы поправим эту страницу вместе с ним.</p>
+
+    <h2>Сайт</h2>
+    <ul>
+      <li>Без аналитики, рекламных пикселей и cookie. Шрифты и картинки отдаются с самого сайта.</li>
+      <li>Сайт лежит на GitHub Pages, поэтому GitHub, как любой веб-сервер, видит IP-адрес и заголовки запроса.</li>
+      <li>В браузере сохраняются только язык и тема (<code>localStorage</code>). Если ты вошёл, сессия лежит в <code>sessionStorage</code> и исчезает вместе с вкладкой.</li>
+    </ul>
+
+    <h2>Запросы к другим сервисам</h2>
+    <ul>
+      <li>Когда ты открываешь окно загрузки, сайт спрашивает у <code>api.github.com</code> список релизов. Сам установщик скачивается с GitHub Releases.</li>
+      <li>При входе сайт обращается к сервису авторизации BetterFy на Cloudflare Workers. Вход через Telegram проходит через Telegram.</li>
+    </ul>
+
+    <h2>Что хранит сервис входа</h2>
+    <ul>
+      <li><strong>Telegram:</strong> числовой идентификатор, имя, никнейм и идентификатор файла аватара. Сам аватар мы не храним, он проксируется при показе.</li>
+      <li><strong>BetterFy ID:</strong> никнейм, пароль только в виде солёного хэша, почта только в виде хэша с ключом и маски для подсказки. Открытый адрес почты не сохраняется.</li>
+      <li><strong>Сессии:</strong> случайный идентификатор, тип клиента (сайт, Windows или неизвестно) и срок действия. IP-адреса, user-agent и названия устройств в сессиях не хранятся.</li>
+      <li><strong>Защита от перебора:</strong> лимиты запросов считаются по хэшу адреса с ключом.</li>
+      <li><strong>Доступ:</strong> уровень (ранний доступ или Premium) и, если ты платил Telegram Stars, номер заказа, сумма и валюта. Платёж проводит Telegram.</li>
+      <li>Сессия сайта живёт двенадцать часов, одноразовые коды действуют десять минут.</li>
+    </ul>
+
+    <h2>Приложение для Windows</h2>
+    <ul>
+      <li>Читает файлы Steam и Dota 2 на твоём компьютере и пишет только те, что нужны для установки и отката. Журнал и резервные копии лежат локально.</li>
+      <li>Данные для входа хранятся в Диспетчере учётных данных Windows.</li>
+      <li>Диагностику и журнал мы получаем только если ты сам их отправил в поддержку.</li>
+    </ul>
+
+    <h2>Удаление и сроки хранения</h2>
+    <p>Кнопки удаления аккаунта в интерфейсе пока нет, и срок хранения данных ещё не определён: это в плане работ. Запрос на удаление можно отправить в <a href="https://t.me/BeterFyBot">Telegram-бот</a>. Сейчас такие запросы разбираются вручную, срок ответа мы не гарантируем.</p>
+
+    <h2>Чего не присылать</h2>
+    <p>Коды входа, токены, ссылки подтверждения, Steam ID и пути, в которых есть твоё имя. Если что-то из этого уже попало в открытый разговор, напиши об этом без повторения значения.</p>
+
+    <h2>Связь</h2>
+    <p>Общие вопросы: <a href="https://t.me/BeterFyBot">@BeterFyBot</a>. Ошибки и предложения: <a href="https://github.com/zori-xyz/BetterFy/issues">GitHub Issues</a>. Уязвимости, только приватно: <a href="https://github.com/zori-xyz/BetterFy/security">вкладка Security</a>. Условия использования: <a href="/BetterFy/terms.html">здесь</a>.</p>
+  </div>
+
+  <div data-l="en">
+    <p class="meta">Updated 8 October 2026 · Early Access</p>
+    <h1>Privacy</h1>
+    <p class="note">This is a plain summary of what the site, the sign-in service and the app do today. It is not a lawyer-reviewed document. It will change when BetterFy leaves Early Access, and this page will change with it.</p>
+
+    <h2>The website</h2>
+    <ul>
+      <li>No analytics, advertising pixels or cookies. Fonts and images are served from the site itself.</li>
+      <li>The site is hosted on GitHub Pages, so GitHub, like any web server, sees your IP address and request headers.</li>
+      <li>The browser keeps only your language and theme (<code>localStorage</code>). If you sign in, the session lives in <code>sessionStorage</code> and disappears with the tab.</li>
+    </ul>
+
+    <h2>Requests to other services</h2>
+    <ul>
+      <li>When you open the download dialog, the site asks <code>api.github.com</code> for the list of releases. The installer itself downloads from GitHub Releases.</li>
+      <li>When you sign in, the site talks to the BetterFy auth service on Cloudflare Workers. Telegram sign-in goes through Telegram.</li>
+    </ul>
+
+    <h2>What the sign-in service stores</h2>
+    <ul>
+      <li><strong>Telegram:</strong> the numeric ID, display name, username and an avatar file ID. We do not keep the avatar itself; it is proxied when shown.</li>
+      <li><strong>BetterFy ID:</strong> a username, the password only as a salted hash, and the email only as a keyed hash plus a masked hint. The plain email address is not stored.</li>
+      <li><strong>Sessions:</strong> a random ID, the client kind (web, Windows or unknown) and an expiry. Sessions do not store IP addresses, user agents or device names.</li>
+      <li><strong>Brute-force protection:</strong> rate limits are counted on a keyed hash of the requester address.</li>
+      <li><strong>Access:</strong> your tier (Early Access or Premium) and, if you paid with Telegram Stars, the order ID, amount and currency. Telegram processes the payment.</li>
+      <li>A website session lasts twelve hours and one-time codes are valid for ten minutes.</li>
+    </ul>
+
+    <h2>The Windows app</h2>
+    <ul>
+      <li>It reads Steam and Dota 2 files on your computer and writes only the ones needed to install and restore. The journal and backups stay local.</li>
+      <li>Sign-in credentials are kept in Windows Credential Manager.</li>
+      <li>We only receive diagnostics and the journal if you send them to support yourself.</li>
+    </ul>
+
+    <h2>Deletion and retention</h2>
+    <p>There is no account deletion button yet, and a retention period is not defined yet; both are on the work plan. You can send a deletion request to the <a href="https://t.me/BeterFyBot">Telegram bot</a>. Such requests are handled by hand for now and we do not guarantee a response time.</p>
+
+    <h2>What not to send</h2>
+    <p>Sign-in codes, tokens, confirmation links, Steam IDs, and paths that contain your name. If one of them has already leaked into a public conversation, say so without repeating the value.</p>
+
+    <h2>Contact</h2>
+    <p>General questions: <a href="https://t.me/BeterFyBot">@BeterFyBot</a>. Bugs and ideas: <a href="https://github.com/zori-xyz/BetterFy/issues">GitHub Issues</a>. Vulnerabilities, privately only: the <a href="https://github.com/zori-xyz/BetterFy/security">Security tab</a>. Terms of use: <a href="/BetterFy/terms.html">here</a>.</p>
+  </div>
+</main>
+<footer class="foot">
+  <a href="/BetterFy/"><span data-l="ru">Главная</span><span data-l="en">Home</span></a>
+  <a href="/BetterFy/terms.html"><span data-l="ru">Условия</span><span data-l="en">Terms</span></a>
+  <a href="https://github.com/zori-xyz/BetterFy">GitHub</a>
+  <a href="https://t.me/BeterFyBot">Telegram</a>
+  <span data-l="ru">Независимый проект. Не связан с Valve Corporation.</span>
+  <span data-l="en">Independent project. Not affiliated with Valve Corporation.</span>
+</footer>
+</body>
+</html>

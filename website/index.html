@@ -6,23 +6,61 @@
     <meta name="theme-color" content="#111116" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.github.com https://betterfy-auth.zori-xyz.workers.dev; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'self'; form-action 'self'" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
-    <meta name="description" content="BetterFy: моды для Dota 2 с проверкой и откатом. Early Access для Windows: 25 модов настройки игры из Minify, облики пока для просмотра." />
-    <meta property="og:title" content="BetterFy: твоя Dota, только лучше" />
-    <meta property="og:description" content="Моды для Dota 2 в одном проверенном VPK с резервной копией и откатом. Early Access для Windows." />
+    <title>BetterFy: моды для Dota 2 с проверкой и откатом</title>
+    <meta name="description" content="Приложение для Windows: собирает моды Dota 2 в один проверенный VPK с резервной копией и откатывает одной кнопкой. Ранний доступ: 25 модов настройки игры из Minify, облики пока только для просмотра." />
+    <link rel="canonical" href="https://zori-xyz.github.io/BetterFy/" />
+    <link rel="alternate" hreflang="ru" href="https://zori-xyz.github.io/BetterFy/?lang=ru" />
+    <link rel="alternate" hreflang="en" href="https://zori-xyz.github.io/BetterFy/?lang=en" />
+    <link rel="alternate" hreflang="x-default" href="https://zori-xyz.github.io/BetterFy/" />
+    <meta property="og:site_name" content="BetterFy" />
+    <meta property="og:title" content="BetterFy: моды для Dota 2 с проверкой и откатом" />
+    <meta property="og:description" content="Приложение для Windows: моды Dota 2 в один проверенный VPK с резервной копией и откатом. Ранний доступ." />
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ru_RU" />
+    <meta property="og:locale:alternate" content="en_US" />
     <meta property="og:url" content="https://zori-xyz.github.io/BetterFy/" />
-    <meta property="og:image" content="https://zori-xyz.github.io/BetterFy/og.webp" />
+    <meta property="og:image" content="https://zori-xyz.github.io/BetterFy/og.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="BetterFy: главный экран приложения и надпись «Моды для Dota 2. Поставил — и откатил»" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="BetterFy: твоя Dota, только лучше" />
-    <meta name="twitter:description" content="Моды, оформление и проверяемые сборки для Dota 2." />
-    <meta name="twitter:image" content="https://zori-xyz.github.io/BetterFy/og.webp" />
-    <link rel="icon" href="%BASE_URL%favicon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="%BASE_URL%betterfy-icon.webp" />
-    <title>BetterFy: твоя Dota, только лучше</title>
+    <meta name="twitter:title" content="BetterFy: моды для Dota 2 с проверкой и откатом" />
+    <meta name="twitter:description" content="Приложение для Windows: моды Dota 2 в один проверенный VPK с резервной копией и откатом. Ранний доступ." />
+    <meta name="twitter:image" content="https://zori-xyz.github.io/BetterFy/og.jpg" />
+    <meta name="twitter:image:alt" content="BetterFy: главный экран приложения и надпись «Моды для Dota 2. Поставил — и откатил»" />
+    <link rel="icon" href="%BASE_URL%favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="%BASE_URL%icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
+    <link rel="manifest" href="%BASE_URL%site.webmanifest" />
+    <link rel="preload" href="%BASE_URL%fonts/days-one-cyrillic.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="%BASE_URL%fonts/manrope-cyrillic-400.woff2" as="font" type="font/woff2" crossorigin />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "BetterFy",
+        "url": "https://zori-xyz.github.io/BetterFy/",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Windows (x64)",
+        "description": "Windows app that installs Dota 2 mods as one verified VPK with a backup and one-button rollback. Early Access.",
+        "softwareHelp": "https://zori-xyz.github.io/BetterFy/#faq",
+        "sameAs": ["https://github.com/zori-xyz/BetterFy", "https://t.me/BeterFyBot"]
+      }
+    </script>
     <style>html,body,#root{min-height:100%;margin:0;background:#111116;color:#f7f5fb}@media(prefers-color-scheme:light){html,body,#root{background:#f7f5fa;color:#211c27}}</style>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <main style="max-width:640px;margin:0 auto;padding:48px 24px;font:16px/1.6 system-ui,sans-serif">
+        <h1>BetterFy</h1>
+        <p>Моды для Dota 2 с проверкой и откатом. Приложение для Windows, ранний доступ. Сайту нужен JavaScript; всё то же самое описано в репозитории.</p>
+        <p>Mods for Dota 2 with checks and rollback. A Windows app in Early Access. This site needs JavaScript; the same information is in the repository.</p>
+        <p><a href="https://github.com/zori-xyz/BetterFy">GitHub</a> · <a href="https://github.com/zori-xyz/BetterFy/releases">Releases</a> · <a href="https://github.com/zori-xyz/BetterFy/blob/main/docs/ROADMAP.md">Roadmap</a></p>
+        <p>Независимый проект, не связан с Valve Corporation. / An independent project, not affiliated with Valve Corporation.</p>
+      </main>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
