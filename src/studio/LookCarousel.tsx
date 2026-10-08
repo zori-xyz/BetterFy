@@ -276,11 +276,7 @@ export default function LookCarousel({
               }
               tabIndex={isFront ? 0 : -1}
               aria-hidden={hidden || undefined}
-              aria-label={
-                isFront
-                  ? `${isRu ? "Открыть облик" : "Open look"}: ${mod.name[language]}`
-                  : `${isRu ? "Показать" : "Show"}: ${mod.name[language]}`
-              }
+              aria-label={isFront ? undefined : `${isRu ? "Показать" : "Show"}: ${mod.name[language]}`}
               onClick={() => (isFront ? onOpen(mod) : go(offset))}
               onPointerMove={(event) => {
                 if (!isFront || event.pointerType !== "mouse" || dragging) return;

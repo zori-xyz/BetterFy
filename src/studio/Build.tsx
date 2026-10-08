@@ -376,7 +376,7 @@ export default function Build({
                 <CountUp value={stat.value} locale={isRu ? "ru-RU" : "en-US"} />
               )}
             </dd>
-            {stat.hint && <small>{stat.hint}</small>}
+            {stat.hint && <dd className="b-stat-hint">{stat.hint}</dd>}
           </div>
         ))}
       </dl>

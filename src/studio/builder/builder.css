@@ -105,11 +105,13 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
-.b-stats small {
+.b-stats .b-stat-hint {
   display: block;
-  margin-top: 2px;
+  margin: 2px 0 0;
   color: var(--s-quiet);
   font-size: var(--s-text-sm);
+  font-weight: 400;
+  letter-spacing: 0;
 }
 .b-stat-pending {
   color: var(--s-quiet);
@@ -126,7 +128,7 @@
   opacity: 0.55;
   border-radius: 2px;
 }
-.b-stats .is-quiet dd {
+.b-stats .is-quiet dd:not(.b-stat-hint) {
   color: var(--s-ready);
 }
 

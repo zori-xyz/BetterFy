@@ -36,6 +36,7 @@ import Library from "./Library";
 import { Preferences, Profile } from "./Preferences";
 import { deliveryLabel, getSelectionDelivery, modById, type Domain, type StudioMod } from "./model";
 import { Media, Modal } from "./ui";
+import Shortcuts from "./Shortcuts";
 import { currentBuildName } from "./builder/buildName";
 
 type Route = "home" | "catalog" | "build" | "library" | "settings" | "profile";
@@ -95,6 +96,7 @@ export default function Workspace({
     null,
   );
   const [saving, setSaving] = useState(false);
+  const [shortcuts, setShortcuts] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveError, setSaveError] = useState(false);
@@ -209,8 +211,33 @@ export default function Workspace({
         }
       }
     };
+    // "G" then a letter jumps between screens; "?" shows the map. Typing in a
+    // field or having a window open never triggers them.
+    let goUntil = 0;
+    const goTo: Record<string, Route> = { h: "home", c: "catalog", b: "build", l: "library", s: "settings" };
+    const keys = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (document.querySelector("dialog[open]")) return;
+      const key = event.key.toLowerCase();
+      if (event.key === "?") {
+        event.preventDefault();
+        setShortcuts(true);
+      } else if (key === "g") {
+        goUntil = Date.now() + 1500;
+      } else if (Date.now() < goUntil && goTo[key]) {
+        goUntil = 0;
+        event.preventDefault();
+        setRoute(goTo[key]);
+      }
+    };
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keydown", keys);
+    return () => {
+      window.removeEventListener("keydown", handler);
+      window.removeEventListener("keydown", keys);
+    };
   }, []);
   const saveSelection = (ids: string[]) => {
     setSelected(ids);
@@ -603,11 +630,18 @@ export default function Workspace({
             )}
             <footer className="s-page-footer">
               <span>BetterFy · Dota 2</span>
-              <span>{isRu ? "Твои моды. Твой выбор." : "Your mods. Your choice."}</span>
+              <span>
+                <button type="button" className="s-footer-keys" onClick={() => setShortcuts(true)}>
+                  <kbd>?</kbd> {isRu ? "горячие клавиши" : "shortcuts"}
+                </button>
+                {" · "}
+                {isRu ? "Твои моды. Твой выбор." : "Your mods. Your choice."}
+              </span>
             </footer>
           </div>
         </div>
       </section>
+      {shortcuts && <Shortcuts onClose={() => setShortcuts(false)} />}
       <div className="s-toast-region" role="status" aria-live="polite">
         {toast && (
           <div className={`s-toast ${toast.action ? "has-action" : ""}`} key={toast.key}>
