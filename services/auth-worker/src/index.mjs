@@ -710,6 +710,28 @@ async function configureTelegram(env) {
       { command: "terms", description: "Условия покупки" },
     ],
   });
+  // First-open card: what this bot is, before anyone presses Start.
+  await telegram(env, "setMyDescription", {
+    description:
+      "BetterFy: менеджер модов для Dota 2. Здесь ты получаешь одноразовый код или подтверждаешь вход в приложении. Переписки бот не читает.",
+  });
+  await telegram(env, "setMyDescription", {
+    language_code: "ru",
+    description:
+      "BetterFy: менеджер модов для Dota 2. Здесь ты получаешь одноразовый код или подтверждаешь вход в приложении. Переписки бот не читает.",
+  });
+  await telegram(env, "setMyDescription", {
+    language_code: "en",
+    description:
+      "BetterFy: a mod manager for Dota 2. Get a one-time code or approve a sign-in for the app here. The bot cannot read your chats.",
+  });
+  await telegram(env, "setMyShortDescription", {
+    short_description: "Вход в BetterFy: коды и подтверждение",
+  });
+  await telegram(env, "setMyShortDescription", {
+    language_code: "en",
+    short_description: "BetterFy sign-in: codes and approvals",
+  });
 }
 
 function websiteUrl() {

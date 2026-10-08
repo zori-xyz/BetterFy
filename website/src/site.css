@@ -20,7 +20,7 @@
    (--danger) means risk, violet is the brand and never a status. */
 :root,.feature.is-dark{
   --bg:#111116;--sidebar:#0d0d12;--panel:#191920;--panel-high:#22222b;--input:#17171e;
-  --text:#f7f5fb;--muted:#a5a1b0;--quiet:#827e8d;--line:#32313b;--line-soft:#292832;
+  --text:#f7f5fb;--muted:#a5a1b0;--quiet:#938f9e;--line:#32313b;--line-soft:#292832;
   --accent:#b45cef;--accent-hover:#c778fa;--accent-text:#160a21;--tint:rgba(180,92,239,.11);
   --ready:#a5cdb1;--danger:#ff9a94;--warning:#ffd18d;--fy:#cf4bc9;--telegram:#196e99;
   --header:rgba(17,17,22,.72);--header-solid:rgba(17,17,22,.86);--backdrop:rgba(8,8,11,.72);
@@ -28,7 +28,7 @@
 }
 :root[data-theme=light]{
   --bg:#f7f5fa;--sidebar:#eeebf2;--panel:#fff;--panel-high:#eeeaf3;--input:#f3f0f6;
-  --text:#211c27;--muted:#665f6d;--quiet:#6f6877;--line:#d8d1df;--line-soft:#e5e0e9;
+  --text:#211c27;--muted:#665f6d;--quiet:#635c6b;--line:#d8d1df;--line-soft:#e5e0e9;
   --accent:#7835a9;--accent-hover:#672997;--accent-text:#fff;--tint:rgba(120,53,169,.09);
   --ready:#2f6e4f;--danger:#a82d27;--warning:#855000;--fy:#b8329f;
   --header:rgba(247,245,250,.76);--header-solid:rgba(247,245,250,.92);--backdrop:rgba(33,24,44,.4);
@@ -37,7 +37,7 @@
 }
 @media(prefers-color-scheme:light){:root:not([data-theme]){
   --bg:#f7f5fa;--sidebar:#eeebf2;--panel:#fff;--panel-high:#eeeaf3;--input:#f3f0f6;
-  --text:#211c27;--muted:#665f6d;--quiet:#6f6877;--line:#d8d1df;--line-soft:#e5e0e9;
+  --text:#211c27;--muted:#665f6d;--quiet:#635c6b;--line:#d8d1df;--line-soft:#e5e0e9;
   --accent:#7835a9;--accent-hover:#672997;--accent-text:#fff;--tint:rgba(120,53,169,.09);
   --ready:#2f6e4f;--danger:#a82d27;--warning:#855000;--fy:#b8329f;
   --header:rgba(247,245,250,.76);--header-solid:rgba(247,245,250,.92);--backdrop:rgba(33,24,44,.4);
@@ -235,13 +235,12 @@ a:hover>.wordmark .wordmark-fy,.footer-mark:hover .wordmark-fy{transform:transla
 .download-cta>a{color:var(--accent-hover);font-weight:700}.download-cta>a:hover{color:var(--text)}
 
 /* Footer */
-.site-footer{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:48px;align-items:start;padding-block:64px 36px}
+.site-footer{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:48px;align-items:start;padding-block:64px 36px}
 .site-footer>div{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
 .site-footer>div:first-child p{color:var(--muted);font-size:var(--t-base)}
 .site-footer b{color:var(--quiet);font-size:var(--t-xs);font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px}
 .site-footer a,.site-footer button{display:inline-flex;align-items:center;gap:6px;min-height:28px;border:0;background:transparent;padding:0;color:var(--muted);font-size:var(--t-base);cursor:pointer;transition:color var(--fast)}
 .site-footer a:hover,.site-footer button:hover{color:var(--text)}
-.site-footer>span{align-self:end;max-width:260px;color:var(--quiet);font-size:var(--t-sm);line-height:1.5;text-align:right}
 .footer-mark{position:relative;display:inline-flex}
 .footer-mark.is-party .wordmark-fy{animation:fy-party .7s var(--spring)}
 @keyframes fy-party{0%{transform:translateY(2px) rotate(-4deg) scale(1)}40%{transform:translateY(-6px) rotate(-20deg) scale(1.25)}100%{transform:translateY(2px) rotate(-4deg)}}
@@ -391,7 +390,7 @@ a:hover>.wordmark .wordmark-fy,.footer-mark:hover .wordmark-fy{transform:transla
   .hero{grid-template-columns:1fr;min-height:auto;padding-block:56px 64px}
   .feature,.feature-reverse{grid-template-columns:1fr}.feature-reverse .poster-button{order:2}
   .download-inner{grid-template-columns:1fr;gap:40px}
-    .site-footer{grid-template-columns:1.5fr 1fr 1fr}.site-footer>span{grid-column:1/-1;text-align:left;max-width:none}
+    .site-footer{grid-template-columns:1fr 1fr 1fr}.site-footer>div:first-child{grid-column:1/-1}
 }
 @media(max-width:940px){.header-actions .live{display:none}}
 @media(max-width:720px){
@@ -633,3 +632,47 @@ h1 strong,h2 strong{font-weight:400}
 .shot-grid figure{margin:0;display:flex;flex-direction:column;gap:12px}
 .shot-grid figcaption{color:var(--muted);font-size:14px;line-height:1.5}
 @media (max-width:760px){.shot-grid{grid-template-columns:1fr}.shot-gallery{margin-top:36px}}
+
+/* What BetterFy touches: three plain cards, read / write / never. */
+.safety{padding-block:96px 24px}
+.safety .section-intro{margin-bottom:36px}
+.safety-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.safety-card{display:flex;flex-direction:column;gap:14px;padding:22px 22px 14px;border:1px solid var(--line);border-radius:var(--r-panel);background:var(--panel);transition:border-color var(--base),transform .5s var(--spring),opacity .5s var(--ease)}
+.safety-card:hover{transform:translateY(-3px);border-color:var(--quiet)}
+.safety-card header{display:flex;align-items:center;gap:12px}
+.safety-card h3{flex:1;margin:0;font:800 18px/1.25 "Manrope",sans-serif;letter-spacing:-.01em}
+.safety-icon{display:grid;place-items:center;flex:none;width:38px;height:38px;border:1px solid var(--line);border-radius:var(--r-control);background:var(--input);color:var(--muted);transition:color var(--base),border-color var(--base),transform .5s var(--spring)}
+.safety-card:hover .safety-icon{transform:rotate(-8deg) scale(1.06)}
+.safety-card.is-write .safety-icon{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+.safety-card.is-never .safety-icon{color:var(--ready);border-color:color-mix(in srgb,var(--ready) 45%,transparent)}
+.safety-card em{flex:none;padding:2px 7px;border:1px solid var(--line);border-radius:var(--r-tag);color:var(--quiet);font:500 var(--t-xs) "JetBrains Mono",monospace;font-style:normal;letter-spacing:.08em;text-transform:uppercase}
+.safety-card ul{margin:0;padding:0;list-style:none}
+.safety-card li{padding:11px 0;border-top:1px solid var(--line-soft);color:var(--muted);font-size:var(--t-base);line-height:1.6}
+.safety-foot{display:flex;align-items:flex-start;gap:10px;max-width:880px;margin:22px 0 0;color:var(--muted);font-size:var(--t-lg);line-height:1.65}
+.safety-foot svg{flex:none;margin-top:4px;color:var(--accent)}
+.safety-foot b{color:var(--text);font-weight:600}
+
+/* FAQ: the list, plus a small "where to ask" card. */
+.faq-layout{display:grid;grid-template-columns:minmax(0,880px) minmax(260px,340px);gap:32px;align-items:start}
+.faq-more{display:inline-flex;align-items:center;gap:6px;margin:0 20px 18px;color:var(--accent-hover);font-size:var(--t-base);font-weight:700}
+.faq-more:hover{text-decoration:underline}
+.faq-help{position:sticky;top:96px;display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:22px;border:1px solid var(--line);border-radius:var(--r-panel);background:var(--panel)}
+.faq-help-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:var(--r-control);background:var(--tint);color:var(--accent);transition:transform .6s var(--spring)}
+.faq-help:hover .faq-help-icon{transform:rotate(-14deg) scale(1.08)}
+.faq-help h3{margin:6px 0 0;font:800 18px/1.25 "Manrope",sans-serif}
+.faq-help p{margin:0 0 6px;color:var(--muted);font-size:var(--t-base);line-height:1.6}
+.faq-help a{display:inline-flex;align-items:center;gap:7px;min-height:36px;color:var(--accent-hover);font-size:var(--t-base);font-weight:700}
+.faq-help a:hover{text-decoration:underline}
+
+/* Footer: the legal row spans every column. */
+.site-footer>.footer-legal{grid-column:1/-1;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px 24px;padding-top:24px;border-top:1px solid var(--line-soft)}
+.footer-legal span{margin-left:auto;max-width:520px;color:var(--quiet);font-size:var(--t-sm);line-height:1.5;text-align:right}
+
+@media(max-width:1100px){
+  .safety-grid{grid-template-columns:1fr}
+  .faq-layout{grid-template-columns:1fr}.faq-list{max-width:none}.faq-help{position:static}
+}
+@media(max-width:720px){
+  .safety{padding-block:64px 16px}
+  .footer-legal span{margin-left:0;max-width:none;text-align:left;flex-basis:100%}
+}

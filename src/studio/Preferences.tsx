@@ -266,8 +266,8 @@ export function Preferences({
               </div>
               <div className="s-about-note">
                 {isRu
-                  ? "Собирай и сохраняй наборы модов и обликов. На Windows BetterFy уже устанавливает три пилотных мода с резервной копией и откатом; остальной каталог пока доступен только для просмотра."
-                  : "Build and save sets of mods and looks. On Windows, BetterFy already installs three pilot mods with a backup and restore; the rest of the catalog is preview-only for now."}
+                  ? "Собирай и сохраняй наборы модов и обликов. На Windows BetterFy уже ставит проверенные моды настройки игры одним файлом, с резервной копией и откатом в один клик. Облики пока только для просмотра."
+                  : "Build and save sets of mods and looks. On Windows, BetterFy installs audited game-tuning mods as one file, with a backup and one-click restore. Looks are preview-only for now."}
               </div>
               <a
                 className="s-settings-link"
