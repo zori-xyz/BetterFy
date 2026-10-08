@@ -45,8 +45,8 @@ const details: Record<GameLanguage, Details> = {
     en: "Russian",
     native: "Русский",
     verified: true,
-    noteRu: "Проверен на Windows: сборка из четырёх модов работала в игре.",
-    noteEn: "Checked on Windows: a four-mod build worked in game.",
+    noteRu: "Проверен на Windows: сборка из 24 модов работала в игре и откатилась начисто.",
+    noteEn: "Checked on Windows: a 24-mod build worked in game and restored cleanly.",
   },
   dutch: {
     ru: "Нидерландский",
