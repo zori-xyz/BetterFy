@@ -30,10 +30,17 @@ Implemented:
 
 - an eight-screen UI (welcome, confirm-uninstall, installing, finish,
   uninstalling, uninstalled, error, plus an inline WebView2 warning) in the
-  BetterFy dark theme, in Russian and English with a visible switcher; the
-  sidebar is a live CSS/HTML build of the reference design (wordmark, the
-  "Join Our Telegram" gradient text positioned near the QR, per direct
-  founder feedback on where it should sit) rather than a static export of it;
+  BetterFy dark theme (the app's violet/near-black tokens, Days One for
+  headings, Manrope for text), in Russian and English with a segmented
+  switcher whose choice is remembered; the left brand panel is live CSS/HTML
+  (wordmark, a short tagline, and the Telegram QR with its "Join our
+  Telegram" text kept near it, per direct founder feedback on where it
+  should sit) rather than a static export;
+- the welcome screen shows the fixed install path as a readonly chip with a
+  note on why it is fixed (updates must replace the same copy), and the
+  options as toggles; the finish screen offers a "Launch BetterFy" action
+  (the `launch_app` command) when the app was not already started by the
+  install step;
 - detects an existing installation (binary present on disk, version read
   from the registry) and switches the welcome screen to an Update framing,
   offering an in-app Uninstall button next to it — reachable without going
@@ -57,8 +64,11 @@ Implemented:
   written to the registry and shown in the "already installed" text — these
   are two different version numbers and conflating them was an earlier bug;
 - installing shows three named, finite steps (files, shortcuts, registry)
-  marked done together when the single `run_install` call returns, rather
-  than an indeterminate looping bar implying unmeasured ongoing work;
+  and a progress bar. `run_install` reports once, when it returns, so the bar
+  and the highlighted step are paced by elapsed time (an estimate that eases
+  toward about 92%) and the bar only reaches 100%, and the steps are only
+  marked done together, when the command actually finishes. The rotating
+  one-line status messages are cosmetic. The same bar is used for uninstall;
   `prefers-reduced-motion: reduce` is honored globally, and every button and
   checkbox has a visible `:focus-visible` ring;
 - errors show a plain-language explanation and Retry/Contact-support actions
@@ -149,8 +159,9 @@ this table wrong again and it will happen silently, not as a build error.
   and links to Microsoft's official download page; it does not download and
   run the bootstrapper itself. Revisit if this proves insufficient in
   practice for the Early Access audience.
-- **Install progress is reported in one batch, not live per step.** The three
-  steps are all marked done together when `run_install` returns, because
+- **Install progress is reported in one batch, not live per step.** The bar
+  is a time-paced estimate and the three steps are all marked done together
+  when `run_install` returns, because
   reporting them as they actually happen needs Tauri's event system, and its
   `core:event:allow-emit`/`allow-listen` permissions have open community
   reports of being inconsistently recognized — not a risk worth taking for a

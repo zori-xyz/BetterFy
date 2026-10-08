@@ -8,14 +8,16 @@ const FALLBACK_PATH = "%LOCALAPPDATA%\\BetterFy";
 
 const STRINGS = {
   ru: {
-    "side.join": "Вступай\nв наш\nTelegram",
+    "side.tagline": "Моды для Dota 2 —\nспокойно и по порядку.",
+    "side.join": "Вступай в наш\nTelegram",
     "side.channel": "Открыть Telegram-канал BetterFy",
     "welcome.eyebrow": "BETTERFY · WINDOWS",
     "welcome.title": "Установка BetterFy",
     "welcome.titleUpdate": "Обновление BetterFy",
     "welcome.body1": "Мастер установит приложение для текущего пользователя. Права администратора не понадобятся.",
     "welcome.body1Update": "BetterFy уже установлен. Обновление заменит файлы приложения; аккаунт, сессии и наборы хранятся отдельно и не затрагиваются.",
-    "welcome.pathLabel": "Путь установки: ",
+    "welcome.pathLabel": "Путь установки",
+    "welcome.pathNote": "Путь фиксирован: так обновления заменяют эту же копию, а не ставят вторую.",
     "welcome.optDesktop": "Создать ярлык на рабочем столе",
     "welcome.optLaunch": "Запустить BetterFy после установки",
     "welcome.cancel": "Отмена",
@@ -36,10 +38,18 @@ const STRINGS = {
     "installing.stepFiles": "Копируем файлы приложения",
     "installing.stepShortcuts": "Создаём ярлыки",
     "installing.stepRegistry": "Регистрируем в Windows",
+    "hint.install.0": "Раскладываем файлы по полочкам…",
+    "hint.install.1": "Протираем пару пикселей…",
+    "hint.install.2": "Аккуратно, без администратора…",
+    "hint.install.3": "Почти готово.",
+    "hint.uninstall.0": "Складываем всё аккуратно…",
+    "hint.uninstall.1": "Ваши данные не трогаем.",
+    "hint.uninstall.2": "Почти готово.",
     "finish.eyebrow": "ГОТОВО",
     "finish.title": "BetterFy установлен",
     "finish.body": "Приложение готово к запуску.",
-    "finish.pathLabel": "Путь: ",
+    "finish.pathLabel": "Путь",
+    "finish.launch": "Запустить BetterFy",
     "finish.done": "Готово",
     "finish.launchFailed": "BetterFy установлен, но запустить его автоматически не удалось. Откройте приложение из меню «Пуск» или ярлыка.",
     "uninstalling.eyebrow": "УДАЛЕНИЕ",
@@ -58,20 +68,22 @@ const STRINGS = {
     "error.body.missing_desktop_dir": "Не удалось найти папку рабочего стола Windows. Установка приложения могла пройти успешно — проверьте меню «Пуск».",
     "error.body.payload_verify_failed": "Файлы приложения записались повреждёнными. Ничего не было заменено — можно спокойно попробовать снова.",
     "error.body.uninstall_incomplete": "Удаление не завершилось полностью. Часть файлов, ярлыков или запись в реестре могли остаться — попробуйте ещё раз.",
-    "error.codeLabel": "Код: ",
+    "error.codeLabel": "Код",
     "error.close": "Закрыть",
     "error.retry": "Повторить",
     "error.help": "Написать в поддержку",
   },
   en: {
-    "side.join": "Join\nOur\nTelegram",
+    "side.tagline": "Your Dota 2 mods,\ncalmly in order.",
+    "side.join": "Join our\nTelegram",
     "side.channel": "Open the BetterFy Telegram channel",
     "welcome.eyebrow": "BETTERFY · WINDOWS",
     "welcome.title": "Install BetterFy",
     "welcome.titleUpdate": "Update BetterFy",
     "welcome.body1": "Setup installs the app for your Windows account. Administrator access is not required.",
     "welcome.body1Update": "BetterFy is already installed. Updating replaces the app files; your account, sessions and presets are stored separately and are not touched.",
-    "welcome.pathLabel": "Install path: ",
+    "welcome.pathLabel": "Install path",
+    "welcome.pathNote": "The location is fixed so updates replace this same copy instead of adding a second one.",
     "welcome.optDesktop": "Create a desktop shortcut",
     "welcome.optLaunch": "Launch BetterFy after installing",
     "welcome.cancel": "Cancel",
@@ -92,10 +104,18 @@ const STRINGS = {
     "installing.stepFiles": "Copying app files",
     "installing.stepShortcuts": "Creating shortcuts",
     "installing.stepRegistry": "Registering with Windows",
+    "hint.install.0": "Putting files on tidy shelves…",
+    "hint.install.1": "Polishing a couple of pixels…",
+    "hint.install.2": "Quietly, no admin rights needed…",
+    "hint.install.3": "Nearly there.",
+    "hint.uninstall.0": "Folding everything up neatly…",
+    "hint.uninstall.1": "Leaving your data alone.",
+    "hint.uninstall.2": "Nearly there.",
     "finish.eyebrow": "READY",
     "finish.title": "BetterFy is installed",
     "finish.body": "The app is ready to open.",
-    "finish.pathLabel": "Path: ",
+    "finish.pathLabel": "Path",
+    "finish.launch": "Launch BetterFy",
     "finish.done": "Finish",
     "finish.launchFailed": "BetterFy is installed, but it could not be started automatically. Open it from the Start menu or a shortcut.",
     "uninstalling.eyebrow": "UNINSTALLING",
@@ -114,14 +134,23 @@ const STRINGS = {
     "error.body.missing_desktop_dir": "Windows' Desktop folder could not be found. The app itself may have installed fine — check the Start menu.",
     "error.body.payload_verify_failed": "The app files were written but came out corrupted. Nothing was replaced, so it's safe to try again.",
     "error.body.uninstall_incomplete": "Uninstalling did not fully finish. Some files, shortcuts, or the registry entry may remain — try again.",
-    "error.codeLabel": "Code: ",
+    "error.codeLabel": "Code",
     "error.close": "Close",
     "error.retry": "Retry",
     "error.help": "Contact support",
   },
 };
 
-let lang = localStorage.getItem("betterfy-installer-lang") || "ru";
+function readStoredLang() {
+  try {
+    const stored = localStorage.getItem("betterfy-installer-lang");
+    return stored === "en" || stored === "ru" ? stored : "ru";
+  } catch (err) {
+    return "ru";
+  }
+}
+
+let lang = readStoredLang();
 let existing = null;
 let lastAction = "install";
 
@@ -145,21 +174,126 @@ function applyTranslations() {
   });
   document.getElementById("btn-channel").setAttribute("aria-label", t("side.channel"));
   document.querySelectorAll(".lang-switch button").forEach((btn) => {
-    btn.classList.toggle("is-active", btn.dataset.lang === lang);
+    const active = btn.dataset.lang === lang;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-pressed", String(active));
   });
+  document.querySelector(".lang-switch").dataset.active = lang;
 }
 
 function setLang(next) {
   lang = next;
-  localStorage.setItem("betterfy-installer-lang", lang);
+  try {
+    localStorage.setItem("betterfy-installer-lang", lang);
+  } catch (err) {
+    // Storage unavailable: the choice just won't be remembered.
+  }
   applyTranslations();
   updateWelcomeForExistingInstall();
+  restartHints();
 }
+
+// Screens that take focus on entry, so keyboard users land on the action that
+// matters. The uninstall confirmation focuses the safe choice (Cancel).
+const FOCUS_ON_ENTER = {
+  welcome: "btn-install",
+  "confirm-uninstall": "btn-uninstall-cancel",
+  finish: "btn-launch",
+  uninstalled: "btn-uninstalled-reinstall",
+  error: "btn-error-retry",
+};
 
 function showScreen(name) {
   document.querySelectorAll(".screen").forEach((el) => {
     el.hidden = el.dataset.screen !== name;
   });
+  let target = FOCUS_ON_ENTER[name] && document.getElementById(FOCUS_ON_ENTER[name]);
+  if (target && target.hidden) {
+    target = document.getElementById("btn-done");
+  }
+  if (target) {
+    target.focus({ preventScroll: true });
+  }
+}
+
+const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// The install and uninstall commands report once, when they finish, so the bar
+// below is paced by elapsed time (it eases toward ~92%) and only reaches 100%
+// when the command actually returns. It is an estimate, not a measurement.
+const HINT_COUNTS = { install: 4, uninstall: 3 };
+let hintTimer = null;
+let hintKind = null;
+let hintIndex = 0;
+let progressTimer = null;
+
+function setHint(kind, index) {
+  const el = document.getElementById(`${kind}-hint`);
+  if (el) {
+    el.textContent = t(`hint.${kind}.${index}`);
+  }
+}
+
+function startHints(kind) {
+  stopHints();
+  hintKind = kind;
+  hintIndex = 0;
+  setHint(kind, 0);
+  hintTimer = setInterval(() => {
+    const el = document.getElementById(`${kind}-hint`);
+    hintIndex = Math.min(hintIndex + 1, HINT_COUNTS[kind] - 1);
+    if (hintIndex === HINT_COUNTS[kind] - 1) {
+      clearInterval(hintTimer);
+      hintTimer = null;
+    }
+    if (REDUCED_MOTION.matches) {
+      setHint(kind, hintIndex);
+      return;
+    }
+    el.classList.add("is-fading");
+    setTimeout(() => {
+      setHint(kind, hintIndex);
+      el.classList.remove("is-fading");
+    }, 350);
+  }, 2400);
+}
+
+function restartHints() {
+  if (hintKind) {
+    setHint(hintKind, hintIndex);
+  }
+}
+
+function stopHints() {
+  clearInterval(hintTimer);
+  hintTimer = null;
+  hintKind = null;
+}
+
+function setProgress(barId, percent) {
+  const bar = document.getElementById(barId);
+  bar.setAttribute("aria-valuenow", String(Math.round(percent)));
+  bar.querySelector(".progress-fill").style.width = `${percent}%`;
+}
+
+function startProgress(barId, onTick) {
+  stopProgress();
+  const started = Date.now();
+  setProgress(barId, 4);
+  progressTimer = setInterval(() => {
+    const elapsed = Date.now() - started;
+    const percent = 4 + 88 * (1 - Math.exp(-elapsed / 3200));
+    setProgress(barId, percent);
+    if (onTick) {
+      onTick(percent);
+    }
+  }, 200);
+}
+
+function stopProgress() {
+  clearInterval(progressTimer);
+  progressTimer = null;
 }
 
 async function invoke(command, args) {
@@ -262,7 +396,16 @@ function showInstallError(err) {
 function markSteps(done) {
   document.querySelectorAll("#install-steps li").forEach((li) => {
     li.classList.toggle("done", done);
+    li.classList.remove("active");
   });
+}
+
+// Highlights the stage the estimate is currently on; none are marked done
+// until the command returns.
+function markActiveStep(percent) {
+  const items = document.querySelectorAll("#install-steps li");
+  const active = percent < 34 ? 0 : percent < 62 ? 1 : 2;
+  items.forEach((li, index) => li.classList.toggle("active", index === active));
 }
 
 async function runInstall() {
@@ -274,15 +417,41 @@ async function runInstall() {
 
   markSteps(false);
   showScreen("installing");
+  markActiveStep(0);
+  startHints("install");
+  startProgress("install-progress", markActiveStep);
+  const started = Date.now();
 
   try {
     const report = await invoke("run_install", { options });
+    // Keep the screen up long enough to read, then complete the bar.
+    await sleep(Math.max(0, 1300 - (Date.now() - started)));
+    stopProgress();
+    setProgress("install-progress", 100);
     markSteps(true);
+    await sleep(REDUCED_MOTION.matches ? 0 : 550);
+    stopHints();
     document.getElementById("finish-path").textContent = report.installDir;
     document.getElementById("finish-launch-note").hidden = !report.launchFailed;
+    // If the install step already started the app there is nothing left to
+    // launch; otherwise offer it as the primary action.
+    const alreadyLaunched = options.launchAfter && !report.launchFailed;
+    document.getElementById("btn-launch").hidden = alreadyLaunched;
+    document.getElementById("btn-done").classList.toggle("btn-primary", alreadyLaunched);
     showScreen("finish");
   } catch (err) {
+    stopProgress();
+    stopHints();
     showInstallError(err);
+  }
+}
+
+async function launchInstalled() {
+  try {
+    await invoke("launch_app");
+    await closeWindow();
+  } catch (err) {
+    document.getElementById("finish-launch-note").hidden = false;
   }
 }
 
@@ -293,10 +462,20 @@ function askUninstallConfirmation() {
 async function runUninstall() {
   lastAction = "uninstall";
   showScreen("uninstalling");
+  startHints("uninstall");
+  startProgress("uninstall-progress");
+  const started = Date.now();
   try {
     await invoke("run_uninstall");
+    await sleep(Math.max(0, 1000 - (Date.now() - started)));
+    stopProgress();
+    setProgress("uninstall-progress", 100);
+    await sleep(REDUCED_MOTION.matches ? 0 : 450);
+    stopHints();
     showScreen("uninstalled");
   } catch (err) {
+    stopProgress();
+    stopHints();
     showInstallError(err);
   }
 }
@@ -325,6 +504,7 @@ document.querySelectorAll(".lang-switch button").forEach((btn) => {
 document.getElementById("btn-cancel").addEventListener("click", closeWindow);
 document.getElementById("btn-install").addEventListener("click", runInstall);
 document.getElementById("btn-done").addEventListener("click", closeWindow);
+document.getElementById("btn-launch").addEventListener("click", launchInstalled);
 document.getElementById("btn-uninstalled-done").addEventListener("click", closeWindow);
 document.getElementById("btn-uninstalled-reinstall").addEventListener("click", goToReinstall);
 document.getElementById("btn-close-error").addEventListener("click", closeWindow);

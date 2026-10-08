@@ -9,13 +9,19 @@
   <body>
     <div class="shell">
       <aside class="side">
-        <div class="wordmark"><span class="better">Better</span><span class="fy">Fy</span></div>
-        <div class="join" data-i18n="side.join"></div>
-        <button type="button" class="qr" id="btn-channel"><img src="assets/telegram-qr.png" alt="" /></button>
+        <div class="side-glow" aria-hidden="true"></div>
+        <div class="brand">
+          <div class="wordmark" aria-label="BetterFy"><span class="better">Better</span><span class="fy">Fy</span></div>
+          <p class="tagline" data-i18n="side.tagline"></p>
+        </div>
+        <div class="tg">
+          <div class="join" data-i18n="side.join"></div>
+          <button type="button" class="qr" id="btn-channel"><img src="assets/telegram-qr.png" alt="" /></button>
+        </div>
       </aside>
 
       <main class="content">
-        <div class="lang-switch" role="group" aria-label="Language">
+        <div class="lang-switch" role="group" aria-label="Language" data-active="ru">
           <button type="button" data-lang="ru">RU</button>
           <button type="button" data-lang="en">EN</button>
         </div>
@@ -24,7 +30,12 @@
           <p class="eyebrow" data-i18n="welcome.eyebrow"></p>
           <h1 data-i18n="welcome.title"></h1>
           <p class="body" data-i18n="welcome.body1"></p>
-          <p class="body" data-i18n="welcome.pathLabel"><span id="install-path">…</span></p>
+
+          <div class="path-chip">
+            <span class="chip-label" data-i18n="welcome.pathLabel"></span>
+            <span class="chip-path" id="install-path">…</span>
+          </div>
+          <p class="fine" data-i18n="welcome.pathNote"></p>
 
           <div class="notice" id="existing-notice" hidden>
             <p class="body" id="existing-notice-text"></p>
@@ -32,18 +43,23 @@
           </div>
 
           <div class="warning" id="webview2-warning" hidden>
-            <p class="body" data-i18n="webview2.body"></p>
-            <button class="btn" id="btn-webview2" data-i18n="webview2.button"></button>
+            <span class="warn-icon" aria-hidden="true">!</span>
+            <div class="warn-main">
+              <p class="body" data-i18n="webview2.body"></p>
+              <button class="btn btn-small" id="btn-webview2" data-i18n="webview2.button"></button>
+            </div>
           </div>
 
-          <label class="option">
-            <input type="checkbox" id="opt-desktop" checked />
-            <span data-i18n="welcome.optDesktop"></span>
-          </label>
-          <label class="option">
-            <input type="checkbox" id="opt-launch" checked />
-            <span data-i18n="welcome.optLaunch"></span>
-          </label>
+          <div class="options">
+            <label class="option">
+              <input type="checkbox" class="toggle" id="opt-desktop" checked />
+              <span data-i18n="welcome.optDesktop"></span>
+            </label>
+            <label class="option">
+              <input type="checkbox" class="toggle" id="opt-launch" checked />
+              <span data-i18n="welcome.optLaunch"></span>
+            </label>
+          </div>
 
           <div class="actions">
             <button class="btn" id="btn-cancel" data-i18n="welcome.cancel"></button>
@@ -52,11 +68,14 @@
         </section>
 
         <section class="screen" data-screen="confirm-uninstall" hidden>
-          <p class="eyebrow error-eyebrow" data-i18n="confirmUninstall.eyebrow"></p>
+          <div class="badge badge-calm" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></svg>
+          </div>
+          <p class="eyebrow" data-i18n="confirmUninstall.eyebrow"></p>
           <h1 data-i18n="confirmUninstall.title"></h1>
           <p class="body" data-i18n="confirmUninstall.body"></p>
           <div class="actions">
-            <button class="btn" id="btn-uninstall-cancel" data-i18n="confirmUninstall.cancel"></button>
+            <button class="btn btn-primary" id="btn-uninstall-cancel" data-i18n="confirmUninstall.cancel"></button>
             <button class="btn btn-danger" id="btn-uninstall-confirm" data-i18n="confirmUninstall.confirm"></button>
           </div>
         </section>
@@ -65,6 +84,10 @@
           <p class="eyebrow" data-i18n="installing.eyebrow"></p>
           <h1 data-i18n="installing.title"></h1>
           <p class="body" data-i18n="installing.body"></p>
+          <div class="progress" id="install-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-labelledby="install-hint">
+            <div class="progress-fill"></div>
+          </div>
+          <p class="progress-label"><span class="spark" aria-hidden="true"></span><span class="hint" id="install-hint"></span></p>
           <ul class="steps" id="install-steps">
             <li data-i18n="installing.stepFiles"></li>
             <li data-i18n="installing.stepShortcuts"></li>
@@ -73,13 +96,20 @@
         </section>
 
         <section class="screen" data-screen="finish" hidden>
+          <div class="badge badge-ok" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path class="tick" d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+          </div>
           <p class="eyebrow" data-i18n="finish.eyebrow"></p>
           <h1 data-i18n="finish.title"></h1>
           <p class="body" data-i18n="finish.body"></p>
-          <p class="body" data-i18n="finish.pathLabel"><span id="finish-path"></span></p>
+          <div class="path-chip">
+            <span class="chip-label" data-i18n="finish.pathLabel"></span>
+            <span class="chip-path" id="finish-path"></span>
+          </div>
           <p class="body launch-note" id="finish-launch-note" data-i18n="finish.launchFailed" hidden></p>
           <div class="actions">
-            <button class="btn btn-primary" id="btn-done" data-i18n="finish.done"></button>
+            <button class="btn" id="btn-done" data-i18n="finish.done"></button>
+            <button class="btn btn-primary" id="btn-launch" data-i18n="finish.launch" hidden></button>
           </div>
         </section>
 
@@ -87,9 +117,16 @@
           <p class="eyebrow" data-i18n="uninstalling.eyebrow"></p>
           <h1 data-i18n="uninstalling.title"></h1>
           <p class="body" data-i18n="uninstalling.body"></p>
+          <div class="progress" id="uninstall-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-labelledby="uninstall-hint">
+            <div class="progress-fill"></div>
+          </div>
+          <p class="progress-label"><span class="spark" aria-hidden="true"></span><span class="hint" id="uninstall-hint"></span></p>
         </section>
 
         <section class="screen" data-screen="uninstalled" hidden>
+          <div class="badge badge-calm" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+          </div>
           <p class="eyebrow" data-i18n="uninstalled.eyebrow"></p>
           <h1 data-i18n="uninstalled.title"></h1>
           <p class="body" data-i18n="uninstalled.body"></p>
@@ -100,12 +137,18 @@
         </section>
 
         <section class="screen" data-screen="error" hidden>
+          <div class="badge badge-error" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v6M12 17h.01" /></svg>
+          </div>
           <p class="eyebrow error-eyebrow" data-i18n="error.eyebrow"></p>
           <h1 data-i18n="error.title"></h1>
           <p class="body" id="error-body" data-i18n="error.body"></p>
-          <p class="body" data-i18n="error.codeLabel"><code id="error-code"></code></p>
+          <div class="path-chip code-chip">
+            <span class="chip-label" data-i18n="error.codeLabel"></span>
+            <code id="error-code"></code>
+          </div>
           <div class="actions">
-            <button class="btn" id="btn-error-help" data-i18n="error.help"></button>
+            <button class="btn btn-ghost" id="btn-error-help" data-i18n="error.help"></button>
             <button class="btn" id="btn-close-error" data-i18n="error.close"></button>
             <button class="btn btn-primary" id="btn-error-retry" data-i18n="error.retry"></button>
           </div>
