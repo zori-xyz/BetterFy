@@ -528,6 +528,21 @@ fn open_url(_url: String) -> Result<(), String> {
     Err("windows_only".to_string())
 }
 
+// Starts the installed app on request from the finish screen, for the case
+// where "launch after installing" was left unticked. Same spawn the install
+// step uses; it refuses to run anything that is not the installed binary.
+#[tauri::command]
+fn launch_app() -> Result<(), String> {
+    let main_binary = install_dir()?.join(MAIN_BINARY_NAME);
+    if !main_binary.is_file() {
+        return Err("launch_failed".to_string());
+    }
+    std::process::Command::new(main_binary)
+        .spawn()
+        .map(|_| ())
+        .map_err(|_| "launch_failed".to_string())
+}
+
 fn run_app() {
     tauri::Builder::default()
         .manage(BusyState(std::sync::Mutex::new(false)))
@@ -546,7 +561,8 @@ fn run_app() {
             check_webview2,
             run_install,
             run_uninstall,
-            open_url
+            open_url,
+            launch_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running the BetterFy installer");
