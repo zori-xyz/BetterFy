@@ -129,6 +129,46 @@ async function assertReducedMotionAndObserverFallback() {
   await fallbackPage.close();
 }
 
+async function assertSeoSafetyAndStaticPages() {
+  const base = new URL(origin);
+  // Language comes from ?lang= first, and the head follows it.
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.goto(`${origin}?lang=en`, { waitUntil: "networkidle" });
+  if (await page.evaluate(() => document.documentElement.lang) !== "en") throw new Error("?lang=en did not switch the page language");
+  if (!/Dota 2 mods/.test(await page.title())) throw new Error(`English title is wrong: ${await page.title()}`);
+  const description = await page.locator('meta[name="description"]').getAttribute("content");
+  if (!/Windows app/.test(description ?? "")) throw new Error("English meta description was not applied");
+  await page.getByRole("button", { name: "RU", exact: true }).click();
+  if (!(await page.url()).includes("lang=ru")) throw new Error("Language switch did not keep ?lang= in sync");
+  if (!/моды для Dota 2/.test(await page.title())) throw new Error("Russian title was not restored");
+  const canonical = await page.locator('link[rel="canonical"]').getAttribute("href");
+  if (canonical !== "https://zori-xyz.github.io/BetterFy/") throw new Error(`Unexpected canonical: ${canonical}`);
+  for (const selector of ['meta[property="og:image"]', 'meta[name="twitter:image"]']) {
+    const href = await page.locator(selector).getAttribute("content");
+    const response = await fetch(new URL(new URL(href).pathname, base.origin));
+    if (!response.ok) throw new Error(`${selector} points to a missing image: ${href}`);
+  }
+  // The safety section and the legal links.
+  if (await page.locator("#safety .safety-card").count() !== 3) throw new Error("Safety section must list read / write / never cards");
+  for (const name of ["privacy.html", "terms.html"]) {
+    if (!(await page.locator(`.site-footer a[href$="${name}"]`).count())) throw new Error(`Footer has no link to ${name}`);
+    const response = await fetch(new URL(name, origin));
+    if (!response.ok) throw new Error(`${name} did not load: ${response.status}`);
+  }
+  await page.close();
+  for (const name of ["robots.txt", "sitemap.xml", "site.webmanifest", "404.html", "favicon-32.png", "apple-touch-icon.png"]) {
+    const response = await fetch(new URL(name, origin));
+    if (!response.ok) throw new Error(`${name} did not load: ${response.status}`);
+  }
+  // The static pages switch language without the app bundle.
+  const legal = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await legal.goto(new URL("privacy.html?lang=en", origin).toString(), { waitUntil: "networkidle" });
+  if (!(await legal.getByRole("heading", { name: "Privacy", level: 1 }).isVisible())) throw new Error("privacy.html did not show the English heading");
+  const legalOverflow = await legal.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  if (legalOverflow > 1) throw new Error(`privacy.html overflows horizontally by ${legalOverflow}px`);
+  await legal.close();
+}
+
 async function assertThemeAndStatus() {
   for (const colorScheme of ["dark", "light"]) {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, colorScheme });
@@ -227,7 +267,8 @@ try {
   await assertReleaseStates();
   await assertReducedMotionAndObserverFallback();
   await assertThemeAndStatus();
-  console.log(`BetterFy website: ${cases.length} responsive checks, mobile navigation, modal focus, auth/release failures, FAQ disclosure, reduced motion, storage fallbacks, theme switching and the status journal passed.`);
+  await assertSeoSafetyAndStaticPages();
+  console.log(`BetterFy website: ${cases.length} responsive checks, mobile navigation, modal focus, auth/release failures, FAQ disclosure, reduced motion, storage fallbacks, theme switching, the status journal, SEO head, the safety section and the static pages passed.`);
 } finally {
   await browser.close();
 }
