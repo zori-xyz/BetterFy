@@ -626,3 +626,10 @@ h1 strong,h2 strong{font-weight:400}
   .bmock-journal{grid-template-columns:auto minmax(0,1fr) auto}
   .bmock-journal>span:not(.console-dot){display:none}
 }
+.builder-shot{align-self:center;filter:drop-shadow(0 30px 60px #0008)}
+.shot-gallery{margin-top:56px}
+.shot-gallery h3{margin:6px 0 22px;font-family:"Days One","Manrope",sans-serif;font-weight:400;font-size:clamp(22px,2.4vw,30px);letter-spacing:-.03em}
+.shot-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+.shot-grid figure{margin:0;display:flex;flex-direction:column;gap:12px}
+.shot-grid figcaption{color:var(--muted);font-size:14px;line-height:1.5}
+@media (max-width:760px){.shot-grid{grid-template-columns:1fr}.shot-gallery{margin-top:36px}}
