@@ -68,9 +68,11 @@ file; it must never enter this repository or a client bundle.
 4. Review `BETTERFY_PLAN_3D_STARS`, `BETTERFY_PLAN_15D_STARS`, and
    `BETTERFY_PLAN_30D_STARS` in `wrangler.jsonc` before charging users.
 5. Run `npm run db:migrate:remote` and `npm run deploy`.
-6. Export the three values required by `scripts/set-webhook.mjs`, then run that
-   script once. It configures Telegram's secret webhook header and discards old
-   pending updates.
+6. Export `BETTERFY_AUTH_WORKER_URL` and `DEPLOY_ADMIN_SECRET`, then run
+   `node scripts/set-webhook.mjs` once after every deploy that changes the bot.
+   The Worker sets Telegram's secret webhook header, discards old pending
+   updates, and refreshes the command menus and first-open descriptions in both
+   languages.
 7. Set desktop `VITE_BETTERFY_AUTH_URL` to the deployed HTTPS Worker origin.
 
 The ID registration routes fail closed with HTTP 503 until mail values and the
