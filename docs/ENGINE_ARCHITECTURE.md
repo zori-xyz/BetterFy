@@ -683,6 +683,24 @@ not been seen. The SHA-256 pin, not the host, decides whether the bytes are acce
 - Not run: Windows CI for this change (see the PR), an install on Windows, and anything
   in Dota. Nothing here claims the skin loads or looks right in the game.
 
+### Letting go of a stale installation
+
+A Dota update or a Steam file check can replace or delete the file BetterFy
+wrote. Install and restore both refuse in that state (`deployment_conflict`,
+`rollback_conflict`), because BetterFy's backup describes a file that is no
+longer there and writing it back could undo a game update.
+
+`release_stale_deployment` is the one way out. It runs only after the user asks
+for it in the builder, only when the file is missing or differs from the
+recorded hash (a healthy install answers `deployment_not_stale`), and it
+touches nothing in the game folder. The ownership record is renamed to
+`ownership.released-<ms>.json`, the journal keeps `released_stale` as its error
+code, and the installed-profile record is cleared. The next install then treats
+whatever sits in the slot as foreign: an empty slot installs, and a slot with
+another file asks for a different language. Steam's `-language` option has its
+own restore button. Covered by unit tests; seen on Windows only as the report
+that led to it, not yet exercised there.
+
 ### Installed profile
 
 After a committed pilot install, Rust writes one derived record to

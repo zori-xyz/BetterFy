@@ -1203,6 +1203,36 @@ async fn rollback_game_deployment(
 }
 
 #[tauri::command]
+async fn release_stale_deployment(
+    app: AppHandle,
+    request: ReleaseStaleRequest,
+) -> Result<game_deployment::StaleRelease, String> {
+    if !request.confirmed {
+        return Err("deployment_confirmation_required".to_string());
+    }
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "deployment_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        require_patch_ready_runtime()?;
+        let released =
+            game_deployment::release_stale_deployment(&app_data, Path::new(&request.game_path))?;
+        let _ = installed_profile::clear(&app_data);
+        Ok(released)
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReleaseStaleRequest {
+    game_path: String,
+    confirmed: bool,
+}
+
+#[tauri::command]
 async fn recover_game_deployments(
     app: AppHandle,
     request: DeploymentRecoveryRequest,
@@ -1301,6 +1331,7 @@ fn main() {
             preview_tree_language,
             start_steam_after_tree_pilot,
             rollback_game_deployment,
+            release_stale_deployment,
             recover_game_deployments,
             start_steam_after_profile,
             start_steam_after_restore,
