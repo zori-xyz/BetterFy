@@ -84,6 +84,15 @@ compression, excess entry or expanded size, and extreme compression ratios. It
 does not extract. Any future extractor must repeat containment and byte limits
 while streaming because central-directory metadata is not proof of safe output.
 
+The one extractor that exists is for wardrobe items (see "Wardrobe items" in
+`ENGINE_ARCHITECTURE.md`) and follows that rule narrowly. It runs only on an
+archive whose size and SHA-256 are pinned in an embedded allowlist entry, after the
+preflight, and only when the archive holds exactly one file. It reads that single entry
+by its pinned name through a hard length bound (the pinned size plus one byte, not the
+size the archive declares), then checks the pinned SHA-256 of the result. Nothing is
+written to a path derived from the archive; the verified VPK goes to the
+content-addressed store like any other pinned resource.
+
 ## Explicitly excluded from this slice
 
 - production catalog URLs, cross-origin redirects, resume, or authenticated CDN delivery;

@@ -1,9 +1,19 @@
 # Skin archive audit: first sample
 
-Status: analysis only. Nothing here is installable yet, and no skin has been
-run in Dota. This note records what a real third-party hero skin contains, so
-the intake rules for wardrobe content rest on one concrete archive instead of
-a guess.
+Status: the first version of this audit was analysis only. The rules below are
+now implemented as an analyzer (`src-tauri/src/skin_archive.rs`) and this one
+archive is pinned in an embedded allowlist, so the engine can plan and install
+it through the normal backup and rollback transaction (see "Wardrobe items" in
+[ENGINE_ARCHITECTURE.md](ENGINE_ARCHITECTURE.md)). Nothing has been run in
+Dota: no skin has been installed on Windows, and whether this one looks right
+in the game, with or without its shared files, is open. The Windows steps are
+in [SKIN_WINDOWS_TEST_PLAN.md](SKIN_WINDOWS_TEST_PLAN.md). This note records what
+a real third-party hero skin contains, so the intake rules for wardrobe content
+rest on one concrete archive instead of a guess.
+
+The founder reports that the skin's authors agreed to community use. The
+archive carries no licence file, so that statement is recorded in the allowlist
+entry as reported, not as a licence.
 
 ## Sample
 
@@ -93,11 +103,90 @@ each and have the shape of Valve's image wrappers: one `.png` and one
 - The first end-to-end proof is this one archive, installed alone, played in
   Dota on Windows, and restored; then two skins together, to cover conflicts.
 
+## Rules as implemented
+
+The proposed rules above became `skin_archive.rs`. Where the code is more
+specific than the proposal, this is what it does:
+
+- **Types.** Allowed: `vpcf_c`, `vsnap_c`, `vtex_c`, `vmat_c`, `vmdl_c`,
+  `vmesh_c`, `vanim_c`, `vsndevts_c`, `vsnd_c`, `vmorf_c`, `vagrp_c`, `vphys_c`.
+  Rejected: scripts (`vjs_c`), uncompiled sources (`.vpcf`, `.vmdl`, ...),
+  executables, empty files, files over 16 MiB, and every other type. Case
+  collisions between two entries reject both. An unsafe path (traversal,
+  uppercase, spaces, empty segments), a script or an executable also blocks the
+  whole install instead of being dropped.
+- **`vxml_c`.** Accepted only when the layout reader proves the file is Valve's
+  image wrapper: `root > Panel[class] > Image[id class src]`, no styles,
+  scripts, includes or event attributes, plain-text attribute values, one `src`
+  that is the sibling `<name>_png.vtex` of the wrapper, and a resource
+  reference list that names that one image and nothing else. If the reader
+  cannot prove it, the file is rejected.
+- **Scope.** Hero-scoped paths are the exact folders of one hero
+  (`models/heroes/<hero>`, `particles/units/heroes/hero_<hero>`,
+  `particles/econ/items/<hero>`, `materials/models/heroes|items/<hero>`, hero
+  files named `<hero>_*` directly in `particles/units/heroes`, and the hero and
+  spell icons under `panorama/images/heroes` and `panorama/images/spellicons`).
+  Author-owned paths are a top-level folder that is not one of Valve's, or a
+  folder or file under `particles/`, `materials/` or `models/` named after a
+  namespace a person declared in the allowlist entry (`darkness` here, which
+  covers `particles/darkness_snaps/...`). Declared namespaces are never derived
+  from the archive, because an archive that names its own top-level folder
+  `units` must not be able to claim `particles/units/...`. Everything else is
+  shared. The list of Valve's top-level folders is deliberately generous, and
+  one name on it only means a folder of that name is never author-owned.
+- **Shared policy.** `strip` (this entry) drops shared files and lists each one;
+  `refuse` refuses the install.
+- **Identity.** The report carries two SHA-256 identities over sorted path and
+  payload hash: one for every entry in the archive and one for the files that
+  will be installed. The allowlist entry pins both, and the analyzer must
+  reproduce them on every build.
+
+## What the analyzer found on the sample
+
+Run locally on a Mac against `pak59_dir.vpk` (VPK v2, all 1,010 entries
+embedded), with the hero `keeper_of_the_light`, the declared namespace
+`darkness` and the `strip` policy. This is a run of the code, not a Windows or
+in-game result.
+
+| Class | Files | Bytes |
+| --- | ---: | ---: |
+| Hero-scoped (includes the 11 image wrappers, all proven) | 214 | 1,343,162 |
+| Author-owned (`darkness/`, `kisilev_ind/`, `particles/darkness*`) | 737 | 51,937,190 |
+| Shared, stripped | 45 | 4,575,285 |
+| Rejected | 14 | 191,574 |
+| Archive total | 1,010 | 58,047,211 |
+| To install | 951 | 53,280,352 |
+
+- The 14 rejected files are all uncompiled `.vpcf` leftovers under
+  `particles/darkness/`, as predicted. No script, executable, unsafe path or
+  duplicate was found.
+- The 45 shared files are the ones the first audit named: 15 under
+  `materials/default`, 9 cubemaps under `materials/models/cubemaps`, 5 under
+  `materials/particle`, `materials/models/particle/net_color.vmat_c`, 12 under
+  `particles/basic_*`, `particles/models/basic_trail/basic_trail.vpcf_c`, and
+  the two `particles/status_fx/status_effect_keeper_spirit_form*` files. The
+  last two are named after the hero but live in a shared folder, so they are
+  shared by rule.
+- By bytes, about 97% of the install is the author's own namespaces; the
+  hero-scoped replacements are 214 files and 1.3 MB. The merged BetterFy VPK built from the 951 files
+  is 53,327,413 bytes.
+- Archive identity `6dfba0d998fb954c36a1bb7a844e92b7bf6805d5f691ff9560525d86bbe70e57`,
+  install identity `eaa2727992025de0f2e820859c673dfae9ad6a2c553a76c1dbb9761ebff98c82`,
+  inner VPK SHA-256 `12137a743ff91c8dc1341e32718580109f86c70df735e24b022929e38cc9a190`.
+
 ## Not verified
 
 - Whether the skin works in the current Dota patch, with and without the shared
-  files.
+  files. This decides whether `strip` is the right policy for it; the Windows
+  plan tests both the stripped install and, if it looks wrong, notes what is
+  missing.
 - Whether the Valve resources it replaces still exist at those paths after the
   2026-07-23 patch.
-- The meaning of every byte in the `vxml_c` files beyond their strings.
-- Licensing.
+- The meaning of every byte in the `vxml_c` files beyond their parsed
+  structure and strings.
+- Whether the bytes of any compiled file are well formed: the type allowlist
+  limits what the game is asked to load, it does not parse every resource.
+- Whether the hero-name rules cover every Valve path a skin for another hero
+  needs (only this archive's shapes have been exercised), and whether Valve
+  has top-level folders missing from the analyzer's list.
+- Licensing beyond the founder's report.
