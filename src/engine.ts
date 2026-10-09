@@ -220,6 +220,12 @@ export type GameDeploymentReceipt = {
   packageIds: string[];
 };
 
+export type StaleDeploymentRelease = {
+  operationId: string;
+  language: GameLanguage;
+  reason: "missing" | "changed";
+};
+
 export type GameDeploymentRecovery = {
   inspected: number;
   rolledBack: number;
@@ -451,6 +457,7 @@ export interface EngineBridge {
   recoverSteamLaunchOptions(): Promise<SteamConfigReceipt[]>;
   deployStagedVpk(gamePath: string, receipt: BuildReceipt): Promise<GameDeploymentReceipt>;
   rollbackGameDeployment(gamePath: string, operationId: string): Promise<GameDeploymentReceipt>;
+  releaseStaleDeployment(gamePath: string): Promise<StaleDeploymentRelease>;
   recoverGameDeployments(gamePath: string): Promise<GameDeploymentRecovery>;
   beginTreePilotDownload(packageIds: string[], gamePath?: string): Promise<TreePilotDownloadStatus>;
   treePilotDownloadStatus(): Promise<TreePilotDownloadStatus | null>;
@@ -717,6 +724,9 @@ export const mockEngine: EngineBridge = {
   },
   async rollbackGameDeployment() {
     throw new EngineFault("desktop_runtime_required", "rollback_game_deployment");
+  },
+  async releaseStaleDeployment() {
+    throw new EngineFault("desktop_runtime_required", "release_stale_deployment");
   },
   async recoverGameDeployments() {
     throw new EngineFault("desktop_runtime_required", "recover_game_deployments");
@@ -1043,6 +1053,17 @@ export const engineBridge: EngineBridge = {
         request: { gamePath, operationId, confirmed: true },
       }),
       90_000,
+    );
+  },
+  async releaseStaleDeployment(gamePath) {
+    if (!isTauriRuntime()) return mockEngine.releaseStaleDeployment(gamePath);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "release_stale_deployment",
+      invoke<StaleDeploymentRelease>("release_stale_deployment", {
+        request: { gamePath, confirmed: true },
+      }),
+      30_000,
     );
   },
   async recoverGameDeployments(gamePath) {

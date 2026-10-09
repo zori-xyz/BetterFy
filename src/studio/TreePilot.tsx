@@ -691,6 +691,51 @@ export default function TreePilot({
     }
   }
 
+  // The game replaced or removed BetterFy's file (usually a Dota update).
+  // Nothing in the game folder is touched: the old record is only forgotten,
+  // so a new install can start from what the game has now.
+  async function releaseStale() {
+    if (!canManage || phase !== "idle") return;
+    setPhase("restore");
+    setEngineActive(true);
+    try {
+      const released = await bridge.releaseStaleDeployment(installation.path);
+      say(
+        "ok",
+        released.reason === "missing"
+          ? "Файл BetterFy в игре уже удалён. Старая установка забыта."
+          : "Файл в игре заменён не BetterFy. Старая установка забыта, файл не тронут.",
+        released.reason === "missing"
+          ? "BetterFy's file is already gone from the game. The old install is forgotten."
+          : "The file in the game was replaced by something else. The old install is forgotten and the file was left alone.",
+      );
+      setError("");
+      setOperationId(null);
+      setInstalledLanguage(null);
+      setInstalledPackageIds([]);
+      setVerifiedInstall(false);
+      setPackageVerified(false);
+      setPlan(null);
+      setSteamStarted(false);
+      setRecoveryMessage(
+        isRu
+          ? steamOperationId
+            ? "Старая установка забыта. Параметр -language в Steam можно вернуть кнопкой «Восстановить параметры Steam». Потом подготовь сборку заново."
+            : "Старая установка забыта. Подготовь сборку заново; если в слоте остался чужой файл, выбери другой язык."
+          : steamOperationId
+            ? "The old install is forgotten. Use Restore Steam settings to remove the -language option, then prepare the build again."
+            : "The old install is forgotten. Prepare the build again; if another file sits in this slot, pick a different language.",
+      );
+    } catch (cause) {
+      const code = codeOf(cause);
+      setError(code);
+      say("error", "Не получилось отпустить установку.", "Could not let go of the install.", code);
+    } finally {
+      setEngineActive(false);
+      setPhase("idle");
+    }
+  }
+
   async function activateSteam() {
     if (
       !operationId ||
@@ -1201,6 +1246,7 @@ export default function TreePilot({
       setPlan(null);
       void prepare();
     } else if (notice.action === "report") void refreshEvidence(true);
+    else if (notice.action === "release") void releaseStale();
     else if (notice.action === "steam" && installedLanguage) void copyLaunchOption();
     else if (notice.action === "settings") {
       const field = languageFieldRef.current;
@@ -1233,7 +1279,11 @@ export default function TreePilot({
         ? isRu
           ? "Подготовить заново"
           : "Prepare again"
-        : notice?.action === "report"
+        : notice?.action === "release"
+          ? isRu
+            ? "Отпустить старую установку"
+            : "Let go of the old install"
+          : notice?.action === "report"
           ? reportCopied
             ? isRu
               ? "Отчёт скопирован"
