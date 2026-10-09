@@ -6,9 +6,10 @@ import {
   type GameLanguage,
   type TreePilotDownloadStatus,
   type TreePilotPlan,
+  type WardrobePlanItem,
 } from "../../engine";
 import { getStorageItem, setStorageItem } from "../../storage";
-import { engineIdFor, findPackage } from "../packages";
+import { engineIdFor, findPackage, isWardrobePackage } from "../packages";
 
 // The browser preview has no Rust engine. To show the whole builder there,
 // this bridge plays the Windows flow with timers: nothing is downloaded and
@@ -71,10 +72,86 @@ function resourcesFor(packageId: string) {
     : seeded(packageId, 40, 420);
 }
 
+// Shaped like the one archive audited so far. The demo does not run the
+// analyzer: these lists and counts only show how the review looks.
+const demoShared = [
+  ...[
+    "default_color_tga_11bf3739",
+    "default_color_tga_47b1af3d",
+    "default_colorwarp3d_z000_tga_8805a83f",
+    "default_detail2_tga_70788555",
+    "default_detail_tga_d55685d8",
+    "default_detailmask_tga_4450da58",
+    "default_diffusewarp_tga_7b504261",
+    "default_eyes_cube_psd_f281aa41",
+    "default_fresnelwarprim_tga_d9279d65",
+    "default_mask_tga_4528a0a9",
+    "default_mask_tga_7a9c85be",
+    "default_normal_tga_7652cb",
+    "default_refl_tga_c1b9c83e",
+    "default_specwarp_tga_436583b9",
+    "dota_default_cube_tga_c95513b9",
+  ].map((name) => `materials/default/${name}.vtex_c`),
+  ...["glossy_cube_tga_4cca90d9", "gold_day_cube_psd_c6b0aa8a", "glossy_red_cube_tga_82cb7b24"].map(
+    (name) => `materials/models/cubemaps/${name}.vtex_c`,
+  ),
+  ...["glow", "rope", "rope_energy", "smoke", "trail"].map(
+    (name) => `materials/particle/basic_${name}.vtex_c`,
+  ),
+  "materials/models/particle/net_color.vmat_c",
+  ...["ambient", "explosion", "projectile", "rope", "trail"].map(
+    (name) => `particles/basic_${name}/basic_${name}.vpcf_c`,
+  ),
+  "particles/models/basic_trail/basic_trail.vpcf_c",
+  "particles/status_fx/status_effect_keeper_spirit_form.vpcf_c",
+];
+
+function demoWardrobeItem(packageId: string): WardrobePlanItem {
+  const sharedPaths = demoShared.map((path) => ({ path, bytes: 4096 }));
+  return {
+    packageId,
+    catalogId: findPackage(packageId)?.catalogId ?? packageId,
+    hero: "keeper_of_the_light",
+    sourceUrl: "https://huggingface.co/datasets/hrdq/Dota2PornFx/",
+    archiveSha256: "f9f0c2f63a9989ea6fd2779cfea1676a2e07bd94eabab9e0c2127a68e7e268a7",
+    catalogSnapshot: "demo",
+    permission: "founder_reported_author_consent",
+    verifiedLanguages: [],
+    compatibilityNote: null,
+    report: {
+      hero: "keeper_of_the_light",
+      sharedPolicy: "strip",
+      entries: 1010,
+      totalBytes: 58047211,
+      archiveIdentity: "6dfba0d998fb954c36a1bb7a844e92b7bf6805d5f691ff9560525d86bbe70e57",
+      heroScoped: { files: 214, bytes: 1343162 },
+      authorOwned: { files: 737, bytes: 51937190 },
+      shared: { files: sharedPaths.length, bytes: 4575285 },
+      rejected: { files: 2, bytes: 20000 },
+      imageWrappers: 11,
+      rejectedPaths: [
+        { path: "particles/darkness/flame.vpcf", reason: "uncompiled_source", bytes: 7152 },
+        { path: "particles/darkness/sparks.vpcf", reason: "uncompiled_source", bytes: 31744 },
+      ],
+      sharedPaths,
+      suggestedNamespaces: ["darkness", "kisilev_ind"],
+      hostile: false,
+      install: {
+        files: 951,
+        bytes: 53280352,
+        identity: "eaa2727992025de0f2e820859c673dfae9ad6a2c553a76c1dbb9761ebff98c82",
+        strippedShared: sharedPaths.length,
+        blocked: null,
+      },
+    },
+  };
+}
+
 function demoPlan(ids: string[]): TreePilotPlan {
   const packageIds = ids.map(engineIdFor);
+  const wardrobe = packageIds.filter(isWardrobePackage).map(demoWardrobeItem);
   const contributions = packageIds.map((packageId, index) => {
-    const input = resourcesFor(packageId);
+    const input = isWardrobePackage(packageId) ? 951 : resourcesFor(packageId);
     const shadowed = index > 0 && packageIds.length > 2 ? Math.min(3, input - 1) : 0;
     return {
       packageId,
@@ -93,8 +170,8 @@ function demoPlan(ids: string[]): TreePilotPlan {
     sourceCommit: "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
     targetFile: "pak66_dir.vpk",
     resourceCount,
-    resourceBytes: resourceCount * 2048,
-    vpkBytes: resourceCount * 1310 + 4096,
+    resourceBytes: resourceCount * 2048 + (wardrobe.length ? 53280352 : 0),
+    vpkBytes: resourceCount * 1310 + 4096 + (wardrobe.length ? 53327413 : 0),
     vpkSha256: "d3m0c0ffee5a1t" + "0".repeat(50),
     bundlePlanId: "demo",
     packageCount: packageIds.length,
@@ -111,6 +188,19 @@ function demoPlan(ids: string[]): TreePilotPlan {
         ]
       : [],
     contributions,
+    wardrobe,
+    // A second selected item that writes a path the skin writes: the demo
+    // shows the confirmation the engine would ask for.
+    wardrobeConflicts:
+      wardrobe.length > 0 && packageIds.length > wardrobe.length
+        ? [
+            {
+              path: "materials/models/heroes/keeper_of_the_light/keeper_body.vmat_c",
+              winnerPackageId: packageIds[0],
+              shadowedPackageIds: packageIds.slice(1, 2),
+            },
+          ]
+        : [],
     compatibility: "unknown",
     distribution: "internal_pilot",
     deployEnabled: true,

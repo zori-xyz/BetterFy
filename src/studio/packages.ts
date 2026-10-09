@@ -1,11 +1,14 @@
 import { useSyncExternalStore } from "react";
 import type { Language } from "../i18n";
 
-// The same PackageManifest files the Rust engine embeds (src-tauri/packages),
-// so the interface and the engine can never disagree on what is installable.
+// The same manifest files the Rust engine embeds (src-tauri/packages for game
+// tuning, src-tauri/wardrobe for audited hero skins), so the interface and the
+// engine can never disagree on what is installable.
 type PackageManifest = {
   id: string;
   catalogId: string;
+  /** Present on wardrobe items (`"wardrobe"`); tuning packages have none. */
+  kind?: string;
   /** Replaced by a newer package; kept only so existing builds stay verifiable. */
   supersededBy?: string | null;
   name: Record<Language, string>;
@@ -15,10 +18,16 @@ type PackageManifest = {
   requires?: string[];
 };
 
-const manifests = import.meta.glob<PackageManifest>("../../src-tauri/packages/*.json", {
-  eager: true,
-  import: "default",
-});
+const manifests = {
+  ...import.meta.glob<PackageManifest>("../../src-tauri/packages/*.json", {
+    eager: true,
+    import: "default",
+  }),
+  ...import.meta.glob<PackageManifest>("../../src-tauri/wardrobe/*.json", {
+    eager: true,
+    import: "default",
+  }),
+};
 
 export const installablePackages: PackageManifest[] = Object.values(manifests)
   .filter((manifest) => !manifest.supersededBy)
@@ -74,6 +83,11 @@ export const MAX_BUNDLE_PACKAGES = 32;
 
 export function findPackage(id: string) {
   return byAnyId.get(id);
+}
+
+/** Whether the package is an audited hero skin rather than a game-tuning mod. */
+export function isWardrobePackage(id: string) {
+  return findPackage(id)?.kind === "wardrobe";
 }
 
 export function engineIdFor(catalogId: string) {

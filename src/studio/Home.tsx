@@ -264,7 +264,7 @@ function BuildDock({
   // Slots filled before Home opened stay still; new arrivals drop in.
   const [arrived] = useState(() => new Set(selected));
   const chosen = known(selected);
-  const pilot = chosen.filter((mod) => mod.domain === "game" && isPilotMod(mod.id));
+  const pilot = chosen.filter((mod) => isPilotMod(mod.id));
   const previewCount = chosen.length - pilot.length;
   const relation = bundleRelationProblem(pilot.map((mod) => mod.id));
   const required = relation?.kind === "missing" ? modForPackage(relation.otherId) : undefined;
@@ -527,7 +527,7 @@ function ReadySets({
           const complete = ids.length > 0 && have === ids.length;
           const allPilot =
             items.length === ids.length &&
-            items.every((mod) => mod.domain === "game" && isPilotMod(mod.id));
+            items.every((mod) => isPilotMod(mod.id));
           const copy = setCopy[preset.id];
           const Icon = copy?.icon ?? Layers3;
           const art = items.flatMap((mod) => (mod.image ? [mod.image] : [])).slice(0, 3);

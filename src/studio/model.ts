@@ -27,10 +27,12 @@ export function isPilotSelection(ids: string[]) {
 
 export function getSelectionDelivery(ids: string[]) {
   const known = ids.flatMap((id) => (modById.has(id) ? [modById.get(id)!] : []));
-  const gameIds = known.filter((mod) => mod.domain === "game").map((mod) => mod.id);
-  const previewCount = known.filter(
-    (mod) => mod.domain === "wardrobe" || !isPilotMod(mod.id),
-  ).length;
+  // Game mods and the audited wardrobe items install through the same engine;
+  // pilotModIds holds exactly the ones the engine knows.
+  const gameIds = known
+    .filter((mod) => mod.domain === "game" || isPilotMod(mod.id))
+    .map((mod) => mod.id);
+  const previewCount = known.filter((mod) => !isPilotMod(mod.id)).length;
   return {
     gameIds,
     pilotReady: isPilotSelection(gameIds),
