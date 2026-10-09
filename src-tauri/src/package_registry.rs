@@ -475,6 +475,15 @@ fn validate(manifest: &PackageManifest) -> Result<(), String> {
     if !valid_package_id(&manifest.id) || !valid_catalog_id(&manifest.catalog_id) {
         return invalid("id");
     }
+    // Wardrobe items come from their own embedded allowlist; a package
+    // manifest, including one from a signed catalog, may not take their names.
+    if manifest
+        .id
+        .starts_with(&format!("{}.", crate::wardrobe::NAMESPACE))
+        || crate::wardrobe::catalog_id_taken(&manifest.catalog_id)
+    {
+        return invalid("id");
+    }
     if manifest.name.ru.trim().is_empty() || manifest.name.en.trim().is_empty() {
         return invalid("name");
     }

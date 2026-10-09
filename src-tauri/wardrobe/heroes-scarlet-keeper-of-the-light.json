@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "kind": "wardrobe",
+  "id": "wardrobe.scarlet-keeper-of-the-light",
+  "catalogId": "heroes-scarlet-keeper-of-the-light",
+  "name": {
+    "ru": "Scarlet Keeper of the Light",
+    "en": "Scarlet Keeper of the Light"
+  },
+  "author": "Darkness",
+  "hero": "keeper_of_the_light",
+  "authorNamespaces": [
+    "darkness"
+  ],
+  "sharedPolicy": "strip",
+  "distribution": "internal_pilot",
+  "source": {
+    "url": "https://huggingface.co/datasets/hrdq/Dota2PornFx/resolve/main/assets/files/heroes/Scarlet%20Keeper.zip",
+    "catalogSnapshot": "Dota2PornFxWeb 2026-07-26",
+    "permission": "founder_reported_author_consent"
+  },
+  "archive": {
+    "zipBytes": 24071988,
+    "zipSha256": "f9f0c2f63a9989ea6fd2779cfea1676a2e07bd94eabab9e0c2127a68e7e268a7",
+    "innerPath": "pak59_dir.vpk",
+    "innerBytes": 58096981,
+    "innerSha256": "12137a743ff91c8dc1341e32718580109f86c70df735e24b022929e38cc9a190"
+  },
+  "audited": {
+    "entries": 1010,
+    "archiveIdentity": "6dfba0d998fb954c36a1bb7a844e92b7bf6805d5f691ff9560525d86bbe70e57",
+    "installFiles": 951,
+    "installBytes": 53280352,
+    "installIdentity": "eaa2727992025de0f2e820859c673dfae9ad6a2c553a76c1dbb9761ebff98c82",
+    "strippedShared": 45,
+    "rejected": 14
+  },
+  "verifiedLanguages": [],
+  "compatibilityNote": "Not run in Dota 2 yet. Shared game files the archive replaces are stripped; whether the skin looks right without them has not been checked."
+}

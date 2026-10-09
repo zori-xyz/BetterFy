@@ -57,7 +57,42 @@ trait DownloadTransport: Send + Sync + 'static {
     ) -> Result<(), String>;
 }
 
-struct PinnedHttpsTransport;
+/// Hosts a wardrobe archive's download may be redirected to. Hugging Face
+/// answers a `resolve/...` URL with a redirect to a CDN host under
+/// `cdn.hf.co` (observed once, from `us.aws.cdn.hf.co`, with a signed query
+/// string); other regions are matched by the suffix and unverified. The
+/// pinned SHA-256 decides whether the bytes are accepted, so the allowlist
+/// only decides where BetterFy is willing to connect.
+const WARDROBE_REDIRECT_SUFFIXES: &[&str] = &[".cdn.hf.co"];
+
+/// HTTPS download with every address resolved, checked and pinned. By default
+/// a redirect must stay on the first URL's origin. A transport made for a
+/// CDN-backed source may also follow a redirect to a host under
+/// `redirect_suffixes`, and only there may the URL carry a query string.
+struct PinnedHttpsTransport {
+    redirect_suffixes: &'static [&'static str],
+    timeout: Duration,
+}
+
+impl PinnedHttpsTransport {
+    const SAME_ORIGIN: Self = Self {
+        redirect_suffixes: &[],
+        timeout: Duration::from_secs(30),
+    };
+    /// A 24 MB archive needs more than the 30 seconds a small resource gets.
+    const WARDROBE: Self = Self {
+        redirect_suffixes: WARDROBE_REDIRECT_SUFFIXES,
+        timeout: Duration::from_secs(600),
+    };
+
+    fn follows(&self, url: &Url) -> bool {
+        url.host_str().is_some_and(|host| {
+            self.redirect_suffixes
+                .iter()
+                .any(|suffix| host.len() > suffix.len() && host.ends_with(suffix))
+        })
+    }
+}
 
 fn public_ip(ip: IpAddr) -> bool {
     match ip {
@@ -83,12 +118,12 @@ fn public_ip(ip: IpAddr) -> bool {
     }
 }
 
-fn validate_url(url: &Url) -> Result<(&str, u16), String> {
+fn validate_url_with(url: &Url, allow_query: bool) -> Result<(&str, u16), String> {
     if url.scheme() != "https"
         || !url.username().is_empty()
         || url.password().is_some()
         || url.fragment().is_some()
-        || url.query().is_some()
+        || (!allow_query && url.query().is_some())
     {
         return Err("download_url_invalid".to_string());
     }
@@ -131,17 +166,18 @@ impl DownloadTransport for PinnedHttpsTransport {
             if cancelled.load(Ordering::Relaxed) {
                 return Err("download_cancelled".to_string());
             }
-            let (host, port) = validate_url(&url)?;
-            if url.origin().ascii_serialization() != original_origin {
+            let cross_origin = url.origin().ascii_serialization() != original_origin;
+            if cross_origin && !self.follows(&url) {
                 return Err("download_redirect_blocked".to_string());
             }
+            let (host, port) = validate_url_with(&url, cross_origin)?;
             let addresses = resolve_public(host, port)?;
             let client = Client::builder()
                 .https_only(true)
                 .no_proxy()
                 .redirect(reqwest::redirect::Policy::none())
                 .connect_timeout(Duration::from_secs(8))
-                .timeout(Duration::from_secs(30))
+                .timeout(self.timeout)
                 .user_agent("BetterFy-content/1")
                 .resolve_to_addrs(host, &addresses)
                 .build()
@@ -246,7 +282,34 @@ pub(crate) fn fetch_pinned_pilot_resource(
         size: resource.bytes as u64,
         sha256: resource.sha256.to_string(),
     };
-    fetch_verified_binary_with(&PinnedHttpsTransport, &spec, cancelled)
+    fetch_verified_binary_with(&PinnedHttpsTransport::SAME_ORIGIN, &spec, cancelled)
+}
+
+/// Downloads a wardrobe item's pinned ZIP. The URL and the expected size and
+/// SHA-256 come from the embedded allowlist entry only.
+pub(crate) fn fetch_pinned_wardrobe_archive(
+    manifest: &crate::wardrobe::WardrobeManifest,
+    cancelled: &AtomicBool,
+) -> Result<Vec<u8>, String> {
+    fetch_wardrobe_archive_with(&PinnedHttpsTransport::WARDROBE, manifest, cancelled)
+}
+
+fn fetch_wardrobe_archive_with<T: DownloadTransport>(
+    transport: &T,
+    manifest: &crate::wardrobe::WardrobeManifest,
+    cancelled: &AtomicBool,
+) -> Result<Vec<u8>, String> {
+    let spec = RemotePackageSpec {
+        package_id: manifest.id.clone(),
+        version: "pinned-archive".to_string(),
+        format: "zip".to_string(),
+        file_name: "wardrobe-archive.zip".to_string(),
+        download_url: manifest.source.url.clone(),
+        media_type: "application/zip".to_string(),
+        size: manifest.archive.zip_bytes,
+        sha256: manifest.archive.zip_sha256.clone(),
+    };
+    fetch_verified_binary_with(transport, &spec, cancelled)
 }
 
 fn operation_id() -> Result<String, String> {
@@ -420,7 +483,12 @@ pub fn begin(app_data_root: PathBuf, package_id: String) -> Result<ContentDownlo
     std::thread::Builder::new()
         .name("betterfy-content-download".to_string())
         .spawn(move || {
-            match run_download(&app_data_root, spec, &operation, &PinnedHttpsTransport) {
+            match run_download(
+                &app_data_root,
+                spec,
+                &operation,
+                &PinnedHttpsTransport::SAME_ORIGIN,
+            ) {
                 Ok((identity, archive_report)) => update(&operation, |state| {
                     state.phase = DownloadPhase::Ready;
                     state.content_identity = Some(identity);
@@ -626,13 +694,78 @@ mod tests {
     }
 
     #[test]
+    fn wardrobe_downloads_follow_only_the_cdn_suffix_and_only_there_allow_a_query() {
+        let wardrobe = PinnedHttpsTransport::WARDROBE;
+        let cdn = Url::parse("https://us.aws.cdn.hf.co/xet-bridge-us/a/b?Expires=1&Signature=x")
+            .expect("url");
+        assert!(wardrobe.follows(&cdn));
+        assert!(validate_url_with(&cdn, true).is_ok());
+        assert_eq!(
+            validate_url_with(&cdn, false).err().as_deref(),
+            Some("download_url_invalid")
+        );
+        for blocked in [
+            "https://cdn.hf.co/x",
+            "https://evilcdn.hf.co/x",
+            "https://cdn.hf.co.evil.example/x",
+            "https://us.aws.cdn.hf.co.evil.example/x",
+            "https://huggingface.co/x",
+            "https://example.com/x",
+        ] {
+            let url = Url::parse(blocked).expect("url");
+            assert!(!wardrobe.follows(&url), "{blocked}");
+        }
+        // The default transport never leaves the first URL's origin.
+        assert!(!PinnedHttpsTransport::SAME_ORIGIN.follows(&cdn));
+        // A fragment, credentials, a plain-HTTP or non-443 target stay invalid
+        // even where a query is allowed.
+        for invalid in [
+            "https://us.aws.cdn.hf.co/x#frag",
+            "https://user@us.aws.cdn.hf.co/x",
+            "http://us.aws.cdn.hf.co/x",
+            "https://us.aws.cdn.hf.co:8443/x",
+        ] {
+            let url = Url::parse(invalid).expect("url");
+            assert!(validate_url_with(&url, true).is_err(), "{invalid}");
+        }
+    }
+
+    #[test]
+    fn wardrobe_archive_fetch_accepts_only_the_pinned_bytes() {
+        let manifest = crate::wardrobe::find("heroes-scarlet-keeper-of-the-light")
+            .expect("registry")
+            .expect("scarlet keeper");
+        let cancelled = AtomicBool::new(false);
+        for chunks in [
+            vec![b"short".to_vec()],
+            vec![vec![0u8; 1024], vec![1u8; 1024]],
+        ] {
+            let bad = FixtureTransport {
+                chunks,
+                cancel_after_first: false,
+            };
+            assert!(fetch_wardrobe_archive_with(&bad, manifest, &cancelled).is_err());
+        }
+        let cancelled_midstream = FixtureTransport {
+            chunks: vec![vec![0u8; 8], vec![0u8; 8]],
+            cancel_after_first: true,
+        };
+        assert_eq!(
+            fetch_wardrobe_archive_with(&cancelled_midstream, manifest, &AtomicBool::new(false))
+                .err()
+                .as_deref(),
+            Some("download_cancelled")
+        );
+    }
+
+    #[test]
     fn blocks_local_network_targets_and_non_https_urls() {
         assert!(!public_ip("127.0.0.1".parse().expect("ip")));
         assert!(!public_ip("10.1.2.3".parse().expect("ip")));
         assert!(public_ip("1.1.1.1".parse().expect("ip")));
         let invalid = Url::parse("http://example.com/file").expect("url");
         assert_eq!(
-            validate_url(&invalid).err().as_deref(),
+            validate_url_with(&invalid, false).err().as_deref(),
             Some("download_url_invalid")
         );
     }

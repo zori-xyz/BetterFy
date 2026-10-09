@@ -249,6 +249,125 @@ pub(crate) fn write(layout: &Layout) -> Result<Vec<u8>, String> {
     panorama::build(&resource)
 }
 
+// ---------- Image wrappers (third-party icons) ----------
+
+const MAX_WRAPPER_BYTES: usize = 16 * 1024;
+const MAX_WRAPPER_TEXT: usize = 64;
+
+fn plain_attribute_text(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= MAX_WRAPPER_TEXT
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+}
+
+fn attributes_of<'a>(
+    node: &'a Node,
+    allowed: &[&str],
+) -> Result<BTreeMap<&'a str, &'a Node>, String> {
+    let mut found = BTreeMap::new();
+    for child in node
+        .children
+        .iter()
+        .filter(|child| child.kind == "PANEL_ATTRIBUTE")
+    {
+        let name = child.name.as_deref().ok_or_else(invalid)?;
+        // `onload`, `onactivate` and every other event attribute fall out here.
+        if !allowed.contains(&name) || child.children.len() != 1 {
+            return Err("panorama_wrapper_unproven".to_string());
+        }
+        if found.insert(name, &child.children[0]).is_some() {
+            return Err("panorama_wrapper_unproven".to_string());
+        }
+    }
+    Ok(found)
+}
+
+fn text_value(node: &Node) -> Result<&str, String> {
+    match (
+        node.kind.as_str(),
+        node.name.as_deref(),
+        node.children.len(),
+    ) {
+        ("PANEL_ATTRIBUTE_VALUE", Some(text), 0) if plain_attribute_text(text) => Ok(text),
+        _ => Err("panorama_wrapper_unproven".to_string()),
+    }
+}
+
+/// Proves that a compiled layout is nothing but Valve's image wrapper and
+/// returns the single image it points at (`...png.vtex`).
+///
+/// The shape accepted is exactly `root > Panel[class] > Image[id class src]`:
+/// no styles, scripts, includes, snippets or other elements, no event
+/// attributes (the attribute allowlist has none), plain-text attribute values,
+/// and one `src` reference. The resource's own external reference list must
+/// name that same image and nothing else, and the image must be the sibling
+/// `<wrapper stem>_png.vtex` of the wrapper's path. Anything the reader cannot
+/// prove this for is an error, never a pass.
+pub(crate) fn image_wrapper_dependency(path: &str, bytes: &[u8]) -> Result<String, String> {
+    let unproven = || "panorama_wrapper_unproven".to_string();
+    if bytes.len() > MAX_WRAPPER_BYTES {
+        return Err(unproven());
+    }
+    let expected = path
+        .strip_suffix(".vxml_c")
+        .filter(|stem| stem.starts_with("panorama/images/"))
+        .map(|stem| format!("{stem}_png.vtex"))
+        .ok_or_else(unproven)?;
+    let layout = read(bytes).map_err(|_| unproven())?;
+    let [outer] = layout.root.children.as_slice() else {
+        return Err(unproven());
+    };
+    if outer.kind != "PANEL" || outer.name.as_deref() != Some("Panel") {
+        return Err(unproven());
+    }
+    attributes_of(outer, &["class"])?
+        .values()
+        .try_for_each(|value| text_value(value).map(|_| ()))?;
+    let elements = outer
+        .children
+        .iter()
+        .filter(|child| child.kind != "PANEL_ATTRIBUTE")
+        .collect::<Vec<_>>();
+    let [image] = elements.as_slice() else {
+        return Err(unproven());
+    };
+    if image.kind != "PANEL"
+        || image.name.as_deref() != Some("Image")
+        || image.children.iter().any(|child| {
+            child.kind != "PANEL_ATTRIBUTE"
+                || child.children.len() != 1
+                || !child.children[0].children.is_empty()
+        })
+    {
+        return Err(unproven());
+    }
+    let attributes = attributes_of(image, &["id", "class", "src"])?;
+    for key in ["id", "class"] {
+        if let Some(value) = attributes.get(key) {
+            text_value(value)?;
+        }
+    }
+    let source = attributes.get("src").ok_or_else(unproven)?;
+    let dependency = match (
+        source.kind.as_str(),
+        source.name.as_deref(),
+        source.children.len(),
+    ) {
+        ("REFERENCE_COMPILED", Some(name), 0) => name,
+        _ => return Err(unproven()),
+    };
+    if dependency != expected {
+        return Err(unproven());
+    }
+    let references = panorama::external_references(&layout.resource).map_err(|_| unproven())?;
+    if references != [expected.clone()] {
+        return Err(unproven());
+    }
+    Ok(expected)
+}
+
 // ---------- Minify's selectors ----------
 
 struct Selector {
@@ -894,9 +1013,200 @@ pub(crate) fn apply_menus(root: &mut Node, menus: &[String]) -> Result<(), Strin
     Ok(())
 }
 
+/// Test helper: a compiled image wrapper for the wrapper at `path` (a
+/// `panorama/images/.../name.vxml_c`), optionally with one extra attribute on
+/// the image. The shape mirrors the wrappers Valve's compiler writes for
+/// icons: `root > Panel[class] > Image[id class src]`.
+#[cfg(test)]
+pub(crate) fn test_image_wrapper(path: &str, extra: Option<(&str, &str)>) -> Vec<u8> {
+    let vtex = format!(
+        "{}_png.vtex",
+        path.strip_suffix(".vxml_c").expect("wrapper path")
+    );
+    test_layout_resource(
+        &vtex,
+        std::slice::from_ref(&vtex),
+        |image| {
+            if let Some((key, value)) = extra {
+                image.children.push(attribute_node(key, value));
+            }
+        },
+        |_| {},
+    )
+}
+
+#[cfg(test)]
+fn test_layout_resource(
+    vtex: &str,
+    references: &[String],
+    edit_image: impl FnOnce(&mut Node),
+    edit_root: impl FnOnce(&mut Node),
+) -> Vec<u8> {
+    let mut image = Node::new("PANEL", Some("Image"));
+    image.children.push(attribute_node("id", "gamemode"));
+    image.children.push(attribute_node("class", "SeqImg"));
+    image
+        .children
+        .push(attribute_node("src", &format!("s2r://{vtex}")));
+    edit_image(&mut image);
+    let mut outer = Node::new("PANEL", Some("Panel"));
+    outer
+        .children
+        .push(attribute_node("class", "AddonLoadingRoot"));
+    outer.children.push(image);
+    let mut root = Node::new("ROOT", None);
+    root.children.push(outer);
+    edit_root(&mut root);
+    // Reference list: an offset to the entries and a count, then per entry an
+    // 8-byte ID and the name's offset from that field.
+    let mut list = Vec::new();
+    list.extend_from_slice(&8u32.to_le_bytes());
+    list.extend_from_slice(&(references.len() as u32).to_le_bytes());
+    let names_start = 8 + 16 * references.len();
+    let mut names = Vec::new();
+    for (index, name) in references.iter().enumerate() {
+        let field = 8 + 16 * index + 8;
+        list.extend_from_slice(&[index as u8; 8]);
+        list.extend_from_slice(&((names_start + names.len() - field) as u64).to_le_bytes());
+        names.extend_from_slice(name.as_bytes());
+        names.push(0);
+    }
+    list.extend_from_slice(&names);
+    let layout = Layout {
+        resource: panorama::Resource {
+            version: 3,
+            blocks: vec![
+                panorama::Block {
+                    tag: *b"RERL",
+                    bytes: list,
+                },
+                panorama::Block {
+                    tag: *b"DATA",
+                    bytes: vec![0; 8],
+                },
+                panorama::Block {
+                    tag: *b"LaCo",
+                    bytes: Vec::new(),
+                },
+            ],
+        },
+        layout_block: 2,
+        format: [7; 16],
+        root,
+    };
+    write(&layout).expect("builds")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const WRAPPER: &str = "panorama/images/spellicons/keeper_of_the_light_recall.vxml_c";
+    const WRAPPER_VTEX: &str = "panorama/images/spellicons/keeper_of_the_light_recall_png.vtex";
+
+    #[test]
+    fn proves_an_image_wrapper_and_names_its_single_image() {
+        let bytes = test_image_wrapper(WRAPPER, None);
+        assert_eq!(
+            image_wrapper_dependency(WRAPPER, &bytes).as_deref(),
+            Ok(WRAPPER_VTEX)
+        );
+        assert!(panorama::external_references(&read(&bytes).expect("reads").resource).is_ok());
+    }
+
+    #[test]
+    fn rejects_anything_that_is_not_provably_an_image_wrapper() {
+        let rejected = |bytes: &[u8]| {
+            assert_eq!(
+                image_wrapper_dependency(WRAPPER, bytes).err().as_deref(),
+                Some("panorama_wrapper_unproven")
+            );
+        };
+        // Event attributes, on the image or anywhere else.
+        for (key, value) in [
+            ("onactivate", "x()"),
+            ("onload", ""),
+            ("style", "a:b;"),
+            ("src", "s2r://other.vtex"),
+        ] {
+            rejected(&test_image_wrapper(WRAPPER, Some((key, value))));
+        }
+        // A wrapper for another path than the one it is stored at.
+        rejected(&test_image_wrapper(
+            "panorama/images/spellicons/other.vxml_c",
+            None,
+        ));
+        // Wrong image: not the sibling `<stem>_png.vtex`.
+        rejected(&test_layout_resource(
+            "panorama/images/spellicons/other_png.vtex",
+            &["panorama/images/spellicons/other_png.vtex".to_string()],
+            |_| {},
+            |_| {},
+        ));
+        // The reference list names a second resource, or a different one.
+        rejected(&test_layout_resource(
+            WRAPPER_VTEX,
+            &[
+                WRAPPER_VTEX.to_string(),
+                "panorama/scripts/x.vjs_c".to_string(),
+            ],
+            |_| {},
+            |_| {},
+        ));
+        rejected(&test_layout_resource(
+            WRAPPER_VTEX,
+            &["panorama/images/spellicons/other_png.vtex".to_string()],
+            |_| {},
+            |_| {},
+        ));
+        rejected(&test_layout_resource(WRAPPER_VTEX, &[], |_| {}, |_| {}));
+        // Extra elements: a script include, a style block, a second image.
+        rejected(&test_layout_resource(
+            WRAPPER_VTEX,
+            &[WRAPPER_VTEX.to_string()],
+            |_| {},
+            |root| {
+                let mut scripts = Node::new("SCRIPTS", None);
+                scripts.children.push(Node::new("INCLUDE", None));
+                root.children.insert(0, scripts);
+            },
+        ));
+        rejected(&test_layout_resource(
+            WRAPPER_VTEX,
+            &[WRAPPER_VTEX.to_string()],
+            |image| image.children.push(Node::new("PANEL", Some("Label"))),
+            |_| {},
+        ));
+        rejected(&test_layout_resource(
+            WRAPPER_VTEX,
+            &[WRAPPER_VTEX.to_string()],
+            |_| {},
+            |root| {
+                let copy = root.children[0].clone();
+                root.children.push(copy);
+            },
+        ));
+        // Not a layout at all, an empty value, and an oversized file.
+        rejected(b"not a resource");
+        rejected(&[0u8; 16]);
+        rejected(&test_layout_resource(
+            WRAPPER_VTEX,
+            &[WRAPPER_VTEX.to_string()],
+            |image| image.children.push(attribute_node("id", "")),
+            |_| {},
+        ));
+        rejected(&vec![0u8; MAX_WRAPPER_BYTES + 1]);
+        // Wrappers only exist under panorama/images.
+        assert_eq!(
+            image_wrapper_dependency(
+                "panorama/layout/page.vxml_c",
+                &test_image_wrapper(WRAPPER, None)
+            )
+            .err()
+            .as_deref(),
+            Some("panorama_wrapper_unproven")
+        );
+    }
 
     fn layout(xml: &str) -> Node {
         let element = parse_snippet(xml).expect("parses");
