@@ -2,7 +2,7 @@ const tauri = window.__TAURI__;
 const hasTauri = Boolean(tauri && tauri.core);
 const WEBVIEW2_DOWNLOAD_URL =
   "https://developer.microsoft.com/microsoft-edge/webview2#download-the-webview2-runtime";
-const HELP_URL = "https://t.me/BeterFyBot";
+const HELP_URL = "https://t.me/BeterHelp";
 const CHANNEL_URL = "https://t.me/iBetterFy";
 const FALLBACK_PATH = "%LOCALAPPDATA%\\BetterFy";
 

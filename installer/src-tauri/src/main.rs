@@ -19,7 +19,7 @@ const APP_NAME: &str = "BetterFy";
 const MAIN_BINARY_NAME: &str = "betterfy.exe";
 const UNINSTALLER_NAME: &str = "uninstall.exe";
 const WEBSITE_URL: &str = "https://zori-xyz.github.io/BetterFy/";
-const HELP_URL: &str = "https://t.me/BeterFyBot";
+const HELP_URL: &str = "https://t.me/BeterHelp";
 // The WebView2 download URL itself lives in installer/ui/app.js, which is
 // the only place `open_url` needs it; `open_url` validates any https:// URL
 // generically rather than special-casing this one.

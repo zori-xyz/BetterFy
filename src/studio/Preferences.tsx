@@ -271,7 +271,7 @@ export function Preferences({
               </div>
               <a
                 className="s-settings-link"
-                href="https://t.me/BeterFyBot"
+                href="https://t.me/BeterHelp"
                 target="_blank"
                 rel="noreferrer"
               >

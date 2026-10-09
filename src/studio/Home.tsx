@@ -199,10 +199,10 @@ export default function Home({
           </p>
         </div>
         <div className="h-community-links">
-          <a className="s-btn" href="https://t.me/BeterFyBot" target="_blank" rel="noreferrer">
+          <a className="s-btn" href="https://t.me/BeterHelp" target="_blank" rel="noreferrer">
             <Send />
             Telegram
-            <code>@BeterFyBot</code>
+            <code>@BeterHelp</code>
             <ArrowUpRight />
           </a>
           <a

@@ -108,3 +108,10 @@ test("signing out everywhere needs a confirmation and then revokes sessions and 
   assert.match(data.batches[0][0], /UPDATE auth_sessions SET revoked_at/);
   assert.match(data.batches[0][1], /UPDATE auth_refresh_tokens SET revoked_at/);
 });
+
+test("/support points at the support account", async () => {
+  const calls = await send(message("/support"), state());
+  const reply = calls.find((call) => call.method === "sendMessage").body;
+  assert.match(reply.text, /@BeterHelp/);
+  assert.equal(reply.reply_markup.inline_keyboard[0][0].url, "https://t.me/BeterHelp");
+});

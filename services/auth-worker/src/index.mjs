@@ -693,6 +693,7 @@ async function configureTelegram(env) {
       { command: "status", description: "Your account and access" },
       { command: "devices", description: "Where you are signed in" },
       { command: "language", description: "Switch Russian / English" },
+      { command: "support", description: "Contact support" },
       { command: "subscribe", description: "Open a Stars subscription" },
       { command: "subscription", description: "View or stop your subscription" },
       { command: "paysupport", description: "Payment support" },
@@ -710,6 +711,7 @@ async function configureTelegram(env) {
       { command: "status", description: "Аккаунт и доступ" },
       { command: "devices", description: "Где ты вошёл" },
       { command: "language", description: "Русский / English" },
+      { command: "support", description: "Связаться с поддержкой" },
       { command: "subscribe", description: "Оформить подписку за Stars" },
       { command: "subscription", description: "Статус и продление подписки" },
       { command: "paysupport", description: "Помощь с оплатой" },
@@ -742,6 +744,8 @@ async function configureTelegram(env) {
   });
 }
 
+const SUPPORT_URL = "https://t.me/BeterHelp";
+
 function websiteUrl() {
   return "https://zori-xyz.github.io/BetterFy/";
 }
@@ -765,6 +769,7 @@ function welcomeKeyboard(language) {
         { text: copy.website, url: websiteUrl() },
         { text: copy.language, callback_data: language === "ru" ? "lang_en" : "lang_ru" },
       ],
+      [{ text: copy.support, url: SUPPORT_URL }],
       [{ text: `⭐ ${copy.subscribe}`, callback_data: "plans" }],
     ],
   };
@@ -1341,6 +1346,13 @@ async function handleMessage(env, message, now) {
     await upsertUser(env, message.from, language, now);
     return sendWelcome(env, target);
   }
+  if (command === "/support") {
+    return telegram(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text: COPY[language].supportBody,
+      reply_markup: { inline_keyboard: [[{ text: COPY[language].support, url: SUPPORT_URL }]] },
+    });
+  }
   if (command === "/status") return sendAccount(env, target, message.from, now);
   if (command === "/devices") return sendDevices(env, target, message.from, now);
   if (command === "/language") {
@@ -1360,7 +1372,11 @@ async function handleMessage(env, message, now) {
     return telegram(env, "sendMessage", { chat_id: message.chat.id, text: COPY[language].terms });
   }
   if (command === "/paysupport") {
-    return telegram(env, "sendMessage", { chat_id: message.chat.id, text: COPY[language].paySupport });
+    return telegram(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text: COPY[language].paySupport,
+      reply_markup: { inline_keyboard: [[{ text: COPY[language].support, url: SUPPORT_URL }]] },
+    });
   }
   await upsertUser(env, message.from, language, now);
   const greeting = command === "/start" ? COPY[language].welcome : COPY[language].unknownText;
@@ -1952,9 +1968,51 @@ export async function cleanupExpiredRows(env, now) {
   await env.AUTH_DB.batch(CLEANUP_STATEMENTS.map((sql) => env.AUTH_DB.prepare(sql).bind(cutoff)));
 }
 
+const REMINDER_WINDOW_SECONDS = 3 * 24 * 60 * 60;
+const REMINDER_BATCH = 100;
+
+// Once per period: a Premium that ends within three days and will not renew
+// by itself gets one message with a renew button. A renewal moves
+// active_until, so the next period is reminded separately.
+export async function sendPremiumReminders(env, now) {
+  const due = await env.AUTH_DB.prepare(
+    `SELECT e.user_id, e.active_until, u.telegram_user_id, u.language
+     FROM entitlements e
+     JOIN betterfy_users u ON u.user_id = e.user_id
+     WHERE e.entitlement_key = ? AND e.active_until > ? AND e.active_until <= ?
+       AND (e.reminded_until IS NULL OR e.reminded_until != e.active_until)
+     LIMIT ?`,
+  ).bind(PREMIUM_ENTITLEMENT, now, now + REMINDER_WINDOW_SECONDS, REMINDER_BATCH).all();
+  let sent = 0;
+  for (const row of due?.results ?? []) {
+    const recurring = await activeRecurringSubscription(env, row.user_id, now);
+    const renewsItself = Boolean(recurring) && recurring.canceled_at == null;
+    if (!renewsItself && isTelegramIdentity(row.telegram_user_id)) {
+      const language = row.language === "ru" ? "ru" : "en";
+      try {
+        await telegram(env, "sendPhoto", {
+          chat_id: row.telegram_user_id,
+          photo: cardUrl(env, botCardFile("premium", language)),
+          caption: COPY[language].premiumEnding.replace("{date}", formatExpiry(row.active_until, language)),
+          reply_markup: { inline_keyboard: [[{ text: `⭐ ${COPY[language].renew}`, callback_data: "plans" }]] },
+        });
+        sent += 1;
+      } catch {
+        // Blocked bot or a Telegram hiccup: do not retry every night.
+      }
+    }
+    await env.AUTH_DB.prepare(
+      "UPDATE entitlements SET reminded_until = ? WHERE user_id = ? AND entitlement_key = ?",
+    ).bind(row.active_until, row.user_id, PREMIUM_ENTITLEMENT).run();
+  }
+  return sent;
+}
+
 export default {
   async scheduled(controller, env, context) {
-    context.waitUntil(cleanupExpiredRows(env, Math.floor(Date.now() / 1000)));
+    const now = Math.floor(Date.now() / 1000);
+    context.waitUntil(cleanupExpiredRows(env, now));
+    context.waitUntil(sendPremiumReminders(env, now).catch(() => undefined));
   },
   async fetch(request, env) {
     try {
