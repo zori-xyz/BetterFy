@@ -18,11 +18,13 @@ mod panorama_layout;
 mod presets;
 mod remote_intake;
 mod runtime_control;
+mod skin_archive;
 mod steam_accounts;
 pub mod steam_config;
 mod system_diagnostics;
 mod tree_pilot;
 mod vpk;
+mod wardrobe;
 
 use auth_session::{
     auth_begin_device_challenge, auth_begin_email, auth_cancel_device_challenge,
@@ -77,6 +79,10 @@ struct InstallTreePilotRequest {
     expected_plan_id: String,
     language: GameLanguage,
     confirmed: bool,
+    /// The person has seen the paths a wardrobe item shares with another
+    /// selected package (the plan lists them). Required when there are any.
+    #[serde(default)]
+    acknowledged_conflicts: bool,
 }
 
 #[derive(Deserialize)]
@@ -734,6 +740,7 @@ fn build_verified_tree_pilot(
     if request.expected_plan_id != verified.plan_id() {
         return Err("build_plan_stale".to_string());
     }
+    verified.require_acknowledged_conflicts(request.acknowledged_conflicts)?;
     let staged = tree_pilot::stage_from_verified_store(
         app_data,
         &request.expected_plan_id,
@@ -822,6 +829,7 @@ async fn install_tree_pilot_stress(
             expected_plan_id: request.expected_plan_id,
             language: request.language,
             confirmed: request.confirmed,
+            acknowledged_conflicts: false,
         };
         let verified = build_verified_tree_pilot(&app_data, &install)?;
         let result = game_deployment::deploy_verified_bundle_for_language_stress(

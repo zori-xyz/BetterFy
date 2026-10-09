@@ -113,12 +113,15 @@ export default function Build({
   const chosen = ids.flatMap((id) => (modById.has(id) ? [modById.get(id)!] : []));
   const missing = ids.filter((id) => !modById.has(id));
   const conflicts = getConflicts(ids);
-  const gameIds = chosen.filter((mod) => mod.domain === "game").map((mod) => mod.id);
+  // Audited wardrobe items install through the same engine as game mods.
+  const gameIds = chosen
+    .filter((mod) => mod.domain === "game" || isPilotMod(mod.id))
+    .map((mod) => mod.id);
   const verifiedPilotSelected = isPilotSelection(gameIds);
   // The pilot subset is installable even when other game mods are selected;
   // those stay preview-only and are listed in the note below.
   const pilotIds = gameIds.filter(isPilotMod);
-  const previewItems = chosen.filter((mod) => mod.domain === "wardrobe" || !isPilotMod(mod.id));
+  const previewItems = chosen.filter((mod) => !isPilotMod(mod.id));
   const busy = useEngineActive();
   const name = useBuildName(ids, language);
   const [pilot, setPilot] = useState<PilotState | null>(null);

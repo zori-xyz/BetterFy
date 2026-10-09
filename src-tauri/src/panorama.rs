@@ -116,6 +116,53 @@ pub(crate) fn build(resource: &Resource) -> Result<Vec<u8>, String> {
     Ok(output)
 }
 
+const MAX_EXTERNAL_REFERENCES: usize = 64;
+const MAX_REFERENCE_NAME_BYTES: usize = 260;
+
+/// Names listed in the resource's `RERL` block (the external reference list):
+/// every other resource the compiled file points at. The block is a
+/// relative offset to the entries and a count; each 16-byte entry is an
+/// 8-byte ID and a 64-bit offset, relative to the offset field itself, of a
+/// NUL-terminated name. Checked on Valve-compiled wrappers only; a block that
+/// does not fit this shape is an error, never an empty list.
+pub(crate) fn external_references(resource: &Resource) -> Result<Vec<String>, String> {
+    let invalid = || "panorama_resource_invalid".to_string();
+    let block = resource
+        .blocks
+        .iter()
+        .find(|block| &block.tag == b"RERL")
+        .ok_or_else(invalid)?;
+    let bytes = &block.bytes;
+    let entries = u32_at(bytes, 0)? as usize;
+    let count = u32_at(bytes, 4)? as usize;
+    if count > MAX_EXTERNAL_REFERENCES {
+        return Err(invalid());
+    }
+    let mut names = Vec::with_capacity(count);
+    for index in 0..count {
+        let entry = entries
+            .checked_add(16usize.checked_mul(index).ok_or_else(invalid)?)
+            .ok_or_else(invalid)?;
+        let field = entry.checked_add(8).ok_or_else(invalid)?;
+        let relative = bytes
+            .get(field..field + 8)
+            .map(|slice| u64::from_le_bytes(slice.try_into().expect("8 bytes")))
+            .ok_or_else(invalid)?;
+        let start = usize::try_from(relative)
+            .ok()
+            .and_then(|relative| field.checked_add(relative))
+            .ok_or_else(invalid)?;
+        let rest = bytes.get(start..).ok_or_else(invalid)?;
+        let length = rest
+            .iter()
+            .position(|byte| *byte == 0)
+            .filter(|length| *length <= MAX_REFERENCE_NAME_BYTES)
+            .ok_or_else(invalid)?;
+        names.push(String::from_utf8(rest[..length].to_vec()).map_err(|_| invalid())?);
+    }
+    Ok(names)
+}
+
 /// Offset of the CSS text inside a Panorama `DATA` block: after the CRC, the
 /// image count and the image table (names, sizes and, from resource version
 /// 3, a CRC per image).

@@ -320,6 +320,182 @@ pub(crate) fn extract_embedded(bytes: &[u8]) -> Result<BTreeMap<String, Vec<u8>>
     Ok(resources)
 }
 
+/// One entry of a third-party VPK directory, exactly as the archive lists it.
+///
+/// `path` is the raw joined path (directory, name, extension). It is neither
+/// validated nor lowercased: classifying and rejecting paths is the caller's
+/// job, so one hostile entry cannot hide the rest of an archive from a report.
+/// The bytes were checked against the directory CRC.
+pub(crate) struct DirectoryEntry<'a> {
+    pub path: String,
+    preload: &'a [u8],
+    data: &'a [u8],
+}
+
+impl<'a> DirectoryEntry<'a> {
+    pub(crate) fn len(&self) -> usize {
+        self.preload.len() + self.data.len()
+    }
+
+    pub(crate) fn payload(&self) -> std::borrow::Cow<'a, [u8]> {
+        if self.preload.is_empty() {
+            std::borrow::Cow::Borrowed(self.data)
+        } else {
+            let mut joined = Vec::with_capacity(self.len());
+            joined.extend_from_slice(self.preload);
+            joined.extend_from_slice(self.data);
+            std::borrow::Cow::Owned(joined)
+        }
+    }
+}
+
+/// Reads every entry of a VPK version 1 or 2 whose data is embedded in the
+/// directory file itself (archive index `0x7fff`). An entry that lives in a
+/// numbered side archive refuses the whole file, and so does a CRC mismatch.
+/// Version 2 trailers (the archive and signature sections after the data) are
+/// not read: the per-entry CRC is what is verified.
+pub(crate) fn read_embedded_directory(bytes: &[u8]) -> Result<Vec<DirectoryEntry<'_>>, String> {
+    if bytes.len() < 15 || bytes.len() > MAX_VPK_BYTES {
+        return Err("vpk_invalid".to_string());
+    }
+    let mut header_cursor = 0usize;
+    if read_u32(bytes, &mut header_cursor, bytes.len())? != VPK_SIGNATURE {
+        return Err("vpk_invalid".to_string());
+    }
+    let version = read_u32(bytes, &mut header_cursor, bytes.len())?;
+    let tree_size = read_u32(bytes, &mut header_cursor, bytes.len())? as usize;
+    let tree_start = match version {
+        1 => 12usize,
+        2 => 28usize,
+        _ => return Err("vpk_version_unsupported".to_string()),
+    };
+    let tree_end = tree_start
+        .checked_add(tree_size)
+        .filter(|end| *end <= bytes.len())
+        .ok_or_else(|| "vpk_invalid".to_string())?;
+    let mut cursor = tree_start;
+    let mut entries = Vec::new();
+    loop {
+        let extension = read_cstring(bytes, &mut cursor, tree_end)?;
+        if extension.is_empty() {
+            break;
+        }
+        loop {
+            let directory = read_cstring(bytes, &mut cursor, tree_end)?;
+            if directory.is_empty() {
+                break;
+            }
+            loop {
+                let stem = read_cstring(bytes, &mut cursor, tree_end)?;
+                if stem.is_empty() {
+                    break;
+                }
+                if entries.len() >= MAX_VPK_ENTRIES {
+                    return Err("vpk_invalid".to_string());
+                }
+                let expected_crc = read_u32(bytes, &mut cursor, tree_end)?;
+                let preload_length = read_u16(bytes, &mut cursor, tree_end)? as usize;
+                if read_u16(bytes, &mut cursor, tree_end)? != DIRECTORY_ARCHIVE_INDEX {
+                    return Err("vpk_archive_unsupported".to_string());
+                }
+                let offset = read_u32(bytes, &mut cursor, tree_end)? as usize;
+                let length = read_u32(bytes, &mut cursor, tree_end)? as usize;
+                if read_u16(bytes, &mut cursor, tree_end)? != ENTRY_TERMINATOR {
+                    return Err("vpk_invalid".to_string());
+                }
+                let preload_end = cursor
+                    .checked_add(preload_length)
+                    .filter(|end| *end <= tree_end)
+                    .ok_or_else(|| "vpk_invalid".to_string())?;
+                let preload = &bytes[cursor..preload_end];
+                cursor = preload_end;
+                let data_start = tree_end
+                    .checked_add(offset)
+                    .ok_or_else(|| "vpk_invalid".to_string())?;
+                let data_end = data_start
+                    .checked_add(length)
+                    .filter(|end| *end <= bytes.len())
+                    .ok_or_else(|| "vpk_invalid".to_string())?;
+                let data = &bytes[data_start..data_end];
+                let mut crc = Crc32::new();
+                crc.update(preload);
+                crc.update(data);
+                if crc.finalize() != expected_crc {
+                    return Err("vpk_crc_mismatch".to_string());
+                }
+                let path = if directory == " " {
+                    format!("{stem}.{extension}")
+                } else {
+                    format!("{directory}/{stem}.{extension}")
+                };
+                entries.push(DirectoryEntry {
+                    path,
+                    preload,
+                    data,
+                });
+            }
+        }
+    }
+    if cursor != tree_end || entries.is_empty() {
+        return Err("vpk_invalid".to_string());
+    }
+    Ok(entries)
+}
+
+/// Test helper: writes a VPK (version 1 or 2, every entry embedded) from
+/// arbitrary path strings without any of `build`'s path checks, so tests can
+/// build the hostile archives `build` refuses to write.
+#[cfg(test)]
+pub(crate) fn build_unchecked(version: u32, entries: &[(&str, &[u8])]) -> Vec<u8> {
+    type Files<'a> = Vec<(String, &'a [u8])>;
+    let mut grouped: BTreeMap<String, BTreeMap<String, Files<'_>>> = BTreeMap::new();
+    for (path, bytes) in entries {
+        let (directory, file) = path.rsplit_once('/').unwrap_or((" ", path));
+        let (stem, extension) = file.rsplit_once('.').expect("test path has an extension");
+        grouped
+            .entry(extension.to_string())
+            .or_default()
+            .entry(directory.to_string())
+            .or_default()
+            .push((stem.to_string(), *bytes));
+    }
+    let mut tree = Vec::new();
+    let mut data: Vec<u8> = Vec::new();
+    for (extension, directories) in grouped {
+        write_cstring(&mut tree, &extension);
+        for (directory, files) in directories {
+            write_cstring(&mut tree, &directory);
+            for (stem, bytes) in files {
+                write_cstring(&mut tree, &stem);
+                let mut crc = Crc32::new();
+                crc.update(bytes);
+                tree.extend_from_slice(&crc.finalize().to_le_bytes());
+                tree.extend_from_slice(&0u16.to_le_bytes());
+                tree.extend_from_slice(&DIRECTORY_ARCHIVE_INDEX.to_le_bytes());
+                tree.extend_from_slice(&(data.len() as u32).to_le_bytes());
+                tree.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+                tree.extend_from_slice(&ENTRY_TERMINATOR.to_le_bytes());
+                data.extend_from_slice(bytes);
+            }
+            tree.push(0);
+        }
+        tree.push(0);
+    }
+    tree.push(0);
+    let mut output = Vec::new();
+    output.extend_from_slice(&VPK_SIGNATURE.to_le_bytes());
+    output.extend_from_slice(&version.to_le_bytes());
+    output.extend_from_slice(&(tree.len() as u32).to_le_bytes());
+    if version == 2 {
+        // Embedded data size, then the three trailer section sizes.
+        output.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        output.extend_from_slice(&[0u8; 12]);
+    }
+    output.extend_from_slice(&tree);
+    output.extend_from_slice(&data);
+    output
+}
+
 /// Valve's own archives (`game/dota/pak01_dir.vpk`) are version 2 and keep
 /// their data in numbered side archives. Only the directory tree is read here.
 const GAME_VPK_MAX_DIRECTORY_BYTES: usize = 1024 * 1024 * 1024;

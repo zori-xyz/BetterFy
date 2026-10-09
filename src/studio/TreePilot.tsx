@@ -46,6 +46,7 @@ import { DemoPanel } from "./builder/DemoPanel";
 import { buildLanguages, languageLabel as languageName } from "./builder/languages";
 import { Choice, ChoiceCards, ChoiceMenu, type ChoiceOption } from "./builder/Choice";
 import { getStorageItem, setStorageItem } from "../storage";
+import { WardrobeReview, formatBytes } from "./WardrobeReview";
 
 const LANGUAGE_KEY = "betterfy:build-language";
 // "auto" follows the language Steam starts Dota in, "manual" keeps the
@@ -174,6 +175,8 @@ export default function TreePilot({
   const [reportError, setReportError] = useState("");
   const [error, setError] = useState("");
   const [dotaPatched, setDotaPatched] = useState(false);
+  // The plan whose wardrobe path conflicts the person confirmed.
+  const [acknowledgedPlan, setAcknowledgedPlan] = useState<string | null>(null);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   // Only work that touches game files or Steam blocks the rest of the app.
@@ -209,6 +212,10 @@ export default function TreePilot({
   // after installing would otherwise hide the only way back.
   const canManage = desktop && windows && (demo || (!preview && installation.verified));
   const canInstall = canManage && supportedBundle;
+  // A skin that shares paths with another item installs only after the
+  // person has seen the list and said so (the engine checks it again).
+  const conflictsPending =
+    (plan?.wardrobeConflicts.length ?? 0) > 0 && acknowledgedPlan !== plan?.planId;
   // Packages whose manifest records no in-game verification yet.
   const unverified = ids.filter((id) => !findPackage(id)?.verifiedLanguages?.length);
   function applyDownloadStatus(status: TreePilotDownloadStatus | null) {
@@ -450,7 +457,7 @@ export default function TreePilot({
   }
 
   async function install() {
-    if (!plan || !canInstall || !selectedLanguage || phase !== "idle") return;
+    if (!plan || !canInstall || !selectedLanguage || phase !== "idle" || conflictsPending) return;
     setError("");
     setPhase("install");
     setJustInstalled(false);
@@ -483,6 +490,7 @@ export default function TreePilot({
         ids,
         plan.planId,
         selectedLanguage,
+        plan.wardrobeConflicts.length > 0,
       );
       if (!receipt.committed || !receipt.backupVerified) throw new Error("deployment_unverified");
       installed = true;
@@ -1127,8 +1135,8 @@ export default function TreePilot({
       label: isRu ? "Скачать и сверить файлы" : "Download and check files",
       hint: plan
         ? isRu
-          ? `${plan.resourceCount} файлов · ${(plan.vpkBytes / 1024).toFixed(1)} KB`
-          : `${plan.resourceCount} files · ${(plan.vpkBytes / 1024).toFixed(1)} KB`
+          ? `${plan.resourceCount} файлов · ${formatBytes(plan.vpkBytes, true)}`
+          : `${plan.resourceCount} files · ${formatBytes(plan.vpkBytes, false)}`
         : isRu
           ? "Только проверенные файлы из каталога"
           : "Only verified catalog files",
@@ -1527,6 +1535,15 @@ export default function TreePilot({
         </p>
       )}
       {plan && !operationId && (
+        <WardrobeReview
+          plan={plan}
+          packageLabel={packageLabel}
+          acknowledged={!conflictsPending}
+          disabled={phase !== "idle"}
+          onAcknowledge={(value) => setAcknowledgedPlan(value ? plan.planId : null)}
+        />
+      )}
+      {plan && !operationId && (
         <div className="b-fields">
           <div className="b-field" ref={languageFieldRef}>
             <div className="b-field-head">
@@ -1690,7 +1707,13 @@ export default function TreePilot({
           ) : (
             <button
               className="s-btn s-btn-primary b-primary"
-              disabled={!canInstall || !selectedLanguage || phase !== "idle" || !plan.deployEnabled}
+              disabled={
+                !canInstall ||
+                !selectedLanguage ||
+                phase !== "idle" ||
+                !plan.deployEnabled ||
+                conflictsPending
+              }
               onClick={() => {
                 // The language that went in becomes the fallback next time.
                 if (selectedLanguage) setStorageItem(LANGUAGE_KEY, selectedLanguage);
@@ -1796,7 +1819,7 @@ export default function TreePilot({
               </div>
               <div>
                 <dt>{isRu ? "Размер" : "Size"}</dt>
-                <dd>{(plan.vpkBytes / 1024).toFixed(1)} KB</dd>
+                <dd>{formatBytes(plan.vpkBytes, isRu)}</dd>
               </div>
               <div>
                 <dt>SHA-256</dt>

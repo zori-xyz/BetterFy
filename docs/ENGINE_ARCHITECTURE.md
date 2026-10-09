@@ -594,6 +594,95 @@ longer offers it. A remote catalog that still lists the old package under its or
 catalog ID collides with the new one and is rejected by this build, so the catalog and
 the app release ship together.
 
+### Wardrobe items (audited hero skins)
+
+A wardrobe item is a third-party hero skin installed through the same verified pipeline
+as the tuning packages: one entry in the BetterFy VPK, the same plan identity, backup,
+journal, deployment and rollback. It differs in where its bytes come from and in how
+much of them is trusted. The rules come from
+[`SKIN_ARCHIVE_AUDIT.md`](SKIN_ARCHIVE_AUDIT.md) and live in `skin_archive.rs` (the
+analyzer), `wardrobe.rs` (the allowlist and the load path) and `src-tauri/wardrobe/*.json`
+(the entries). The entries are kept apart from `src-tauri/packages` so the signed package
+catalog is unchanged.
+
+**Allowlist.** A wardrobe item is installable only if it has an entry compiled into the
+app, like the audited scripts: a signed catalog cannot add one, and the package registry
+reserves the `wardrobe.` namespace and the catalog IDs of the entries. An entry pins
+
+- the downloaded ZIP and the single VPK inside it by size and SHA-256, and the HTTPS URL
+  under the project's Hugging Face dataset they come from;
+- the hero, the author namespaces a person declared, and the shared policy;
+- what the analyzer must find: the entry count, an archive identity and an install
+  identity (SHA-256 over sorted path and payload hash), the install file count and size,
+  and the numbers of stripped shared and rejected files;
+- how permission was established, as recorded (`founder_reported_author_consent` for the
+  first entry: no licence file ships in the archive).
+
+The first entry is `wardrobe.scarlet-keeper-of-the-light` (catalog ID
+`heroes-scarlet-keeper-of-the-light`, hero `keeper_of_the_light`).
+
+**Pipeline.** Preparing a build with a wardrobe item downloads the ZIP (bounded, proxy
+bypass, public-address and peer checks, SHA-256), reads exactly the one pinned entry out of
+it behind the ZIP preflight and a hard length bound, checks its SHA-256 and publishes only
+that VPK to the content store, where every later build re-reads and re-hashes it. Each
+build then runs the analyzer on those bytes and requires its result to equal the pinned
+audit field for field; otherwise it stops with `wardrobe_audit_mismatch`. A change to the
+analyzer's rules therefore cannot silently change which files an audited archive
+installs. The files to install become an ordinary bundle package, merged by the existing
+`mod_bundle` with the tuning packages.
+
+**Analyzer.** It reads a VPK v1 or v2 directory with every entry embedded (side archives
+and CRC mismatches refuse the file) and classifies each path:
+
+- *Type.* Only compiled `vpcf_c`, `vsnap_c`, `vtex_c`, `vmat_c`, `vmdl_c`, `vmesh_c`,
+  `vanim_c`, `vsndevts_c`, `vsnd_c`, `vmorf_c`, `vagrp_c` and `vphys_c` pass. Scripts,
+  uncompiled sources, executables, empty files, oversized files, case-colliding names and
+  every other type are rejected; scripts, executables and unsafe paths also block the
+  whole install. A `vxml_c` passes only when `panorama_layout::image_wrapper_dependency`
+  proves the image-wrapper shape from the parsed KV3 tree and the resource's reference
+  list (details in the audit); what the reader cannot prove is rejected. The existing
+  `audited scripts only` rule is untouched: no skin can bring a script.
+- *Scope.* Hero-scoped (the exact folders of one hero), author-owned (a top-level folder
+  outside Valve's, or a declared namespace below `particles/`, `materials/` or `models/`)
+  or shared (everything else). Shared files are dropped under the `strip` policy, each one
+  listed in the report, and refuse the install under `refuse`.
+
+The result is a typed, serializable `SkinReport` (counts and bytes per class, rejected and
+shared paths with reasons, the two identities) carried in the plan.
+
+**Plan and conflicts.** `TreePilotPlan` gains `wardrobe` (one report per item, with the
+size and the stripped and rejected lists) and `wardrobeConflicts`. A path that a wardrobe
+item and another selected package both write, with different bytes, is a conflict. The
+first package in the selection wins, as for tuning packages, but the plan lists every such
+path and the install command refuses to run unless the request carries
+`acknowledgedConflicts`, which the interface sends only after the person ticks a
+confirmation under that list. Identical bytes are a duplicate, not a conflict. Both are
+already part of the plan identity. No Tauri command was added; `install_tree_pilot` takes
+the optional field, and the stress variant never acknowledges.
+
+**Download hosts.** Hugging Face answers a `resolve/...` URL with a redirect to a CDN host
+under `cdn.hf.co`, with a signed query string (observed once, with a `HEAD` request from a
+Mac on 2026-10-09: `us.aws.cdn.hf.co`). The transport for wardrobe archives therefore
+follows redirects to hosts ending in `.cdn.hf.co` in addition to the original origin, and
+allows a query string only there; every hop is still HTTPS on port 443 with resolved
+addresses checked and pinned. Other regions of that CDN are matched by the suffix and have
+not been seen. The SHA-256 pin, not the host, decides whether the bytes are accepted.
+
+**What has and has not been run.**
+
+- Compiles and passes unit tests on macOS: the analyzer against small synthetic VPKs (v1
+  and v2; hero, author-owned and shared paths; uncompiled sources, scripts, executables,
+  traversal, case-colliding and oversized entries; passing and failing image wrappers),
+  the allowlist and its hostile-entry rejections, ZIP extraction, the audit match,
+  build and conflict behaviour with synthetic items, and the transport's redirect rules.
+- Run locally on a Mac against the real sample (never committed): the analyzer's numbers
+  in the audit document, extraction of the pinned VPK from the real ZIP, and a build from
+  the content store into one VPK of 951 resources and 53,327,413 bytes, reproduced
+  byte for byte on a second build. The real download through the transport has not been
+  exercised: only the redirect response was observed.
+- Not run: Windows CI for this change (see the PR), an install on Windows, and anything
+  in Dota. Nothing here claims the skin loads or looks right in the game.
+
 ### Installed profile
 
 After a committed pilot install, Rust writes one derived record to

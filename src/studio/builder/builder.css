@@ -1786,3 +1786,107 @@
     transform: rotate(-200deg);
   }
 }
+
+/* Wardrobe review: what the skin analyzer found, before the install button. */
+.b-wardrobe {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.b-wardrobe h3 {
+  margin: 0;
+  color: var(--s-quiet);
+  font-size: var(--s-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.b-wardrobe-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--s-line-soft);
+  border-radius: var(--s-radius-card);
+  background: var(--s-panel);
+}
+.b-wardrobe-item > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+.b-wardrobe-item > header strong {
+  font-size: var(--s-text-base);
+}
+.b-wardrobe-item > header code,
+.b-wardrobe-list code,
+.b-wardrobe-paths code {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: var(--s-text-sm);
+  overflow-wrap: anywhere;
+}
+.b-wardrobe-item > header small {
+  flex-basis: 100%;
+  color: var(--s-muted);
+  font-size: var(--s-text-md);
+}
+.b-wardrobe-item .b-facts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 0;
+  border-top: 0;
+}
+.b-wardrobe-item .b-facts div:first-child {
+  grid-column: 1 / -1;
+}
+@media (max-width: 520px) {
+  .b-wardrobe-item .b-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.b-wardrobe-list > summary {
+  color: var(--s-muted);
+  cursor: pointer;
+  font-size: var(--s-text-md);
+  font-weight: 700;
+}
+.b-wardrobe-list ul,
+.b-wardrobe-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.b-wardrobe-list ul {
+  max-height: 180px;
+  overflow: auto;
+}
+.b-wardrobe-list li,
+.b-wardrobe-paths li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  color: var(--s-quiet);
+  font-size: var(--s-text-md);
+}
+.b-wardrobe-paths {
+  max-height: 160px;
+  overflow: auto;
+}
+.b-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: var(--s-text-md);
+  cursor: pointer;
+}
+.b-check input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: var(--s-accent);
+}

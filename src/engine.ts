@@ -226,6 +226,68 @@ export type GameDeploymentRecovery = {
   markedFailed: number;
 };
 
+/** Files and bytes in one class of a skin archive. */
+export type SkinClassStat = { files: number; bytes: number };
+
+export type SkinRejectReason =
+  | "path_unsafe"
+  | "duplicate_path"
+  | "oversized"
+  | "empty_resource"
+  | "script"
+  | "uncompiled_source"
+  | "executable"
+  | "type_not_allowed"
+  | "panorama_unproven";
+
+/** What the skin-archive analyzer found (src-tauri/src/skin_archive.rs). */
+export type SkinReport = {
+  hero: string;
+  sharedPolicy: "strip" | "refuse";
+  entries: number;
+  totalBytes: number;
+  archiveIdentity: string;
+  heroScoped: SkinClassStat;
+  authorOwned: SkinClassStat;
+  /** Files that would change other heroes or the interface. */
+  shared: SkinClassStat;
+  rejected: SkinClassStat;
+  imageWrappers: number;
+  rejectedPaths: Array<{ path: string; reason: SkinRejectReason; bytes: number }>;
+  sharedPaths: Array<{ path: string; bytes: number }>;
+  suggestedNamespaces: string[];
+  hostile: boolean;
+  install: {
+    files: number;
+    bytes: number;
+    identity: string;
+    /** Shared files dropped from the install, each listed in `sharedPaths`. */
+    strippedShared: number;
+    blocked: string | null;
+  };
+};
+
+export type WardrobePlanItem = {
+  packageId: string;
+  catalogId: string;
+  hero: string;
+  sourceUrl: string;
+  archiveSha256: string;
+  catalogSnapshot: string;
+  /** How permission to use the item was established, as recorded. */
+  permission: string;
+  verifiedLanguages: string[];
+  compatibilityNote: string | null;
+  report: SkinReport;
+};
+
+/** A path a wardrobe item writes that another selected package writes differently. */
+export type WardrobeConflict = {
+  path: string;
+  winnerPackageId: string;
+  shadowedPackageIds: string[];
+};
+
 export type TreePilotPlan = {
   planId: string;
   packageId: string;
@@ -243,6 +305,9 @@ export type TreePilotPlan = {
   duplicates: Array<{ path: string; keptPackageId: string; duplicatePackageIds: string[] }>;
   overrides: Array<{ path: string; winnerPackageId: string; shadowedPackageIds: string[] }>;
   contributions: Array<{ packageId: string; inputResources: number; effectiveResources: number; duplicateResources: number; shadowedResources: number }>;
+  /** One entry per selected wardrobe item; empty for tuning-only builds. */
+  wardrobe: WardrobePlanItem[];
+  wardrobeConflicts: WardrobeConflict[];
   compatibility: "unknown";
   distribution: "internal_pilot";
   deployEnabled: boolean;
@@ -396,6 +461,8 @@ export interface EngineBridge {
     packageIds: string[],
     expectedPlanId: string,
     language: GameLanguage,
+    /** The person reviewed the paths wardrobe items share with other packages. */
+    acknowledgedConflicts?: boolean,
   ): Promise<GameDeploymentReceipt>;
   currentTreePilot(gamePath: string): Promise<TreePilotCurrentState | null>;
   refreshCatalog(): Promise<CatalogStatus | null>;
@@ -1022,7 +1089,7 @@ export const engineBridge: EngineBridge = {
       invoke<void>("preview_tree_language", { gamePath, language }),
     );
   },
-  async installTreePilot(gamePath, packageIds, expectedPlanId, language) {
+  async installTreePilot(gamePath, packageIds, expectedPlanId, language, acknowledgedConflicts) {
     if (!isTauriRuntime()) {
       return mockEngine.installTreePilot(gamePath, packageIds, expectedPlanId, language);
     }
@@ -1036,6 +1103,7 @@ export const engineBridge: EngineBridge = {
           expectedPlanId,
           language,
           confirmed: true,
+          acknowledgedConflicts: acknowledgedConflicts === true,
         },
       }),
       120_000,

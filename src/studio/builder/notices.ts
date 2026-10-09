@@ -167,6 +167,34 @@ export const explainError = (code: string, isRu: boolean) => {
       "Контролируемый стресс-тест доступен только аккаунту разработчика.",
       "Controlled stress testing is available only to a developer account.",
     ],
+    wardrobe_conflict_unacknowledged: [
+      "В сборке есть файлы, которые меняют сразу несколько наборов. Просмотри список и подтверди его, затем повтори.",
+      "Some files are changed by more than one item in the build. Review the list, confirm it, and retry.",
+    ],
+    wardrobe_audit_mismatch: [
+      "Архив не совпал с проверенным описанием. BetterFy не будет его ставить.",
+      "The archive does not match its audited description. BetterFy will not install it.",
+    ],
+    wardrobe_archive_hash_mismatch: [
+      "Скачанный архив не совпал с ожидаемой контрольной суммой. BetterFy его не сохранил.",
+      "The downloaded archive did not match the expected checksum. BetterFy did not keep it.",
+    ],
+    wardrobe_archive_unexpected: [
+      "Внутри архива не то, что ожидалось. BetterFy не будет его ставить.",
+      "The archive does not contain what was expected. BetterFy will not install it.",
+    ],
+    skin_archive_hostile: [
+      "В архиве есть файлы, которые BetterFy не ставит ни при каких условиях (скрипты, программы или небезопасные пути).",
+      "The archive holds files BetterFy never installs (scripts, programs or unsafe paths).",
+    ],
+    skin_shared_paths_refused: [
+      "Архив меняет общие файлы игры, а для него выбрано «отказать». Установка остановлена.",
+      "The archive changes shared game files and is set to refuse them. Installation stopped.",
+    ],
+    skin_install_too_large: [
+      "Набор слишком большой для одной сборки.",
+      "This item is too large for one build.",
+    ],
   };
   return (
     messages[code]?.[isRu ? 0 : 1] ??
@@ -199,6 +227,24 @@ const groups: Array<{
     title: ["Моды не уживаются вместе", "These mods do not fit together"],
     action: null,
     tone: "warn",
+  },
+  {
+    codes: ["wardrobe_conflict_unacknowledged"],
+    title: ["Нужно подтвердить общие файлы", "Shared files need your confirmation"],
+    action: null,
+    tone: "warn",
+  },
+  {
+    codes: [
+      "wardrobe_audit_mismatch",
+      "wardrobe_archive_hash_mismatch",
+      "wardrobe_archive_unexpected",
+      "skin_archive_hostile",
+      "skin_shared_paths_refused",
+      "skin_install_too_large",
+    ],
+    title: ["Набор не прошёл проверку", "This item did not pass the check"],
+    action: null,
   },
   {
     codes: ["game_path_required", "language_folder_unavailable", "game_archive_unreadable"],

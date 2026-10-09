@@ -233,8 +233,8 @@ export default function Catalog({
               ? "Моды с этой отметкой ставятся в Dota 2 с проверкой и откатом. Остальные карточки сохраняются в набор, но пока не записываются в Dota 2."
               : "Mods with this mark install into Dota 2 with verification and rollback. Other cards can be saved to a build but are not written to Dota 2 yet."
             : isRu
-              ? "Облики и эффекты можно изучать и сохранять в наборы. Их установка в Dota 2 пока не включена."
-              : "Looks and effects can be explored and saved to builds. Installing them into Dota 2 is not enabled yet."}
+              ? "Облики и эффекты можно изучать и сохранять в наборы. Ставятся в Dota 2 только карточки с отметкой «Windows-пилот»: их архив проверен и закреплён по контрольной сумме. В игре они пока не проверены."
+              : "Looks and effects can be explored and saved to builds. Only cards marked Windows pilot install into Dota 2: their archive is audited and pinned by checksum. None has been checked in game yet."}
         </p>
       </div>
       <div className="s-results-head">

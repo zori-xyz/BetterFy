@@ -6,6 +6,7 @@ use crate::mod_bundle::{
 };
 use crate::package_registry::{self, PackageManifest, Resource};
 use crate::vpk;
+use crate::wardrobe::{self, WardrobeConflict, WardrobeManifest, WardrobePlanItem};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -70,7 +71,9 @@ fn resolve_blacklists(
 ) -> Result<(), String> {
     let mut game_paths: Option<BTreeSet<String>> = None;
     for package_id in package_ids {
-        let manifest = contract(package_id)?;
+        let Some(manifest) = tuning(package_id)? else {
+            continue;
+        };
         let Some(blacklist) = &manifest.blacklist else {
             continue;
         };
@@ -162,7 +165,9 @@ fn resolve_styles(
     game_path: Option<&Path>,
 ) -> Result<(), String> {
     for package_id in package_ids {
-        let manifest = contract(package_id)?;
+        let Some(manifest) = tuning(package_id)? else {
+            continue;
+        };
         let Some(sections) = read_styling(app_data_root, manifest)? else {
             continue;
         };
@@ -235,7 +240,9 @@ fn apply_panorama_styles(
 ) -> Result<(), String> {
     let mut targets: BTreeMap<String, (StoredOriginal, Vec<(usize, String)>)> = BTreeMap::new();
     for (index, package_id) in package_ids.iter().enumerate() {
-        let manifest = contract(package_id)?;
+        let Some(manifest) = tuning(package_id)? else {
+            continue;
+        };
         let Some(sections) = read_styling(app_data_root, manifest)? else {
             continue;
         };
@@ -371,7 +378,9 @@ fn resolve_layouts(
     game_path: Option<&Path>,
 ) -> Result<(), String> {
     for package_id in package_ids {
-        let manifest = contract(package_id)?;
+        let Some(manifest) = tuning(package_id)? else {
+            continue;
+        };
         let Some(layouts) = read_layouts(app_data_root, manifest)? else {
             continue;
         };
@@ -432,7 +441,9 @@ fn apply_panorama_layouts(
 ) -> Result<(), String> {
     let mut selected = Vec::new();
     for (index, package_id) in package_ids.iter().enumerate() {
-        let manifest = contract(package_id)?;
+        let Some(manifest) = tuning(package_id)? else {
+            continue;
+        };
         let Some(layouts) = read_layouts(app_data_root, manifest)? else {
             continue;
         };
@@ -547,7 +558,7 @@ fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
     let ids = ids
         .iter()
         .map(|id| {
-            let id = package_registry::find(id)?.id.clone();
+            let id = resolve(id)?.engine_id().to_string();
             if !seen.insert(id.clone()) {
                 return Err("pilot_package_invalid".to_string());
             }
@@ -555,9 +566,11 @@ fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
         })
         .collect::<Result<Vec<_>, String>>()?;
     // Minify's own conflicts and dependencies, checked before anything is
-    // downloaded or built.
+    // downloaded or built. A wardrobe item declares neither.
     for id in &ids {
-        let manifest = contract(id)?;
+        let Some(manifest) = tuning(id)? else {
+            continue;
+        };
         if manifest.conflicts.iter().any(|other| seen.contains(other)) {
             return Err("package_conflict".to_string());
         }
@@ -568,14 +581,52 @@ fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
     Ok(ids)
 }
 
+/// What a package ID resolves to: an audited tuning package, or a wardrobe
+/// item from the embedded allowlist.
+enum Contract {
+    Tuning(&'static PackageManifest),
+    Wardrobe(&'static WardrobeManifest),
+}
+
+impl Contract {
+    fn engine_id(&self) -> &str {
+        match self {
+            Self::Tuning(manifest) => &manifest.id,
+            Self::Wardrobe(item) => &item.id,
+        }
+    }
+}
+
+fn resolve(id: &str) -> Result<Contract, String> {
+    if let Some(item) = wardrobe::find(id)? {
+        return Ok(Contract::Wardrobe(item));
+    }
+    package_registry::find(id).map(Contract::Tuning)
+}
+
+/// The tuning manifest behind an ID, or `None` for a wardrobe item, which has
+/// no blacklist, style or layout edits.
+fn tuning(id: &str) -> Result<Option<&'static PackageManifest>, String> {
+    match resolve(id)? {
+        Contract::Tuning(manifest) => Ok(Some(manifest)),
+        Contract::Wardrobe(_) => Ok(None),
+    }
+}
+
+/// A tuning package only; wardrobe items have no pinned per-file contract.
 fn contract(id: &str) -> Result<&'static PackageManifest, String> {
-    package_registry::find(id)
+    tuning(id)?.ok_or_else(|| "pilot_package_unsupported".to_string())
 }
 
 pub(crate) struct VerifiedTreeVpk {
     bytes: Vec<u8>,
     sha256: String,
     bundle_plan: BundlePlan,
+    /// What the analyzer found for each selected wardrobe item, in selection
+    /// order. Empty for a build of tuning packages only.
+    wardrobe: Vec<WardrobePlanItem>,
+    /// Paths a wardrobe item writes that another package writes differently.
+    wardrobe_conflicts: Vec<WardrobeConflict>,
 }
 
 #[derive(Clone, Serialize)]
@@ -597,6 +648,10 @@ pub(crate) struct TreePilotPlan {
     duplicates: Vec<BundleDuplicate>,
     overrides: Vec<BundleOverride>,
     contributions: Vec<BundleContribution>,
+    /// One entry per selected wardrobe item: the analyzer report, with its
+    /// size, class counts and every stripped or rejected path.
+    wardrobe: Vec<WardrobePlanItem>,
+    wardrobe_conflicts: Vec<WardrobeConflict>,
     compatibility: &'static str,
     distribution: &'static str,
     deploy_enabled: bool,
@@ -618,6 +673,16 @@ impl VerifiedTreeVpk {
     pub(crate) fn bundle_plan(&self) -> &BundlePlan {
         &self.bundle_plan
     }
+
+    /// A build with a wardrobe path conflict installs only after the person
+    /// has been shown the conflicts and said so.
+    pub(crate) fn require_acknowledged_conflicts(&self, acknowledged: bool) -> Result<(), String> {
+        if self.wardrobe_conflicts.is_empty() || acknowledged {
+            Ok(())
+        } else {
+            Err("wardrobe_conflict_unacknowledged".to_string())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -634,6 +699,8 @@ pub(crate) fn verified_test_vpk() -> VerifiedTreeVpk {
         bytes: bundle.bytes().to_vec(),
         sha256: bundle.sha256().to_string(),
         bundle_plan: bundle.plan().clone(),
+        wardrobe: Vec::new(),
+        wardrobe_conflicts: Vec::new(),
     }
 }
 
@@ -675,12 +742,25 @@ fn acquire_verified_resources_with_progress(
     cancelled: &AtomicBool,
     mut progress: impl FnMut(usize),
 ) -> Result<(), String> {
-    let manifests = package_ids
+    let contracts = package_ids
         .iter()
-        .map(|id| contract(id))
+        .map(|id| resolve(id))
         .collect::<Result<Vec<_>, _>>()?;
     let mut index = 0usize;
-    for (package_id, manifest) in package_ids.iter().zip(manifests) {
+    for (package_id, contract) in package_ids.iter().zip(contracts) {
+        let manifest = match contract {
+            Contract::Tuning(manifest) => manifest,
+            // One pinned archive: fetched, verified and stored as a unit.
+            Contract::Wardrobe(item) => {
+                if cancelled.load(Ordering::Relaxed) {
+                    return Err("download_cancelled".to_string());
+                }
+                wardrobe::acquire(app_data_root, item, cancelled)?;
+                index += 1;
+                progress(index);
+                continue;
+            }
+        };
         for resource in &manifest.downloads() {
             if cancelled.load(Ordering::Relaxed) {
                 return Err("download_cancelled".to_string());
@@ -726,8 +806,9 @@ pub(crate) fn begin_download(
     game_path: Option<std::path::PathBuf>,
 ) -> Result<TreeDownloadStatus, String> {
     let package_ids = normalize_package_ids(&requested_package_ids)?;
+    // A wardrobe item is one archive.
     let total_resources = package_ids.iter().try_fold(0usize, |total, id| {
-        contract(id).map(|manifest| total + manifest.downloads().len())
+        Ok::<_, String>(total + tuning(id)?.map_or(1, |manifest| manifest.downloads().len()))
     })?;
     if game_path.is_none()
         && package_ids.iter().any(|id| {
@@ -860,10 +941,23 @@ pub(crate) fn build_from_verified_store(
     requested_package_ids: &[String],
 ) -> Result<VerifiedTreeVpk, String> {
     let package_ids = normalize_package_ids(requested_package_ids)?;
+    let mut wardrobe_items = Vec::new();
     let packages = package_ids
         .iter()
         .map(|package_id| {
-            let manifest = contract(package_id)?;
+            let manifest = match resolve(package_id)? {
+                Contract::Tuning(manifest) => manifest,
+                // The analyzer re-checks the stored archive against its audit
+                // and returns only the files that audit allows.
+                Contract::Wardrobe(item) => {
+                    let loaded = wardrobe::load(app_data_root, item)?;
+                    wardrobe_items.push(loaded.item);
+                    return Ok(BundlePackage {
+                        package_id: package_id.clone(),
+                        resources: loaded.resources,
+                    });
+                }
+            };
             let mut resources = manifest
                 .resources
                 .iter()
@@ -919,7 +1013,7 @@ pub(crate) fn build_from_verified_store(
     let mut packages = packages;
     apply_panorama_styles(app_data_root, &package_ids, &mut packages)?;
     apply_panorama_layouts(app_data_root, &package_ids, &mut packages)?;
-    build_verified_bundle(packages)
+    build_verified_bundle(packages, wardrobe_items)
 }
 
 fn plan_for(verified: &VerifiedTreeVpk) -> TreePilotPlan {
@@ -947,6 +1041,8 @@ fn plan_for(verified: &VerifiedTreeVpk) -> TreePilotPlan {
         duplicates: verified.bundle_plan().duplicates.clone(),
         overrides: verified.bundle_plan().overrides.clone(),
         contributions: verified.bundle_plan().contributions.clone(),
+        wardrobe: verified.wardrobe.clone(),
+        wardrobe_conflicts: verified.wardrobe_conflicts.clone(),
         compatibility: "unknown",
         distribution: "internal_pilot",
         deploy_enabled: cfg!(target_os = "windows"),
@@ -1010,22 +1106,54 @@ pub(crate) fn build_verified_vpk(
     resources: &BTreeMap<String, Vec<u8>>,
 ) -> Result<VerifiedTreeVpk, String> {
     verify_resources(&tree_resources(), resources)?;
-    build_verified_bundle(vec![BundlePackage {
-        package_id: PACKAGE_ID.to_string(),
-        resources: resources.clone(),
-    }])
+    build_verified_bundle(
+        vec![BundlePackage {
+            package_id: PACKAGE_ID.to_string(),
+            resources: resources.clone(),
+        }],
+        Vec::new(),
+    )
 }
 
-fn build_verified_bundle(packages: Vec<BundlePackage>) -> Result<VerifiedTreeVpk, String> {
+fn build_verified_bundle(
+    packages: Vec<BundlePackage>,
+    wardrobe: Vec<WardrobePlanItem>,
+) -> Result<VerifiedTreeVpk, String> {
     let bundle = mod_bundle::build(packages)?;
     let report = vpk::inspect(bundle.bytes())?;
     if report.entries != bundle.plan().resource_count {
         return Err("tree_vpk_invalid".to_string());
     }
+    // The bundle already records every path two packages write differently
+    // (the first package wins). Those involving a wardrobe item are surfaced
+    // on their own: a skin must never lose or win a path unseen.
+    let items = wardrobe
+        .iter()
+        .map(|item| item.package_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let wardrobe_conflicts = bundle
+        .plan()
+        .overrides
+        .iter()
+        .filter(|item| {
+            items.contains(item.winner_package_id.as_str())
+                || item
+                    .shadowed_package_ids
+                    .iter()
+                    .any(|id| items.contains(id.as_str()))
+        })
+        .map(|item| WardrobeConflict {
+            path: item.path.clone(),
+            winner_package_id: item.winner_package_id.clone(),
+            shadowed_package_ids: item.shadowed_package_ids.clone(),
+        })
+        .collect();
     Ok(VerifiedTreeVpk {
         bytes: bundle.bytes().to_vec(),
         sha256: bundle.sha256().to_string(),
         bundle_plan: bundle.plan().clone(),
+        wardrobe,
+        wardrobe_conflicts,
     })
 }
 
@@ -1306,5 +1434,294 @@ mod tests {
         let second = build_from_verified_store(&root, &ids).expect("rebuild from cache");
         assert_eq!(first.bytes(), second.bytes());
         std::fs::remove_dir_all(root).expect("clean generated test cache");
+    }
+
+    fn wardrobe_root(name: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "betterfy-wardrobe-build-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("temp root");
+        root
+    }
+
+    /// Registers a synthetic wardrobe item and stores its archive.
+    fn stored_item(
+        root: &Path,
+        id: &str,
+        hood: &'static [u8],
+    ) -> &'static crate::wardrobe::WardrobeManifest {
+        let (manifest, archive) = crate::wardrobe::synthetic_item(
+            id,
+            &[
+                ("models/heroes/keeper_of_the_light/kotl_hood.vmdl_c", hood),
+                (
+                    "particles/units/heroes/hero_keeper_of_the_light/attack.vpcf_c",
+                    b"attack",
+                ),
+                ("darkness/materials/body.vmat_c", b"body"),
+                ("particles/basic_ambient/basic_ambient.vpcf_c", b"shared"),
+                ("particles/darkness/flame.vpcf", b"source"),
+            ],
+            |_| {},
+        );
+        crate::content_store::store_pinned_resource(
+            root,
+            manifest.archive.inner_bytes,
+            &manifest.archive.inner_sha256,
+            &archive,
+        )
+        .expect("store archive");
+        crate::wardrobe::register_for_test(manifest)
+    }
+
+    #[test]
+    fn a_wardrobe_item_builds_into_the_bundle_with_its_report() {
+        let root = wardrobe_root("single");
+        let item = stored_item(&root, "build-single", b"hood");
+        let ids = vec![item.catalog_id.clone()];
+        // The catalog ID resolves to the engine ID, and a repeat is refused.
+        assert_eq!(
+            normalize_package_ids(&ids).expect("resolves"),
+            vec![item.id.clone()]
+        );
+        assert_eq!(
+            normalize_package_ids(&[item.id.clone(), item.catalog_id.clone()])
+                .err()
+                .as_deref(),
+            Some("pilot_package_invalid")
+        );
+        // Everything is already in the store, so acquiring needs no network.
+        let mut seen = 0;
+        acquire_verified_resources_with_progress(&root, &ids, &AtomicBool::new(false), |count| {
+            seen = count
+        })
+        .expect("stored archive is reused");
+        assert_eq!(seen, 1);
+        assert_eq!(
+            acquire_verified_resources_with_progress(&root, &ids, &AtomicBool::new(true), |_| {})
+                .err()
+                .as_deref(),
+            Some("download_cancelled")
+        );
+
+        let verified = build_from_verified_store(&root, &ids).expect("builds");
+        assert_eq!(verified.bundle_plan().package_ids, vec![item.id.clone()]);
+        // hero file, hero particle, author file; the shared and source files are out.
+        assert_eq!(verified.bundle_plan().resource_count, 3);
+        let report = &verified.wardrobe[0].report;
+        assert_eq!(report.install.files, 3);
+        assert_eq!(report.install.stripped_shared, 1);
+        assert_eq!(report.rejected.files, 1);
+        assert!(verified.wardrobe_conflicts.is_empty());
+        verified
+            .require_acknowledged_conflicts(false)
+            .expect("nothing to acknowledge");
+        let reopened = vpk::extract_embedded(verified.bytes()).expect("reopen");
+        assert!(reopened.contains_key("darkness/materials/body.vmat_c"));
+        assert!(!reopened.contains_key("particles/basic_ambient/basic_ambient.vpcf_c"));
+
+        let plan = plan_for(&verified);
+        let json = serde_json::to_value(&plan).expect("plan json");
+        assert_eq!(json["wardrobe"][0]["packageId"], item.id.as_str());
+        assert_eq!(json["wardrobe"][0]["report"]["install"]["files"], 3);
+        assert_eq!(
+            json["wardrobe"][0]["report"]["install"]["strippedShared"],
+            1
+        );
+        assert_eq!(
+            json["wardrobe"][0]["report"]["sharedPaths"][0]["path"],
+            "particles/basic_ambient/basic_ambient.vpcf_c"
+        );
+        assert_eq!(json["wardrobeConflicts"], serde_json::json!([]));
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn two_items_writing_the_same_path_are_a_reviewed_conflict() {
+        let root = wardrobe_root("conflict");
+        let first = stored_item(&root, "build-first", b"first-hood");
+        let second = stored_item(&root, "build-second", b"second-hood");
+        let ids = vec![first.id.clone(), second.id.clone()];
+        let verified = build_from_verified_store(&root, &ids).expect("builds");
+        // Only the hood differs; the two identical files are duplicates.
+        assert_eq!(
+            verified.wardrobe_conflicts,
+            vec![WardrobeConflict {
+                path: "models/heroes/keeper_of_the_light/kotl_hood.vmdl_c".to_string(),
+                winner_package_id: first.id.clone(),
+                shadowed_package_ids: vec![second.id.clone()],
+            }]
+        );
+        assert_eq!(verified.bundle_plan().duplicates.len(), 2);
+        assert_eq!(
+            verified
+                .require_acknowledged_conflicts(false)
+                .err()
+                .as_deref(),
+            Some("wardrobe_conflict_unacknowledged")
+        );
+        verified
+            .require_acknowledged_conflicts(true)
+            .expect("acknowledged");
+        // The first item in the selection wins, and the order is part of the plan.
+        let reopened = vpk::extract_embedded(verified.bytes()).expect("reopen");
+        assert_eq!(
+            reopened["models/heroes/keeper_of_the_light/kotl_hood.vmdl_c"],
+            b"first-hood"
+        );
+        let reversed = build_from_verified_store(&root, &[second.id.clone(), first.id.clone()])
+            .expect("builds reversed");
+        assert_ne!(verified.plan_id(), reversed.plan_id());
+        assert_eq!(reversed.wardrobe_conflicts[0].winner_package_id, second.id);
+        let plan = serde_json::to_value(plan_for(&verified)).expect("plan json");
+        assert_eq!(
+            plan["wardrobeConflicts"][0]["path"],
+            "models/heroes/keeper_of_the_light/kotl_hood.vmdl_c"
+        );
+        assert_eq!(plan["overriddenResources"], 1);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_wardrobe_path_shared_with_a_tuning_package_is_a_conflict_too() {
+        let bundle = |tuning: &[u8], skin: &[u8]| {
+            let analysis_archive = crate::vpk::build(vec![crate::vpk::VpkInput {
+                path: "models/heroes/keeper_of_the_light/a.vmdl_c",
+                bytes: b"x",
+            }])
+            .expect("vpk");
+            let report = crate::skin_archive::analyze(
+                &analysis_archive,
+                &crate::skin_archive::ScopeSpec {
+                    hero: "keeper_of_the_light".to_string(),
+                    author_namespaces: Vec::new(),
+                    shared_policy: crate::skin_archive::SharedPolicy::Strip,
+                },
+                &crate::skin_archive::Limits::default(),
+            )
+            .expect("analysis")
+            .report;
+            let item = WardrobePlanItem {
+                package_id: "wardrobe.test-mix".to_string(),
+                catalog_id: "heroes-test-mix".to_string(),
+                hero: "keeper_of_the_light".to_string(),
+                source_url: String::new(),
+                archive_sha256: "0".repeat(64),
+                catalog_snapshot: String::new(),
+                permission: String::new(),
+                verified_languages: Vec::new(),
+                compatibility_note: None,
+                report,
+            };
+            build_verified_bundle(
+                vec![
+                    BundlePackage {
+                        package_id: PACKAGE_ID.to_string(),
+                        resources: BTreeMap::from([
+                            ("materials/water/river.vmat_c".to_string(), tuning.to_vec()),
+                            ("sounds/ui/ping.vsnd_c".to_string(), b"ping".to_vec()),
+                        ]),
+                    },
+                    BundlePackage {
+                        package_id: item.package_id.clone(),
+                        resources: BTreeMap::from([
+                            ("materials/water/river.vmat_c".to_string(), skin.to_vec()),
+                            ("sounds/ui/ping.vsnd_c".to_string(), b"ping".to_vec()),
+                        ]),
+                    },
+                ],
+                vec![item],
+            )
+            .expect("builds")
+        };
+        let differing = bundle(b"tuning", b"skin");
+        assert_eq!(
+            differing.wardrobe_conflicts,
+            vec![WardrobeConflict {
+                path: "materials/water/river.vmat_c".to_string(),
+                winner_package_id: PACKAGE_ID.to_string(),
+                shadowed_package_ids: vec!["wardrobe.test-mix".to_string()],
+            }]
+        );
+        assert!(differing.require_acknowledged_conflicts(false).is_err());
+        // Identical bytes are a duplicate, not a conflict.
+        let identical = bundle(b"same", b"same");
+        assert!(identical.wardrobe_conflicts.is_empty());
+        assert_eq!(identical.bundle_plan().duplicates.len(), 2);
+    }
+
+    #[test]
+    fn a_wardrobe_item_without_its_stored_archive_does_not_build() {
+        let root = wardrobe_root("missing");
+        let (manifest, _) = crate::wardrobe::synthetic_item(
+            "build-missing",
+            &[("models/heroes/keeper_of_the_light/a.vmdl_c", b"a")],
+            |_| {},
+        );
+        let item = crate::wardrobe::register_for_test(manifest);
+        assert!(build_from_verified_store(&root, std::slice::from_ref(&item.id)).is_err());
+        // An unknown wardrobe-looking ID is not an item.
+        assert_eq!(
+            normalize_package_ids(&["wardrobe.unknown".to_string()])
+                .err()
+                .as_deref(),
+            Some("pilot_package_unsupported")
+        );
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    /// Local-only: builds the real Scarlet Keeper archive (named by
+    /// `BETTERFY_SKIN_SAMPLE`) through the whole store-to-VPK path and prints
+    /// the numbers. The archive is never part of the repository.
+    #[test]
+    fn builds_the_real_sample_through_the_store_when_given() {
+        let Ok(path) = std::env::var("BETTERFY_SKIN_SAMPLE") else {
+            return;
+        };
+        let archive = std::fs::read(path).expect("sample");
+        let item = wardrobe::find("heroes-scarlet-keeper-of-the-light")
+            .expect("registry")
+            .expect("item");
+        let root = wardrobe_root("real");
+        crate::content_store::store_pinned_resource(
+            &root,
+            item.archive.inner_bytes,
+            &item.archive.inner_sha256,
+            &archive,
+        )
+        .expect("store");
+        let started = std::time::Instant::now();
+        let verified = build_from_verified_store(&root, std::slice::from_ref(&item.catalog_id))
+            .expect("builds from the store");
+        let built = started.elapsed();
+        let plan = serde_json::to_value(plan_for(&verified)).expect("plan json");
+        println!(
+            "real sample: {} resources, {} payload bytes, vpk {} bytes, sha256 {}, plan {}, built in {:?}",
+            plan["resourceCount"],
+            plan["resourceBytes"],
+            plan["vpkBytes"],
+            plan["vpkSha256"],
+            plan["planId"],
+            built
+        );
+        assert_eq!(plan["resourceCount"], item.audited.install_files);
+        assert_eq!(plan["resourceBytes"], item.audited.install_bytes);
+        assert_eq!(
+            plan["wardrobe"][0]["report"]["install"]["strippedShared"],
+            item.audited.stripped_shared
+        );
+        assert_eq!(plan["wardrobeConflicts"], serde_json::json!([]));
+        let again =
+            build_from_verified_store(&root, std::slice::from_ref(&item.id)).expect("rebuild");
+        assert_eq!(again.bytes(), verified.bytes(), "deterministic");
+        assert_eq!(again.plan_id(), verified.plan_id());
+        let reopened = vpk::inspect(verified.bytes()).expect("the VPK reopens");
+        assert_eq!(reopened.entries, item.audited.install_files);
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 }
