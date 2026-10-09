@@ -688,7 +688,11 @@ async function configureTelegram(env) {
   await telegram(env, "setMyCommands", {
     commands: [
       { command: "start", description: "Open BetterFy" },
+      { command: "menu", description: "Main menu" },
       { command: "code", description: "Get a one-time sign-in code" },
+      { command: "status", description: "Your account and access" },
+      { command: "devices", description: "Where you are signed in" },
+      { command: "language", description: "Switch Russian / English" },
       { command: "subscribe", description: "Open a Stars subscription" },
       { command: "subscription", description: "View or stop your subscription" },
       { command: "paysupport", description: "Payment support" },
@@ -701,7 +705,11 @@ async function configureTelegram(env) {
     language_code: "ru",
     commands: [
       { command: "start", description: "Открыть BetterFy" },
+      { command: "menu", description: "Главное меню" },
       { command: "code", description: "Получить одноразовый код" },
+      { command: "status", description: "Аккаунт и доступ" },
+      { command: "devices", description: "Где ты вошёл" },
+      { command: "language", description: "Русский / English" },
       { command: "subscribe", description: "Оформить подписку за Stars" },
       { command: "subscription", description: "Статус и продление подписки" },
       { command: "paysupport", description: "Помощь с оплатой" },
@@ -749,31 +757,64 @@ function welcomeKeyboard(language) {
   return {
     inline_keyboard: [
       [{ text: copy.issue, callback_data: "issue_code" }],
-      [{ text: `⭐ ${copy.subscribe}`, callback_data: "plans" }],
+      [
+        { text: copy.account, callback_data: "account" },
+        { text: copy.devices, callback_data: "devices" },
+      ],
       [
         { text: copy.website, url: websiteUrl() },
         { text: copy.language, callback_data: language === "ru" ? "lang_en" : "lang_ru" },
       ],
+      [{ text: `⭐ ${copy.subscribe}`, callback_data: "plans" }],
     ],
   };
+}
+
+function backRow(language) {
+  return [{ text: COPY[language].back, callback_data: "menu" }];
+}
+
+// One card that changes in place: buttons edit the message they live on, so
+// the chat stays a single menu instead of a pile of near-identical photos.
+// Falls back to a fresh message when the old one cannot be edited.
+async function showCard(env, target, card, caption, keyboard, extra = {}) {
+  const photo = cardUrl(env, botCardFile(card, target.language));
+  if (target.messageId) {
+    try {
+      await telegram(env, "editMessageMedia", {
+        chat_id: target.chatId,
+        message_id: target.messageId,
+        media: { type: "photo", media: photo, caption, ...extra },
+        reply_markup: keyboard,
+      });
+      return;
+    } catch {
+      // Too old, deleted, or unchanged: send a new card instead.
+    }
+  }
+  await telegram(env, "sendPhoto", {
+    chat_id: target.chatId,
+    photo,
+    caption,
+    reply_markup: keyboard,
+    ...extra,
+  });
 }
 
 function plansKeyboard(language) {
   const copy = COPY[language];
   return {
-    inline_keyboard: ACCESS_PLANS.map((plan) => [
-      { text: copy.plans[plan.id].button, callback_data: `buy_${plan.id}` },
-    ]),
+    inline_keyboard: [
+      ...ACCESS_PLANS.map((plan) => [
+        { text: copy.plans[plan.id].button, callback_data: `buy_${plan.id}` },
+      ]),
+      backRow(language),
+    ],
   };
 }
 
-async function sendPlans(env, chatId, language) {
-  await telegram(env, "sendPhoto", {
-    chat_id: chatId,
-    photo: cardUrl(env, botCardFile("premium", language)),
-    caption: COPY[language].choosePlan,
-    reply_markup: plansKeyboard(language),
-  });
+async function sendPlans(env, target) {
+  await showCard(env, target, "premium", COPY[target.language].choosePlan, plansKeyboard(target.language));
 }
 
 function formatExpiry(timestamp, language) {
@@ -816,12 +857,90 @@ async function getLanguage(env, from) {
     : chooseLanguage(from.language_code);
 }
 
-async function sendWelcome(env, chatId, language) {
-  await telegram(env, "sendPhoto", {
-    chat_id: chatId,
-    photo: cardUrl(env, botCardFile("mainMenu", language)),
-    caption: COPY[language].welcome,
-    reply_markup: welcomeKeyboard(language),
+async function sendWelcome(env, target, caption = COPY[target.language].welcome) {
+  await showCard(env, target, "mainMenu", caption, welcomeKeyboard(target.language));
+}
+
+async function activeSignIns(env, userId, now) {
+  const rows = await env.AUTH_DB.prepare(
+    `SELECT client_kind, COUNT(*) AS count FROM auth_sessions
+     WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
+     GROUP BY client_kind`,
+  ).bind(userId, now).all();
+  const counts = { windows: 0, web: 0, unknown: 0 };
+  for (const row of rows?.results ?? []) {
+    const kind = Object.hasOwn(counts, row.client_kind) ? row.client_kind : "unknown";
+    counts[kind] += Number(row.count);
+  }
+  return counts;
+}
+
+async function sendAccount(env, target, from, now) {
+  const { language } = target;
+  const copy = COPY[language];
+  const userId = await upsertUser(env, from, language, now);
+  const subscription = await subscriptionRecord(env, userId);
+  const counts = await activeSignIns(env, userId, now);
+  const total = counts.windows + counts.web + counts.unknown;
+  const access = isEntitlementActive(subscription, now)
+    ? copy.accountPremium.replace("{date}", formatExpiry(subscription.active_until, language))
+    : copy.accountEarly;
+  const caption = [
+    `<b>${copy.accountTitle}</b>`,
+    "",
+    `${copy.accountAccess}: ${access}`,
+    copy.accountSignIns.replace("{count}", String(total)),
+  ].join("\n");
+  await showCard(env, target, "mainMenu", caption, {
+    inline_keyboard: [
+      [{ text: copy.devices, callback_data: "devices" }],
+      backRow(language),
+    ],
+  }, { parse_mode: "HTML" });
+}
+
+async function sendDevices(env, target, from, now) {
+  const { language } = target;
+  const copy = COPY[language];
+  const userId = await upsertUser(env, from, language, now);
+  const counts = await activeSignIns(env, userId, now);
+  const lines = Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .map(([kind, count]) => `• ${copy.deviceKinds[kind]}: ${count}`);
+  const caption = lines.length
+    ? `<b>${copy.devicesTitle}</b>\n\n${lines.join("\n")}`
+    : copy.devicesNone;
+  await showCard(env, target, "mainMenu", caption, {
+    inline_keyboard: [
+      ...(lines.length ? [[{ text: copy.signOutAll, callback_data: "signout_ask" }]] : []),
+      backRow(language),
+    ],
+  }, { parse_mode: "HTML" });
+}
+
+async function askSignOutAll(env, target) {
+  const copy = COPY[target.language];
+  await showCard(env, target, "mainMenu", copy.signOutAsk, {
+    inline_keyboard: [
+      [{ text: copy.signOutConfirm, callback_data: "signout_yes" }],
+      [{ text: copy.keepSignedIn, callback_data: "devices" }],
+    ],
+  });
+}
+
+// Closes every session and every refresh family for this user.
+async function signOutEverywhere(env, target, from, now) {
+  const userId = await upsertUser(env, from, target.language, now);
+  await env.AUTH_DB.batch([
+    env.AUTH_DB.prepare(
+      "UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ?",
+    ).bind(now, userId),
+    env.AUTH_DB.prepare(
+      "UPDATE auth_refresh_tokens SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ?",
+    ).bind(now, userId),
+  ]);
+  await showCard(env, target, "mainMenu", COPY[target.language].signedOutAll, {
+    inline_keyboard: [backRow(target.language)],
   });
 }
 
@@ -1217,7 +1336,19 @@ async function handleMessage(env, message, now) {
   if (challengeToken) return sendDeviceChallenge(env, message, language, challengeToken, now);
   const command = String(message.text ?? "").trim().split(/\s+/)[0].split("@")[0].toLowerCase();
   if (command === "/code") return issueCode(env, message.chat.id, message.from, language, now);
-  if (command === "/subscribe") return sendPlans(env, message.chat.id, language);
+  const target = { chatId: message.chat.id, language };
+  if (command === "/menu") {
+    await upsertUser(env, message.from, language, now);
+    return sendWelcome(env, target);
+  }
+  if (command === "/status") return sendAccount(env, target, message.from, now);
+  if (command === "/devices") return sendDevices(env, target, message.from, now);
+  if (command === "/language") {
+    const next = language === "ru" ? "en" : "ru";
+    await upsertUser(env, message.from, next, now);
+    return sendWelcome(env, { chatId: message.chat.id, language: next }, COPY[next].languageChanged);
+  }
+  if (command === "/subscribe") return sendPlans(env, target);
   if (command === "/subscription") return sendSubscriptionStatus(env, message.chat.id, message.from, language, now);
   if (command === "/help") {
     return telegram(env, "sendMessage", { chat_id: message.chat.id, text: COPY[language].help });
@@ -1232,7 +1363,8 @@ async function handleMessage(env, message, now) {
     return telegram(env, "sendMessage", { chat_id: message.chat.id, text: COPY[language].paySupport });
   }
   await upsertUser(env, message.from, language, now);
-  return sendWelcome(env, message.chat.id, language);
+  const greeting = command === "/start" ? COPY[language].welcome : COPY[language].unknownText;
+  return sendWelcome(env, target, greeting);
 }
 
 async function handleCallback(env, callback, now) {
@@ -1251,8 +1383,14 @@ async function handleCallback(env, callback, now) {
       now,
     );
   }
+  const target = { chatId, language, messageId: callback.message.message_id };
   if (callback.data === "issue_code") return issueCode(env, chatId, callback.from, language, now);
-  if (callback.data === "plans") return sendPlans(env, chatId, language);
+  if (callback.data === "menu") return sendWelcome(env, target);
+  if (callback.data === "account") return sendAccount(env, target, callback.from, now);
+  if (callback.data === "devices") return sendDevices(env, target, callback.from, now);
+  if (callback.data === "signout_ask") return askSignOutAll(env, target);
+  if (callback.data === "signout_yes") return signOutEverywhere(env, target, callback.from, now);
+  if (callback.data === "plans") return sendPlans(env, target);
   if (typeof callback.data === "string" && callback.data.startsWith("buy_")) {
     return sendAccessInvoice(env, chatId, callback.from, language, now, callback.data.slice(4));
   }
@@ -1260,8 +1398,7 @@ async function handleCallback(env, callback, now) {
   if (callback.data === "lang_ru" || callback.data === "lang_en") {
     language = callback.data.endsWith("ru") ? "ru" : "en";
     await upsertUser(env, callback.from, language, now);
-    await telegram(env, "sendMessage", { chat_id: chatId, text: COPY[language].languageChanged });
-    return sendWelcome(env, chatId, language);
+    return sendWelcome(env, { ...target, language }, COPY[language].languageChanged);
   }
 }
 
@@ -1466,6 +1603,7 @@ async function verifyCode(request, env, origin) {
       chat_id: user.telegram_user_id,
       photo: cardUrl(env, botCardFile("loginApproved", language)),
       caption: copy.approved,
+      reply_markup: { inline_keyboard: [[{ text: copy.notMe, callback_data: "signout_ask" }]] },
       protect_content: true,
     });
   } catch {
