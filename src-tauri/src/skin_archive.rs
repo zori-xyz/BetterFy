@@ -302,9 +302,10 @@ pub(crate) fn path_is_safe(path: &str) -> bool {
 fn path_safe(path: &str) -> bool {
     path.len() <= MAX_PATH_BYTES
         && vpk::validate_path(path).is_ok()
-        && !path.contains(' ')
         && path.split('/').all(|segment| {
             !segment.is_empty()
+                && !segment.starts_with(' ')
+                && !segment.ends_with(' ')
                 && segment != "."
                 && segment != ".."
                 && segment.len() <= MAX_SEGMENT_BYTES
@@ -1189,7 +1190,7 @@ mod tests {
                 ("panorama/scripts/evil.vjs_c", b"script"),
                 ("darkness/tool.exe", b"MZ"),
                 ("darkness//double.vpcf_c", b"double"),
-                ("darkness/a b.vpcf_c", b"space"),
+                (" darkness/lead.vpcf_c", b"space"),
                 ("darkness/caf\u{e9}.vpcf_c", b"nonascii"),
             ],
         );
@@ -1206,7 +1207,7 @@ mod tests {
         assert_eq!(reasons["panorama/scripts/evil.vjs_c"], RejectReason::Script);
         assert_eq!(reasons["darkness/tool.exe"], RejectReason::Executable);
         assert_eq!(reasons["darkness//double.vpcf_c"], RejectReason::PathUnsafe);
-        assert_eq!(reasons["darkness/a b.vpcf_c"], RejectReason::PathUnsafe);
+        assert_eq!(reasons[" darkness/lead.vpcf_c"], RejectReason::PathUnsafe);
         assert_eq!(
             reasons["darkness/caf\u{e9}.vpcf_c"],
             RejectReason::PathUnsafe
@@ -1590,7 +1591,7 @@ mod tests {
                 ..base()
             },
             ScopeSpec {
-                shared_paths: vec!["a b/a.vtex_c".to_string()],
+                shared_paths: vec![" a/a.vtex_c".to_string()],
                 ..base()
             },
             ScopeSpec {

@@ -215,7 +215,7 @@ fn audit_item(inputs: &Inputs, item: &CatalogItem) -> Outcome {
     );
     if zip.len() as u64 > content_store::MAX_ARTIFACT_BYTES {
         return skip(
-            "archive over the 64 MiB limit",
+            "archive over the 256 MiB limit",
             format!("ZIP is {} bytes", zip.len()),
         );
     }
@@ -223,7 +223,7 @@ fn audit_item(inputs: &Inputs, item: &CatalogItem) -> Outcome {
         // The inspector's size bound is on the unpacked VPK.
         if code == "archive_size_invalid" {
             return skip(
-                "archive over the 64 MiB limit",
+                "archive over the 256 MiB limit",
                 "the VPK inside the ZIP is over the unpacked-size bound of the archive inspector",
             );
         }
@@ -254,7 +254,7 @@ fn audit_item(inputs: &Inputs, item: &CatalogItem) -> Outcome {
     }
     if entry.size() > content_store::MAX_ARTIFACT_BYTES {
         return skip(
-            "archive over the 64 MiB limit",
+            "archive over the 256 MiB limit",
             format!("inner VPK is {} bytes", entry.size()),
         );
     }

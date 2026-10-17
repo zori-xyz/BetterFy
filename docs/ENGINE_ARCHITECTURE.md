@@ -616,7 +616,7 @@ out is an explicit per-skin opt-in (see "Install modes").
 app, like the audited scripts: a signed catalog cannot add one, and the package registry
 reserves the `wardrobe.` namespace and the catalog IDs of the entries. All entries are one
 generated JSON array, `src-tauri/wardrobe/manifests.json` (compact, sorted by ID, about
-0.8 MB for the 471 entries), and `index.json` is the interface's copy (names, authors,
+0.8 MB for the 499 entries), and `index.json` is the interface's copy (names, authors,
 heroes, sizes; about 0.14 MB). A test requires both files to be exactly what the
 generator would write for the embedded manifests, so the interface cannot list an item the
 engine does not know. An entry pins
@@ -654,8 +654,8 @@ build then runs the analyzer on those bytes in the requested mode and requires i
 to equal that mode's pinned audit; otherwise it stops with `wardrobe_audit_mismatch`. A
 change to the analyzer's rules therefore cannot silently change which files an audited
 archive installs. The files to install become an ordinary bundle package, merged by the
-existing `mod_bundle` with the tuning packages. The content store holds at most 64 MiB per
-object, so an archive whose VPK is larger is not in the allowlist.
+existing `mod_bundle` with the tuning packages. The content store holds at most 256 MiB per
+object (the same cap as the merged VPK), so an archive whose VPK is larger is not in the allowlist. Paths may contain spaces and plus signs, which Valve's own sound and material names use; traversal, backslashes, control characters, empty or space-padded segments stay rejected.
 
 **Analyzer.** It reads a VPK v1 or v2 directory with every entry embedded (side archives
 and CRC mismatches refuse the file) and classifies each path:
