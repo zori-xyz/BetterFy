@@ -19,7 +19,12 @@ export const isDesktopRuntime = () =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 export const demoActive = () => !isDesktopRuntime();
 
-export type DemoScenario = "success" | "dota_open" | "download_fails" | "steam_fails";
+export type DemoScenario =
+  | "success"
+  | "dota_open"
+  | "download_fails"
+  | "steam_fails"
+  | "game_updated";
 
 type DemoSettings = { scenario: DemoScenario; developer: boolean };
 const key = "betterfy:builder-demo";
@@ -27,7 +32,9 @@ let settings: DemoSettings = (() => {
   try {
     const stored = JSON.parse(getStorageItem(key) ?? "{}");
     return {
-      scenario: ["success", "dota_open", "download_fails", "steam_fails"].includes(stored.scenario)
+      scenario: ["success", "dota_open", "download_fails", "steam_fails", "game_updated"].includes(
+        stored.scenario,
+      )
         ? stored.scenario
         : "success",
       developer: stored.developer === true,
@@ -301,6 +308,8 @@ export const demoBridge: EngineBridge = {
     };
   },
   async installTreePilot(_path, ids, _plan, language) {
+    if (settings.scenario === "game_updated")
+      throw new EngineFault("deployment_conflict", "install_tree_pilot");
     await wait(2400);
     installed = {
       operationId: `demo-${Date.now()}`,
@@ -364,6 +373,11 @@ export const demoBridge: EngineBridge = {
       profile: null,
       dotaPatched: false,
     };
+  },
+  async releaseStaleDeployment() {
+    await wait(900);
+    if (settings.scenario === "game_updated") setDemoSettings({ scenario: "success" });
+    return { operationId: "demo-stale", language: "russian", reason: "changed" };
   },
   async rollbackSteamLaunchOptions(operationId) {
     await wait(700);

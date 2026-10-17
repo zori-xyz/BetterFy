@@ -2,7 +2,14 @@
 // one recommended next step. The code itself stays under "Details" (and in
 // the journal) so support can match it to the engine.
 
-export type NoticeAction = "retry" | "prepare" | "settings" | "report" | "steam" | null;
+export type NoticeAction =
+  | "retry"
+  | "prepare"
+  | "settings"
+  | "report"
+  | "steam"
+  | "release"
+  | null;
 
 export type Notice = {
   code: string;
@@ -120,8 +127,8 @@ export const explainError = (code: string, isRu: boolean) => {
       "Steam already specifies a different language. Restore BetterFy's previous settings or change them manually before installing.",
     ],
     deployment_conflict: [
-      "Файл игры изменился после установки. Автоматический откат остановлен.",
-      "The game file changed after installation. Automatic restore was stopped.",
+      "Файл BetterFy в игре изменили или удалили после установки: чаще всего это обновление Dota или проверка файлов в Steam. BetterFy не будет затирать его старой копией. «Отпустить старую установку» только забудет её: файлы игры не тронуты.",
+      "BetterFy's file in the game was changed or removed after installation, most often by a Dota update or a Steam file check. BetterFy will not overwrite it with an old copy. Letting go of the old install only forgets it: no game files are touched.",
     ],
     backup_failed: [
       "Резервная копия BetterFy недоступна. Автоматический откат заблокирован; не заменяй файл вручную, пока не проверишь состояние установки.",
@@ -132,8 +139,12 @@ export const explainError = (code: string, isRu: boolean) => {
       "The backup failed verification. BetterFy will not restore it over the game file.",
     ],
     rollback_conflict: [
-      "Файл игры изменился после установки. Автоматический откат остановлен.",
-      "The game file changed after installation. Automatic restore was stopped.",
+      "Файл BetterFy в игре изменили после установки: чаще всего это обновление Dota. Откат остановлен, чтобы не затереть новый файл старым. «Отпустить старую установку» только забудет её: файлы игры не тронуты.",
+      "BetterFy's file in the game was changed after installation, most often by a Dota update. Restore stopped so a new file is not overwritten by an old one. Letting go of the old install only forgets it: no game files are touched.",
+    ],
+    deployment_not_stale: [
+      "Установка BetterFy на месте, отпускать её не нужно. Если что-то не так, используй откат.",
+      "The BetterFy install is intact, so there is nothing to let go of. Use restore if something is off.",
     ],
     steam_profile_conflict: [
       "Этот Steam-профиль нельзя менять автоматически. Выбери другой или проверь параметры запуска вручную.",
@@ -284,12 +295,16 @@ const groups: Array<{
     tone: "warn",
   },
   {
+    codes: ["deployment_conflict", "rollback_conflict"],
+    title: ["Файл игры изменился", "The game file changed"],
+    action: "release",
+    tone: "warn",
+  },
+  {
     codes: [
       "rollback_failed",
       "backup_failed",
       "backup_verification_failed",
-      "deployment_conflict",
-      "rollback_conflict",
       "deployment_target_foreign",
       "steam_recovery_required",
       "deployment_language_change_requires_restore",

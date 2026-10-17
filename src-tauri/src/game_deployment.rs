@@ -813,6 +813,77 @@ pub(crate) fn current_owned_deployment(
     }))
 }
 
+/// Why BetterFy's record of an installation no longer matches the game folder.
+#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StaleReason {
+    /// The file BetterFy wrote is gone.
+    Missing,
+    /// Another program (a Dota update, a manual edit) replaced the file.
+    Changed,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StaleRelease {
+    pub operation_id: String,
+    pub language: GameLanguage,
+    pub reason: StaleReason,
+}
+
+/// Lets go of an installation whose file no longer matches the record.
+///
+/// Nothing in the game folder is touched: the file stays exactly as it is and
+/// BetterFy's old backup is never copied over it, because the backup describes
+/// a file that is no longer there and restoring it could undo a game update.
+/// The ownership record is renamed, not deleted, so the evidence stays. An
+/// installation that still matches is refused, so this cannot be used to
+/// abandon a healthy install.
+pub(crate) fn release_stale_deployment(
+    app_data_root: &Path,
+    dota_root: &Path,
+) -> Result<StaleRelease, String> {
+    let identity = target_identity(dota_root)?;
+    let (root, _, journals) = owned_roots(app_data_root)?;
+    let _lock = transaction_lock(&root)?;
+    let ownership_file = ownership_path(&root);
+    if !ownership_file.exists() {
+        return Err("deployment_not_found".to_string());
+    }
+    let state: OwnershipState = read_json(&ownership_file)?;
+    if state.schema_version != SCHEMA_VERSION || state.target_identity != identity {
+        return Err("deployment_journal_invalid".to_string());
+    }
+    validate_operation_id(&state.operation_id)?;
+    let target = target_for(dota_root, state.language)?;
+    reject_symlink(&target)?;
+    let reason = if !target.exists() {
+        StaleReason::Missing
+    } else if !target.is_file() {
+        StaleReason::Changed
+    } else {
+        let current = fs::read(&target).map_err(|_| "deployment_conflict".to_string())?;
+        if sha256(&current) == state.installed_sha256 {
+            return Err("deployment_not_stale".to_string());
+        }
+        StaleReason::Changed
+    };
+    let released = root.join(format!("ownership.released-{}.json", now_ms()?));
+    reject_symlink(&released)?;
+    fs::rename(&ownership_file, &released).map_err(|_| "deployment_failed".to_string())?;
+    let journal_path = journals.join(format!("{}.json", state.operation_id));
+    if let Ok(mut journal) = read_json::<DeploymentJournal>(&journal_path) {
+        journal.error_code = Some("released_stale".to_string());
+        journal.updated_at_ms = now_ms()?;
+        let _ = atomic_json(&journal_path, &journal);
+    }
+    Ok(StaleRelease {
+        operation_id: state.operation_id,
+        language: state.language,
+        reason,
+    })
+}
+
 pub(crate) fn rollback(
     app_data_root: &Path,
     dota_root: &Path,
@@ -1586,6 +1657,60 @@ mod tests {
                 .as_deref(),
             Some("rollback_conflict")
         );
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn releases_only_an_installation_whose_file_changed_or_vanished() {
+        let base = root("stale");
+        let app = base.join("app");
+        let dota = game(&base);
+        let bytes = package(b"tree");
+        let receipt = deploy_verified_vpk(&app, &dota, &bytes, &sha256(&bytes)).expect("deploy");
+        let target = dota.join("game/dota_dutch/pak66_dir.vpk");
+        // A healthy install is never released.
+        assert_eq!(
+            release_stale_deployment(&app, &dota).err().as_deref(),
+            Some("deployment_not_stale")
+        );
+        // A game update replaces the file: both install and restore are
+        // refused, and releasing leaves the new file alone.
+        fs::write(&target, b"game-update").expect("replace");
+        assert_eq!(
+            rollback(&app, &dota, &receipt.operation_id)
+                .err()
+                .as_deref(),
+            Some("rollback_conflict")
+        );
+        let released = release_stale_deployment(&app, &dota).expect("release");
+        assert_eq!(released.reason, StaleReason::Changed);
+        assert_eq!(released.operation_id, receipt.operation_id);
+        assert_eq!(fs::read(&target).expect("kept"), b"game-update");
+        // Nothing is owned any more, and the game's file is not overwritten.
+        assert_eq!(
+            release_stale_deployment(&app, &dota).err().as_deref(),
+            Some("deployment_not_found")
+        );
+        assert_eq!(
+            deploy_verified_vpk(&app, &dota, &bytes, &sha256(&bytes))
+                .err()
+                .as_deref(),
+            Some("deployment_target_foreign")
+        );
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn a_vanished_file_is_released_and_a_fresh_install_works() {
+        let base = root("stale-missing");
+        let app = base.join("app");
+        let dota = game(&base);
+        let bytes = package(b"tree");
+        deploy_verified_vpk(&app, &dota, &bytes, &sha256(&bytes)).expect("deploy");
+        fs::remove_file(dota.join("game/dota_dutch/pak66_dir.vpk")).expect("remove");
+        let released = release_stale_deployment(&app, &dota).expect("release");
+        assert_eq!(released.reason, StaleReason::Missing);
+        deploy_verified_vpk(&app, &dota, &bytes, &sha256(&bytes)).expect("fresh install");
         let _ = fs::remove_dir_all(base);
     }
 

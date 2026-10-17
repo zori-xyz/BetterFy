@@ -16,6 +16,7 @@ export function DemoPanel() {
     ["dota_open", "Dota не закрывается", "Dota will not close", "runtime_busy"],
     ["download_fails", "Обрыв загрузки", "Download drops", "download_transport_failed"],
     ["steam_fails", "Steam меняет настройки", "Steam changes settings", "steam_config_plan_stale"],
+    ["game_updated", "Dota обновила файл", "Dota updated the file", "deployment_conflict"],
   ];
   return (
     <div className="b-demo">
