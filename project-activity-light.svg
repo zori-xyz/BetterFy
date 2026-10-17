@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="880" height="336" viewBox="0 0 880 336" role="img" aria-labelledby="title desc">
 <title id="title">Project activity</title>
-<desc id="desc">Commits and GitHub Actions workflow runs per day on BetterFy from 2026-08-18 to 2026-10-16, drawn as two separate bars per day: 121 commits and 227 CI runs in this window. 164 commits and 285 CI runs since 2026-08-02.</desc>
+<desc id="desc">Commits and GitHub Actions workflow runs per day on BetterFy from 2026-08-19 to 2026-10-17, drawn as two separate bars per day: 119 commits and 218 CI runs in this window. 165 commits and 285 CI runs since 2026-08-02.</desc>
 <style>
 text{font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;font-variant-numeric:tabular-nums}
 .title{font-size:20px;font-weight:600;fill:#211C27;letter-spacing:-.01em}
@@ -12,74 +12,74 @@ text{font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Hel
 </style>
 <rect x="0.5" y="0.5" width="879" height="335" rx="20" fill="#FFFFFF" stroke="#D8D1DF"/>
 <text x="32" y="50" class="title">Project activity</text>
-<text x="32" y="74" class="subtitle">Commits and CI runs per day over the last 60 days, updated 2026-10-16</text>
+<text x="32" y="74" class="subtitle">Commits and CI runs per day over the last 60 days, updated 2026-10-17</text>
 <rect x="700.2" y="35" width="10" height="10" rx="2.5" fill="#A98AE6"/><text x="763.1" y="44.5" text-anchor="end" class="legend">commits</text>
 <rect x="785.1" y="35" width="10" height="10" rx="2.5" fill="#5F1CB3"/><text x="848" y="44.5" text-anchor="end" class="legend">CI runs</text>
 <line x1="60" y1="108" x2="848" y2="108" stroke="#EEEAF3" stroke-width="1" stroke-dasharray="2 4"/><text x="50" y="112" text-anchor="end" class="axis">80</text><line x1="60" y1="175" x2="848" y2="175" stroke="#EEEAF3" stroke-width="1" stroke-dasharray="2 4"/><text x="50" y="179" text-anchor="end" class="axis">40</text>
 <line x1="60" y1="242.5" x2="848" y2="242.5" stroke="#D8D1DF" stroke-width="1"/>
 <text x="50" y="246" text-anchor="end" class="axis">0</text>
-<g><title>2026-08-18: 3 commits, 9 CI runs</title><path d="M61.84 242V238.48Q61.84 236.98 63.34 236.98H64.57Q66.07 236.98 66.07 238.48V242Z" fill="#A98AE6"/><path d="M67.07 242V228.43Q67.07 226.93 68.57 226.93H69.79Q71.29 226.93 71.29 228.43V242Z" fill="#5F1CB3"/></g>
-<g><title>2026-08-19: 0 commits, 0 CI runs</title><rect x="74.97" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="80.2" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-08-20: 0 commits, 0 CI runs</title><rect x="88.11" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="93.33" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-08-21: 0 commits, 0 CI runs</title><rect x="101.24" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="106.47" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-08-22: 0 commits, 0 CI runs</title><rect x="114.37" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="119.6" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-08-23: 0 commits, 0 CI runs</title><rect x="127.51" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="132.73" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-08-24: 0 commits, 0 CI runs</title><rect x="140.64" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="145.87" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-08-25: 0 commits, 0 CI runs</title><rect x="153.77" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="159" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-08-26: 0 commits, 0 CI runs</title><rect x="166.91" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="172.13" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-08-27: 0 commits, 0 CI runs</title><rect x="180.04" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="185.27" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-08-28: 0 commits, 0 CI runs</title><rect x="193.17" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="198.4" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-08-29: 0 commits, 0 CI runs</title><rect x="206.31" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="211.53" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-08-30: 0 commits, 0 CI runs</title><rect x="219.44" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="224.67" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-08-31: 0 commits, 0 CI runs</title><rect x="232.57" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="237.8" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-01: 0 commits, 0 CI runs</title><rect x="245.71" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="250.93" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-02: 0 commits, 0 CI runs</title><rect x="258.84" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="264.07" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-03: 0 commits, 0 CI runs</title><rect x="271.97" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="277.2" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-04: 0 commits, 0 CI runs</title><rect x="285.11" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="290.33" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-05: 0 commits, 0 CI runs</title><rect x="298.24" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="303.47" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-06: 0 commits, 0 CI runs</title><rect x="311.37" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="316.6" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-07: 0 commits, 0 CI runs</title><rect x="324.51" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="329.73" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-08: 0 commits, 0 CI runs</title><rect x="337.64" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="342.87" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-09: 0 commits, 0 CI runs</title><rect x="350.77" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="356" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-10: 0 commits, 0 CI runs</title><rect x="363.91" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="369.13" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-11: 0 commits, 0 CI runs</title><rect x="377.04" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="382.27" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-12: 0 commits, 0 CI runs</title><rect x="390.17" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="395.4" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-13: 0 commits, 0 CI runs</title><rect x="403.31" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="408.53" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-14: 0 commits, 0 CI runs</title><rect x="416.44" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="421.67" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-15: 0 commits, 0 CI runs</title><rect x="429.57" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="434.8" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-16: 0 commits, 0 CI runs</title><rect x="442.71" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="447.93" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-17: 0 commits, 0 CI runs</title><rect x="455.84" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="461.07" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-18: 0 commits, 0 CI runs</title><rect x="468.97" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="474.2" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-19: 0 commits, 0 CI runs</title><rect x="482.11" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="487.33" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-20: 1 commits, 1 CI runs</title><path d="M495.24 242V241.83Q495.24 240.33 496.74 240.33H497.97Q499.47 240.33 499.47 241.83V242Z" fill="#A98AE6"/><path d="M500.47 242V241.83Q500.47 240.33 501.97 240.33H503.19Q504.69 240.33 504.69 241.83V242Z" fill="#5F1CB3"/></g>
-<g><title>2026-09-21: 2 commits, 4 CI runs</title><path d="M508.37 242V240.15Q508.37 238.65 509.87 238.65H511.1Q512.6 238.65 512.6 240.15V242Z" fill="#A98AE6"/><path d="M513.6 242V236.8Q513.6 235.3 515.1 235.3H516.33Q517.83 235.3 517.83 236.8V242Z" fill="#5F1CB3"/></g>
-<g><title>2026-09-22: 0 commits, 0 CI runs</title><rect x="521.51" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="526.73" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-23: 0 commits, 0 CI runs</title><rect x="534.64" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="539.87" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-24: 0 commits, 0 CI runs</title><rect x="547.77" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="553" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-25: 0 commits, 0 CI runs</title><rect x="560.91" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="566.13" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-26: 2 commits, 4 CI runs</title><path d="M574.04 242V240.15Q574.04 238.65 575.54 238.65H576.77Q578.27 238.65 578.27 240.15V242Z" fill="#A98AE6"/><path d="M579.27 242V236.8Q579.27 235.3 580.77 235.3H581.99Q583.49 235.3 583.49 236.8V242Z" fill="#5F1CB3"/></g>
-<g><title>2026-09-27: 20 commits, 15 CI runs</title><path d="M587.17 242V210Q587.17 208.5 588.67 208.5H589.9Q591.4 208.5 591.4 210V242Z" fill="#A98AE6"/><path d="M592.4 242V218.38Q592.4 216.88 593.9 216.88H595.13Q596.63 216.88 596.63 218.38V242Z" fill="#5F1CB3"/></g>
-<g><title>2026-09-28: 0 commits, 0 CI runs</title><rect x="600.31" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="605.53" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-09-29: 5 commits, 2 CI runs</title><path d="M613.44 242V235.13Q613.44 233.63 614.94 233.63H616.17Q617.67 233.63 617.67 235.13V242Z" fill="#A98AE6"/><path d="M618.67 242V240.15Q618.67 238.65 620.17 238.65H621.39Q622.89 238.65 622.89 240.15V242Z" fill="#5F1CB3"/></g>
-<g><title>2026-09-30: 16 commits, 26 CI runs</title><path d="M626.57 242V216.7Q626.57 215.2 628.07 215.2H629.3Q630.8 215.2 630.8 216.7V242Z" fill="#A98AE6"/><path d="M631.8 242V199.95Q631.8 198.45 633.3 198.45H634.53Q636.03 198.45 636.03 199.95V242Z" fill="#5F1CB3"/></g>
-<g><title>2026-10-01: 2 commits, 4 CI runs</title><path d="M639.71 242V240.15Q639.71 238.65 641.21 238.65H642.43Q643.93 238.65 643.93 240.15V242Z" fill="#A98AE6"/><path d="M644.93 242V236.8Q644.93 235.3 646.43 235.3H647.66Q649.16 235.3 649.16 236.8V242Z" fill="#5F1CB3"/></g>
-<g><title>2026-10-02: 8 commits, 20 CI runs</title><path d="M652.84 242V230.1Q652.84 228.6 654.34 228.6H655.57Q657.07 228.6 657.07 230.1V242Z" fill="#A98AE6"/><path d="M658.07 242V210Q658.07 208.5 659.57 208.5H660.79Q662.29 208.5 662.29 210V242Z" fill="#5F1CB3"/></g>
-<g><title>2026-10-03: 22 commits, 67 CI runs</title><path d="M665.97 242V206.65Q665.97 205.15 667.47 205.15H668.7Q670.2 205.15 670.2 206.65V242Z" fill="#A98AE6"/><path d="M671.2 242V131.27Q671.2 129.77 672.7 129.77H673.93Q675.43 129.77 675.43 131.27V242Z" fill="#5F1CB3"/></g>
-<g><title>2026-10-04: 9 commits, 16 CI runs</title><path d="M679.11 242V228.43Q679.11 226.93 680.61 226.93H681.83Q683.33 226.93 683.33 228.43V242Z" fill="#A98AE6"/><path d="M684.33 242V216.7Q684.33 215.2 685.83 215.2H687.06Q688.56 215.2 688.56 216.7V242Z" fill="#5F1CB3"/></g>
-<g><title>2026-10-05: 2 commits, 2 CI runs</title><path d="M692.24 242V240.15Q692.24 238.65 693.74 238.65H694.97Q696.47 238.65 696.47 240.15V242Z" fill="#A98AE6"/><path d="M697.47 242V240.15Q697.47 238.65 698.97 238.65H700.19Q701.69 238.65 701.69 240.15V242Z" fill="#5F1CB3"/></g>
-<g><title>2026-10-06: 1 commits, 0 CI runs</title><path d="M705.37 242V241.83Q705.37 240.33 706.87 240.33H708.1Q709.6 240.33 709.6 241.83V242Z" fill="#A98AE6"/><rect x="710.6" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-10-07: 1 commits, 0 CI runs</title><path d="M718.51 242V241.83Q718.51 240.33 720.01 240.33H721.23Q722.73 240.33 722.73 241.83V242Z" fill="#A98AE6"/><rect x="723.73" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-10-08: 11 commits, 31 CI runs</title><path d="M731.64 242V225.08Q731.64 223.58 733.14 223.58H734.37Q735.87 223.58 735.87 225.08V242Z" fill="#A98AE6"/><path d="M736.87 242V191.58Q736.87 190.08 738.37 190.08H739.59Q741.09 190.08 741.09 191.58V242Z" fill="#5F1CB3"/></g>
-<g><title>2026-10-09: 10 commits, 26 CI runs</title><path d="M744.77 242V226.75Q744.77 225.25 746.27 225.25H747.5Q749 225.25 749 226.75V242Z" fill="#A98AE6"/><path d="M750 242V199.95Q750 198.45 751.5 198.45H752.73Q754.23 198.45 754.23 199.95V242Z" fill="#5F1CB3"/></g>
-<g><title>2026-10-10: 1 commits, 0 CI runs</title><path d="M757.91 242V241.83Q757.91 240.33 759.41 240.33H760.63Q762.13 240.33 762.13 241.83V242Z" fill="#A98AE6"/><rect x="763.13" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-10-11: 1 commits, 0 CI runs</title><path d="M771.04 242V241.83Q771.04 240.33 772.54 240.33H773.77Q775.27 240.33 775.27 241.83V242Z" fill="#A98AE6"/><rect x="776.27" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-10-12: 1 commits, 0 CI runs</title><path d="M784.17 242V241.83Q784.17 240.33 785.67 240.33H786.9Q788.4 240.33 788.4 241.83V242Z" fill="#A98AE6"/><rect x="789.4" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-10-13: 1 commits, 0 CI runs</title><path d="M797.31 242V241.83Q797.31 240.33 798.81 240.33H800.03Q801.53 240.33 801.53 241.83V242Z" fill="#A98AE6"/><rect x="802.53" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-10-14: 1 commits, 0 CI runs</title><path d="M810.44 242V241.83Q810.44 240.33 811.94 240.33H813.17Q814.67 240.33 814.67 241.83V242Z" fill="#A98AE6"/><rect x="815.67" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-10-15: 1 commits, 0 CI runs</title><path d="M823.57 242V241.83Q823.57 240.33 825.07 240.33H826.3Q827.8 240.33 827.8 241.83V242Z" fill="#A98AE6"/><rect x="828.8" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<g><title>2026-10-16: 0 commits, 0 CI runs</title><rect x="836.71" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="841.93" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
-<text x="60" y="264" class="axis">2026-08-18</text>
-<text x="848" y="264" text-anchor="end" class="axis">2026-10-16</text>
+<g><title>2026-08-19: 0 commits, 0 CI runs</title><rect x="61.84" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="67.07" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-08-20: 0 commits, 0 CI runs</title><rect x="74.97" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="80.2" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-08-21: 0 commits, 0 CI runs</title><rect x="88.11" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="93.33" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-08-22: 0 commits, 0 CI runs</title><rect x="101.24" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="106.47" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-08-23: 0 commits, 0 CI runs</title><rect x="114.37" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="119.6" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-08-24: 0 commits, 0 CI runs</title><rect x="127.51" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="132.73" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-08-25: 0 commits, 0 CI runs</title><rect x="140.64" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="145.87" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-08-26: 0 commits, 0 CI runs</title><rect x="153.77" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="159" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-08-27: 0 commits, 0 CI runs</title><rect x="166.91" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="172.13" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-08-28: 0 commits, 0 CI runs</title><rect x="180.04" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="185.27" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-08-29: 0 commits, 0 CI runs</title><rect x="193.17" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="198.4" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-08-30: 0 commits, 0 CI runs</title><rect x="206.31" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="211.53" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-08-31: 0 commits, 0 CI runs</title><rect x="219.44" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="224.67" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-01: 0 commits, 0 CI runs</title><rect x="232.57" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="237.8" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-02: 0 commits, 0 CI runs</title><rect x="245.71" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="250.93" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-03: 0 commits, 0 CI runs</title><rect x="258.84" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="264.07" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-04: 0 commits, 0 CI runs</title><rect x="271.97" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="277.2" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-05: 0 commits, 0 CI runs</title><rect x="285.11" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="290.33" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-06: 0 commits, 0 CI runs</title><rect x="298.24" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="303.47" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-07: 0 commits, 0 CI runs</title><rect x="311.37" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="316.6" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-08: 0 commits, 0 CI runs</title><rect x="324.51" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="329.73" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-09: 0 commits, 0 CI runs</title><rect x="337.64" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="342.87" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-10: 0 commits, 0 CI runs</title><rect x="350.77" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="356" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-11: 0 commits, 0 CI runs</title><rect x="363.91" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="369.13" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-12: 0 commits, 0 CI runs</title><rect x="377.04" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="382.27" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-13: 0 commits, 0 CI runs</title><rect x="390.17" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="395.4" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-14: 0 commits, 0 CI runs</title><rect x="403.31" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="408.53" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-15: 0 commits, 0 CI runs</title><rect x="416.44" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="421.67" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-16: 0 commits, 0 CI runs</title><rect x="429.57" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="434.8" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-17: 0 commits, 0 CI runs</title><rect x="442.71" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="447.93" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-18: 0 commits, 0 CI runs</title><rect x="455.84" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="461.07" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-19: 0 commits, 0 CI runs</title><rect x="468.97" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="474.2" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-20: 1 commits, 1 CI runs</title><path d="M482.11 242V241.83Q482.11 240.33 483.61 240.33H484.83Q486.33 240.33 486.33 241.83V242Z" fill="#A98AE6"/><path d="M487.33 242V241.83Q487.33 240.33 488.83 240.33H490.06Q491.56 240.33 491.56 241.83V242Z" fill="#5F1CB3"/></g>
+<g><title>2026-09-21: 2 commits, 4 CI runs</title><path d="M495.24 242V240.15Q495.24 238.65 496.74 238.65H497.97Q499.47 238.65 499.47 240.15V242Z" fill="#A98AE6"/><path d="M500.47 242V236.8Q500.47 235.3 501.97 235.3H503.19Q504.69 235.3 504.69 236.8V242Z" fill="#5F1CB3"/></g>
+<g><title>2026-09-22: 0 commits, 0 CI runs</title><rect x="508.37" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="513.6" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-23: 0 commits, 0 CI runs</title><rect x="521.51" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="526.73" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-24: 0 commits, 0 CI runs</title><rect x="534.64" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="539.87" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-25: 0 commits, 0 CI runs</title><rect x="547.77" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="553" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-26: 2 commits, 4 CI runs</title><path d="M560.91 242V240.15Q560.91 238.65 562.41 238.65H563.63Q565.13 238.65 565.13 240.15V242Z" fill="#A98AE6"/><path d="M566.13 242V236.8Q566.13 235.3 567.63 235.3H568.86Q570.36 235.3 570.36 236.8V242Z" fill="#5F1CB3"/></g>
+<g><title>2026-09-27: 20 commits, 15 CI runs</title><path d="M574.04 242V210Q574.04 208.5 575.54 208.5H576.77Q578.27 208.5 578.27 210V242Z" fill="#A98AE6"/><path d="M579.27 242V218.38Q579.27 216.88 580.77 216.88H581.99Q583.49 216.88 583.49 218.38V242Z" fill="#5F1CB3"/></g>
+<g><title>2026-09-28: 0 commits, 0 CI runs</title><rect x="587.17" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="592.4" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-09-29: 5 commits, 2 CI runs</title><path d="M600.31 242V235.13Q600.31 233.63 601.81 233.63H603.03Q604.53 233.63 604.53 235.13V242Z" fill="#A98AE6"/><path d="M605.53 242V240.15Q605.53 238.65 607.03 238.65H608.26Q609.76 238.65 609.76 240.15V242Z" fill="#5F1CB3"/></g>
+<g><title>2026-09-30: 16 commits, 26 CI runs</title><path d="M613.44 242V216.7Q613.44 215.2 614.94 215.2H616.17Q617.67 215.2 617.67 216.7V242Z" fill="#A98AE6"/><path d="M618.67 242V199.95Q618.67 198.45 620.17 198.45H621.39Q622.89 198.45 622.89 199.95V242Z" fill="#5F1CB3"/></g>
+<g><title>2026-10-01: 2 commits, 4 CI runs</title><path d="M626.57 242V240.15Q626.57 238.65 628.07 238.65H629.3Q630.8 238.65 630.8 240.15V242Z" fill="#A98AE6"/><path d="M631.8 242V236.8Q631.8 235.3 633.3 235.3H634.53Q636.03 235.3 636.03 236.8V242Z" fill="#5F1CB3"/></g>
+<g><title>2026-10-02: 8 commits, 20 CI runs</title><path d="M639.71 242V230.1Q639.71 228.6 641.21 228.6H642.43Q643.93 228.6 643.93 230.1V242Z" fill="#A98AE6"/><path d="M644.93 242V210Q644.93 208.5 646.43 208.5H647.66Q649.16 208.5 649.16 210V242Z" fill="#5F1CB3"/></g>
+<g><title>2026-10-03: 22 commits, 67 CI runs</title><path d="M652.84 242V206.65Q652.84 205.15 654.34 205.15H655.57Q657.07 205.15 657.07 206.65V242Z" fill="#A98AE6"/><path d="M658.07 242V131.27Q658.07 129.77 659.57 129.77H660.79Q662.29 129.77 662.29 131.27V242Z" fill="#5F1CB3"/></g>
+<g><title>2026-10-04: 9 commits, 16 CI runs</title><path d="M665.97 242V228.43Q665.97 226.93 667.47 226.93H668.7Q670.2 226.93 670.2 228.43V242Z" fill="#A98AE6"/><path d="M671.2 242V216.7Q671.2 215.2 672.7 215.2H673.93Q675.43 215.2 675.43 216.7V242Z" fill="#5F1CB3"/></g>
+<g><title>2026-10-05: 2 commits, 2 CI runs</title><path d="M679.11 242V240.15Q679.11 238.65 680.61 238.65H681.83Q683.33 238.65 683.33 240.15V242Z" fill="#A98AE6"/><path d="M684.33 242V240.15Q684.33 238.65 685.83 238.65H687.06Q688.56 238.65 688.56 240.15V242Z" fill="#5F1CB3"/></g>
+<g><title>2026-10-06: 1 commits, 0 CI runs</title><path d="M692.24 242V241.83Q692.24 240.33 693.74 240.33H694.97Q696.47 240.33 696.47 241.83V242Z" fill="#A98AE6"/><rect x="697.47" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-10-07: 1 commits, 0 CI runs</title><path d="M705.37 242V241.83Q705.37 240.33 706.87 240.33H708.1Q709.6 240.33 709.6 241.83V242Z" fill="#A98AE6"/><rect x="710.6" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-10-08: 11 commits, 31 CI runs</title><path d="M718.51 242V225.08Q718.51 223.58 720.01 223.58H721.23Q722.73 223.58 722.73 225.08V242Z" fill="#A98AE6"/><path d="M723.73 242V191.58Q723.73 190.08 725.23 190.08H726.46Q727.96 190.08 727.96 191.58V242Z" fill="#5F1CB3"/></g>
+<g><title>2026-10-09: 10 commits, 26 CI runs</title><path d="M731.64 242V226.75Q731.64 225.25 733.14 225.25H734.37Q735.87 225.25 735.87 226.75V242Z" fill="#A98AE6"/><path d="M736.87 242V199.95Q736.87 198.45 738.37 198.45H739.59Q741.09 198.45 741.09 199.95V242Z" fill="#5F1CB3"/></g>
+<g><title>2026-10-10: 1 commits, 0 CI runs</title><path d="M744.77 242V241.83Q744.77 240.33 746.27 240.33H747.5Q749 240.33 749 241.83V242Z" fill="#A98AE6"/><rect x="750" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-10-11: 1 commits, 0 CI runs</title><path d="M757.91 242V241.83Q757.91 240.33 759.41 240.33H760.63Q762.13 240.33 762.13 241.83V242Z" fill="#A98AE6"/><rect x="763.13" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-10-12: 1 commits, 0 CI runs</title><path d="M771.04 242V241.83Q771.04 240.33 772.54 240.33H773.77Q775.27 240.33 775.27 241.83V242Z" fill="#A98AE6"/><rect x="776.27" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-10-13: 1 commits, 0 CI runs</title><path d="M784.17 242V241.83Q784.17 240.33 785.67 240.33H786.9Q788.4 240.33 788.4 241.83V242Z" fill="#A98AE6"/><rect x="789.4" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-10-14: 1 commits, 0 CI runs</title><path d="M797.31 242V241.83Q797.31 240.33 798.81 240.33H800.03Q801.53 240.33 801.53 241.83V242Z" fill="#A98AE6"/><rect x="802.53" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-10-15: 1 commits, 0 CI runs</title><path d="M810.44 242V241.83Q810.44 240.33 811.94 240.33H813.17Q814.67 240.33 814.67 241.83V242Z" fill="#A98AE6"/><rect x="815.67" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-10-16: 1 commits, 0 CI runs</title><path d="M823.57 242V241.83Q823.57 240.33 825.07 240.33H826.3Q827.8 240.33 827.8 241.83V242Z" fill="#A98AE6"/><rect x="828.8" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<g><title>2026-10-17: 0 commits, 0 CI runs</title><rect x="836.71" y="240" width="4.23" height="2" fill="#E5E0E9"/><rect x="841.93" y="240" width="4.23" height="2" fill="#E5E0E9"/></g>
+<text x="60" y="264" class="axis">2026-08-19</text>
+<text x="848" y="264" text-anchor="end" class="axis">2026-10-17</text>
 <line x1="32" y1="281.5" x2="848" y2="281.5" stroke="#EEEAF3" stroke-width="1"/>
-<text x="32" y="312" class="footer"><tspan class="strong">164</tspan> commits<tspan dx="10">/</tspan><tspan dx="10" class="strong">285</tspan> CI runs since 2026-08-02</text>
+<text x="32" y="312" class="footer"><tspan class="strong">165</tspan> commits<tspan dx="10">/</tspan><tspan dx="10" class="strong">285</tspan> CI runs since 2026-08-02</text>
 </svg>
