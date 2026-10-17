@@ -5,6 +5,7 @@ use crate::mod_bundle::{
     self, BundleContribution, BundleDuplicate, BundleOverride, BundlePackage, BundlePlan,
 };
 use crate::package_registry::{self, PackageManifest, Resource};
+use crate::skin_archive::SharedPolicy;
 use crate::vpk;
 use crate::wardrobe::{self, WardrobeConflict, WardrobeManifest, WardrobePlanItem};
 use serde::Serialize;
@@ -105,6 +106,45 @@ fn resolve_blacklists(
         let temporary = target.with_extension("json.tmp");
         std::fs::write(&temporary, bytes).map_err(|_| "blacklist_store_failed".to_string())?;
         std::fs::rename(&temporary, &target).map_err(|_| "blacklist_store_failed".to_string())?;
+    }
+    Ok(())
+}
+
+/// The file list of the player's own `game/dota/pak01_dir.vpk`, lower case.
+/// Read-only and bounded; any problem is an error the caller turns into "not
+/// checked".
+fn read_dota_pak_paths(game_path: &Path) -> Result<BTreeSet<String>, String> {
+    const MAX_DIRECTORY_FILE_BYTES: u64 = 512 * 1024 * 1024;
+    let file = game_path.join("game/dota/pak01_dir.vpk");
+    let metadata = std::fs::metadata(&file).map_err(|_| "game_archive_unreadable".to_string())?;
+    if !metadata.is_file() || metadata.len() > MAX_DIRECTORY_FILE_BYTES {
+        return Err("game_archive_unreadable".to_string());
+    }
+    let bytes = std::fs::read(&file).map_err(|_| "game_archive_unreadable".to_string())?;
+    Ok(vpk::list_directory_paths(&bytes)?.into_iter().collect())
+}
+
+/// Compares every selected wardrobe item with the player's own game and
+/// stores, per item, which of the skin's own files the game ships now
+/// (added by Valve since the audit). Those are left out of the build and
+/// listed in the plan. When there is no game folder, or its file list cannot
+/// be read, the items are recorded as "not checked" and the plan says so: the
+/// game never makes the plan fail. Later rebuilds read the stored result, as
+/// for blacklists, so a Dota update does not change what is installed.
+fn resolve_wardrobe_game_checks(
+    app_data_root: &Path,
+    package_ids: &[String],
+    game_path: Option<&Path>,
+) -> Result<(), String> {
+    let mut listing: Option<Option<BTreeSet<String>>> = None;
+    for package_id in package_ids {
+        let Contract::Wardrobe(item, _) = resolve(package_id)? else {
+            continue;
+        };
+        let game_paths = listing
+            .get_or_insert_with(|| game_path.and_then(|path| read_dota_pak_paths(path).ok()))
+            .as_ref();
+        wardrobe::record_game_check(app_data_root, item, game_paths)?;
     }
     Ok(())
 }
@@ -558,11 +598,12 @@ fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
     let ids = ids
         .iter()
         .map(|id| {
-            let id = resolve(id)?.engine_id().to_string();
-            if !seen.insert(id.clone()) {
+            let contract = resolve(id)?;
+            // A skin and its `.strip` mode are the same skin: once per build.
+            if !seen.insert(contract.base_id().to_string()) {
                 return Err("pilot_package_invalid".to_string());
             }
-            Ok(id)
+            Ok(contract.engine_id())
         })
         .collect::<Result<Vec<_>, String>>()?;
     // Minify's own conflicts and dependencies, checked before anything is
@@ -585,21 +626,32 @@ fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
 /// item from the embedded allowlist.
 enum Contract {
     Tuning(&'static PackageManifest),
-    Wardrobe(&'static WardrobeManifest),
+    /// An item and how it is installed: everything the analyzer accepts (the
+    /// default) or, for the `.strip` ID, without the shared game files.
+    Wardrobe(&'static WardrobeManifest, SharedPolicy),
 }
 
 impl Contract {
-    fn engine_id(&self) -> &str {
+    fn engine_id(&self) -> String {
+        match self {
+            Self::Tuning(manifest) => manifest.id.clone(),
+            Self::Wardrobe(item, policy) => wardrobe::variant_id(item, *policy),
+        }
+    }
+
+    /// The ID of what is installed, without the install mode: two modes of the
+    /// same skin are one skin, and a build holds it once.
+    fn base_id(&self) -> &str {
         match self {
             Self::Tuning(manifest) => &manifest.id,
-            Self::Wardrobe(item) => &item.id,
+            Self::Wardrobe(item, _) => &item.id,
         }
     }
 }
 
 fn resolve(id: &str) -> Result<Contract, String> {
-    if let Some(item) = wardrobe::find(id)? {
-        return Ok(Contract::Wardrobe(item));
+    if let Some((item, policy)) = wardrobe::find_variant(id)? {
+        return Ok(Contract::Wardrobe(item, policy));
     }
     package_registry::find(id).map(Contract::Tuning)
 }
@@ -609,7 +661,7 @@ fn resolve(id: &str) -> Result<Contract, String> {
 fn tuning(id: &str) -> Result<Option<&'static PackageManifest>, String> {
     match resolve(id)? {
         Contract::Tuning(manifest) => Ok(Some(manifest)),
-        Contract::Wardrobe(_) => Ok(None),
+        Contract::Wardrobe(..) => Ok(None),
     }
 }
 
@@ -751,7 +803,7 @@ fn acquire_verified_resources_with_progress(
         let manifest = match contract {
             Contract::Tuning(manifest) => manifest,
             // One pinned archive: fetched, verified and stored as a unit.
-            Contract::Wardrobe(item) => {
+            Contract::Wardrobe(item, _) => {
                 if cancelled.load(Ordering::Relaxed) {
                     return Err("download_cancelled".to_string());
                 }
@@ -806,6 +858,13 @@ pub(crate) fn begin_download(
     game_path: Option<std::path::PathBuf>,
 ) -> Result<TreeDownloadStatus, String> {
     let package_ids = normalize_package_ids(&requested_package_ids)?;
+    // The merged VPK has a hard size and entry limit. The audited install
+    // sizes of the selected skins are known up front, so a selection that
+    // cannot fit is refused before anything is downloaded.
+    let (skin_files, skin_bytes) = wardrobe::install_footprint(&package_ids);
+    if skin_bytes > mod_bundle::MAX_PAYLOAD_BYTES as u64 || skin_files > mod_bundle::MAX_RESOURCES {
+        return Err("bundle_limit_exceeded".to_string());
+    }
     // A wardrobe item is one archive.
     let total_resources = package_ids.iter().try_fold(0usize, |total, id| {
         Ok::<_, String>(total + tuning(id)?.map_or(1, |manifest| manifest.downloads().len()))
@@ -870,6 +929,7 @@ pub(crate) fn begin_download(
                 status.phase = "verifying";
             }
             resolve_blacklists(&app_data_root, &package_ids, game_path.as_deref())?;
+            resolve_wardrobe_game_checks(&app_data_root, &package_ids, game_path.as_deref())?;
             resolve_styles(&app_data_root, &package_ids, game_path.as_deref())?;
             resolve_layouts(&app_data_root, &package_ids, game_path.as_deref())?;
             plan_from_verified_store(&app_data_root, &package_ids)
@@ -949,8 +1009,8 @@ pub(crate) fn build_from_verified_store(
                 Contract::Tuning(manifest) => manifest,
                 // The analyzer re-checks the stored archive against its audit
                 // and returns only the files that audit allows.
-                Contract::Wardrobe(item) => {
-                    let loaded = wardrobe::load(app_data_root, item)?;
+                Contract::Wardrobe(item, policy) => {
+                    let loaded = wardrobe::load(app_data_root, item, policy)?;
                     wardrobe_items.push(loaded.item);
                     return Ok(BundlePackage {
                         package_id: package_id.clone(),
@@ -1511,11 +1571,13 @@ mod tests {
 
         let verified = build_from_verified_store(&root, &ids).expect("builds");
         assert_eq!(verified.bundle_plan().package_ids, vec![item.id.clone()]);
-        // hero file, hero particle, author file; the shared and source files are out.
-        assert_eq!(verified.bundle_plan().resource_count, 3);
+        // hero file, hero particle, author file and the one file that overrides
+        // a Valve file; only the source file is out.
+        assert_eq!(verified.bundle_plan().resource_count, 4);
         let report = &verified.wardrobe[0].report;
-        assert_eq!(report.install.files, 3);
-        assert_eq!(report.install.stripped_shared, 1);
+        assert_eq!(report.install.files, 4);
+        assert_eq!(report.install.stripped_shared, 0);
+        assert_eq!(report.shared.files, 1);
         assert_eq!(report.rejected.files, 1);
         assert!(verified.wardrobe_conflicts.is_empty());
         verified
@@ -1523,15 +1585,16 @@ mod tests {
             .expect("nothing to acknowledge");
         let reopened = vpk::extract_embedded(verified.bytes()).expect("reopen");
         assert!(reopened.contains_key("darkness/materials/body.vmat_c"));
-        assert!(!reopened.contains_key("particles/basic_ambient/basic_ambient.vpcf_c"));
+        assert!(reopened.contains_key("particles/basic_ambient/basic_ambient.vpcf_c"));
 
         let plan = plan_for(&verified);
         let json = serde_json::to_value(&plan).expect("plan json");
         assert_eq!(json["wardrobe"][0]["packageId"], item.id.as_str());
-        assert_eq!(json["wardrobe"][0]["report"]["install"]["files"], 3);
+        assert_eq!(json["wardrobe"][0]["report"]["install"]["files"], 4);
+        assert_eq!(json["wardrobe"][0]["sharedPolicy"], "install");
         assert_eq!(
             json["wardrobe"][0]["report"]["install"]["strippedShared"],
-            1
+            0
         );
         assert_eq!(
             json["wardrobe"][0]["report"]["sharedPaths"][0]["path"],
@@ -1557,7 +1620,7 @@ mod tests {
                 shadowed_package_ids: vec![second.id.clone()],
             }]
         );
-        assert_eq!(verified.bundle_plan().duplicates.len(), 2);
+        assert_eq!(verified.bundle_plan().duplicates.len(), 3);
         assert_eq!(
             verified
                 .require_acknowledged_conflicts(false)
@@ -1598,8 +1661,8 @@ mod tests {
             let report = crate::skin_archive::analyze(
                 &analysis_archive,
                 &crate::skin_archive::ScopeSpec {
-                    hero: "keeper_of_the_light".to_string(),
-                    author_namespaces: Vec::new(),
+                    heroes: vec!["keeper_of_the_light".to_string()],
+                    shared_paths: Vec::new(),
                     shared_policy: crate::skin_archive::SharedPolicy::Strip,
                 },
                 &crate::skin_archive::Limits::default(),
@@ -1609,13 +1672,15 @@ mod tests {
             let item = WardrobePlanItem {
                 package_id: "wardrobe.test-mix".to_string(),
                 catalog_id: "heroes-test-mix".to_string(),
-                hero: "keeper_of_the_light".to_string(),
-                source_url: String::new(),
+                heroes: vec!["keeper_of_the_light".to_string()],
+                source_urls: Vec::new(),
                 archive_sha256: "0".repeat(64),
                 catalog_snapshot: String::new(),
                 permission: String::new(),
                 verified_languages: Vec::new(),
                 compatibility_note: None,
+                shared_policy: SharedPolicy::Install,
+                game_checked: false,
                 report,
             };
             build_verified_bundle(
@@ -1653,6 +1718,98 @@ mod tests {
         let identical = bundle(b"same", b"same");
         assert!(identical.wardrobe_conflicts.is_empty());
         assert_eq!(identical.bundle_plan().duplicates.len(), 2);
+    }
+
+    #[test]
+    fn the_strip_mode_is_its_own_package_id_and_its_own_plan() {
+        let root = wardrobe_root("strip-mode");
+        let item = stored_item(&root, "build-strip-mode", b"hood");
+        let strip_id = format!("{}.strip", item.id);
+        // Either spelling of the item, in either mode, resolves to the item.
+        assert_eq!(
+            normalize_package_ids(&[format!("{}.strip", item.catalog_id)]).expect("resolves"),
+            vec![strip_id.clone()]
+        );
+        // A skin is in a build once, whatever the mode.
+        for both in [
+            vec![item.id.clone(), strip_id.clone()],
+            vec![strip_id.clone(), item.catalog_id.clone()],
+        ] {
+            assert_eq!(
+                normalize_package_ids(&both).err().as_deref(),
+                Some("pilot_package_invalid")
+            );
+        }
+        // Not an item: a strip suffix on something else.
+        assert!(normalize_package_ids(&["minify-tree-mod.strip".to_string()]).is_err());
+
+        let install =
+            build_from_verified_store(&root, std::slice::from_ref(&item.id)).expect("install");
+        let strip =
+            build_from_verified_store(&root, std::slice::from_ref(&strip_id)).expect("strip");
+        assert_eq!(install.bundle_plan().resource_count, 4);
+        assert_eq!(strip.bundle_plan().resource_count, 3);
+        assert_eq!(strip.bundle_plan().package_ids, vec![strip_id.clone()]);
+        assert_ne!(install.plan_id(), strip.plan_id());
+        assert_ne!(install.sha256(), strip.sha256());
+        let reopened = vpk::extract_embedded(strip.bytes()).expect("reopen");
+        assert!(!reopened.contains_key("particles/basic_ambient/basic_ambient.vpcf_c"));
+        let plan = serde_json::to_value(plan_for(&strip)).expect("plan json");
+        assert_eq!(plan["wardrobe"][0]["sharedPolicy"], "strip");
+        assert_eq!(plan["wardrobe"][0]["packageId"], strip_id.as_str());
+        assert_eq!(
+            plan["wardrobe"][0]["report"]["install"]["strippedShared"],
+            1
+        );
+        // The plan the person reviewed is the one that stages: a different
+        // mode is a different plan ID, so staging the other one is refused.
+        let stale = stage_from_verified_store(&root, install.plan_id(), &[strip_id], true);
+        assert!(stale.is_err());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_selection_that_cannot_fit_one_vpk_is_refused_before_any_download() {
+        let root = wardrobe_root("budget");
+        let big = |name: &str| {
+            let (manifest, _) = crate::wardrobe::synthetic_item(
+                name,
+                &[
+                    ("models/heroes/keeper_of_the_light/a.vmdl_c", b"a"),
+                    ("particles/basic_ambient/basic_ambient.vpcf_c", b"b"),
+                ],
+                |value| {
+                    value["archive"]["innerBytes"] = 61_000_000.into();
+                    value["audited"]["installBytes"] = 60_000_000.into();
+                    value["audited"]["stripBytes"] = 1_000.into();
+                },
+            );
+            crate::wardrobe::register_for_test(manifest)
+        };
+        let items = (0..5)
+            .map(|index| big(&format!("budget-skin-{index}")))
+            .collect::<Vec<_>>();
+        let ids = items.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
+        // 5 x 60 MB is more than the 256 MiB the merged VPK can hold.
+        assert_eq!(
+            begin_download(root.clone(), ids.clone(), None)
+                .err()
+                .as_deref(),
+            Some("bundle_limit_exceeded")
+        );
+        // Four fit under the limit, which the check only reads from the pins.
+        assert_eq!(
+            wardrobe::install_footprint(&ids[..4]).1,
+            240_000_000,
+            "four skins stay under the limit"
+        );
+        // The opt-in mode counts the smaller pinned size.
+        let strip_ids = ids
+            .iter()
+            .map(|id| format!("{id}.strip"))
+            .collect::<Vec<_>>();
+        assert_eq!(wardrobe::install_footprint(&strip_ids).1, 5_000);
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
@@ -1709,11 +1866,24 @@ mod tests {
             plan["planId"],
             built
         );
+        let report = &plan["wardrobe"][0]["report"];
+        println!(
+            "real sample classes: hero {} / author {} / shared {} / rejected {}, renamed {}",
+            report["heroScoped"],
+            report["authorOwned"],
+            report["shared"],
+            report["rejected"],
+            report["renamed"]
+        );
         assert_eq!(plan["resourceCount"], item.audited.install_files);
         assert_eq!(plan["resourceBytes"], item.audited.install_bytes);
         assert_eq!(
             plan["wardrobe"][0]["report"]["install"]["strippedShared"],
-            item.audited.stripped_shared
+            0
+        );
+        assert_eq!(
+            plan["wardrobe"][0]["report"]["shared"]["files"],
+            item.audited.shared
         );
         assert_eq!(plan["wardrobeConflicts"], serde_json::json!([]));
         let again =

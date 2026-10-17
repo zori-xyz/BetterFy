@@ -2,8 +2,8 @@
 //!
 //! A skin arrives as a VPK whose directory holds every file. Nothing in it is
 //! trusted. [`analyze`] reads the directory, classifies every path and turns
-//! the archive plus a hero ID into the list of files that may be installed,
-//! with a typed report of everything that is not.
+//! the archive plus an audited [`ScopeSpec`] into the list of files that may be
+//! installed, with a typed report of everything that is not.
 //!
 //! Rules (see `docs/SKIN_ARCHIVE_AUDIT.md`):
 //!
@@ -12,18 +12,28 @@
 //!   unknown are rejected. A `vxml_c` is accepted only when the layout reader
 //!   proves it is an image wrapper (`panorama_layout::image_wrapper_dependency`);
 //!   if the reader cannot prove it, the file is rejected.
-//! * Scope. Every accepted path is hero-scoped, author-owned or shared.
-//!   Hero-scoped paths are the exact folders of the one hero the skin is for.
-//!   Author-owned paths are a top-level folder that is not one of Valve's
-//!   (`darkness/...`), or a file or folder under `particles/`, `materials/` or
-//!   `models/` named after a namespace the audited entry declares
-//!   (`particles/darkness_snaps/...`). Namespaces are declared by a human
-//!   audit and never derived from the archive itself, because an archive that
-//!   names its own top-level folder `units` must not be able to claim
-//!   `particles/units/...`. Everything else is shared: it would change how
-//!   other heroes or the interface look.
-//! * Shared paths follow [`SharedPolicy`]: `Strip` drops them and lists every
-//!   one in the report, `Refuse` refuses the install.
+//! * Paths. Upper-case letters are folded to lower case (the game looks files
+//!   up case-insensitively and BetterFy's own VPK writer is lower-case only);
+//!   every such rename is counted in the report, and two entries that are equal
+//!   once folded are both rejected. Traversal, spaces, empty segments and any
+//!   other odd byte are an unsafe path and block the install.
+//! * Scope. Every accepted path is hero-scoped, shared or author-owned.
+//!   Hero-scoped paths are the folders and files of the heroes the skin is for
+//!   (a hero can have several internal names: `shadow_fiend` models and
+//!   `nevermore` particles, so the audit names a set). Shared paths are the
+//!   ones an audit found in Valve's own file list and that are not hero-scoped:
+//!   the skin would replace a file every hero or the interface uses. The audit
+//!   pins that list (`ScopeSpec::shared_paths`). Everything else is
+//!   author-owned: the archive adds a file the game does not ship (its own
+//!   folders, but also new particle or material files the skin's effects
+//!   depend on), so it installs. Which class a path is in is decided by the
+//!   pinned list, never by a name heuristic.
+//! * Shared paths follow [`SharedPolicy`]. The default is `Install`: every
+//!   accepted file installs, shared ones included, and the report counts and
+//!   lists the shared files as information. That is what a person gets by
+//!   dropping the skin's VPK into the game folder by hand, which is known to
+//!   give the full look. `Strip` is an explicit opt-in that leaves the shared
+//!   files out (and lists each), `Refuse` refuses an archive that carries any.
 //!
 //! What this does not prove: that the bytes of an accepted compiled file are
 //! well formed. The type allowlist limits what the game is asked to load; it
@@ -50,6 +60,7 @@ pub(crate) const ALLOWED_TYPES: &[&str] = &[
     "vmorf_c",
     "vagrp_c",
     "vphys_c",
+    "vseq_c",
 ];
 const LAYOUT_TYPE: &str = "vxml_c";
 
@@ -57,8 +68,8 @@ const LAYOUT_TYPE: &str = "vxml_c";
 /// leftover of the author's work tree, so they are dropped.
 const SOURCE_TYPES: &[&str] = &[
     "vpcf", "vmdl", "vmat", "vtex", "vmesh", "vanim", "vsnd", "vsndevts", "vxml", "vcss", "vts",
-    "vmap", "vsnap", "vmorf", "vagrp", "vphys", "fbx", "dmx", "tga", "png", "jpg", "jpeg", "psd",
-    "vsvg", "svg",
+    "vmap", "vsnap", "vmorf", "vagrp", "vphys", "vseq", "fbx", "dmx", "tga", "png", "jpg", "jpeg",
+    "psd", "vsvg", "svg",
 ];
 const SCRIPT_TYPES: &[&str] = &["vjs_c", "vjs", "js", "jse", "lua", "py", "ts"];
 const EXECUTABLE_TYPES: &[&str] = &[
@@ -66,54 +77,19 @@ const EXECUTABLE_TYPES: &[&str] = &[
     "ocx", "sh", "so", "dylib", "jar", "app",
 ];
 
-/// Top-level folders Valve's own archives use (and a few more, on purpose:
-/// listing a name here only means a folder of that name is never "author
-/// owned"). A top-level folder outside this list cannot replace any game file.
-const VALVE_ROOTS: &[&str] = &[
-    "addons",
-    "ambient",
-    "bin",
-    "cfg",
-    "core",
-    "custom_games",
-    "dota",
-    "expressions",
-    "fonts",
-    "game",
-    "maps",
-    "materials",
-    "media",
-    "models",
-    "movies",
-    "panorama",
-    "particles",
-    "resource",
-    "scenes",
-    "scripts",
-    "shaders",
-    "soundevents",
-    "sounds",
-    "soundstacks",
-    "textures",
-    "ui",
-    "vscripts",
-];
-/// Roots under which a declared namespace may prefix a folder or file name.
-const NAMESPACE_ROOTS: &[&str] = &["particles", "materials", "models"];
-/// Folder names that Valve uses below the roots above. A declared namespace
-/// must not be one of them, or it would claim a shared game folder.
-const RESERVED_NAMESPACES: &[&str] = &[
-    "basic", "cubemaps", "default", "econ", "generic", "heroes", "hero", "items", "particle",
-    "status", "units", "world", "creeps", "ui", "props", "water", "weather",
-];
-
 const MAX_SEGMENT_BYTES: usize = 96;
 const MAX_PATH_BYTES: usize = 240;
 const MAX_REPORTED_PATHS: usize = 2_000;
+/// Internal names a single skin may be scoped to.
+pub(crate) const MAX_HEROES: usize = 8;
+/// Upper bound on the audited shared list (a VPK holds at most 65,536 entries).
+pub(crate) const MAX_SHARED_PATHS: usize = 65_536;
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum SharedPolicy {
+    /// Install every accepted file, shared ones included (the default).
+    Install,
     /// Drop shared paths from the install and list each one.
     Strip,
     /// Refuse the whole install when the archive carries any shared path.
@@ -131,7 +107,7 @@ pub(crate) enum ScopeClass {
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum RejectReason {
-    /// Not a plain lowercase relative path (traversal, uppercase, odd bytes).
+    /// Not a plain relative path (traversal, spaces, odd bytes).
     PathUnsafe,
     /// Two entries whose paths are equal when case is ignored.
     DuplicatePath,
@@ -159,8 +135,11 @@ impl RejectReason {
 /// The audited facts an archive is checked against.
 #[derive(Clone, Debug)]
 pub(crate) struct ScopeSpec {
-    pub hero: String,
-    pub author_namespaces: Vec<String>,
+    /// Internal names of the heroes the skin is for (1 to [`MAX_HEROES`]).
+    pub heroes: Vec<String>,
+    /// Sorted, unique, lower-case paths that exist in Valve's file list at
+    /// audit time and are not hero-scoped. These are the shared files.
+    pub shared_paths: Vec<String>,
     pub shared_policy: SharedPolicy,
 }
 
@@ -215,7 +194,8 @@ pub(crate) struct InstallSummary {
     pub bytes: u64,
     /// SHA-256 over the sorted path and payload hash of the files to install.
     pub identity: String,
-    /// Shared files dropped under [`SharedPolicy::Strip`].
+    /// Shared files left out of the install: all of them under
+    /// [`SharedPolicy::Strip`], none under `Install`.
     pub stripped_shared: usize,
     /// Stable code when the policy or the archive forbids installing.
     pub blocked: Option<String>,
@@ -224,23 +204,29 @@ pub(crate) struct InstallSummary {
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SkinReport {
-    pub hero: String,
+    pub heroes: Vec<String>,
     pub shared_policy: SharedPolicy,
     pub entries: usize,
     pub total_bytes: u64,
-    /// SHA-256 over the sorted path and payload hash of every entry.
+    /// SHA-256 over the sorted path and payload hash of every entry, with the
+    /// paths exactly as the archive spells them.
     pub archive_identity: String,
     pub hero_scoped: ClassStat,
     pub author_owned: ClassStat,
     pub shared: ClassStat,
     pub rejected: ClassStat,
+    /// Accepted paths whose upper-case letters were folded to lower case.
+    pub renamed: usize,
     /// `vxml_c` files proven to be image wrappers (counted in the classes).
     pub image_wrappers: usize,
     pub rejected_paths: Vec<RejectedPath>,
+    /// The files that override a Valve file outside the heroes' own (the audit's
+    /// shared paths found in the archive), whatever the policy does with them.
     pub shared_paths: Vec<SharedPath>,
-    /// Top-level folders outside Valve's own: candidates for a human to
-    /// review and declare as the entry's namespaces. Informational only.
-    pub suggested_namespaces: Vec<String>,
+    /// Author-owned files the player's own game ships although the audit did
+    /// not find them in Valve's list (added since the audit). Informational;
+    /// only filled in by [`Analysis::apply_game_check`].
+    pub new_in_game: Vec<String>,
     pub hostile: bool,
     pub install: InstallSummary,
 }
@@ -276,23 +262,41 @@ fn token(value: &str, min: usize, max: usize) -> bool {
 impl ScopeSpec {
     pub(crate) fn validate(&self) -> Result<(), String> {
         let invalid = || "skin_scope_invalid".to_string();
-        if !token(&self.hero, 2, 48) || self.author_namespaces.len() > 8 {
+        if self.heroes.is_empty()
+            || self.heroes.len() > MAX_HEROES
+            || self.shared_paths.len() > MAX_SHARED_PATHS
+        {
             return Err(invalid());
         }
         let mut seen = BTreeSet::new();
-        for namespace in &self.author_namespaces {
-            if !token(namespace, 4, 48)
-                || VALVE_ROOTS.contains(&namespace.as_str())
-                || RESERVED_NAMESPACES.contains(&namespace.as_str())
-                || namespace.starts_with("hero_")
-                || *namespace == self.hero
-                || !seen.insert(namespace.as_str())
-            {
+        for hero in &self.heroes {
+            if !token(hero, 2, 48) || !seen.insert(hero.as_str()) {
+                return Err(invalid());
+            }
+        }
+        // Strictly increasing: sorted and unique. A shared path is a safe
+        // lower-case path and never one the heroes own, so that the audit
+        // cannot strip the very files a skin exists to replace.
+        for pair in self.shared_paths.windows(2) {
+            if pair[0] >= pair[1] {
+                return Err(invalid());
+            }
+        }
+        for path in &self.shared_paths {
+            if !path_safe(path) || hero_scoped(path, &self.heroes) {
                 return Err(invalid());
             }
         }
         Ok(())
     }
+}
+
+/// Whether a lower-case path is one the analyzer can ever accept: plain
+/// segments, no traversal, no spaces, within the length bounds. Used by the
+/// local generator.
+#[cfg(test)]
+pub(crate) fn path_is_safe(path: &str) -> bool {
+    path_safe(path)
 }
 
 fn path_safe(path: &str) -> bool {
@@ -342,44 +346,79 @@ fn named_after(name: &str, prefix: &str) -> bool {
         .is_some_and(|rest| rest.starts_with('_') || rest.starts_with('.'))
 }
 
-fn scope_of(path: &str, spec: &ScopeSpec) -> ScopeClass {
+/// The hero name a folder-shaped Valve path belongs to, if it has one:
+/// `models/heroes/<h>/..`, `models/items/<h>/..`,
+/// `particles/units/heroes/hero_<h>/..`, `particles/econ/items/<h>/..` and
+/// `materials/models/(heroes|items)/<h>/..`. `directories` excludes the file
+/// name. The audit's hero inference and the scope rules use this one function,
+/// so what is inferred is exactly what is later treated as hero-scoped.
+pub(crate) fn hero_folder<'a>(directories: &[&'a str]) -> Option<&'a str> {
+    match directories {
+        ["models", "heroes", folder, ..]
+        | ["models", "items", folder, ..]
+        | ["particles", "econ", "items", folder, ..]
+        | ["materials", "models", "heroes" | "items", folder, ..] => Some(*folder),
+        ["particles", "units", "heroes", folder, ..] => {
+            folder.strip_prefix("hero_").filter(|name| !name.is_empty())
+        }
+        _ => None,
+    }
+}
+
+/// Folders Valve keeps per hero under sounds and interface images. They are
+/// the hero's own files, but they are not used to infer which heroes a skin is
+/// for (a voice pack would drown out every other signal).
+fn hero_extra_folder<'a>(directories: &[&'a str]) -> Option<&'a str> {
+    match directories {
+        ["sounds", "vo", folder, ..]
+        | ["sounds", "weapons", "hero", folder, ..]
+        | ["sounds", "physics", "footsteps", "hero", folder, ..]
+        | ["panorama", "images", "spellicons", folder, ..]
+        | ["panorama", "images", "econ", "heroes", folder, ..] => Some(*folder),
+        _ => None,
+    }
+}
+
+/// Whether a lower-case path belongs to one of the heroes: their folders (see
+/// [`hero_folder`] and the sound and image folders), the files Valve names
+/// after the hero (particles next to the hero folders, the hero and spell
+/// icons, the hero's sound events and status effects).
+pub(crate) fn hero_scoped(path: &str, heroes: &[String]) -> bool {
     let segments = path.split('/').collect::<Vec<_>>();
-    let hero = spec.hero.as_str();
     let name = segments[segments.len() - 1];
     let directories = &segments[..segments.len() - 1];
-    let hero_prefix = format!("hero_{hero}");
-    let hero_icon = format!("npc_dota_hero_{hero}");
-    let hero_scoped = match directories {
-        ["models", "heroes", folder, ..] => *folder == hero,
-        ["particles", "units", "heroes", folder, ..] => *folder == hero_prefix,
+    if let Some(folder) = hero_folder(directories).or_else(|| hero_extra_folder(directories)) {
+        return heroes.iter().any(|hero| hero == folder);
+    }
+    let named = |prefix: String| {
+        heroes
+            .iter()
+            .any(|hero| named_after(name, &format!("{prefix}{hero}")))
+    };
+    match directories {
         // A few Valve particles sit next to the hero folders, named after the
         // hero (`keeper_of_the_light_radiant_bind_groundfx`).
-        ["particles", "units", "heroes"] => named_after(name, hero),
-        ["particles", "econ", "items", folder, ..] => *folder == hero,
-        ["materials", "models", "heroes" | "items", folder, ..] => *folder == hero,
-        ["panorama", "images", "heroes"] => named_after(name, &hero_icon),
-        ["panorama", "images", "spellicons"] => named_after(name, hero),
+        ["particles", "units", "heroes"] => named(String::new()),
+        ["panorama", "images", "heroes"]
+        | ["panorama", "images", "heroes", "selection" | "icons"] => {
+            named("npc_dota_hero_".to_string())
+        }
+        ["panorama", "images", "spellicons"] => named(String::new()),
+        ["soundevents", "voscripts"] => named("game_sounds_vo_".to_string()),
+        ["soundevents", "game_sounds_heroes"] => named("game_sounds_".to_string()),
+        ["particles", "status_fx"] => named("status_effect_".to_string()),
         _ => false,
-    };
-    if hero_scoped {
-        return ScopeClass::HeroScoped;
     }
-    // A top-level folder outside Valve's cannot replace any game file.
-    if segments.len() >= 2 && !VALVE_ROOTS.contains(&segments[0]) {
-        return ScopeClass::AuthorOwned;
+}
+
+fn scope_of(path: &str, heroes: &[String], shared: &BTreeSet<&str>) -> ScopeClass {
+    if hero_scoped(path, heroes) {
+        ScopeClass::HeroScoped
+    } else if shared.contains(path) {
+        ScopeClass::Shared
+    } else {
+        ScopeClass::AuthorOwned
     }
-    // `segments[1]` is a folder or, for a file directly under the root
-    // (`particles/darkness_snapshot1.vsnap_c`), the file name.
-    if segments.len() >= 2
-        && NAMESPACE_ROOTS.contains(&segments[0])
-        && spec
-            .author_namespaces
-            .iter()
-            .any(|namespace| segments[1] == namespace || named_after(segments[1], namespace))
-    {
-        return ScopeClass::AuthorOwned;
-    }
-    ScopeClass::Shared
 }
 
 fn identity(domain: &str, items: &mut [(String, [u8; 32])]) -> String {
@@ -398,6 +437,55 @@ fn sha256_of(bytes: &[u8]) -> [u8; 32] {
     Sha256::digest(bytes).into()
 }
 
+struct InstallInputs {
+    hero_scoped: ClassStat,
+    author_owned: ClassStat,
+    shared: ClassStat,
+    hostile: bool,
+    policy: SharedPolicy,
+    max_install_bytes: usize,
+}
+
+/// Whether the policy leaves an accepted file of this class out of the install.
+fn left_out(policy: SharedPolicy, class: ScopeClass) -> bool {
+    class == ScopeClass::Shared && policy == SharedPolicy::Strip
+}
+
+/// What installing the accepted files amounts to under the policy, and whether
+/// a rule forbids it.
+fn install_summary(accepted: &[Accepted<'_>], inputs: &InstallInputs) -> InstallSummary {
+    let strip = inputs.policy == SharedPolicy::Strip;
+    let mut items = accepted
+        .iter()
+        .filter(|item| !left_out(inputs.policy, item.class))
+        .map(|item| (item.path.clone(), item.digest))
+        .collect::<Vec<_>>();
+    let mut bytes = inputs.hero_scoped.bytes + inputs.author_owned.bytes;
+    let mut files = inputs.hero_scoped.files + inputs.author_owned.files;
+    if !strip {
+        bytes += inputs.shared.bytes;
+        files += inputs.shared.files;
+    }
+    let blocked = if inputs.hostile {
+        Some("skin_archive_hostile".to_string())
+    } else if inputs.policy == SharedPolicy::Refuse && inputs.shared.files > 0 {
+        Some("skin_shared_paths_refused".to_string())
+    } else if files == 0 {
+        Some("skin_nothing_to_install".to_string())
+    } else if bytes > inputs.max_install_bytes as u64 {
+        Some("skin_install_too_large".to_string())
+    } else {
+        None
+    };
+    InstallSummary {
+        files,
+        bytes,
+        identity: identity("betterfy-skin-install-v1\n", &mut items),
+        stripped_shared: if strip { inputs.shared.files } else { 0 },
+        blocked,
+    }
+}
+
 /// Reads the directory of an archive (VPK version 1 or 2, every entry
 /// embedded) and classifies each entry. Failures of the container itself
 /// (bad header, side archives, CRC mismatch) are errors; everything wrong
@@ -408,6 +496,11 @@ pub(crate) fn analyze<'a>(
     limits: &Limits,
 ) -> Result<Analysis<'a>, String> {
     spec.validate()?;
+    let shared_set = spec
+        .shared_paths
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
     let entries = vpk::read_embedded_directory(archive)?;
     let mut by_lowercase = BTreeMap::<String, usize>::new();
     for entry in &entries {
@@ -420,11 +513,11 @@ pub(crate) fn analyze<'a>(
     let mut accepted = Vec::new();
     let mut rejected_paths = Vec::new();
     let mut shared_paths = Vec::new();
-    let mut hero_scoped = ClassStat::default();
+    let mut hero_scoped_stat = ClassStat::default();
     let mut author_owned = ClassStat::default();
     let mut shared = ClassStat::default();
     let mut rejected = ClassStat::default();
-    let mut namespaces = BTreeSet::new();
+    let mut renamed = 0usize;
     let mut image_wrappers = 0usize;
     let mut hostile = false;
     let mut total_bytes = 0u64;
@@ -434,16 +527,16 @@ pub(crate) fn analyze<'a>(
         let digest = sha256_of(&payload);
         total_bytes += payload.len() as u64;
         all.push((entry.path.clone(), digest));
-        let path = entry.path.as_str();
+        let lower = entry.path.to_ascii_lowercase();
 
         let outcome = (|| -> Result<(ScopeClass, bool), RejectReason> {
-            if by_lowercase[&path.to_ascii_lowercase()] > 1 {
+            if by_lowercase[&lower] > 1 {
                 return Err(RejectReason::DuplicatePath);
             }
-            if !path_safe(path) {
+            if !path_safe(&lower) {
                 return Err(RejectReason::PathUnsafe);
             }
-            let kind = classify_type(extension(path))?;
+            let kind = classify_type(extension(&lower))?;
             if payload.is_empty() {
                 return Err(RejectReason::EmptyResource);
             }
@@ -451,19 +544,14 @@ pub(crate) fn analyze<'a>(
                 return Err(RejectReason::Oversized);
             }
             let wrapper = matches!(kind, Kind::Layout);
-            if wrapper && crate::panorama_layout::image_wrapper_dependency(path, &payload).is_err()
+            if wrapper
+                && crate::panorama_layout::image_wrapper_dependency(&lower, &payload).is_err()
             {
                 return Err(RejectReason::PanoramaUnproven);
             }
-            Ok((scope_of(path, spec), wrapper))
+            Ok((scope_of(&lower, &spec.heroes, &shared_set), wrapper))
         })();
 
-        if path_safe(path) {
-            let segments = path.split('/').collect::<Vec<_>>();
-            if segments.len() >= 2 && !VALVE_ROOTS.contains(&segments[0]) {
-                namespaces.insert(segments[0].to_string());
-            }
-        }
         match outcome {
             Err(reason) => {
                 hostile |= reason.is_hostile();
@@ -480,21 +568,24 @@ pub(crate) fn analyze<'a>(
                 if wrapper {
                     image_wrappers += 1;
                 }
+                if lower != entry.path {
+                    renamed += 1;
+                }
                 match class {
-                    ScopeClass::HeroScoped => hero_scoped.add(payload.len()),
+                    ScopeClass::HeroScoped => hero_scoped_stat.add(payload.len()),
                     ScopeClass::AuthorOwned => author_owned.add(payload.len()),
                     ScopeClass::Shared => {
                         shared.add(payload.len());
                         if shared_paths.len() < MAX_REPORTED_PATHS {
                             shared_paths.push(SharedPath {
-                                path: entry.path.clone(),
+                                path: lower.clone(),
                                 bytes: payload.len() as u64,
                             });
                         }
                     }
                 }
                 accepted.push(Accepted {
-                    path: entry.path.clone(),
+                    path: lower,
                     class,
                     payload,
                     digest,
@@ -507,47 +598,33 @@ pub(crate) fn analyze<'a>(
     shared_paths.sort_by(|a, b| a.path.cmp(&b.path));
     let archive_identity = identity("betterfy-skin-archive-v1\n", &mut all);
 
-    let strip = spec.shared_policy == SharedPolicy::Strip;
-    let mut install_items = accepted
-        .iter()
-        .filter(|item| item.class != ScopeClass::Shared)
-        .map(|item| (item.path.clone(), item.digest))
-        .collect::<Vec<_>>();
-    let install_bytes = hero_scoped.bytes + author_owned.bytes;
-    let install_files = hero_scoped.files + author_owned.files;
-    let blocked = if hostile {
-        Some("skin_archive_hostile".to_string())
-    } else if !strip && shared.files > 0 {
-        Some("skin_shared_paths_refused".to_string())
-    } else if install_files == 0 {
-        Some("skin_nothing_to_install".to_string())
-    } else if install_bytes > limits.max_install_bytes as u64 {
-        Some("skin_install_too_large".to_string())
-    } else {
-        None
-    };
-    let install = InstallSummary {
-        files: install_files,
-        bytes: install_bytes,
-        identity: identity("betterfy-skin-install-v1\n", &mut install_items),
-        stripped_shared: if strip { shared.files } else { 0 },
-        blocked,
-    };
+    let install = install_summary(
+        &accepted,
+        &InstallInputs {
+            hero_scoped: hero_scoped_stat,
+            author_owned,
+            shared,
+            hostile,
+            policy: spec.shared_policy,
+            max_install_bytes: limits.max_install_bytes,
+        },
+    );
     Ok(Analysis {
         report: SkinReport {
-            hero: spec.hero.clone(),
+            heroes: spec.heroes.clone(),
             shared_policy: spec.shared_policy,
             entries: entries.len(),
             total_bytes,
             archive_identity,
-            hero_scoped,
+            hero_scoped: hero_scoped_stat,
             author_owned,
             shared,
             rejected,
+            renamed,
             image_wrappers,
             rejected_paths,
             shared_paths,
-            suggested_namespaces: namespaces.into_iter().collect(),
+            new_in_game: Vec::new(),
             hostile,
             install,
         },
@@ -557,6 +634,67 @@ pub(crate) fn analyze<'a>(
 }
 
 impl Analysis<'_> {
+    /// The lower-case paths the analyzer accepted as author-owned: files the
+    /// skin adds that the audit found nowhere in Valve's list. Used to check
+    /// them against the game the person actually has.
+    pub(crate) fn author_owned_paths(&self) -> Vec<String> {
+        self.accepted
+            .iter()
+            .filter(|item| item.class == ScopeClass::AuthorOwned)
+            .map(|item| item.path.clone())
+            .collect()
+    }
+
+    /// Records which author-owned files the player's own game ships (`paths`,
+    /// lower case): Valve added them since the audit, so they now replace a
+    /// game file the audit never reviewed. Under `Install` this is information
+    /// only (`report.new_in_game`). Under `Strip`, whose point is leaving the
+    /// game's files untouched, they are also left out: they move to the shared
+    /// class and the install summary is recomputed. Hero-scoped files are
+    /// never touched: replacing the hero's own game files is what a skin is
+    /// for.
+    pub(crate) fn apply_game_check(&mut self, paths: &BTreeSet<String>) {
+        let strip = self.report.shared_policy == SharedPolicy::Strip;
+        let mut moved = false;
+        for item in &mut self.accepted {
+            if item.class != ScopeClass::AuthorOwned || !paths.contains(&item.path) {
+                continue;
+            }
+            self.report.new_in_game.push(item.path.clone());
+            if !strip {
+                continue;
+            }
+            item.class = ScopeClass::Shared;
+            let report = &mut self.report;
+            report.author_owned.files -= 1;
+            report.author_owned.bytes -= item.payload.len() as u64;
+            report.shared.add(item.payload.len());
+            if report.shared_paths.len() < MAX_REPORTED_PATHS {
+                report.shared_paths.push(SharedPath {
+                    path: item.path.clone(),
+                    bytes: item.payload.len() as u64,
+                });
+            }
+            moved = true;
+        }
+        self.report.new_in_game.sort();
+        if !moved {
+            return;
+        }
+        self.report.shared_paths.sort_by(|a, b| a.path.cmp(&b.path));
+        self.report.install = install_summary(
+            &self.accepted,
+            &InstallInputs {
+                hero_scoped: self.report.hero_scoped,
+                author_owned: self.report.author_owned,
+                shared: self.report.shared,
+                hostile: self.report.hostile,
+                policy: self.report.shared_policy,
+                max_install_bytes: self.max_install_bytes,
+            },
+        );
+    }
+
     /// The files to install under the spec's [`SharedPolicy`], or the stable
     /// code of the rule that forbids installing this archive.
     pub(crate) fn into_selection(self) -> Result<Selection, String> {
@@ -565,8 +703,9 @@ impl Analysis<'_> {
         }
         let mut files = BTreeMap::new();
         let mut bytes = 0usize;
+        let policy = self.report.shared_policy;
         for item in self.accepted {
-            if item.class == ScopeClass::Shared {
+            if left_out(policy, item.class) {
                 continue;
             }
             bytes += item.payload.len();
@@ -586,7 +725,9 @@ impl Analysis<'_> {
     }
 }
 
-/// An archive plus a hero ID in, the files to install (and the report) out.
+/// An archive plus an audited scope in, the files to install (and the report)
+/// out.
+#[cfg(test)]
 pub(crate) fn select_install_files(
     archive: &[u8],
     spec: &ScopeSpec,
@@ -602,10 +743,30 @@ mod tests {
 
     fn spec(policy: SharedPolicy) -> ScopeSpec {
         ScopeSpec {
-            hero: "keeper_of_the_light".to_string(),
-            author_namespaces: vec!["darkness".to_string()],
+            heroes: vec!["keeper_of_the_light".to_string()],
+            shared_paths: sorted(&[
+                "materials/default/default_color_tga_11bf3739.vtex_c",
+                "materials/models/cubemaps/glossy_cube_tga_4cca90d9.vtex_c",
+                "materials/models/particle/net_color.vmat_c",
+                "materials/particle/basic_glow.vtex_c",
+                "models/heroes/axe/axe.vmdl_c",
+                "panorama/images/spellicons/axe_battle_hunger_png.vtex_c",
+                "particles/basic_ambient/basic_ambient.vpcf_c",
+                "particles/models/basic_trail/basic_trail.vpcf_c",
+                "particles/status_fx/status_effect_keeper_spirit_form.vpcf_c",
+                "particles/units/heroes/hero_axe/axe.vpcf_c",
+            ]),
             shared_policy: policy,
         }
+    }
+
+    fn sorted(paths: &[&str]) -> Vec<String> {
+        let mut paths = paths
+            .iter()
+            .map(|path| (*path).to_string())
+            .collect::<Vec<_>>();
+        paths.sort();
+        paths
     }
 
     fn wrapper_bytes(path: &str) -> Vec<u8> {
@@ -613,7 +774,8 @@ mod tests {
     }
 
     /// The same shape as the audited sample: hero files, the author's own
-    /// namespaces, shared overrides, and leftovers.
+    /// folders, shared overrides that Valve ships, new files Valve does not
+    /// ship, and leftovers.
     fn skin_files() -> Vec<(String, Vec<u8>)> {
         let wrapper = "panorama/images/spellicons/keeper_of_the_light_recall.vxml_c";
         let bad_wrapper = "panorama/images/heroes/npc_dota_hero_keeper_of_the_light.vxml_c";
@@ -622,6 +784,10 @@ mod tests {
             (
                 "models/heroes/keeper_of_the_light/kotl_hood.vmdl_c",
                 b"hood".to_vec(),
+            ),
+            (
+                "models/items/keeper_of_the_light/mount/mount.vmdl_c",
+                b"item".to_vec(),
             ),
             (
                 "particles/units/heroes/hero_keeper_of_the_light/attack.vpcf_c",
@@ -651,16 +817,26 @@ mod tests {
                 "panorama/images/spellicons/keeper_of_the_light_recall_png.vtex_c",
                 b"spell".to_vec(),
             ),
-            // author-owned: own top-level folders and declared prefixes
+            // author-owned: the author's own folders
             ("darkness/materials/body.vmat_c", b"d1".to_vec()),
             ("kisilev_ind/darkness/particles/p.vpcf_c", b"k1".to_vec()),
             ("particles/darkness_snaps/snap1.vsnap_c", b"s1".to_vec()),
             ("particles/darkness/flame.vpcf_c", b"flame".to_vec()),
+            // author-owned: new files in Valve-looking folders that Valve does
+            // not ship (the skin's effects depend on them)
             (
-                "particles/darkness_weaponka_snapshot1.vsnap_c",
-                b"s2".to_vec(),
+                "particles/basic_ember/basic_ember.vpcf_c",
+                b"ember".to_vec(),
             ),
-            // shared
+            (
+                "materials/particle/basic_ember.vtex_c",
+                b"embertex".to_vec(),
+            ),
+            (
+                "models/heroes/keeper_of_the_light/anim.vseq_c",
+                b"seq".to_vec(),
+            ),
+            // shared: Valve ships these and they are not the hero's
             (
                 "particles/basic_ambient/basic_ambient.vpcf_c",
                 b"basic".to_vec(),
@@ -686,7 +862,7 @@ mod tests {
                 "materials/models/particle/net_color.vmat_c",
                 b"net".to_vec(),
             ),
-            // another hero, and a namespace prefix without the separator
+            // another hero, listed as shared by the audit
             ("models/heroes/axe/axe.vmdl_c", b"axe".to_vec()),
             (
                 "particles/units/heroes/hero_axe/axe.vpcf_c",
@@ -696,7 +872,6 @@ mod tests {
                 "panorama/images/spellicons/axe_battle_hunger_png.vtex_c",
                 b"axeicon".to_vec(),
             ),
-            ("particles/darknessfoo/foo.vpcf_c", b"foo".to_vec()),
             // dropped
             ("particles/darkness/sparks.vpcf", b"source".to_vec()),
             ("materials/darkness/leftover.vmat", b"source".to_vec()),
@@ -735,12 +910,14 @@ mod tests {
         let analysis =
             analyze(&bytes, &spec(SharedPolicy::Strip), &Limits::default()).expect("analysis");
         let report = &analysis.report;
-        assert_eq!(report.entries, 28);
-        // 8 hero files plus the proven image wrapper.
-        assert_eq!(report.hero_scoped.files, 9);
+        assert_eq!(report.entries, 30);
+        // 9 hero folder and file paths (one of them an item model), the
+        // sequence file and the proven image wrapper.
+        assert_eq!(report.hero_scoped.files, 11);
         assert_eq!(report.image_wrappers, 1);
-        assert_eq!(report.author_owned.files, 5);
-        assert_eq!(report.shared.files, 11);
+        // 4 files in the author's folders and the 2 new basic_ember files.
+        assert_eq!(report.author_owned.files, 6);
+        assert_eq!(report.shared.files, 10);
         assert_eq!(report.rejected.files, 3);
         assert_eq!(
             report.hero_scoped.files
@@ -750,8 +927,9 @@ mod tests {
             report.entries
         );
         assert!(!report.hostile);
-        assert_eq!(report.install.files, 14);
-        assert_eq!(report.install.stripped_shared, 11);
+        assert_eq!(report.renamed, 0);
+        assert_eq!(report.install.files, 17);
+        assert_eq!(report.install.stripped_shared, 10);
         assert_eq!(report.install.blocked, None);
 
         let rejected = report
@@ -781,37 +959,135 @@ mod tests {
             .iter()
             .map(|item| item.path.as_str())
             .collect::<Vec<_>>();
-        for expected in [
-            "particles/basic_ambient/basic_ambient.vpcf_c",
-            "materials/default/default_color_tga_11bf3739.vtex_c",
-            "materials/models/cubemaps/glossy_cube_tga_4cca90d9.vtex_c",
-            "materials/models/particle/net_color.vmat_c",
-            "particles/status_fx/status_effect_keeper_spirit_form.vpcf_c",
-            "models/heroes/axe/axe.vmdl_c",
-            "particles/units/heroes/hero_axe/axe.vpcf_c",
-            "panorama/images/spellicons/axe_battle_hunger_png.vtex_c",
-            "particles/darknessfoo/foo.vpcf_c",
-        ] {
-            assert!(shared.contains(&expected), "{expected} should be shared");
-        }
-        assert_eq!(report.suggested_namespaces, vec!["darkness", "kisilev_ind"]);
+        assert_eq!(
+            shared,
+            spec(SharedPolicy::Strip)
+                .shared_paths
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+        );
 
         let selection = analysis.into_selection().expect("selection");
-        assert_eq!(selection.files.len(), 14);
+        assert_eq!(selection.files.len(), 17);
         assert!(selection
             .files
             .contains_key("panorama/images/spellicons/keeper_of_the_light_recall.vxml_c"));
         assert!(selection
             .files
             .contains_key("particles/darkness_snaps/snap1.vsnap_c"));
+        assert!(selection
+            .files
+            .contains_key("models/items/keeper_of_the_light/mount/mount.vmdl_c"));
+        assert!(selection
+            .files
+            .contains_key("models/heroes/keeper_of_the_light/anim.vseq_c"));
         assert!(!selection
             .files
             .keys()
-            .any(|path| path.contains("basic_") || path.contains("axe")));
+            .any(|path| path.contains("basic_ambient") || path.contains("axe")));
         assert_eq!(
             selection.files["models/heroes/keeper_of_the_light/kotl_hood.vmdl_c"],
             b"hood"
         );
+    }
+
+    #[test]
+    fn install_is_the_default_and_installs_every_accepted_file() {
+        // The same archive under Install: classes are reported as before, but
+        // nothing accepted is left out, shared files included (that is what
+        // dropping the VPK into the game folder by hand does).
+        let bytes = archive(&skin_files());
+        let analysis =
+            analyze(&bytes, &spec(SharedPolicy::Install), &Limits::default()).expect("analysis");
+        let report = &analysis.report;
+        assert_eq!(report.shared_policy, SharedPolicy::Install);
+        assert_eq!(report.hero_scoped.files, 11);
+        assert_eq!(report.author_owned.files, 6);
+        assert_eq!(report.shared.files, 10);
+        assert_eq!(report.rejected.files, 3);
+        assert_eq!(report.shared_paths.len(), 10);
+        assert_eq!(report.install.files, 27);
+        assert_eq!(report.install.stripped_shared, 0);
+        assert_eq!(report.install.blocked, None);
+        assert_eq!(
+            report.install.bytes,
+            report.hero_scoped.bytes + report.author_owned.bytes + report.shared.bytes
+        );
+        let selection = analysis.into_selection().expect("selection");
+        assert_eq!(selection.files.len(), 27);
+        for shared in &spec(SharedPolicy::Install).shared_paths {
+            assert!(selection.files.contains_key(shared), "{shared}");
+        }
+        // Still rejected, exactly as before: sources and unproven wrappers.
+        assert!(!selection
+            .files
+            .contains_key("particles/darkness/sparks.vpcf"));
+        assert!(!selection
+            .files
+            .contains_key("panorama/images/heroes/npc_dota_hero_keeper_of_the_light.vxml_c"));
+
+        // Strip is the explicit opt-in; the two summaries differ and so do
+        // their identities.
+        let strip = analyze(&bytes, &spec(SharedPolicy::Strip), &Limits::default())
+            .expect("analysis")
+            .report;
+        assert_eq!(strip.install.files, 17);
+        assert_eq!(strip.install.stripped_shared, 10);
+        assert_ne!(strip.install.identity, selection.report.install.identity);
+        assert_eq!(strip.archive_identity, selection.report.archive_identity);
+    }
+
+    #[test]
+    fn hostile_entries_still_block_an_install_policy_archive() {
+        let bytes = build_unchecked(
+            2,
+            &[
+                ("models/heroes/keeper_of_the_light/ok.vmdl_c", b"ok"),
+                ("panorama/scripts/evil.vjs_c", b"script"),
+                ("particles/basic_ambient/basic_ambient.vpcf_c", b"shared"),
+            ],
+        );
+        let analysis =
+            analyze(&bytes, &spec(SharedPolicy::Install), &Limits::default()).expect("analysis");
+        assert!(analysis.report.hostile);
+        assert_eq!(
+            analysis.into_selection().err().as_deref(),
+            Some("skin_archive_hostile")
+        );
+    }
+
+    #[test]
+    fn files_that_replace_nothing_install_even_in_shared_looking_folders() {
+        // `particles/basic_ember` and `materials/particle/basic_ember` look
+        // like Valve's `basic_*` folders but are not in the audited list, so
+        // they are the skin's own and install. A path the audit listed in the
+        // same folder is stripped.
+        let selection = select_install_files(
+            &archive(&skin_files()),
+            &spec(SharedPolicy::Strip),
+            &Limits::default(),
+        )
+        .expect("selection");
+        assert_eq!(
+            selection.files["particles/basic_ember/basic_ember.vpcf_c"],
+            b"ember"
+        );
+        assert!(selection
+            .files
+            .contains_key("materials/particle/basic_ember.vtex_c"));
+        assert!(!selection
+            .files
+            .contains_key("particles/basic_ambient/basic_ambient.vpcf_c"));
+        assert!(!selection
+            .files
+            .contains_key("materials/particle/basic_glow.vtex_c"));
+        // The class counts say the same.
+        let report = selection.report;
+        assert!(report
+            .shared_paths
+            .iter()
+            .all(|item| !item.path.contains("basic_ember")));
     }
 
     #[test]
@@ -845,12 +1121,39 @@ mod tests {
     }
 
     #[test]
+    fn the_audited_list_decides_what_is_shared_not_the_file_name() {
+        // The same archive audited with an empty list strips nothing: every
+        // non-hero path is the author's.
+        let none = ScopeSpec {
+            shared_paths: Vec::new(),
+            ..spec(SharedPolicy::Strip)
+        };
+        let report = analyze(&archive(&skin_files()), &none, &Limits::default())
+            .expect("analysis")
+            .report;
+        assert_eq!(report.shared.files, 0);
+        assert_eq!(report.install.stripped_shared, 0);
+        assert_eq!(report.author_owned.files, 16);
+        // A list entry that names a hero path is not a valid audit.
+        let hero_entry = ScopeSpec {
+            shared_paths: sorted(&["models/heroes/keeper_of_the_light/kotl_hood.vmdl_c"]),
+            ..spec(SharedPolicy::Strip)
+        };
+        assert_eq!(
+            analyze(&archive(&skin_files()), &hero_entry, &Limits::default())
+                .err()
+                .as_deref(),
+            Some("skin_scope_invalid")
+        );
+    }
+
+    #[test]
     fn refuse_policy_blocks_any_shared_path_but_still_reports() {
         let bytes = archive(&skin_files());
         let analysis =
             analyze(&bytes, &spec(SharedPolicy::Refuse), &Limits::default()).expect("analysis");
-        assert_eq!(analysis.report.shared.files, 11);
-        assert_eq!(analysis.report.shared_paths.len(), 11);
+        assert_eq!(analysis.report.shared.files, 10);
+        assert_eq!(analysis.report.shared_paths.len(), 10);
         assert_eq!(analysis.report.install.stripped_shared, 0);
         assert_eq!(
             analysis.report.install.blocked.as_deref(),
@@ -862,19 +1165,10 @@ mod tests {
         );
 
         // The same archive without shared files installs under either policy.
+        let listed = spec(SharedPolicy::Refuse).shared_paths;
         let clean = skin_files()
             .into_iter()
-            .filter(|(path, _)| {
-                !(path.contains("basic_")
-                    || path.contains("default")
-                    || path.contains("cubemaps")
-                    || path.contains("net_color")
-                    || path.contains("status_fx")
-                    || path.contains("heroes/axe")
-                    || path.contains("hero_axe")
-                    || path.contains("axe_")
-                    || path.contains("darknessfoo"))
-            })
+            .filter(|(path, _)| !listed.contains(path))
             .collect::<Vec<_>>();
         let selection = select_install_files(
             &archive(&clean),
@@ -882,7 +1176,7 @@ mod tests {
             &Limits::default(),
         )
         .expect("clean archive installs under refuse");
-        assert_eq!(selection.files.len(), 14);
+        assert_eq!(selection.files.len(), 17);
     }
 
     #[test]
@@ -894,9 +1188,9 @@ mod tests {
                 ("../escape.vtex_c", b"x"),
                 ("panorama/scripts/evil.vjs_c", b"script"),
                 ("darkness/tool.exe", b"MZ"),
-                ("Particles/Upper.vpcf_c", b"upper"),
                 ("darkness//double.vpcf_c", b"double"),
                 ("darkness/a b.vpcf_c", b"space"),
+                ("darkness/caf\u{e9}.vpcf_c", b"nonascii"),
             ],
         );
         let analysis = analyze(&bytes, &spec(SharedPolicy::Strip), &Limits::default())
@@ -911,9 +1205,12 @@ mod tests {
         assert_eq!(reasons["../escape.vtex_c"], RejectReason::PathUnsafe);
         assert_eq!(reasons["panorama/scripts/evil.vjs_c"], RejectReason::Script);
         assert_eq!(reasons["darkness/tool.exe"], RejectReason::Executable);
-        assert_eq!(reasons["Particles/Upper.vpcf_c"], RejectReason::PathUnsafe);
         assert_eq!(reasons["darkness//double.vpcf_c"], RejectReason::PathUnsafe);
         assert_eq!(reasons["darkness/a b.vpcf_c"], RejectReason::PathUnsafe);
+        assert_eq!(
+            reasons["darkness/caf\u{e9}.vpcf_c"],
+            RejectReason::PathUnsafe
+        );
         assert_eq!(analysis.report.hero_scoped.files, 1);
         assert_eq!(
             analysis.into_selection().err().as_deref(),
@@ -922,7 +1219,58 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_paths_with_different_case_are_all_rejected() {
+    fn mixed_case_paths_are_renamed_to_lower_case_and_counted() {
+        let bytes = build_unchecked(
+            2,
+            &[
+                ("models/heroes/keeper_of_the_light/ok.vmdl_c", b"ok"),
+                ("Sounds/VO/Yoyoko/Hello.vsnd_c", b"voice"),
+                ("Particles/Upper.vpcf_c", b"upper"),
+                // Folding makes a Valve-listed path out of this one.
+                ("Particles/Basic_Ambient/Basic_Ambient.vpcf_c", b"basic"),
+            ],
+        );
+        let analysis = analyze(&bytes, &spec(SharedPolicy::Strip), &Limits::default())
+            .expect("renames are not fatal");
+        let report = &analysis.report;
+        assert!(!report.hostile);
+        assert_eq!(report.renamed, 3);
+        assert_eq!(report.shared.files, 1);
+        assert_eq!(
+            report.shared_paths[0].path,
+            "particles/basic_ambient/basic_ambient.vpcf_c"
+        );
+        assert_eq!(report.install.files, 3);
+        // The archive identity covers the names exactly as the archive spells
+        // them; the install identity covers the folded names.
+        let lower = build_unchecked(
+            2,
+            &[
+                ("models/heroes/keeper_of_the_light/ok.vmdl_c", b"ok"),
+                ("sounds/vo/yoyoko/hello.vsnd_c", b"voice"),
+                ("particles/upper.vpcf_c", b"upper"),
+                ("particles/basic_ambient/basic_ambient.vpcf_c", b"basic"),
+            ],
+        );
+        let lower = analyze(&lower, &spec(SharedPolicy::Strip), &Limits::default())
+            .expect("analysis")
+            .report;
+        assert_ne!(lower.archive_identity, report.archive_identity);
+        assert_eq!(lower.install.identity, report.install.identity);
+        assert_eq!(lower.renamed, 0);
+        let selection = analysis.into_selection().expect("selection");
+        assert_eq!(
+            selection.files.keys().cloned().collect::<Vec<_>>(),
+            vec![
+                "models/heroes/keeper_of_the_light/ok.vmdl_c",
+                "particles/upper.vpcf_c",
+                "sounds/vo/yoyoko/hello.vsnd_c",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_folded_name_that_collides_rejects_both_entries() {
         let bytes = build_unchecked(
             1,
             &[
@@ -931,22 +1279,28 @@ mod tests {
                 ("models/heroes/keeper_of_the_light/same.vmdl_c", b"one"),
                 ("models/heroes/keeper_of_the_light/same.vmdl_c", b"two"),
                 ("models/heroes/keeper_of_the_light/fine.vmdl_c", b"fine"),
+                ("Darkness/Mixed.vpcf_c", b"upper-only"),
             ],
         );
         let analysis =
             analyze(&bytes, &spec(SharedPolicy::Strip), &Limits::default()).expect("analysis");
-        assert_eq!(analysis.report.entries, 5);
+        assert_eq!(analysis.report.entries, 6);
         assert_eq!(analysis.report.hero_scoped.files, 1);
+        assert_eq!(analysis.report.author_owned.files, 1);
+        assert_eq!(analysis.report.renamed, 1);
         assert_eq!(analysis.report.rejected.files, 4);
         assert!(analysis
             .report
             .rejected_paths
             .iter()
             .all(|item| item.reason == RejectReason::DuplicatePath));
-        let selection = analysis.into_selection().expect("the unique file installs");
+        let selection = analysis.into_selection().expect("the unique files install");
         assert_eq!(
             selection.files.keys().collect::<Vec<_>>(),
-            vec!["models/heroes/keeper_of_the_light/fine.vmdl_c"]
+            vec![
+                "darkness/mixed.vpcf_c",
+                "models/heroes/keeper_of_the_light/fine.vmdl_c"
+            ]
         );
     }
 
@@ -961,6 +1315,7 @@ mod tests {
                 ("models/heroes/keeper_of_the_light/empty.vmdl_c", b""),
                 ("darkness/notes.txt", b"readme"),
                 ("darkness/compiled.vcss_c", b"css"),
+                ("darkness/clip.webm", b"video"),
             ],
         );
         let limits = Limits {
@@ -983,6 +1338,7 @@ mod tests {
             RejectReason::EmptyResource
         );
         assert_eq!(reasons["darkness/notes.txt"], RejectReason::TypeNotAllowed);
+        assert_eq!(reasons["darkness/clip.webm"], RejectReason::TypeNotAllowed);
         assert_eq!(
             reasons["darkness/compiled.vcss_c"],
             RejectReason::TypeNotAllowed
@@ -1005,117 +1361,249 @@ mod tests {
     }
 
     #[test]
-    fn scope_is_exact_not_a_prefix_match() {
-        let short = ScopeSpec {
-            hero: "keeper".to_string(),
-            author_namespaces: vec![],
-            shared_policy: SharedPolicy::Strip,
-        };
+    fn hero_scope_is_exact_not_a_prefix_match() {
+        let heroes = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+        let short = heroes(&["keeper"]);
         for path in [
             "models/heroes/keeper_of_the_light/a.vmdl_c",
+            "models/items/keeper_of_the_light/a.vmdl_c",
             "particles/units/heroes/hero_keeper_of_the_light/a.vpcf_c",
             "particles/econ/items/keeper_of_the_light/a/b.vpcf_c",
         ] {
-            assert_eq!(scope_of(path, &short), ScopeClass::Shared, "{path}");
+            assert!(!hero_scoped(path, &short), "{path}");
         }
-        let full = spec(SharedPolicy::Strip);
-        for (path, class) in [
-            (
-                "models/heroes/keeper_of_the_light/a.vmdl_c",
-                ScopeClass::HeroScoped,
-            ),
-            (
-                "models/heroes/keeper_of_the_light_x/a.vmdl_c",
-                ScopeClass::Shared,
-            ),
-            (
-                "models/items/keeper_of_the_light/a.vmdl_c",
-                ScopeClass::Shared,
-            ),
+        let full = heroes(&["keeper_of_the_light"]);
+        for (path, scoped) in [
+            ("models/heroes/keeper_of_the_light/a.vmdl_c", true),
+            ("models/heroes/keeper_of_the_light_x/a.vmdl_c", false),
+            // hero item models are the hero's too
+            ("models/items/keeper_of_the_light/a/b.vmdl_c", true),
+            ("models/items/keeper_of_the_light_x/a.vmdl_c", false),
+            ("models/items/keeper_of_the_light.vmdl_c", false),
             (
                 "particles/units/heroes/hero_keeper_of_the_light_x/a.vpcf_c",
-                ScopeClass::Shared,
+                false,
             ),
             (
-                "particles/units/heroes/keeper_of_the_light.vpcf_c",
-                ScopeClass::HeroScoped,
+                "particles/units/heroes/hero_keeper_of_the_light/a.vpcf_c",
+                true,
             ),
-            (
-                "particles/units/heroes/keeper_of_the_lightx.vpcf_c",
-                ScopeClass::Shared,
-            ),
+            ("particles/units/heroes/keeper_of_the_light.vpcf_c", true),
+            ("particles/units/heroes/keeper_of_the_lightx.vpcf_c", false),
             (
                 "panorama/images/heroes/npc_dota_hero_keeper_of_the_light_png.vtex_c",
-                ScopeClass::HeroScoped,
+                true,
             ),
             (
                 "panorama/images/heroes/npc_dota_hero_keeper_of_the_lighter_png.vtex_c",
-                ScopeClass::Shared,
+                false,
             ),
             (
-                "panorama/images/heroes/deep/npc_dota_hero_keeper_of_the_light_png.vtex_c",
-                ScopeClass::Shared,
+                "panorama/images/heroes/deep/er/npc_dota_hero_keeper_of_the_light_png.vtex_c",
+                false,
             ),
-            // a top-level folder that is not Valve's is the author's
-            ("darkness/a.vpcf_c", ScopeClass::AuthorOwned),
-            ("units/heroes/a.vpcf_c", ScopeClass::AuthorOwned),
-            ("a.vpcf_c", ScopeClass::Shared),
-            // declared prefixes count only below particles, materials, models
-            ("particles/darkness_a/b.vpcf_c", ScopeClass::AuthorOwned),
-            ("materials/darkness/b.vmat_c", ScopeClass::AuthorOwned),
-            ("models/darkness_m/b.vmdl_c", ScopeClass::AuthorOwned),
+            // the hero's sounds, icons, sound events and status effects
             (
-                "panorama/images/darkness_a/b_png.vtex_c",
-                ScopeClass::Shared,
+                "panorama/images/heroes/selection/npc_dota_hero_keeper_of_the_light_png.vtex_c",
+                true,
             ),
-            ("particles/darknessx/b.vpcf_c", ScopeClass::Shared),
             (
-                "particles/units/heroes/hero_axe/b.vpcf_c",
-                ScopeClass::Shared,
+                "panorama/images/heroes/icons/npc_dota_hero_keeper_of_the_light_png.vtex_c",
+                true,
             ),
+            (
+                "panorama/images/heroes/selection/npc_dota_hero_axe_png.vtex_c",
+                false,
+            ),
+            (
+                "panorama/images/spellicons/keeper_of_the_light/ti9/recall_png.vtex_c",
+                true,
+            ),
+            (
+                "panorama/images/spellicons/keeper/ti9/recall_png.vtex_c",
+                false,
+            ),
+            (
+                "panorama/images/econ/heroes/keeper_of_the_light/hood_png.vtex_c",
+                true,
+            ),
+            ("sounds/vo/keeper_of_the_light/kotl_01.vsnd_c", true),
+            ("sounds/vo/axe/axe_01.vsnd_c", false),
+            ("sounds/weapons/hero/keeper_of_the_light/blind.vsnd_c", true),
+            ("sounds/weapons/hero/shared/large_blade/hit.vsnd_c", false),
+            (
+                "sounds/physics/footsteps/hero/keeper_of_the_light/foley01.vsnd_c",
+                true,
+            ),
+            (
+                "soundevents/voscripts/game_sounds_vo_keeper_of_the_light.vsndevts_c",
+                true,
+            ),
+            (
+                "soundevents/voscripts/game_sounds_vo_keeper_of_the_lighter.vsndevts_c",
+                false,
+            ),
+            (
+                "soundevents/game_sounds_heroes/game_sounds_keeper_of_the_light.vsndevts_c",
+                true,
+            ),
+            (
+                "soundevents/game_sounds_heroes/game_sounds_axe.vsndevts_c",
+                false,
+            ),
+            (
+                "particles/status_fx/status_effect_keeper_of_the_light_x.vpcf_c",
+                true,
+            ),
+            (
+                "particles/status_fx/status_effect_keeper_spirit_form.vpcf_c",
+                false,
+            ),
+            ("materials/models/heroes/keeper_of_the_light/a.vmat_c", true),
+            (
+                "materials/models/items/keeper_of_the_light/a/b.vmat_c",
+                true,
+            ),
+            ("materials/models/items/other/a.vmat_c", false),
+            ("darkness/a.vpcf_c", false),
+            ("particles/units/heroes/hero_axe/b.vpcf_c", false),
+            ("a.vpcf_c", false),
         ] {
-            assert_eq!(scope_of(path, &full), class, "{path}");
+            assert_eq!(hero_scoped(path, &full), scoped, "{path}");
         }
     }
 
     #[test]
-    fn declared_namespaces_cannot_claim_valve_folders_or_the_hero() {
-        let make = |namespace: &str| ScopeSpec {
-            hero: "keeper_of_the_light".to_string(),
-            author_namespaces: vec![namespace.to_string()],
+    fn a_hero_with_several_internal_names_accepts_all_of_them() {
+        // Shadow Fiend: models and items under `shadow_fiend`, particles and
+        // spell icons under `nevermore`.
+        let names = vec!["shadow_fiend".to_string(), "nevermore".to_string()];
+        for path in [
+            "models/heroes/shadow_fiend/head.vmdl_c",
+            "models/items/shadow_fiend/arms/a.vmdl_c",
+            "particles/units/heroes/hero_nevermore/shadowraze.vpcf_c",
+            "particles/econ/items/nevermore/ti6/a.vpcf_c",
+            "particles/units/heroes/nevermore_requiem.vpcf_c",
+            "materials/models/heroes/nevermore/body.vmat_c",
+            "panorama/images/spellicons/nevermore_necromastery_png.vtex_c",
+            "panorama/images/heroes/npc_dota_hero_nevermore_png.vtex_c",
+        ] {
+            assert!(hero_scoped(path, &names), "{path}");
+        }
+        assert!(!hero_scoped("models/heroes/axe/a.vmdl_c", &names));
+        assert!(!hero_scoped(
+            "particles/units/heroes/hero_axe/a.vpcf_c",
+            &names
+        ));
+
+        let spec = ScopeSpec {
+            heroes: names,
+            shared_paths: sorted(&["models/heroes/axe/a.vmdl_c"]),
             shared_policy: SharedPolicy::Strip,
         };
-        assert!(make("darkness").validate().is_ok());
+        let bytes = build_unchecked(
+            2,
+            &[
+                ("models/heroes/shadow_fiend/head.vmdl_c", b"head"),
+                ("particles/units/heroes/hero_nevermore/raze.vpcf_c", b"raze"),
+                ("models/heroes/axe/a.vmdl_c", b"axe"),
+                ("effects/own.vpcf_c", b"own"),
+            ],
+        );
+        let report = analyze(&bytes, &spec, &Limits::default())
+            .expect("analysis")
+            .report;
+        assert_eq!(report.hero_scoped.files, 2);
+        assert_eq!(report.shared.files, 1);
+        assert_eq!(report.author_owned.files, 1);
+        assert_eq!(report.heroes, vec!["shadow_fiend", "nevermore"]);
+    }
+
+    #[test]
+    fn inference_and_scope_share_one_hero_rule() {
+        assert_eq!(
+            hero_folder(&["models", "heroes", "axe", "sub"]),
+            Some("axe")
+        );
+        assert_eq!(hero_folder(&["models", "items", "axe"]), Some("axe"));
+        assert_eq!(
+            hero_folder(&["particles", "units", "heroes", "hero_axe"]),
+            Some("axe")
+        );
+        assert_eq!(
+            hero_folder(&["particles", "units", "heroes", "hero_"]),
+            None
+        );
+        assert_eq!(hero_folder(&["particles", "units", "heroes", "axe"]), None);
+        assert_eq!(
+            hero_folder(&["particles", "econ", "items", "axe", "x"]),
+            Some("axe")
+        );
+        assert_eq!(
+            hero_folder(&["materials", "models", "items", "axe", "x"]),
+            Some("axe")
+        );
+        assert_eq!(hero_folder(&["materials", "default"]), None);
+        assert_eq!(hero_folder(&["models", "heroes"]), None);
+    }
+
+    #[test]
+    fn scope_specs_must_be_well_formed() {
+        let base = || spec(SharedPolicy::Strip);
+        assert!(base().validate().is_ok());
         for bad in [
-            "units",
-            "econ",
-            "materials",
-            "particles",
-            "heroes",
-            "hero_keeper",
-            "keeper_of_the_light",
-            "abc",
-            "Darkness",
-            "dark-ness",
-            "9lives",
-            "",
+            ScopeSpec {
+                heroes: vec![],
+                ..base()
+            },
+            ScopeSpec {
+                heroes: vec!["Keeper".to_string()],
+                ..base()
+            },
+            ScopeSpec {
+                heroes: vec!["a".to_string()],
+                ..base()
+            },
+            ScopeSpec {
+                heroes: vec!["axe".to_string(), "axe".to_string()],
+                ..base()
+            },
+            ScopeSpec {
+                heroes: (0..=MAX_HEROES).map(|i| format!("hero{i}")).collect(),
+                ..base()
+            },
+            // unsorted, duplicated, upper-case, unsafe or hero-owned entries
+            ScopeSpec {
+                shared_paths: vec!["b/b.vtex_c".to_string(), "a/a.vtex_c".to_string()],
+                ..base()
+            },
+            ScopeSpec {
+                shared_paths: vec!["a/a.vtex_c".to_string(), "a/a.vtex_c".to_string()],
+                ..base()
+            },
+            ScopeSpec {
+                shared_paths: vec!["A/a.vtex_c".to_string()],
+                ..base()
+            },
+            ScopeSpec {
+                shared_paths: vec!["../a.vtex_c".to_string()],
+                ..base()
+            },
+            ScopeSpec {
+                shared_paths: vec!["a b/a.vtex_c".to_string()],
+                ..base()
+            },
+            ScopeSpec {
+                shared_paths: vec!["models/items/keeper_of_the_light/a.vmdl_c".to_string()],
+                ..base()
+            },
         ] {
             assert_eq!(
-                make(bad).validate().err().as_deref(),
+                bad.validate().err().as_deref(),
                 Some("skin_scope_invalid"),
-                "{bad}"
+                "{bad:?}"
             );
         }
-        let duplicate = ScopeSpec {
-            author_namespaces: vec!["darkness".to_string(), "darkness".to_string()],
-            ..make("darkness")
-        };
-        assert!(duplicate.validate().is_err());
-        let hero = ScopeSpec {
-            hero: "Keeper".to_string(),
-            ..make("darkness")
-        };
-        assert!(hero.validate().is_err());
     }
 
     #[test]
@@ -1162,7 +1650,7 @@ mod tests {
             Some("vpk_version_unsupported")
         );
         let bad_spec = ScopeSpec {
-            hero: "Bad Hero".to_string(),
+            heroes: vec!["Bad Hero".to_string()],
             ..spec(SharedPolicy::Strip)
         };
         assert_eq!(
@@ -1189,26 +1677,64 @@ mod tests {
         assert_eq!(selection.report.entries, 2);
     }
 
-    /// Local-only: analyzes the real sample archive named by the
-    /// `BETTERFY_SKIN_SAMPLE` environment variable and prints the report.
-    /// The archive is never part of the repository or of any fixture.
     #[test]
-    fn analyzes_the_local_sample_archive_when_given() {
-        let Ok(path) = std::env::var("BETTERFY_SKIN_SAMPLE") else {
-            return;
-        };
-        let bytes = std::fs::read(&path).expect("sample archive");
-        let spec = ScopeSpec {
-            hero: "keeper_of_the_light".to_string(),
-            author_namespaces: vec!["darkness".to_string()],
-            shared_policy: SharedPolicy::Strip,
-        };
-        let analysis = analyze(&bytes, &spec, &Limits::default()).expect("analysis");
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&analysis.report).expect("report json")
+    fn author_owned_paths_are_exposed_for_the_game_check() {
+        let bytes = archive(&skin_files());
+        let analysis =
+            analyze(&bytes, &spec(SharedPolicy::Strip), &Limits::default()).expect("analysis");
+        let owned = analysis.author_owned_paths();
+        assert_eq!(owned.len(), analysis.report.author_owned.files);
+        assert!(owned.contains(&"darkness/materials/body.vmat_c".to_string()));
+        assert!(!owned.iter().any(|path| path.contains("kotl_hood")));
+    }
+
+    #[test]
+    fn a_game_check_informs_under_install_and_leaves_files_out_under_strip() {
+        let bytes = archive(&skin_files());
+        // The game ships one of the skin's own files, one hero file and one
+        // shared file.
+        let game = BTreeSet::from([
+            "particles/basic_ember/basic_ember.vpcf_c".to_string(),
+            "models/heroes/keeper_of_the_light/kotl_hood.vmdl_c".to_string(),
+            "particles/basic_ambient/basic_ambient.vpcf_c".to_string(),
+        ]);
+
+        let mut install =
+            analyze(&bytes, &spec(SharedPolicy::Install), &Limits::default()).expect("analysis");
+        let before = install.report.install.clone();
+        install.apply_game_check(&game);
+        assert_eq!(
+            install.report.new_in_game,
+            vec!["particles/basic_ember/basic_ember.vpcf_c"]
         );
-        assert!(!analysis.report.hostile);
-        assert_eq!(analysis.report.install.blocked, None);
+        // Information only: nothing changes in the install.
+        assert_eq!(install.report.install, before);
+        assert_eq!(install.report.author_owned.files, 6);
+        assert!(install
+            .into_selection()
+            .expect("selection")
+            .files
+            .contains_key("particles/basic_ember/basic_ember.vpcf_c"));
+
+        let mut strip =
+            analyze(&bytes, &spec(SharedPolicy::Strip), &Limits::default()).expect("analysis");
+        let before = strip.report.install.clone();
+        strip.apply_game_check(&game);
+        assert_eq!(
+            strip.report.new_in_game,
+            vec!["particles/basic_ember/basic_ember.vpcf_c"]
+        );
+        assert_eq!(strip.report.install.files, before.files - 1);
+        assert_eq!(strip.report.install.stripped_shared, 11);
+        assert_eq!(strip.report.author_owned.files, 5);
+        assert_eq!(strip.report.shared.files, 11);
+        assert_ne!(strip.report.install.identity, before.identity);
+        let selection = strip.into_selection().expect("selection");
+        assert!(!selection
+            .files
+            .contains_key("particles/basic_ember/basic_ember.vpcf_c"));
+        assert!(selection
+            .files
+            .contains_key("models/heroes/keeper_of_the_light/kotl_hood.vmdl_c"));
     }
 }

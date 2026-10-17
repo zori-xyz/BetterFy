@@ -25,6 +25,8 @@ mod system_diagnostics;
 mod tree_pilot;
 mod vpk;
 mod wardrobe;
+#[cfg(test)]
+mod wardrobe_audit;
 
 use auth_session::{
     auth_begin_device_challenge, auth_begin_email, auth_cancel_device_challenge,
