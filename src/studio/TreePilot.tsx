@@ -29,12 +29,15 @@ import {
 import { useLocale } from "../i18n";
 import { deliveryLabel, modById } from "./model";
 import {
+  MAX_BUNDLE_BYTES,
   MAX_BUNDLE_PACKAGES,
   engineIdFor,
   findPackage,
   bundleRelationProblem,
   installablePackages,
   packageName,
+  wardrobeBytes,
+  withSharedMode,
 } from "./packages";
 import { setEngineActive } from "./engineActivity";
 import { journal } from "./builder/journal";
@@ -177,6 +180,20 @@ export default function TreePilot({
   const [dotaPatched, setDotaPatched] = useState(false);
   // The plan whose wardrobe path conflicts the person confirmed.
   const [acknowledgedPlan, setAcknowledgedPlan] = useState<string | null>(null);
+  // Skins the person asked to keep the game's shared files untouched for (the
+  // opt-in mode). Engine IDs. The default, installing everything the archive
+  // carries, needs no entry.
+  const [keepShared, setKeepShared] = useState<ReadonlySet<string>>(() => new Set());
+  const idsFor = (keep: ReadonlySet<string>) =>
+    ids.map((id) => withSharedMode(id, keep.has(engineIdFor(id))));
+  // What the engine is asked for: the ID of each item in the chosen mode, so
+  // the mode is part of the reviewed plan.
+  const requestIds = idsFor(keepShared);
+  // The engine IDs a plan must carry to be the one asked for. A ref, because
+  // the status poll and the first answer after a mode switch run before the
+  // state that holds the switch has re-rendered.
+  const expectedIdsRef = useRef<string[]>([]);
+  expectedIdsRef.current = requestIds.map(engineIdFor);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   // Only work that touches game files or Steam blocks the rest of the app.
@@ -217,6 +234,7 @@ export default function TreePilot({
   const conflictsPending =
     (plan?.wardrobeConflicts.length ?? 0) > 0 && acknowledgedPlan !== plan?.planId;
   // Packages whose manifest records no in-game verification yet.
+  const skinBytes = wardrobeBytes(requestIds);
   const unverified = ids.filter((id) => !findPackage(id)?.verifiedLanguages?.length);
   function applyDownloadStatus(status: TreePilotDownloadStatus | null) {
     if (!status) return;
@@ -249,7 +267,7 @@ export default function TreePilot({
         );
     }
     if (status.phase === "ready") {
-      const expectedIds = ids.map(engineIdFor);
+      const expectedIds = expectedIdsRef.current;
       if (
         status.plan?.planId.startsWith("sha256:") &&
         status.plan.packageIds.join("|") === expectedIds.join("|")
@@ -283,7 +301,7 @@ export default function TreePilot({
     return () => {
       active = false;
     };
-  }, [desktop, ids.join("|"), operationId]);
+  }, [desktop, requestIds.join("|"), operationId]);
   useEffect(() => {
     if (phase !== "download") return;
     let active = true;
@@ -425,8 +443,10 @@ export default function TreePilot({
     };
   }, [canManage, installation.path, demoDeveloper]);
 
-  async function prepare() {
+  async function prepare(keep: ReadonlySet<string> = keepShared) {
     if (!desktop || phase !== "idle") return;
+    const sendIds = idsFor(keep);
+    expectedIdsRef.current = sendIds.map(engineIdFor);
     setError("");
     setPhase("download");
     phaseRef.current = "download";
@@ -438,7 +458,7 @@ export default function TreePilot({
     try {
       applyDownloadStatus(
         await bridge.beginTreePilotDownload(
-          ids,
+          sendIds,
           installation.verified ? installation.path : undefined,
         ),
       );
@@ -446,6 +466,20 @@ export default function TreePilot({
       setError(codeOf(cause));
       setPhase("idle");
     }
+  }
+
+  // The per-item switch in the review: the plan is prepared again for the
+  // other mode (the archive is already stored, so this is a rebuild).
+  function toggleKeepShared(packageId: string, keep: boolean) {
+    const base = findPackage(packageId)?.id;
+    if (!base || phase !== "idle") return;
+    const next = new Set(keepShared);
+    if (keep) next.add(base);
+    else next.delete(base);
+    setKeepShared(next);
+    setPlan(null);
+    setAcknowledgedPlan(null);
+    void prepare(next);
   }
 
   async function cancelPrepare() {
@@ -487,7 +521,7 @@ export default function TreePilot({
       );
       const receipt = await bridge.installTreePilot(
         installation.path,
-        ids,
+        requestIds,
         plan.planId,
         selectedLanguage,
         plan.wardrobeConflicts.length > 0,
@@ -951,7 +985,7 @@ export default function TreePilot({
       try {
         await bridge.installTreePilotStress(
           installation.path,
-          ids,
+          requestIds,
           plan.planId,
           selectedLanguage,
           failurePoint,
@@ -1481,7 +1515,7 @@ export default function TreePilot({
             2,
             "0",
           )}
-          <i>/{String(installablePackages.length).padStart(2, "0")}</i>
+          <i>/{String(Math.min(installablePackages.length, MAX_BUNDLE_PACKAGES)).padStart(2, "0")}</i>
         </span>
       </header>
       {demo && <DemoPanel />}
@@ -1584,6 +1618,17 @@ export default function TreePilot({
             : `Not checked in game yet: ${unverified.map(packageLabel).join(", ")}. If something is off, restore in one click.`}
         </p>
       )}
+      {!plan && !operationId && skinBytes > MAX_BUNDLE_BYTES / 2 && (
+        <p className={`b-pilot-hint${skinBytes > MAX_BUNDLE_BYTES ? " b-pilot-blocker is-warning" : ""}`}>
+          {skinBytes > MAX_BUNDLE_BYTES
+            ? isRu
+              ? `Облики в сборке весят ${formatBytes(skinBytes, true)}, а в один файл помещается не больше ${formatBytes(MAX_BUNDLE_BYTES, true)}. Убери один из обликов, иначе подготовка сборки остановится.`
+              : `The skins in this build add ${formatBytes(skinBytes, false)}, and one file can hold at most ${formatBytes(MAX_BUNDLE_BYTES, false)}. Remove a skin, or the build will not prepare.`
+            : isRu
+              ? `Облики в сборке весят ${formatBytes(skinBytes, true)} из ${formatBytes(MAX_BUNDLE_BYTES, true)}, которые помещаются в один файл.`
+              : `The skins in this build add ${formatBytes(skinBytes, false)} of the ${formatBytes(MAX_BUNDLE_BYTES, false)} one file can hold.`}
+        </p>
+      )}
       {plan && !operationId && (
         <WardrobeReview
           plan={plan}
@@ -1591,6 +1636,7 @@ export default function TreePilot({
           acknowledged={!conflictsPending}
           disabled={phase !== "idle"}
           onAcknowledge={(value) => setAcknowledgedPlan(value ? plan.planId : null)}
+          onToggleKeepShared={toggleKeepShared}
         />
       )}
       {plan && !operationId && (

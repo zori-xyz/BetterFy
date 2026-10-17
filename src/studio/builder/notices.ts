@@ -182,6 +182,10 @@ export const explainError = (code: string, isRu: boolean) => {
       "В сборке есть файлы, которые меняют сразу несколько наборов. Просмотри список и подтверди его, затем повтори.",
       "Some files are changed by more than one item in the build. Review the list, confirm it, and retry.",
     ],
+    bundle_limit_exceeded: [
+      "Сборка не помещается в один файл: образ может занимать не больше 256 МБ. Убери один из обликов или включи «Не трогать общие файлы игры» (так сборка меньше), затем подготовь заново.",
+      "The build does not fit in one file: the merged VPK can hold at most 256 MB. Remove a skin, or turn on \"Keep the game's shared files untouched\" (it makes the build smaller), then prepare again.",
+    ],
     wardrobe_audit_mismatch: [
       "Архив не совпал с проверенным описанием. BetterFy не будет его ставить.",
       "The archive does not match its audited description. BetterFy will not install it.",
@@ -242,6 +246,12 @@ const groups: Array<{
   {
     codes: ["wardrobe_conflict_unacknowledged"],
     title: ["Нужно подтвердить общие файлы", "Shared files need your confirmation"],
+    action: null,
+    tone: "warn",
+  },
+  {
+    codes: ["bundle_limit_exceeded"],
+    title: ["Сборка слишком большая", "The build is too big"],
     action: null,
     tone: "warn",
   },
