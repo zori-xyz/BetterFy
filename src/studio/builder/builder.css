@@ -1883,6 +1883,12 @@
   font-size: var(--s-text-md);
   cursor: pointer;
 }
+.b-check > span small {
+  display: block;
+  margin-top: 2px;
+  color: var(--s-quiet);
+  font-size: var(--s-text-sm, 0.85em);
+}
 .b-check input {
   flex: none;
   width: 16px;

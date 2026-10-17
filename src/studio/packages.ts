@@ -2,8 +2,10 @@ import { useSyncExternalStore } from "react";
 import type { Language } from "../i18n";
 
 // The same manifest files the Rust engine embeds (src-tauri/packages for game
-// tuning, src-tauri/wardrobe for audited hero skins), so the interface and the
-// engine can never disagree on what is installable.
+// tuning; src-tauri/wardrobe/index.json is the interface's copy of the audited
+// hero skins in manifests.json, and a Rust test requires it to be derived from
+// them), so the interface and the engine can never disagree on what is
+// installable.
 type PackageManifest = {
   id: string;
   catalogId: string;
@@ -16,20 +18,31 @@ type PackageManifest = {
   verifiedLanguages?: string[];
   conflicts?: string[];
   requires?: string[];
+  /** Wardrobe items: heroes the skin is for and the audited install sizes. */
+  heroes?: string[];
+  installFiles?: number;
+  installBytes?: number;
+  /** The same install without the files that override a shared Valve file. */
+  stripBytes?: number;
+  /** How many accepted files override a shared Valve file. */
+  sharedFiles?: number;
 };
 
-const manifests = {
-  ...import.meta.glob<PackageManifest>("../../src-tauri/packages/*.json", {
-    eager: true,
-    import: "default",
-  }),
-  ...import.meta.glob<PackageManifest>("../../src-tauri/wardrobe/*.json", {
-    eager: true,
-    import: "default",
-  }),
-};
+const wardrobeIndex = import.meta.glob<PackageManifest[]>("../../src-tauri/wardrobe/index.json", {
+  eager: true,
+  import: "default",
+});
+const manifests: PackageManifest[] = [
+  ...Object.values(
+    import.meta.glob<PackageManifest>("../../src-tauri/packages/*.json", {
+      eager: true,
+      import: "default",
+    }),
+  ),
+  ...Object.values(wardrobeIndex).flat(),
+];
 
-export const installablePackages: PackageManifest[] = Object.values(manifests)
+export const installablePackages: PackageManifest[] = manifests
   .filter((manifest) => !manifest.supersededBy)
   .sort((a, b) => a.catalogId.localeCompare(b.catalogId));
 
@@ -42,7 +55,7 @@ function index(manifest: PackageManifest) {
   byAnyId.set(manifest.catalogId, manifest);
   pilotCatalogIds.add(manifest.catalogId);
 }
-Object.values(manifests).forEach(index);
+manifests.forEach(index);
 
 // The engine may activate a newer signed catalog at runtime. Its summaries
 // replace or extend the embedded list; subscribers re-render.
@@ -81,8 +94,53 @@ export function usePackagesRevision() {
 /** Upper bound on packages the engine merges into one build (tree_pilot.rs). */
 export const MAX_BUNDLE_PACKAGES = 32;
 
+/**
+ * The engine ID suffix of the opt-in mode of a wardrobe item that leaves the
+ * game's shared files untouched (`wardrobe.<name>.strip`). The engine treats
+ * it as a separate package ID, so the mode is part of the reviewed plan.
+ */
+export const STRIP_SUFFIX = ".strip";
+
+/** The item an ID names and whether it carries the opt-in suffix. */
+function splitMode(id: string) {
+  return id.endsWith(STRIP_SUFFIX)
+    ? { base: id.slice(0, -STRIP_SUFFIX.length), strip: true }
+    : { base: id, strip: false };
+}
+
+/** Catalog, engine or `.strip` engine ID; the suffix only exists on skins. */
 export function findPackage(id: string) {
-  return byAnyId.get(id);
+  const { base, strip } = splitMode(id);
+  const manifest = byAnyId.get(base);
+  return strip && manifest?.kind !== "wardrobe" ? undefined : manifest;
+}
+
+/** Whether the ID selects the opt-in mode that leaves shared game files out. */
+export function isSharedKept(id: string) {
+  return splitMode(id).strip && findPackage(id) !== undefined;
+}
+
+/** The request ID for an item in the chosen mode. */
+export function withSharedMode(id: string, keepShared: boolean) {
+  const manifest = findPackage(id);
+  const base = manifest?.id ?? splitMode(id).base;
+  return keepShared && manifest?.kind === "wardrobe" ? `${base}${STRIP_SUFFIX}` : base;
+}
+
+/** Upper bound on the merged VPK (mod_bundle.rs): 256 MiB of file data. */
+export const MAX_BUNDLE_BYTES = 256 * 1024 * 1024;
+
+/**
+ * What the selected skins add to the merged VPK, from the audited sizes. Each
+ * item counts in its own mode, so the warning matches the engine's check.
+ */
+export function wardrobeBytes(ids: string[]) {
+  return ids.reduce((total, id) => {
+    const manifest = findPackage(id);
+    if (manifest?.kind !== "wardrobe") return total;
+    const bytes = isSharedKept(id) ? manifest.stripBytes : manifest.installBytes;
+    return total + (bytes ?? 0);
+  }, 0);
 }
 
 /** Whether the package is an audited hero skin rather than a game-tuning mod. */
@@ -91,7 +149,10 @@ export function isWardrobePackage(id: string) {
 }
 
 export function engineIdFor(catalogId: string) {
-  return findPackage(catalogId)?.id ?? catalogId;
+  const { base, strip } = splitMode(catalogId);
+  const manifest = findPackage(catalogId);
+  if (!manifest) return catalogId;
+  return strip ? `${manifest.id}${STRIP_SUFFIX}` : (byAnyId.get(base)?.id ?? catalogId);
 }
 
 /**

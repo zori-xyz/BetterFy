@@ -248,42 +248,58 @@ export type SkinRejectReason =
 
 /** What the skin-archive analyzer found (src-tauri/src/skin_archive.rs). */
 export type SkinReport = {
-  hero: string;
-  sharedPolicy: "strip" | "refuse";
+  /** Internal names of the heroes the skin is for. */
+  heroes: string[];
+  /**
+   * `install` (the default) puts every accepted file into the build; `strip`
+   * is the opt-in that leaves the shared game files out.
+   */
+  sharedPolicy: "install" | "strip" | "refuse";
   entries: number;
   totalBytes: number;
   archiveIdentity: string;
   heroScoped: SkinClassStat;
   authorOwned: SkinClassStat;
-  /** Files that would change other heroes or the interface. */
+  /**
+   * Files that override a Valve file outside the heroes' own (other heroes,
+   * shared effects, the interface). Installed by default, left out in `strip`.
+   */
   shared: SkinClassStat;
   rejected: SkinClassStat;
+  /** Accepted paths whose upper-case letters were folded to lower case. */
+  renamed: number;
   imageWrappers: number;
   rejectedPaths: Array<{ path: string; reason: SkinRejectReason; bytes: number }>;
   sharedPaths: Array<{ path: string; bytes: number }>;
-  suggestedNamespaces: string[];
+  /** Files the skin adds that the player's own game ships now (informational). */
+  newInGame: string[];
   hostile: boolean;
   install: {
     files: number;
     bytes: number;
     identity: string;
-    /** Shared files dropped from the install, each listed in `sharedPaths`. */
+    /** Shared files left out of the install (only in `strip`), listed in `sharedPaths`. */
     strippedShared: number;
     blocked: string | null;
   };
 };
 
 export type WardrobePlanItem = {
+  /** The engine ID of this selection: `wardrobe.<name>`, plus `.strip` in the opt-in mode. */
   packageId: string;
   catalogId: string;
-  hero: string;
-  sourceUrl: string;
+  heroes: string[];
+  /** The mirrors the archive may come from, in the order they are tried. */
+  sourceUrls: string[];
   archiveSha256: string;
   catalogSnapshot: string;
   /** How permission to use the item was established, as recorded. */
   permission: string;
   verifiedLanguages: string[];
   compatibilityNote: string | null;
+  sharedPolicy: "install" | "strip";
+  /** Whether the skin's files were also compared with the player's own game. */
+  gameChecked: boolean;
   report: SkinReport;
 };
 

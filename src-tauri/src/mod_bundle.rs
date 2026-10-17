@@ -5,8 +5,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::vpk::{self, VpkInput};
 
 const MAX_PACKAGES: usize = 64;
-const MAX_RESOURCES: usize = 65_536;
-const MAX_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
+/// Limits of one merged VPK (`vpk.rs` writes at most this many entries and
+/// bytes). The builder checks a wardrobe selection against them before it
+/// downloads anything.
+pub(crate) const MAX_RESOURCES: usize = 65_536;
+pub(crate) const MAX_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
 pub(crate) struct BundlePackage {

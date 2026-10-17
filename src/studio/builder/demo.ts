@@ -9,7 +9,7 @@ import {
   type WardrobePlanItem,
 } from "../../engine";
 import { getStorageItem, setStorageItem } from "../../storage";
-import { engineIdFor, findPackage, isWardrobePackage } from "../packages";
+import { engineIdFor, findPackage, isSharedKept, isWardrobePackage } from "../packages";
 
 // The browser preview has no Rust engine. To show the whole builder there,
 // this bridge plays the Windows flow with timers: nothing is downloaded and
@@ -113,52 +113,91 @@ const demoShared = [
   "particles/status_fx/status_effect_keeper_spirit_form.vpcf_c",
 ];
 
+// The demo's one skin in both modes: everything the archive carries (the
+// default) or without the shared game files (the opt-in). Class counts are
+// illustrative; the install totals are the audited ones.
+const DEMO_SKIN = {
+  heroScoped: { files: 214, bytes: 1343162 },
+  shared: { files: 27, bytes: 4147352 },
+  install: { files: 996, bytes: 57855637 },
+  strip: { files: 969, bytes: 53708285 },
+};
+
 function demoWardrobeItem(packageId: string): WardrobePlanItem {
-  const sharedPaths = demoShared.map((path) => ({ path, bytes: 4096 }));
+  const keepShared = isSharedKept(packageId);
+  const sharedPaths = demoShared
+    .slice(0, DEMO_SKIN.shared.files)
+    .map((path) => ({ path, bytes: 4096 }));
+  const kept = keepShared ? DEMO_SKIN.strip : DEMO_SKIN.install;
   return {
     packageId,
     catalogId: findPackage(packageId)?.catalogId ?? packageId,
-    hero: "keeper_of_the_light",
-    sourceUrl: "https://huggingface.co/datasets/hrdq/Dota2PornFx/",
+    heroes: ["keeper_of_the_light"],
+    sourceUrls: [
+      "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/files/heroes/",
+      "https://huggingface.co/datasets/hrdq/Dota2PornFx/",
+    ],
     archiveSha256: "f9f0c2f63a9989ea6fd2779cfea1676a2e07bd94eabab9e0c2127a68e7e268a7",
     catalogSnapshot: "demo",
     permission: "founder_reported_author_consent",
     verifiedLanguages: [],
     compatibilityNote: null,
+    sharedPolicy: keepShared ? "strip" : "install",
+    gameChecked: true,
     report: {
-      hero: "keeper_of_the_light",
-      sharedPolicy: "strip",
+      heroes: ["keeper_of_the_light"],
+      sharedPolicy: keepShared ? "strip" : "install",
       entries: 1010,
       totalBytes: 58047211,
       archiveIdentity: "6dfba0d998fb954c36a1bb7a844e92b7bf6805d5f691ff9560525d86bbe70e57",
-      heroScoped: { files: 214, bytes: 1343162 },
-      authorOwned: { files: 737, bytes: 51937190 },
-      shared: { files: sharedPaths.length, bytes: 4575285 },
+      heroScoped: DEMO_SKIN.heroScoped,
+      authorOwned: {
+        files: DEMO_SKIN.install.files - DEMO_SKIN.heroScoped.files - DEMO_SKIN.shared.files,
+        bytes:
+          DEMO_SKIN.install.bytes - DEMO_SKIN.heroScoped.bytes - DEMO_SKIN.shared.bytes,
+      },
+      shared: DEMO_SKIN.shared,
       rejected: { files: 2, bytes: 20000 },
+      renamed: 0,
       imageWrappers: 11,
       rejectedPaths: [
         { path: "particles/darkness/flame.vpcf", reason: "uncompiled_source", bytes: 7152 },
         { path: "particles/darkness/sparks.vpcf", reason: "uncompiled_source", bytes: 31744 },
       ],
       sharedPaths,
-      suggestedNamespaces: ["darkness", "kisilev_ind"],
+      newInGame: [],
       hostile: false,
       install: {
-        files: 951,
-        bytes: 53280352,
-        identity: "eaa2727992025de0f2e820859c673dfae9ad6a2c553a76c1dbb9761ebff98c82",
-        strippedShared: sharedPaths.length,
+        files: kept.files,
+        bytes: kept.bytes,
+        identity: keepShared
+          ? "371151d7332ba44baf2dce9ad86a32bbaa23aa19a5730be418607d630adbe521"
+          : "c9c9ac4bc822df19c6daf8b01ffecbf44c09dde8f051423a0ab3273ee5da0dc1",
+        strippedShared: keepShared ? sharedPaths.length : 0,
         blocked: null,
       },
     },
   };
 }
 
+function demoSkinBytes(packageIds: string[]) {
+  return packageIds
+    .filter(isWardrobePackage)
+    .reduce(
+      (total, id) => total + (isSharedKept(id) ? DEMO_SKIN.strip.bytes : DEMO_SKIN.install.bytes),
+      0,
+    );
+}
+
 function demoPlan(ids: string[]): TreePilotPlan {
   const packageIds = ids.map(engineIdFor);
   const wardrobe = packageIds.filter(isWardrobePackage).map(demoWardrobeItem);
   const contributions = packageIds.map((packageId, index) => {
-    const input = isWardrobePackage(packageId) ? 951 : resourcesFor(packageId);
+    const input = isWardrobePackage(packageId)
+      ? isSharedKept(packageId)
+        ? DEMO_SKIN.strip.files
+        : DEMO_SKIN.install.files
+      : resourcesFor(packageId);
     const shadowed = index > 0 && packageIds.length > 2 ? Math.min(3, input - 1) : 0;
     return {
       packageId,
@@ -177,8 +216,8 @@ function demoPlan(ids: string[]): TreePilotPlan {
     sourceCommit: "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
     targetFile: "pak66_dir.vpk",
     resourceCount,
-    resourceBytes: resourceCount * 2048 + (wardrobe.length ? 53280352 : 0),
-    vpkBytes: resourceCount * 1310 + 4096 + (wardrobe.length ? 53327413 : 0),
+    resourceBytes: resourceCount * 2048 + demoSkinBytes(packageIds),
+    vpkBytes: resourceCount * 1310 + 4096 + demoSkinBytes(packageIds),
     vpkSha256: "d3m0c0ffee5a1t" + "0".repeat(50),
     bundlePlanId: "demo",
     packageCount: packageIds.length,

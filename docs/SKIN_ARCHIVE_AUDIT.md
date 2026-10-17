@@ -1,192 +1,165 @@
-# Skin archive audit: first sample
+# Skin archive audit
 
-Status: the first version of this audit was analysis only. The rules below are
-now implemented as an analyzer (`src-tauri/src/skin_archive.rs`) and this one
-archive is pinned in an embedded allowlist, so the engine can plan and install
-it through the normal backup and rollback transaction (see "Wardrobe items" in
-[ENGINE_ARCHITECTURE.md](ENGINE_ARCHITECTURE.md)). Nothing has been run in
-Dota: no skin has been installed on Windows, and whether this one looks right
-in the game, with or without its shared files, is open. The Windows steps are
-in [SKIN_WINDOWS_TEST_PLAN.md](SKIN_WINDOWS_TEST_PLAN.md). This note records what
-a real third-party hero skin contains, so the intake rules for wardrobe content
-rest on one concrete archive instead of a guess.
+Status: the analyzer (`src-tauri/src/skin_archive.rs`) classifies the files of a
+third-party hero skin VPK, and the embedded allowlist
+(`src-tauri/wardrobe/manifests.json`, generated) pins 471 audited catalog
+archives so the engine can plan and install them through the normal backup and
+rollback transaction (see "Wardrobe items" in
+[ENGINE_ARCHITECTURE.md](ENGINE_ARCHITECTURE.md) and the catalog-wide numbers in
+[WARDROBE_AUDIT_REPORT.md](WARDROBE_AUDIT_REPORT.md)). Nothing has been run in
+Dota through BetterFy: no skin has been installed by the app on Windows, and
+whether any of them looks right in the game when BetterFy installs it is open.
+The Windows steps are in [SKIN_WINDOWS_TEST_PLAN.md](SKIN_WINDOWS_TEST_PLAN.md).
 
-The founder reports that the skin's authors agreed to community use. The
-archive carries no licence file, so that statement is recorded in the allowlist
-entry as reported, not as a licence.
+The founder reports that the skins' authors agreed to community use. The
+archives carry no licence file, so that statement is recorded in every
+allowlist entry as `founder_reported_author_consent`, not as a licence.
 
-## Sample
+## What changed, and why (the earlier rule is superseded)
+
+The first version of this audit proposed, and the first analyzer implemented,
+**stripping the shared game files by default**: any file in a skin that was not
+the hero's own or in a namespace the author owned was dropped from the install
+and listed. That rule is superseded.
+
+The reason is evidence from real Windows use, reported by the founder: when he
+drops these skin VPKs into the language folder as they are (the way the
+upstream project's own install guide describes), everything works, with the
+colours and the full new look. Installing the whole archive is therefore the
+known-good behaviour, and stripping files can break the look (textures and
+materials missing or replaced by the game's own). The default is now
+**install every accepted file**. Stripping the shared game files is an explicit,
+per-skin opt-in ("Keep the game's shared files untouched" in the build review),
+off by default, and the interface says it may change how the skin looks.
+
+What stays exactly as before: scripts, executables, uncompiled sources, unknown
+file types, unsafe paths, empty and oversized files and name collisions are
+still rejected, and the pinned hashes, the analyzer re-run on every build, the
+backup, the journal and the rollback are unchanged. Valve's file list is still
+used, but to *describe* the archive (which files override a shared game file)
+instead of to drop them.
+
+## Sample: Scarlet Keeper of the Light
 
 | Field | Value |
 | --- | --- |
 | Catalog entry | `heroes-scarlet-keeper-of-the-light` ("Scarlet Keeper of the Light") |
 | Catalog author | Darkness (per the catalog's author link) |
-| Catalog source | Dota2PornFxWeb snapshot 2026-07-26; archive hosted on the project's Hugging Face dataset |
+| Catalog source | Dota2PornFxWeb snapshot 2026-07-26; mirrored on the project's GitHub repository and Hugging Face dataset |
 | Archive | `Scarlet Keeper.zip`, 24,071,988 bytes, SHA-256 `f9f0c2f63a9989ea6fd2779cfea1676a2e07bd94eabab9e0c2127a68e7e268a7` |
 | Contents | one file, `pak59_dir.vpk`, 58,096,981 bytes, VPK version 2, every entry embedded in the directory file (archive index 32767) |
 
 It was picked as a hard case on purpose: custom particle effects, custom
-materials, replaced hero models, replaced icons, and many files.
+materials, replaced hero models, replaced icons, and many files. It holds 1,010
+entries: 447 `vpcf_c` particle systems, 290 `vtex_c` textures, 225 `vsnap_c`
+snapshots, 18 `vmat_c` materials, 14 uncompiled `vpcf` leftovers, 11 `vxml_c`
+Panorama icon wrappers and 5 `vmdl_c` models; no scripts and no executables.
 
-## What is inside (1,010 entries)
+## What the analyzer finds on the sample
 
-| Extension | Count | Meaning |
-| --- | ---: | --- |
-| `vpcf_c` | 447 | compiled particle systems |
-| `vtex_c` | 290 | compiled textures |
-| `vsnap_c` | 225 | particle snapshots (baked point clouds) |
-| `vmat_c` | 18 | compiled materials |
-| `vpcf` | 14 | **uncompiled** particle source text |
-| `vxml_c` | 11 | compiled Panorama layouts (spell and hero icon wrappers) |
-| `vmdl_c` | 5 | compiled models |
-
-No `vjs_c` scripts and no executables. The 11 `vxml_c` files are about 1.9 KB
-each and have the shape of Valve's image wrappers: one `.png` and one
-`_png.vtex` dependency, nothing else readable in their strings.
-
-### By location
-
-| Location | Files | Kind |
-| --- | ---: | --- |
-| `particles/` | 583 | hero-scoped effects plus the shared files listed below |
-| `kisilev_ind/` | 185 | the author's own namespace, no Valve path |
-| `darkness/` | 178 | the author's own namespace, no Valve path |
-| `materials/` | 38 | hero and item materials plus shared ones, see below |
-| `panorama/images/` | 22 | spell and hero icons |
-| `models/heroes/keeper_of_the_light/` | 4 | hood, mount, skirt, staff (replacements for Valve models) |
-
-## Findings that shape the intake rules
-
-1. **The archive overrides shared game files.** Besides the hero's own paths
-   (`models/heroes/keeper_of_the_light`, `particles/units/heroes/hero_keeper_of_the_light`,
-   `particles/econ/items/keeper_of_the_light`, `materials/models/heroes|items/keeper_of_the_light`),
-   it replaces files every hero and the interface use:
-   `particles/basic_ambient|basic_explosion|basic_projectile|basic_rope|basic_trail`,
-   `particles/models/basic_trail`, `materials/default/*` (14 default textures),
-   `materials/particle/basic_*` (5 textures), `materials/models/cubemaps/*`
-   (9 cubemaps) and `materials/models/particle/net_color.vmat_c`. Installing it
-   as is would change how other heroes' effects and materials look. A skin must
-   be installed with a **scope filter**: only paths that belong to the hero (or
-   to a namespace the archive owns) are allowed by default; shared paths are
-   either stripped with a visible note or refuse the install. Which of the two
-   is right depends on whether the skin still looks correct without them, and
-   that has to be confirmed in the game.
-2. **Uncompiled `.vpcf` text files are present** (14 of them under
-   `particles/darkness/`). Dota loads compiled `_c` resources, so these are
-   most likely leftovers. They are not an allowed type and would be dropped.
-3. **`vxml_c` appears in a skin.** The project's script policy allows only
-   audited Panorama layouts. These 11 are icon wrappers, so the intake can
-   either keep them out of the first slice or admit a layout only when the
-   parsed structure matches the image-wrapper shape exactly (one image
-   dependency, no events, no scripts). The existing layout reader already
-   parses this container; a shape check is a smaller promise than a hash list,
-   but it is a new promise and needs its own tests.
-4. **Size.** 58 MB uncompressed in one archive. The deployment builder embeds
-   all entries into one VPK, so a build of several skins grows quickly; the
-   build plan should show the size before installing.
-5. **Provenance.** The catalog credits an author but the archive carries no
-   licence or credit file, and the catalog's own notice says it cannot
-   license other authors' work or Valve files inside mods. Public use needs the
-   author's permission, not only the catalog's licence.
-
-## Proposed rules for wardrobe archives
-
-- Allowed types: `vpcf_c`, `vsnap_c`, `vtex_c`, `vmat_c`, `vmdl_c`, `vmesh_c`,
-  `vanim_c`, `vsndevts_c`, `vsnd_c`. Everything else is rejected, including
-  `vjs_c`, uncompiled sources and executables.
-- `vxml_c` only through a structural image-wrapper check, or not in the first
-  slice.
-- Every path is classified before installing: hero-scoped, author-owned, or
-  shared. Shared paths never pass silently.
-- The reviewed plan lists counts per class, total size, and every rejected or
-  stripped path, and the user confirms exactly that plan.
-- The first end-to-end proof is this one archive, installed alone, played in
-  Dota on Windows, and restored; then two skins together, to cover conflicts.
-
-## Rules as implemented
-
-The proposed rules above became `skin_archive.rs`. Where the code is more
-specific than the proposal, this is what it does:
-
-- **Types.** Allowed: `vpcf_c`, `vsnap_c`, `vtex_c`, `vmat_c`, `vmdl_c`,
-  `vmesh_c`, `vanim_c`, `vsndevts_c`, `vsnd_c`, `vmorf_c`, `vagrp_c`, `vphys_c`.
-  Rejected: scripts (`vjs_c`), uncompiled sources (`.vpcf`, `.vmdl`, ...),
-  executables, empty files, files over 16 MiB, and every other type. Case
-  collisions between two entries reject both. An unsafe path (traversal,
-  uppercase, spaces, empty segments), a script or an executable also blocks the
-  whole install instead of being dropped.
-- **`vxml_c`.** Accepted only when the layout reader proves the file is Valve's
-  image wrapper: `root > Panel[class] > Image[id class src]`, no styles,
-  scripts, includes or event attributes, plain-text attribute values, one `src`
-  that is the sibling `<name>_png.vtex` of the wrapper, and a resource
-  reference list that names that one image and nothing else. If the reader
-  cannot prove it, the file is rejected.
-- **Scope.** Hero-scoped paths are the exact folders of one hero
-  (`models/heroes/<hero>`, `particles/units/heroes/hero_<hero>`,
-  `particles/econ/items/<hero>`, `materials/models/heroes|items/<hero>`, hero
-  files named `<hero>_*` directly in `particles/units/heroes`, and the hero and
-  spell icons under `panorama/images/heroes` and `panorama/images/spellicons`).
-  Author-owned paths are a top-level folder that is not one of Valve's, or a
-  folder or file under `particles/`, `materials/` or `models/` named after a
-  namespace a person declared in the allowlist entry (`darkness` here, which
-  covers `particles/darkness_snaps/...`). Declared namespaces are never derived
-  from the archive, because an archive that names its own top-level folder
-  `units` must not be able to claim `particles/units/...`. Everything else is
-  shared. The list of Valve's top-level folders is deliberately generous, and
-  one name on it only means a folder of that name is never author-owned.
-- **Shared policy.** `strip` (this entry) drops shared files and lists each one;
-  `refuse` refuses the install.
-- **Identity.** The report carries two SHA-256 identities over sorted path and
-  payload hash: one for every entry in the archive and one for the files that
-  will be installed. The allowlist entry pins both, and the analyzer must
-  reproduce them on every build.
-
-## What the analyzer found on the sample
-
-Run locally on a Mac against `pak59_dir.vpk` (VPK v2, all 1,010 entries
-embedded), with the hero `keeper_of_the_light`, the declared namespace
-`darkness` and the `strip` policy. This is a run of the code, not a Windows or
-in-game result.
+Run locally on a Mac against `pak59_dir.vpk` (a run of the code, not a Windows
+or in-game result), with the hero `keeper_of_the_light` and Valve's file list of
+2026-10-17 (388,116 entries):
 
 | Class | Files | Bytes |
 | --- | ---: | ---: |
 | Hero-scoped (includes the 11 image wrappers, all proven) | 214 | 1,343,162 |
-| Author-owned (`darkness/`, `kisilev_ind/`, `particles/darkness*`) | 737 | 51,937,190 |
-| Shared, stripped | 45 | 4,575,285 |
-| Rejected | 14 | 191,574 |
-| Archive total | 1,010 | 58,047,211 |
-| To install | 951 | 53,280,352 |
+| Author-owned (files the game does not ship) | 755 | 52,365,123 |
+| Overrides a shared Valve file | 27 | 4,147,352 |
+| Rejected (the 14 uncompiled `.vpcf`) | 14 | 191,574 |
+| **Install, default mode** | **996** | **57,855,637** |
+| Install with the shared files left out (opt-in) | 969 | 53,708,285 |
 
-- The 14 rejected files are all uncompiled `.vpcf` leftovers under
-  `particles/darkness/`, as predicted. No script, executable, unsafe path or
-  duplicate was found.
-- The 45 shared files are the ones the first audit named: 15 under
-  `materials/default`, 9 cubemaps under `materials/models/cubemaps`, 5 under
-  `materials/particle`, `materials/models/particle/net_color.vmat_c`, 12 under
-  `particles/basic_*`, `particles/models/basic_trail/basic_trail.vpcf_c`, and
-  the two `particles/status_fx/status_effect_keeper_spirit_form*` files. The
-  last two are named after the hero but live in a shared folder, so they are
-  shared by rule.
-- By bytes, about 97% of the install is the author's own namespaces; the
-  hero-scoped replacements are 214 files and 1.3 MB. The merged BetterFy VPK built from the 951 files
-  is 53,327,413 bytes.
-- Archive identity `6dfba0d998fb954c36a1bb7a844e92b7bf6805d5f691ff9560525d86bbe70e57`,
-  install identity `eaa2727992025de0f2e820859c673dfae9ad6a2c553a76c1dbb9761ebff98c82`,
+- The first audit counted 45 "shared" files by folder name and stripped them.
+  Valve's own list says only 27 of them exist in the game (15 default
+  textures with a hash suffix, cubemaps, `net_color`, status effects). The other
+  18 (`particles/basic_*/*.vpcf_c`, `materials/particle/basic_*.vtex_c`,
+  `particles/models/basic_trail`) exist nowhere in Valve's tree: they are new
+  files the skin's own effects very likely refer to, and stripping them is what
+  could leave references dangling. They are author-owned and always install.
+- Identities: archive `6dfba0d998fb954c36a1bb7a844e92b7bf6805d5f691ff9560525d86bbe70e57`,
+  install (default) `c9c9ac4bc822df19c6daf8b01ffecbf44c09dde8f051423a0ab3273ee5da0dc1`,
+  install (opt-in) `371151d7332ba44baf2dce9ad86a32bbaa23aa19a5730be418607d630adbe521`,
   inner VPK SHA-256 `12137a743ff91c8dc1341e32718580109f86c70df735e24b022929e38cc9a190`.
+- The merged BetterFy VPK built from the 996 files is 57,904,917 bytes, SHA-256
+  `69de05a590aa33a01479b166034198ef360ca554c7a0efbf530967a57fcd586b`, plan ID
+  `sha256:ba18ccfe2988d4266a7f9baaf145de4822e03597841948a8df8fe4c4eaf56fa3`
+  (reproduced by a second build). The opt-in build is 53,756,163 bytes.
+
+## Rules as implemented
+
+- **Types.** Allowed: `vpcf_c`, `vsnap_c`, `vtex_c`, `vmat_c`, `vmdl_c`,
+  `vmesh_c`, `vanim_c`, `vsndevts_c`, `vsnd_c`, `vmorf_c`, `vagrp_c`, `vphys_c`,
+  `vseq_c`. Rejected: scripts (`vjs_c`), uncompiled sources (`.vpcf`, `.vmdl`,
+  ...), executables, empty files, files over 16 MiB, and every other type
+  (`vcss_c`, `webm`, `txt`, images, ...).
+- **Paths.** Upper-case letters are folded to lower case (the game looks files
+  up case-insensitively, and BetterFy's VPK writer is lower-case only); each
+  fold is counted in the report ("names lower-cased"). Two entries equal once
+  folded are both rejected. Traversal, spaces, empty segments and any other odd
+  byte are an unsafe path and block the whole install. That is strict on
+  purpose and costs 21 catalog items (see the report); relaxing it for spaces is
+  a possible follow-up, not done here.
+- **`vxml_c`.** Accepted only when the layout reader proves the file is Valve's
+  image wrapper: `root > Panel[class] > Image[id class src]`, no styles,
+  scripts, includes or event attributes, plain-text attribute values, one `src`
+  that is the sibling `<name>_png.vtex` of the wrapper, and a resource
+  reference list that names that one image and nothing else. Otherwise it is
+  rejected.
+- **Scope (v2).** Every accepted path is hero-scoped, shared or author-owned.
+  *Hero-scoped*: the folders and files of the heroes the audit names (a hero can
+  have several internal names: `shadow_fiend` models and `nevermore` particles,
+  `queen_of_pain` and `queenofpain`, so the audit carries a set). The rules
+  cover `models/heroes|items/<h>`, `particles/units/heroes/hero_<h>`,
+  `particles/econ/items/<h>`, `materials/models/heroes|items/<h>`, the hero's
+  voice and weapon sounds, spell icon folders, hero and selection icons, the
+  `game_sounds_*` sound events and `status_effect_<h>_*`. *Shared*: a path that
+  exists in Valve's own file list at audit time and is not hero-scoped; the
+  audit pins that list (`sharedPaths`). *Author-owned*: everything else, that
+  is, files the game does not ship, whether in the author's own folders or new
+  files in Valve-looking folders. The class of a path is decided by the pinned
+  list, never by a name heuristic.
+- **Policy.** `install` (default): every accepted file goes into the build and
+  the shared files are counted and listed as information. `strip` (opt-in):
+  the shared files are left out and listed. `refuse` (analyzer only, not an
+  item mode): refuse an archive that carries any shared file.
+- **Identity.** The report carries SHA-256 identities over sorted path and
+  payload hash: one for every entry as the archive spells it, and one for the
+  files that will be installed. The allowlist entry pins the archive identity,
+  the default install result and the opt-in install result, and the analyzer
+  must reproduce the requested mode's numbers on every build.
+
+## Catalog-wide audit
+
+`heroes` (460 items) and `hero-items` (52) of the catalog were audited by the
+local generator (`wardrobe_audit::generate_wardrobe_allowlist`) against
+Valve's file list, `game/dota/pak01_dir.txt` of SteamDatabase/GameTracking-Dota2
+(SHA-256 `6d98c763afe09ba0de5caf0fc965b6b21f26eeb2954ff1e7744996ba056db1b7`,
+388,116 entries). The result, item by item, is in
+[WARDROBE_AUDIT_REPORT.md](WARDROBE_AUDIT_REPORT.md). In short: 471 of 512 items
+are allowlisted; the rest are listed with their reason (an archive over the
+64 MiB content-store bound, an unsafe path, an unreadable container, never
+fetched). Across the 471, 43,765 files are hero-scoped, 30,029 are files the
+game does not ship, and 2,636 override a shared Valve file; 265 items override
+none. Valve's list was taken from a public mirror on the day of the audit and
+reflects the game files at that time, not necessarily the player's patch; the
+build can also compare a skin with the player's own `pak01_dir.vpk` and report
+files the game ships now that the audit did not know (information only, see
+ENGINE_ARCHITECTURE).
 
 ## Not verified
 
-- Whether the skin works in the current Dota patch, with and without the shared
-  files. This decides whether `strip` is the right policy for it; the Windows
-  plan tests both the stripped install and, if it looks wrong, notes what is
-  missing.
-- Whether the Valve resources it replaces still exist at those paths after the
-  2026-07-23 patch.
+- Whether any skin works in the current Dota patch when BetterFy installs it.
+  The founder's hand-copy evidence covers the as-is behaviour, not BetterFy's
+  merged `pak66` file; the Windows plan tests it.
+- Whether the Valve resources a skin replaces still exist at those paths after
+  the 2026-07-23 patch, beyond what the player-side comparison reports.
 - The meaning of every byte in the `vxml_c` files beyond their parsed
   structure and strings.
 - Whether the bytes of any compiled file are well formed: the type allowlist
   limits what the game is asked to load, it does not parse every resource.
 - Whether the hero-name rules cover every Valve path a skin for another hero
-  needs (only this archive's shapes have been exercised), and whether Valve
-  has top-level folders missing from the analyzer's list.
+  needs. The hero names are inferred from Valve-present paths; 49 emitted items
+  carry more than one name and 44 still override a file in another hero's
+  folder (89 files in all), which is only information in the default mode.
 - Licensing beyond the founder's report.

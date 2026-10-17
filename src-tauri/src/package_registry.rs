@@ -105,7 +105,7 @@ fn audited(list: &[(&str, usize, &str)], path: &str, bytes: usize, sha256: &str)
     list.contains(&(path, bytes, sha256))
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LocalizedName {
     pub ru: String,

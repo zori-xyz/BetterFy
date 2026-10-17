@@ -1,53 +1,67 @@
 //! Wardrobe items: third-party hero skins installed through the same
 //! verified pipeline as the audited game-tuning packages.
 //!
-//! An item is installable only when it is in the embedded allowlist below
-//! (`src-tauri/wardrobe/*.json`, compiled into the binary; a signed catalog
-//! cannot extend it, like the audited scripts in `package_registry.rs`). An
-//! entry pins:
+//! An item is installable only when it is in the embedded allowlist
+//! (`src-tauri/wardrobe/manifests.json`, one generated JSON array compiled
+//! into the binary; a signed catalog cannot extend it, like the audited
+//! scripts in `package_registry.rs`). An entry pins:
 //!
 //! * the archive: the downloaded ZIP and the one VPK inside it, by size and
-//!   SHA-256, and the HTTPS URL they come from;
-//! * the audit: the hero, the author namespaces a human declared, the shared
-//!   policy, and what the analyzer found (entry count, archive identity, the
-//!   install file count, size and identity). The analyzer is re-run on every
-//!   build and must reproduce the audit exactly, so a change to its rules can
-//!   never silently change which files an audited archive installs.
+//!   SHA-256, and the HTTPS URLs they may come from (an ordered list of
+//!   mirrors, each under a trusted prefix);
+//! * the audit: the heroes the skin is for, the shared policy, the shared
+//!   paths (the files the archive carries that Valve's own file list also
+//!   has, at audit time), and what the analyzer found (entry count, archive
+//!   identity, the install file count, size and identity). The analyzer is
+//!   re-run on every build and must reproduce the audit exactly, so a change
+//!   to its rules can never silently change which files an audited archive
+//!   installs.
 //!
 //! The bytes are fetched once into the content store (the VPK, after the ZIP
 //! is verified), read back and re-hashed on every build, and turned into
 //! ordinary bundle resources by [`load`]. Backup, journal, deployment and
 //! rollback are the existing transaction and are not touched here.
+//!
+//! `src-tauri/wardrobe/index.json` is the interface's copy of the same list
+//! (names, authors, sizes, without the shared paths); a test requires it to be
+//! exactly what the manifests derive.
 
 use crate::content_store;
 use crate::package_registry::LocalizedName;
 use crate::skin_archive::{self, Limits, ScopeSpec, SharedPolicy, SkinReport};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::OnceLock;
 
-const MANIFESTS: &[&str] = &[include_str!(
-    "../wardrobe/heroes-scarlet-keeper-of-the-light.json"
-)];
+const MANIFESTS: &str = include_str!("../wardrobe/manifests.json");
+#[cfg(test)]
+const INDEX: &str = include_str!("../wardrobe/index.json");
 
-/// The only place archives are downloaded from: the Dota2PornFx project's
-/// Hugging Face dataset, over HTTPS. The pinned hash decides whether the bytes
-/// are accepted; the host only decides where to look.
-const TRUSTED_ARCHIVE_PREFIX: &str =
-    "https://huggingface.co/datasets/hrdq/Dota2PornFx/resolve/main/assets/files/";
+/// Where archives are downloaded from, in the order a manifest lists them:
+/// the Dota2PornFx project's GitHub mirror and its Hugging Face dataset, both
+/// over HTTPS. The pinned hash decides whether the bytes are accepted; the
+/// host only decides where to look.
+pub(crate) const TRUSTED_ARCHIVE_PREFIXES: [&str; 2] = [
+    "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/files/",
+    "https://huggingface.co/datasets/hrdq/Dota2PornFx/resolve/main/assets/files/",
+];
 /// Wardrobe IDs share the package ID shape (`namespace.name`) under their own
 /// namespace, which `package_registry` reserves.
 pub(crate) const NAMESPACE: &str = "wardrobe";
+const SCHEMA_VERSION: u32 = 2;
 const MAX_ARCHIVE_BYTES: u64 = content_store::MAX_ARTIFACT_BYTES;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WardrobeSource {
-    pub url: String,
+    /// Mirrors of the same ZIP, tried in order. Each must be under a trusted
+    /// prefix and name the same file; a mirror that does not have the file or
+    /// serves other bytes is skipped.
+    pub urls: Vec<String>,
     pub catalog_snapshot: String,
     /// How permission to redistribute was established. Recorded, never
     /// inferred: `founder_reported_author_consent` means the project's founder
@@ -55,7 +69,7 @@ pub struct WardrobeSource {
     pub permission: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ArchivePin {
     pub zip_bytes: u64,
@@ -65,20 +79,35 @@ pub struct ArchivePin {
     pub inner_sha256: String,
 }
 
-/// What the analyzer found when a person audited this archive.
-#[derive(Clone, Debug, Deserialize)]
+/// What the analyzer found when a person audited this archive. Both ways of
+/// installing it are pinned: `install_*` is everything the analyzer accepts
+/// (the default, [`SharedPolicy::Install`]); `strip_*` is the same without the
+/// `shared` files that override a Valve file outside the heroes' own (the
+/// explicit opt-in, [`SharedPolicy::Strip`]). The analyzer is re-run on every
+/// build for the mode asked for and must reproduce that mode's numbers.
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AuditedResult {
     pub entries: usize,
     pub archive_identity: String,
+    pub rejected: usize,
+    /// Accepted files that override a Valve file outside the heroes' own.
+    pub shared: usize,
     pub install_files: usize,
     pub install_bytes: u64,
     pub install_identity: String,
-    pub stripped_shared: usize,
-    pub rejected: usize,
+    pub strip_files: usize,
+    pub strip_bytes: u64,
+    pub strip_identity: String,
+    /// Accepted paths whose upper-case letters were folded to lower case.
+    pub renamed: usize,
+    /// SHA-256 and entry count of Valve's file list the shared paths were
+    /// computed against (SteamDatabase `game/dota/pak01_dir.txt`).
+    pub valve_list_sha256: String,
+    pub valve_list_entries: usize,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WardrobeManifest {
     pub schema_version: u32,
@@ -87,26 +116,103 @@ pub struct WardrobeManifest {
     pub catalog_id: String,
     pub name: LocalizedName,
     pub author: String,
-    pub hero: String,
-    pub author_namespaces: Vec<String>,
-    pub shared_policy: SharedPolicy,
+    /// Internal names of the heroes the skin is for.
+    pub heroes: Vec<String>,
+    /// Sorted lower-case paths in the archive that Valve ships and that are
+    /// not the heroes': the files the opt-in `strip` mode leaves out.
+    pub shared_paths: Vec<String>,
     pub distribution: String,
     pub source: WardrobeSource,
     pub archive: ArchivePin,
     pub audited: AuditedResult,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub verified_languages: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compatibility_note: Option<String>,
 }
 
 impl WardrobeManifest {
-    pub(crate) fn scope_spec(&self) -> ScopeSpec {
+    pub(crate) fn scope_spec(&self, policy: SharedPolicy) -> ScopeSpec {
         ScopeSpec {
-            hero: self.hero.clone(),
-            author_namespaces: self.author_namespaces.clone(),
-            shared_policy: self.shared_policy,
+            heroes: self.heroes.clone(),
+            shared_paths: self.shared_paths.clone(),
+            shared_policy: policy,
         }
+    }
+}
+
+/// The engine ID suffix that selects the opt-in `strip` mode of an item:
+/// `wardrobe.<name>.strip`. It is a separate package ID on purpose, so the
+/// mode travels everywhere the package list already travels (plan, journal,
+/// ownership, rebuilds) and is part of the plan identity with no new field.
+pub(crate) const STRIP_SUFFIX: &str = ".strip";
+
+/// What an item is installed as: the default (every accepted file) or the
+/// opt-in that leaves the shared game files untouched.
+pub(crate) fn parse_variant(id: &str) -> (&str, SharedPolicy) {
+    match id.strip_suffix(STRIP_SUFFIX) {
+        Some(base) => (base, SharedPolicy::Strip),
+        None => (id, SharedPolicy::Install),
+    }
+}
+
+pub(crate) fn variant_id(manifest: &WardrobeManifest, policy: SharedPolicy) -> String {
+    match policy {
+        SharedPolicy::Strip => format!("{}{STRIP_SUFFIX}", manifest.id),
+        _ => manifest.id.clone(),
+    }
+}
+
+impl AuditedResult {
+    /// Files, bytes and identity pinned for a mode. `Refuse` is not an
+    /// installable mode of an item.
+    pub(crate) fn pin(&self, policy: SharedPolicy) -> Option<(usize, u64, &str)> {
+        match policy {
+            SharedPolicy::Install => Some((
+                self.install_files,
+                self.install_bytes,
+                &self.install_identity,
+            )),
+            SharedPolicy::Strip => Some((self.strip_files, self.strip_bytes, &self.strip_identity)),
+            SharedPolicy::Refuse => None,
+        }
+    }
+}
+
+/// The interface's copy of one manifest (`index.json`): what a card, a build
+/// summary and the size warning need, without the shared paths.
+#[cfg(test)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct IndexEntry {
+    pub id: String,
+    pub catalog_id: String,
+    pub kind: String,
+    pub name: LocalizedName,
+    pub author: String,
+    pub heroes: Vec<String>,
+    /// Everything the analyzer accepts (the default mode).
+    pub install_files: usize,
+    pub install_bytes: u64,
+    /// The same without the files that override a shared Valve file.
+    pub strip_bytes: u64,
+    /// How many accepted files override a shared Valve file.
+    pub shared_files: usize,
+}
+
+#[cfg(test)]
+pub(crate) fn index_entry(manifest: &WardrobeManifest) -> IndexEntry {
+    IndexEntry {
+        id: manifest.id.clone(),
+        catalog_id: manifest.catalog_id.clone(),
+        kind: manifest.kind.clone(),
+        name: manifest.name.clone(),
+        author: manifest.author.clone(),
+        heroes: manifest.heroes.clone(),
+        install_files: manifest.audited.install_files,
+        install_bytes: manifest.audited.install_bytes,
+        strip_bytes: manifest.audited.strip_bytes,
+        shared_files: manifest.audited.shared,
     }
 }
 
@@ -115,10 +221,13 @@ impl WardrobeManifest {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct WardrobePlanItem {
+    /// The engine ID of this selection: the item's, with `.strip` when the
+    /// person asked to keep the game's shared files untouched.
     pub package_id: String,
     pub catalog_id: String,
-    pub hero: String,
-    pub source_url: String,
+    pub heroes: Vec<String>,
+    /// The mirror list in the order it is tried.
+    pub source_urls: Vec<String>,
     pub archive_sha256: String,
     /// Where the catalog listed it, and how permission to use it was
     /// established. Shown as recorded, never upgraded.
@@ -126,6 +235,12 @@ pub(crate) struct WardrobePlanItem {
     pub permission: String,
     pub verified_languages: Vec<String>,
     pub compatibility_note: Option<String>,
+    /// `install` (default) or `strip`: whether the shared game files the
+    /// archive overrides are part of the build.
+    pub shared_policy: SharedPolicy,
+    /// Whether the skin's files were also compared with the player's own
+    /// `pak01_dir.vpk` when the build was prepared.
+    pub game_checked: bool,
     pub report: SkinReport,
 }
 
@@ -162,30 +277,53 @@ fn slug(value: &str) -> bool {
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
-fn valid_archive_url(url: &str) -> bool {
-    let Some(rest) = url.strip_prefix(TRUSTED_ARCHIVE_PREFIX) else {
-        return false;
-    };
-    rest.ends_with(".zip")
+/// `<category>/<file>.zip` of a URL under one of the trusted prefixes: exactly
+/// two percent-encoded path segments, no query, no fragment, no traversal.
+pub(crate) fn archive_tail(url: &str) -> Option<&str> {
+    let rest = TRUSTED_ARCHIVE_PREFIXES
+        .iter()
+        .find_map(|prefix| url.strip_prefix(prefix))?;
+    let segments = rest.split('/').collect::<Vec<_>>();
+    (rest.ends_with(".zip")
         && rest.len() <= 160
-        && rest.split('/').all(|segment| {
+        && segments.len() == 2
+        && segments.iter().all(|segment| {
             !segment.is_empty()
-                && segment != "."
-                && segment != ".."
+                && *segment != "."
+                && *segment != ".."
                 && segment.bytes().all(|byte| {
-                    byte.is_ascii_alphanumeric() || matches!(byte, b'%' | b'.' | b'_' | b'-')
+                    byte.is_ascii_alphanumeric() || matches!(byte, b'%' | b'.' | b'_' | b'-' | b'~')
                 })
-        })
+        }))
+    .then_some(rest)
 }
 
-fn validate(manifest: &WardrobeManifest) -> Result<(), String> {
+fn valid_archive_urls(urls: &[String]) -> bool {
+    if urls.is_empty() || urls.len() > TRUSTED_ARCHIVE_PREFIXES.len() {
+        return false;
+    }
+    let Some(first) = archive_tail(&urls[0]) else {
+        return false;
+    };
+    // Every mirror names the same file, and no mirror is listed twice.
+    let mut prefixes = BTreeSet::new();
+    urls.iter().all(|url| {
+        archive_tail(url) == Some(first)
+            && TRUSTED_ARCHIVE_PREFIXES
+                .iter()
+                .find(|prefix| url.starts_with(**prefix))
+                .is_some_and(|prefix| prefixes.insert(*prefix))
+    })
+}
+
+pub(crate) fn validate(manifest: &WardrobeManifest) -> Result<(), String> {
     let invalid = |reason: &str| {
         Err(format!(
             "wardrobe_manifest_invalid:{}:{reason}",
             manifest.id
         ))
     };
-    if manifest.schema_version != 1 || manifest.kind != "wardrobe" {
+    if manifest.schema_version != SCHEMA_VERSION || manifest.kind != "wardrobe" {
         return invalid("schema");
     }
     if manifest.distribution != "internal_pilot" {
@@ -200,13 +338,18 @@ fn validate(manifest: &WardrobeManifest) -> Result<(), String> {
         || manifest.name.en.trim().is_empty()
         || manifest.author.trim().is_empty()
         || manifest.source.permission.trim().is_empty()
+        || manifest.source.catalog_snapshot.trim().is_empty()
     {
         return invalid("name");
     }
-    if manifest.scope_spec().validate().is_err() {
+    if manifest
+        .scope_spec(SharedPolicy::Install)
+        .validate()
+        .is_err()
+    {
         return invalid("scope");
     }
-    if !valid_archive_url(&manifest.source.url) {
+    if !valid_archive_urls(&manifest.source.urls) {
         return invalid("source");
     }
     let pin = &manifest.archive;
@@ -228,47 +371,71 @@ fn validate(manifest: &WardrobeManifest) -> Result<(), String> {
     let audit = &manifest.audited;
     if audit.entries == 0
         || audit.install_files == 0
-        || audit.install_files + audit.stripped_shared + audit.rejected > audit.entries
+        || audit.install_files + audit.rejected > audit.entries
+        || audit.renamed > audit.entries
         || audit.install_bytes == 0
         || audit.install_bytes > pin.inner_bytes as u64
         || !valid_sha256(&audit.archive_identity)
         || !valid_sha256(&audit.install_identity)
+        || !valid_sha256(&audit.strip_identity)
+        || !valid_sha256(&audit.valve_list_sha256)
+        || audit.valve_list_entries == 0
+        // Every pinned shared path is a file the install carries and the
+        // opt-in mode leaves out: none left over, none missing, and the two
+        // pinned results differ by exactly those files.
+        || audit.shared != manifest.shared_paths.len()
+        || audit.strip_files + audit.shared != audit.install_files
+        || audit.strip_bytes > audit.install_bytes
+        || (audit.shared == 0
+            && (audit.strip_bytes != audit.install_bytes
+                || audit.strip_identity != audit.install_identity))
+        || (audit.shared > 0 && audit.strip_identity == audit.install_identity)
     {
         return invalid("audit");
     }
     Ok(())
 }
 
-fn parse_all(sources: &[&str]) -> Result<Vec<WardrobeManifest>, String> {
-    let mut ids = std::collections::BTreeSet::new();
-    let mut catalog_ids = std::collections::BTreeSet::new();
-    sources
-        .iter()
-        .map(|source| {
-            let manifest: WardrobeManifest = serde_json::from_str(source)
-                .map_err(|error| format!("wardrobe_manifest_invalid:parse:{error}"))?;
-            validate(&manifest)?;
-            if !ids.insert(manifest.id.clone()) || !catalog_ids.insert(manifest.catalog_id.clone())
-            {
-                return Err(format!(
-                    "wardrobe_manifest_invalid:{}:duplicate",
-                    manifest.id
-                ));
-            }
-            Ok(manifest)
-        })
-        .collect()
+fn parse_all(source: &str) -> Result<Vec<WardrobeManifest>, String> {
+    let manifests: Vec<WardrobeManifest> = serde_json::from_str(source)
+        .map_err(|error| format!("wardrobe_manifest_invalid:parse:{error}"))?;
+    let mut ids = BTreeSet::new();
+    let mut catalog_ids = BTreeSet::new();
+    for manifest in &manifests {
+        validate(manifest)?;
+        if !ids.insert(manifest.id.as_str()) || !catalog_ids.insert(manifest.catalog_id.as_str()) {
+            return Err(format!(
+                "wardrobe_manifest_invalid:{}:duplicate",
+                manifest.id
+            ));
+        }
+    }
+    Ok(manifests)
 }
 
-fn embedded() -> &'static Result<Vec<WardrobeManifest>, String> {
-    static EMBEDDED: OnceLock<Result<Vec<WardrobeManifest>, String>> = OnceLock::new();
-    EMBEDDED.get_or_init(|| parse_all(MANIFESTS))
+struct Registry {
+    manifests: Vec<WardrobeManifest>,
+    by_id: BTreeMap<String, usize>,
 }
 
+fn embedded() -> &'static Result<Registry, String> {
+    static EMBEDDED: OnceLock<Result<Registry, String>> = OnceLock::new();
+    EMBEDDED.get_or_init(|| {
+        let manifests = parse_all(MANIFESTS)?;
+        let mut by_id = BTreeMap::new();
+        for (index, manifest) in manifests.iter().enumerate() {
+            by_id.insert(manifest.id.clone(), index);
+            by_id.insert(manifest.catalog_id.clone(), index);
+        }
+        Ok(Registry { manifests, by_id })
+    })
+}
+
+#[cfg(test)]
 pub(crate) fn manifests() -> Result<&'static [WardrobeManifest], String> {
     embedded()
         .as_ref()
-        .map(Vec::as_slice)
+        .map(|registry| registry.manifests.as_slice())
         .map_err(|_| "wardrobe_registry_invalid".to_string())
 }
 
@@ -285,9 +452,22 @@ pub(crate) fn find(id: &str) -> Result<Option<&'static WardrobeManifest>, String
     {
         return Ok(Some(*item));
     }
-    Ok(manifests()?
-        .iter()
-        .find(|manifest| manifest.id == id || manifest.catalog_id == id))
+    let registry = embedded()
+        .as_ref()
+        .map_err(|_| "wardrobe_registry_invalid".to_string())?;
+    Ok(registry
+        .by_id
+        .get(id)
+        .map(|index| &registry.manifests[*index]))
+}
+
+/// Resolves an ID that may carry the `.strip` suffix to the item and the mode
+/// it is installed in.
+pub(crate) fn find_variant(
+    id: &str,
+) -> Result<Option<(&'static WardrobeManifest, SharedPolicy)>, String> {
+    let (base, policy) = parse_variant(id);
+    Ok(find(base)?.map(|item| (item, policy)))
 }
 
 /// Test-only registry of synthetic items, so build tests can exercise the
@@ -304,14 +484,13 @@ pub(crate) fn register_for_test(manifest: WardrobeManifest) -> &'static Wardrobe
     leaked
 }
 
-/// Test-only: a manifest that pins a small synthetic archive made of `files`
+/// Test-only: a manifest value for a small synthetic archive made of `files`
 /// (paths for `vpk::build`), with the audit the analyzer produces for it.
+/// `particles/basic_ambient/basic_ambient.vpcf_c` and
+/// `materials/default/default_color_tga_1.vtex_c` stand in for files Valve
+/// ships: when present they are the archive's audited shared paths.
 #[cfg(test)]
-pub(crate) fn synthetic_item(
-    id: &str,
-    files: &[(&str, &[u8])],
-    edit: impl FnOnce(&mut serde_json::Value),
-) -> (WardrobeManifest, Vec<u8>) {
+pub(crate) fn synthetic_value(id: &str, files: &[(&str, &[u8])]) -> (serde_json::Value, Vec<u8>) {
     use crate::vpk::{build, VpkInput};
     let archive = build(
         files
@@ -320,28 +499,100 @@ pub(crate) fn synthetic_item(
             .collect(),
     )
     .expect("synthetic archive");
-    let spec = ScopeSpec {
-        hero: "keeper_of_the_light".to_string(),
-        author_namespaces: vec!["darkness".to_string()],
-        shared_policy: SharedPolicy::Strip,
-    };
-    let report = skin_archive::analyze(&archive, &spec, &Limits::default())
-        .expect("analysis")
-        .report;
-    let mut value: serde_json::Value = serde_json::from_str(MANIFESTS[0]).expect("json");
-    value["id"] = format!("wardrobe.{id}").into();
-    value["catalogId"] = format!("heroes-{id}").into();
-    value["archive"]["innerBytes"] = archive.len().into();
-    value["archive"]["innerSha256"] = sha256_hex(&archive).into();
-    value["audited"] = serde_json::json!({
-        "entries": report.entries,
-        "archiveIdentity": report.archive_identity,
-        "installFiles": report.install.files,
-        "installBytes": report.install.bytes,
-        "installIdentity": report.install.identity,
-        "strippedShared": report.install.stripped_shared,
-        "rejected": report.rejected.files,
+    let mut shared_paths = files
+        .iter()
+        .map(|(path, _)| (*path).to_string())
+        .filter(|path| {
+            [
+                "particles/basic_ambient/basic_ambient.vpcf_c",
+                "materials/default/default_color_tga_1.vtex_c",
+            ]
+            .contains(&path.as_str())
+        })
+        .collect::<Vec<_>>();
+    shared_paths.sort();
+    let audited = audit_both_modes(
+        &archive,
+        &["keeper_of_the_light".to_string()],
+        &shared_paths,
+        &"2".repeat(64),
+        388116,
+    )
+    .expect("audit");
+    let value = serde_json::json!({
+        "schemaVersion": SCHEMA_VERSION,
+        "kind": "wardrobe",
+        "id": format!("wardrobe.{id}"),
+        "catalogId": format!("heroes-{id}"),
+        "name": { "ru": "Test Skin", "en": "Test Skin" },
+        "author": "Test",
+        "heroes": ["keeper_of_the_light"],
+        "sharedPaths": shared_paths,
+        "distribution": "internal_pilot",
+        "source": {
+            "urls": [
+                "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/files/heroes/Test%20Skin.zip",
+                "https://huggingface.co/datasets/hrdq/Dota2PornFx/resolve/main/assets/files/heroes/Test%20Skin.zip"
+            ],
+            "catalogSnapshot": "test",
+            "permission": "founder_reported_author_consent"
+        },
+        "archive": {
+            "zipBytes": 1000,
+            "zipSha256": "1".repeat(64),
+            "innerPath": "pak59_dir.vpk",
+            "innerBytes": archive.len(),
+            "innerSha256": sha256_hex(&archive)
+        },
+        "audited": audited
     });
+    (value, archive)
+}
+
+/// What an audit pins: the analyzer's result in both modes. Used by the
+/// generator and by tests; the app only ever checks a pin, never makes one.
+#[cfg(test)]
+pub(crate) fn audit_both_modes(
+    archive: &[u8],
+    heroes: &[String],
+    shared_paths: &[String],
+    valve_list_sha256: &str,
+    valve_list_entries: usize,
+) -> Result<AuditedResult, String> {
+    let run = |policy| {
+        let spec = ScopeSpec {
+            heroes: heroes.to_vec(),
+            shared_paths: shared_paths.to_vec(),
+            shared_policy: policy,
+        };
+        skin_archive::analyze(archive, &spec, &Limits::default()).map(|analysis| analysis.report)
+    };
+    let install = run(SharedPolicy::Install)?;
+    let strip = run(SharedPolicy::Strip)?;
+    Ok(AuditedResult {
+        entries: install.entries,
+        archive_identity: install.archive_identity.clone(),
+        rejected: install.rejected.files,
+        shared: install.shared.files,
+        install_files: install.install.files,
+        install_bytes: install.install.bytes,
+        install_identity: install.install.identity.clone(),
+        strip_files: strip.install.files,
+        strip_bytes: strip.install.bytes,
+        strip_identity: strip.install.identity.clone(),
+        renamed: install.renamed,
+        valve_list_sha256: valve_list_sha256.to_string(),
+        valve_list_entries,
+    })
+}
+
+#[cfg(test)]
+pub(crate) fn synthetic_item(
+    id: &str,
+    files: &[(&str, &[u8])],
+    edit: impl FnOnce(&mut serde_json::Value),
+) -> (WardrobeManifest, Vec<u8>) {
+    let (mut value, archive) = synthetic_value(id, files);
     edit(&mut value);
     let manifest: WardrobeManifest = serde_json::from_value(value).expect("manifest");
     validate(&manifest).expect("valid");
@@ -351,7 +602,12 @@ pub(crate) fn synthetic_item(
 /// Whether the catalog ID belongs to the wardrobe allowlist; a signed package
 /// catalog may not reuse it.
 pub(crate) fn catalog_id_taken(catalog_id: &str) -> bool {
-    manifests().is_ok_and(|all| all.iter().any(|manifest| manifest.catalog_id == catalog_id))
+    embedded().as_ref().is_ok_and(|registry| {
+        registry
+            .by_id
+            .get(catalog_id)
+            .is_some_and(|index| registry.manifests[*index].catalog_id == catalog_id)
+    })
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -411,47 +667,169 @@ pub(crate) fn acquire(
     content_store::store_pinned_resource(app_data_root, pin.inner_bytes, &pin.inner_sha256, &inner)
 }
 
-/// The analyzer must reproduce the audit, field for field.
+/// The analyzer must reproduce the audit, field for field, for the mode that
+/// was asked for.
 fn matches_audit(manifest: &WardrobeManifest, report: &SkinReport) -> bool {
     let audit = &manifest.audited;
+    let Some((files, bytes, identity)) = audit.pin(report.shared_policy) else {
+        return false;
+    };
     report.entries == audit.entries
         && report.archive_identity == audit.archive_identity
-        && report.install.files == audit.install_files
-        && report.install.bytes == audit.install_bytes
-        && report.install.identity == audit.install_identity
-        && report.install.stripped_shared == audit.stripped_shared
+        && report.install.files == files
+        && report.install.bytes == bytes
+        && report.install.identity == identity
         && report.rejected.files == audit.rejected
+        && report.renamed == audit.renamed
+        // Every audited shared path was found in the archive.
+        && report.shared.files == manifest.shared_paths.len()
+}
+
+/// What a build knows about the player's own game: which of the skin's
+/// author-owned files the game ships now although the audit did not find them
+/// in Valve's list (Valve added a file since the audit). Kept per item and
+/// read back by every later rebuild, like the blacklist expansion, so a Dota
+/// update does not change what BetterFy considers installed.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GameCheckRecord {
+    package_id: String,
+    inner_sha256: String,
+    install_identity: String,
+    /// False when no Dota install was available or its file list could not be
+    /// read; the build then says so and nothing is stripped.
+    checked: bool,
+    new_in_game: Vec<String>,
+}
+
+fn game_check_path(app_data_root: &Path, package_id: &str) -> PathBuf {
+    app_data_root
+        .join("engine-v1")
+        .join("wardrobe")
+        .join(format!("{package_id}.json"))
+}
+
+fn read_game_check(app_data_root: &Path, manifest: &WardrobeManifest) -> Option<GameCheckRecord> {
+    let bytes = std::fs::read(game_check_path(app_data_root, &manifest.id)).ok()?;
+    if bytes.len() > 4 * 1024 * 1024 {
+        return None;
+    }
+    let record: GameCheckRecord = serde_json::from_slice(&bytes).ok()?;
+    // A record belongs to exactly this audited archive.
+    (record.package_id == manifest.id
+        && record.inner_sha256 == manifest.archive.inner_sha256
+        && record.install_identity == manifest.audited.install_identity
+        && record.checked)
+        .then_some(record)
+}
+
+fn write_game_check(
+    app_data_root: &Path,
+    manifest: &WardrobeManifest,
+    record: &GameCheckRecord,
+) -> Result<(), String> {
+    let target = game_check_path(app_data_root, &manifest.id);
+    let parent = target
+        .parent()
+        .ok_or_else(|| "wardrobe_game_check_failed".to_string())?;
+    std::fs::create_dir_all(parent).map_err(|_| "wardrobe_game_check_failed".to_string())?;
+    let bytes = serde_json::to_vec(record).map_err(|_| "wardrobe_game_check_failed".to_string())?;
+    let temporary = target.with_extension("json.tmp");
+    std::fs::write(&temporary, bytes).map_err(|_| "wardrobe_game_check_failed".to_string())?;
+    std::fs::rename(&temporary, &target).map_err(|_| "wardrobe_game_check_failed".to_string())
+}
+
+/// Compares the skin's author-owned files with the file list of the player's
+/// own game (`game_paths`, lower-case paths of `game/dota/pak01_dir.vpk`) and
+/// stores the result for this item. With `None` (no game folder, or its file
+/// list could not be read) the stored record says "not checked". Never fails
+/// the plan because of the game: only a broken content store or an unwritable
+/// app-data folder is an error.
+pub(crate) fn record_game_check(
+    app_data_root: &Path,
+    manifest: &WardrobeManifest,
+    game_paths: Option<&BTreeSet<String>>,
+) -> Result<(), String> {
+    let mut record = GameCheckRecord {
+        package_id: manifest.id.clone(),
+        inner_sha256: manifest.archive.inner_sha256.clone(),
+        install_identity: manifest.audited.install_identity.clone(),
+        checked: false,
+        new_in_game: Vec::new(),
+    };
+    if let Some(game_paths) = game_paths {
+        let pin = &manifest.archive;
+        let archive =
+            content_store::read_pinned_resource(app_data_root, pin.inner_bytes, &pin.inner_sha256)?;
+        let spec = manifest.scope_spec(SharedPolicy::Install);
+        let analysis = skin_archive::analyze(&archive, &spec, &Limits::default())?;
+        record.new_in_game = analysis
+            .author_owned_paths()
+            .into_iter()
+            .filter(|path| game_paths.contains(path))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        record.checked = true;
+    }
+    write_game_check(app_data_root, manifest, &record)
 }
 
 /// Reads the item's VPK back from the content store (size and SHA-256 are
-/// checked again), analyzes it and returns the files to install.
+/// checked again), analyzes it in the requested mode and returns the files to
+/// install.
 pub(crate) fn load(
     app_data_root: &Path,
     manifest: &WardrobeManifest,
+    policy: SharedPolicy,
 ) -> Result<LoadedWardrobe, String> {
+    if !matches!(policy, SharedPolicy::Install | SharedPolicy::Strip) {
+        return Err("wardrobe_policy_unsupported".to_string());
+    }
     let pin = &manifest.archive;
     let archive =
         content_store::read_pinned_resource(app_data_root, pin.inner_bytes, &pin.inner_sha256)?;
-    let selection =
-        skin_archive::select_install_files(&archive, &manifest.scope_spec(), &Limits::default())?;
-    if !matches_audit(manifest, &selection.report) {
+    let mut analysis =
+        skin_archive::analyze(&archive, &manifest.scope_spec(policy), &Limits::default())?;
+    // The audit is checked before anything about the player's game is applied.
+    if !matches_audit(manifest, &analysis.report) {
         return Err("wardrobe_audit_mismatch".to_string());
     }
+    let game_check = read_game_check(app_data_root, manifest);
+    if let Some(record) = &game_check {
+        analysis.apply_game_check(&record.new_in_game.iter().cloned().collect());
+    }
+    let selection = analysis.into_selection()?;
     Ok(LoadedWardrobe {
         resources: selection.files,
         item: WardrobePlanItem {
-            package_id: manifest.id.clone(),
+            package_id: variant_id(manifest, policy),
             catalog_id: manifest.catalog_id.clone(),
-            hero: manifest.hero.clone(),
-            source_url: manifest.source.url.clone(),
+            heroes: manifest.heroes.clone(),
+            source_urls: manifest.source.urls.clone(),
             archive_sha256: pin.zip_sha256.clone(),
             catalog_snapshot: manifest.source.catalog_snapshot.clone(),
             permission: manifest.source.permission.clone(),
             verified_languages: manifest.verified_languages.clone(),
             compatibility_note: manifest.compatibility_note.clone(),
+            shared_policy: policy,
+            game_checked: game_check.is_some(),
             report: selection.report,
         },
     })
+}
+
+/// Files and bytes a set of wardrobe items adds to the merged VPK in the mode
+/// each is selected in, for the size budget. Unknown IDs count for nothing
+/// (they fail elsewhere).
+pub(crate) fn install_footprint(ids: &[String]) -> (usize, u64) {
+    ids.iter()
+        .filter_map(|id| find_variant(id).ok().flatten())
+        .filter_map(|(item, policy)| item.audited.pin(policy))
+        .fold(
+            (0usize, 0u64),
+            |(files, bytes), (item_files, item_bytes, _)| (files + item_files, bytes + item_bytes),
+        )
 }
 
 #[cfg(test)]
@@ -465,10 +843,19 @@ mod tests {
             .expect("scarlet keeper")
     }
 
-    fn manifest_with(edit: impl FnOnce(&mut serde_json::Value)) -> String {
-        let mut value: serde_json::Value = serde_json::from_str(MANIFESTS[0]).expect("json");
+    /// A valid manifest (over a synthetic archive) as JSON, for rejection cases.
+    fn base_value() -> serde_json::Value {
+        synthetic_value(
+            "base-skin",
+            &[("models/heroes/keeper_of_the_light/a.vmdl_c", b"a")],
+        )
+        .0
+    }
+
+    fn array_with(edit: impl FnOnce(&mut serde_json::Value)) -> String {
+        let mut value = base_value();
         edit(&mut value);
-        value.to_string()
+        serde_json::Value::Array(vec![value]).to_string()
     }
 
     fn temp_root(name: &str) -> std::path::PathBuf {
@@ -487,89 +874,209 @@ mod tests {
     #[test]
     fn the_embedded_allowlist_pins_the_audited_scarlet_keeper_archive() {
         let all = manifests().expect("registry parses");
-        assert_eq!(all.len(), 1);
+        assert!(!all.is_empty());
         let item = scarlet();
         assert_eq!(item.id, "wardrobe.scarlet-keeper-of-the-light");
-        assert_eq!(item.hero, "keeper_of_the_light");
+        assert_eq!(item.heroes, vec!["keeper_of_the_light"]);
         assert_eq!(
             item.archive.zip_sha256,
             "f9f0c2f63a9989ea6fd2779cfea1676a2e07bd94eabab9e0c2127a68e7e268a7"
         );
         assert_eq!(item.archive.zip_bytes, 24_071_988);
         assert_eq!(item.archive.inner_bytes, 58_096_981);
-        assert_eq!(item.shared_policy, SharedPolicy::Strip);
+        // The default pins everything the analyzer accepts: the 1,010 entries
+        // minus the 14 uncompiled `.vpcf` leftovers. Valve's list has 27 of
+        // them outside the hero; the opt-in mode leaves exactly those out.
+        let audit = &item.audited;
+        assert_eq!(audit.entries, 1010);
+        assert_eq!(audit.rejected, 14);
+        assert_eq!(audit.install_files, 996);
+        assert_eq!(audit.shared, 27);
+        assert_eq!(audit.strip_files, 969);
+        assert_eq!(item.shared_paths.len(), 27);
         assert_eq!(
-            item.source.url,
-            "https://huggingface.co/datasets/hrdq/Dota2PornFx/resolve/main/assets/files/heroes/Scarlet%20Keeper.zip"
+            item.archive.inner_sha256,
+            "12137a743ff91c8dc1341e32718580109f86c70df735e24b022929e38cc9a190"
         );
+        assert!(item.source.urls.contains(
+            &"https://huggingface.co/datasets/hrdq/Dota2PornFx/resolve/main/assets/files/heroes/Scarlet%20Keeper.zip"
+                .to_string()
+        ));
         assert!(find("wardrobe.scarlet-keeper-of-the-light")
             .expect("registry")
             .is_some());
         assert!(find("minify-tree-mod").expect("registry").is_none());
         assert!(catalog_id_taken("heroes-scarlet-keeper-of-the-light"));
+        assert!(!catalog_id_taken("wardrobe.scarlet-keeper-of-the-light"));
         assert!(!catalog_id_taken("minify-tree-mod"));
     }
 
     #[test]
-    fn every_wardrobe_file_is_embedded() {
+    fn every_embedded_manifest_revalidates_and_the_files_are_canonical() {
+        let all = parse_all(MANIFESTS).expect("every embedded manifest is valid");
+        assert!(!all.is_empty());
+        let mut previous = "";
+        for item in &all {
+            // sorted by engine id, so the generated file is deterministic
+            assert!(previous < item.id.as_str(), "{} is out of order", item.id);
+            previous = &item.id;
+            assert!(valid_archive_urls(&item.source.urls), "{}", item.id);
+            assert_eq!(item.source.permission, "founder_reported_author_consent");
+            // mirrors are listed in the order they are tried, GitHub or HF
+            assert!(item.source.urls.len() <= TRUSTED_ARCHIVE_PREFIXES.len());
+            assert!(item.shared_paths.windows(2).all(|pair| pair[0] < pair[1]));
+            assert!(item.audited.install_files > 0);
+            assert!(item.audited.install_bytes <= item.archive.inner_bytes as u64);
+        }
+        // Compact and re-serializable: what is embedded is what the generator
+        // would write for these manifests.
+        assert_eq!(
+            serde_json::to_string(&all).expect("serializes"),
+            MANIFESTS.trim_end(),
+            "manifests.json is not the canonical compact form; regenerate it"
+        );
+        let index = all.iter().map(index_entry).collect::<Vec<_>>();
+        assert_eq!(
+            serde_json::to_string(&index).expect("serializes"),
+            INDEX.trim_end(),
+            "index.json is not derived from manifests.json; regenerate it"
+        );
+        // Only the two generated files live in the folder.
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("wardrobe");
-        let files = std::fs::read_dir(dir)
+        let mut names = std::fs::read_dir(dir)
             .expect("wardrobe dir")
             .filter_map(|entry| entry.ok())
-            .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "json"))
-            .count();
-        assert_eq!(files, MANIFESTS.len(), "add the new manifest to MANIFESTS");
+            .map(|entry| entry.file_name().to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+        names.sort();
+        assert_eq!(names, vec!["index.json", "manifests.json"]);
     }
 
     #[test]
     fn hostile_or_malformed_entries_are_rejected() {
-        assert!(parse_all(&[MANIFESTS[0]]).is_ok());
+        assert!(parse_all(&array_with(|_| {})).is_ok());
+        let github = |tail: &str| {
+            format!(
+                "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/files/{tail}"
+            )
+        };
+        let hf = |tail: &str| {
+            format!(
+                "https://huggingface.co/datasets/hrdq/Dota2PornFx/resolve/main/assets/files/{tail}"
+            )
+        };
         let cases = [
-            manifest_with(|v| v["kind"] = "package".into()),
-            manifest_with(|v| v["schemaVersion"] = 2.into()),
-            manifest_with(|v| v["distribution"] = "public".into()),
-            manifest_with(|v| v["id"] = "minify.scarlet".into()),
-            manifest_with(|v| v["id"] = "wardrobe.Scarlet".into()),
-            manifest_with(|v| v["catalogId"] = "scarlet".into()),
-            manifest_with(|v| v["hero"] = "Keeper".into()),
-            manifest_with(|v| v["authorNamespaces"] = serde_json::json!(["units"])),
-            manifest_with(|v| v["authorNamespaces"] = serde_json::json!(["particles"])),
-            manifest_with(|v| {
-                v["source"]["url"] = "http://huggingface.co/datasets/hrdq/Dota2PornFx/resolve/main/assets/files/heroes/a.zip".into()
+            array_with(|v| v["kind"] = "package".into()),
+            array_with(|v| v["schemaVersion"] = 1.into()),
+            array_with(|v| v["schemaVersion"] = 3.into()),
+            array_with(|v| v["distribution"] = "public".into()),
+            array_with(|v| v["id"] = "minify.scarlet".into()),
+            array_with(|v| v["id"] = "wardrobe.Scarlet".into()),
+            array_with(|v| v["catalogId"] = "scarlet".into()),
+            array_with(|v| v["heroes"] = serde_json::json!([])),
+            array_with(|v| v["heroes"] = serde_json::json!(["Keeper"])),
+            array_with(|v| v["heroes"] = serde_json::json!(["axe", "axe"])),
+            array_with(|v| v["sharedPaths"] = serde_json::json!(["b/b.vtex_c", "a/a.vtex_c"])),
+            array_with(|v| v["sharedPaths"] = serde_json::json!(["A/a.vtex_c"])),
+            array_with(|v| v["sharedPaths"] = serde_json::json!(["../a.vtex_c"])),
+            // the audit says no file is stripped but a path is pinned
+            array_with(|v| v["sharedPaths"] = serde_json::json!(["a/a.vtex_c"])),
+            // the audit counts a shared file that no pinned path accounts for
+            array_with(|v| v["audited"]["shared"] = 1.into()),
+            array_with(|v| v["audited"]["stripFiles"] = 0.into()),
+            array_with(|v| v["audited"]["stripIdentity"] = "9".repeat(64).into()),
+            array_with(|v| v["audited"]["stripBytes"] = 1_000_000.into()),
+            array_with(|v| v["audited"]["strippedShared"] = 1.into()),
+            array_with(|v| v["sharedPolicy"] = "strip".into()),
+            array_with(|v| v["source"]["urls"] = serde_json::json!([])),
+            array_with(|v| {
+                v["source"]["urls"] =
+                    serde_json::json!([github("heroes/Test%20Skin.zip").replace("https", "http")])
             }),
-            manifest_with(|v| {
-                v["source"]["url"] = "https://huggingface.co.evil.example/datasets/hrdq/Dota2PornFx/resolve/main/assets/files/heroes/a.zip".into()
+            array_with(|v| {
+                v["source"]["urls"] = serde_json::json!([
+                    "https://raw.githubusercontent.com.evil.example/h6rd/Dota2PornFxWeb/main/assets/files/heroes/a.zip"
+                ])
             }),
-            manifest_with(|v| {
-                v["source"]["url"] = "https://huggingface.co/datasets/other/Repo/resolve/main/assets/files/heroes/a.zip".into()
+            array_with(|v| {
+                v["source"]["urls"] = serde_json::json!([
+                    "https://huggingface.co.evil.example/datasets/hrdq/Dota2PornFx/resolve/main/assets/files/heroes/a.zip"
+                ])
             }),
-            manifest_with(|v| {
-                v["source"]["url"] = "https://huggingface.co/datasets/hrdq/Dota2PornFx/resolve/main/assets/files/../../x.zip".into()
+            array_with(|v| {
+                v["source"]["urls"] = serde_json::json!([
+                    "https://huggingface.co/datasets/other/Repo/resolve/main/assets/files/heroes/a.zip"
+                ])
             }),
-            manifest_with(|v| {
-                v["source"]["url"] = "https://huggingface.co/datasets/hrdq/Dota2PornFx/resolve/main/assets/files/heroes/a.zip?download=1".into()
+            array_with(|v| {
+                v["source"]["urls"] = serde_json::json!([
+                    "https://raw.githubusercontent.com/other/Repo/main/assets/files/heroes/a.zip"
+                ])
             }),
-            manifest_with(|v| {
-                v["source"]["url"] = "https://huggingface.co/datasets/hrdq/Dota2PornFx/resolve/main/assets/files/heroes/a.exe".into()
+            array_with(|v| v["source"]["urls"] = serde_json::json!([hf("../../x.zip")])),
+            array_with(|v| {
+                v["source"]["urls"] = serde_json::json!([hf("heroes/a.zip?download=1")])
             }),
-            manifest_with(|v| v["archive"]["zipSha256"] = "00".into()),
-            manifest_with(|v| v["archive"]["innerSha256"] = "A".repeat(64).into()),
-            manifest_with(|v| v["archive"]["innerPath"] = "../pak01_dir.vpk".into()),
-            manifest_with(|v| v["archive"]["innerPath"] = "payload.exe".into()),
-            manifest_with(|v| v["archive"]["innerBytes"] = 70_000_000.into()),
-            manifest_with(|v| v["archive"]["zipBytes"] = 0.into()),
-            manifest_with(|v| v["audited"]["installFiles"] = 0.into()),
-            manifest_with(|v| v["audited"]["installFiles"] = 2000.into()),
-            manifest_with(|v| v["audited"]["installIdentity"] = "abc".into()),
-            manifest_with(|v| v["script"] = "rm -rf".into()),
+            array_with(|v| v["source"]["urls"] = serde_json::json!([hf("heroes/a.exe")])),
+            array_with(|v| v["source"]["urls"] = serde_json::json!([hf("a.zip")])),
+            array_with(|v| v["source"]["urls"] = serde_json::json!([hf("heroes/x/a.zip")])),
+            // mirrors must name the same file, and each host appears once
+            array_with(|v| {
+                v["source"]["urls"] =
+                    serde_json::json!([hf("heroes/a.zip"), github("heroes/b.zip")])
+            }),
+            array_with(|v| {
+                v["source"]["urls"] = serde_json::json!([hf("heroes/a.zip"), hf("heroes/a.zip")])
+            }),
+            array_with(|v| {
+                v["source"]["urls"] = serde_json::json!([
+                    hf("heroes/a.zip"),
+                    github("heroes/a.zip"),
+                    github("heroes/a.zip")
+                ])
+            }),
+            array_with(|v| v["source"]["permission"] = "".into()),
+            array_with(|v| v["archive"]["zipSha256"] = "00".into()),
+            array_with(|v| v["archive"]["innerSha256"] = "A".repeat(64).into()),
+            array_with(|v| v["archive"]["innerPath"] = "../pak01_dir.vpk".into()),
+            array_with(|v| v["archive"]["innerPath"] = "payload.exe".into()),
+            array_with(|v| v["archive"]["innerBytes"] = 70_000_000.into()),
+            array_with(|v| v["archive"]["zipBytes"] = 0.into()),
+            array_with(|v| v["archive"]["zipBytes"] = 70_000_000.into()),
+            array_with(|v| v["audited"]["installFiles"] = 0.into()),
+            array_with(|v| v["audited"]["installFiles"] = 2000.into()),
+            array_with(|v| v["audited"]["installIdentity"] = "abc".into()),
+            array_with(|v| v["audited"]["valveListSha256"] = "abc".into()),
+            array_with(|v| v["audited"]["renamed"] = 99.into()),
+            array_with(|v| v["script"] = "rm -rf".into()),
+            array_with(|v| {
+                v["source"]["extra"] = 1.into();
+            }),
         ];
         for case in &cases {
-            assert!(parse_all(&[case.as_str()]).is_err(), "accepted: {case}");
+            assert!(parse_all(case).is_err(), "accepted: {case}");
         }
-        assert!(
-            parse_all(&[MANIFESTS[0], MANIFESTS[0]]).is_err(),
-            "duplicates"
+        // Both trusted mirrors, in either order, are fine.
+        for urls in [
+            serde_json::json!([github("heroes/a.zip")]),
+            serde_json::json!([hf("hero-items/a%20b.zip")]),
+            serde_json::json!([github("heroes/a.zip"), hf("heroes/a.zip")]),
+            serde_json::json!([hf("heroes/a.zip"), github("heroes/a.zip")]),
+        ] {
+            let accepted = array_with(|v| v["source"]["urls"] = urls.clone());
+            assert!(parse_all(&accepted).is_ok(), "rejected: {urls}");
+        }
+        // A duplicate ID or catalog ID is refused.
+        let one = base_value();
+        let twice = serde_json::Value::Array(vec![one.clone(), one]).to_string();
+        assert!(parse_all(&twice).is_err(), "duplicates");
+        let (mut other, _) = synthetic_value(
+            "other-skin",
+            &[("models/heroes/keeper_of_the_light/a.vmdl_c", b"a")],
         );
+        other["catalogId"] = base_value()["catalogId"].clone();
+        let clash = serde_json::Value::Array(vec![base_value(), other]).to_string();
+        assert!(parse_all(&clash).is_err(), "catalog id clash");
     }
 
     #[test]
@@ -657,6 +1164,8 @@ mod tests {
                 ),
                 ("darkness/materials/body.vmat_c", b"body"),
                 ("particles/darkness_snaps/snap1.vsnap_c", b"snap"),
+                // not in Valve's list: the skin's own, so it installs
+                ("particles/basic_ember/basic_ember.vpcf_c", b"ember"),
                 ("particles/basic_ambient/basic_ambient.vpcf_c", b"shared"),
                 ("materials/default/default_color_tga_1.vtex_c", b"shared2"),
                 ("particles/darkness/flame.vpcf", b"source"),
@@ -665,50 +1174,128 @@ mod tests {
         )
     }
 
+    fn store(root: &Path, manifest: &WardrobeManifest, archive: &[u8]) {
+        content_store::store_pinned_resource(
+            root,
+            manifest.archive.inner_bytes,
+            &manifest.archive.inner_sha256,
+            archive,
+        )
+        .expect("store");
+    }
+
     #[test]
     fn loads_only_what_the_audit_describes() {
         let (manifest, archive) = synthetic(|_| {});
         let root = temp_root("load");
         // Nothing stored yet: the build cannot start from thin air.
-        assert!(load(&root, &manifest).is_err());
-        content_store::store_pinned_resource(
-            &root,
-            manifest.archive.inner_bytes,
-            &manifest.archive.inner_sha256,
-            &archive,
-        )
-        .expect("store");
-        let loaded = load(&root, &manifest).expect("loads");
-        assert_eq!(loaded.resources.len(), 4);
-        assert_eq!(loaded.item.report.install.stripped_shared, 2);
-        assert_eq!(loaded.item.report.rejected.files, 1);
+        assert!(load(&root, &manifest, SharedPolicy::Install).is_err());
+        store(&root, &manifest, &archive);
+
+        // The default installs every accepted file, shared ones included.
+        let loaded = load(&root, &manifest, SharedPolicy::Install).expect("loads");
+        assert_eq!(loaded.resources.len(), 7);
+        assert_eq!(loaded.item.shared_policy, SharedPolicy::Install);
         assert_eq!(loaded.item.package_id, manifest.id);
-        assert!(!loaded.resources.keys().any(|path| path.contains("basic_")));
+        assert_eq!(loaded.item.report.install.stripped_shared, 0);
+        assert_eq!(loaded.item.report.shared.files, 2);
+        assert_eq!(loaded.item.report.rejected.files, 1);
+        assert_eq!(loaded.item.heroes, vec!["keeper_of_the_light"]);
+        assert!(!loaded.item.game_checked);
+        for path in [
+            "particles/basic_ember/basic_ember.vpcf_c",
+            "particles/basic_ambient/basic_ambient.vpcf_c",
+            "materials/default/default_color_tga_1.vtex_c",
+        ] {
+            assert!(loaded.resources.contains_key(path), "{path}");
+        }
         assert_eq!(
             loaded.resources["models/heroes/keeper_of_the_light/kotl_hood.vmdl_c"],
             b"hood"
         );
 
-        // Any drift between the audit and the analyzer refuses the build.
-        for edit in [
-            |v: &mut serde_json::Value| v["audited"]["installIdentity"] = "1".repeat(64).into(),
-            |v: &mut serde_json::Value| v["audited"]["installFiles"] = 3.into(),
-            |v: &mut serde_json::Value| v["audited"]["archiveIdentity"] = "2".repeat(64).into(),
-            |v: &mut serde_json::Value| v["audited"]["strippedShared"] = 1.into(),
-            // A different declared hero re-classifies the same archive.
-            |v: &mut serde_json::Value| v["hero"] = "axe".into(),
-        ] {
+        // The opt-in leaves the two shared files out and is a different
+        // package ID, so it is a different plan.
+        let strip = load(&root, &manifest, SharedPolicy::Strip).expect("loads");
+        assert_eq!(strip.resources.len(), 5);
+        assert_eq!(strip.item.shared_policy, SharedPolicy::Strip);
+        assert_eq!(strip.item.package_id, format!("{}.strip", manifest.id));
+        assert_eq!(strip.item.report.install.stripped_shared, 2);
+        assert!(!strip
+            .resources
+            .contains_key("particles/basic_ambient/basic_ambient.vpcf_c"));
+        assert!(strip
+            .resources
+            .contains_key("particles/basic_ember/basic_ember.vpcf_c"));
+        assert_eq!(
+            load(&root, &manifest, SharedPolicy::Refuse)
+                .err()
+                .as_deref(),
+            Some("wardrobe_policy_unsupported")
+        );
+
+        // Any drift between the audit and the analyzer refuses the build in
+        // the mode it concerns.
+        type Edit = fn(&mut serde_json::Value);
+        let drifts: [(Edit, SharedPolicy); 8] = [
+            (
+                |v| v["audited"]["installIdentity"] = "1".repeat(64).into(),
+                SharedPolicy::Install,
+            ),
+            (
+                |v| {
+                    v["audited"]["installFiles"] = 6.into();
+                    v["audited"]["stripFiles"] = 4.into();
+                },
+                SharedPolicy::Install,
+            ),
+            (
+                |v| v["audited"]["archiveIdentity"] = "2".repeat(64).into(),
+                SharedPolicy::Install,
+            ),
+            (
+                |v| v["audited"]["renamed"] = 1.into(),
+                SharedPolicy::Install,
+            ),
+            (
+                |v| v["audited"]["stripIdentity"] = "3".repeat(64).into(),
+                SharedPolicy::Strip,
+            ),
+            (
+                |v| v["audited"]["stripBytes"] = 1.into(),
+                SharedPolicy::Strip,
+            ),
+            // An audited shared path the archive does not carry.
+            (
+                |v| {
+                    v["sharedPaths"] = serde_json::json!([
+                        "materials/default/default_color_tga_1.vtex_c",
+                        "materials/default/default_color_tga_2.vtex_c",
+                        "particles/basic_ambient/basic_ambient.vpcf_c"
+                    ]);
+                    v["audited"]["shared"] = 3.into();
+                    v["audited"]["stripFiles"] = 4.into();
+                },
+                SharedPolicy::Install,
+            ),
+            // A shared path dropped from the list turns a file into the
+            // author's; the opt-in then leaves out one file fewer.
+            (
+                |v| {
+                    v["sharedPaths"] =
+                        serde_json::json!(["materials/default/default_color_tga_1.vtex_c"]);
+                    v["audited"]["shared"] = 1.into();
+                    v["audited"]["stripFiles"] = 6.into();
+                },
+                SharedPolicy::Strip,
+            ),
+        ];
+        for (edit, policy) in drifts {
             let (drifted, _) = synthetic(edit);
             let root = temp_root("drift");
-            content_store::store_pinned_resource(
-                &root,
-                drifted.archive.inner_bytes,
-                &drifted.archive.inner_sha256,
-                &archive,
-            )
-            .expect("store");
+            store(&root, &drifted, &archive);
             assert_eq!(
-                load(&root, &drifted).err().as_deref(),
+                load(&root, &drifted, policy).err().as_deref(),
                 Some("wardrobe_audit_mismatch")
             );
             std::fs::remove_dir_all(root).expect("cleanup");
@@ -717,16 +1304,49 @@ mod tests {
     }
 
     #[test]
+    fn strip_variant_ids_resolve_to_the_same_item() {
+        let (manifest, _) = synthetic_item(
+            "variant-skin",
+            &[("models/heroes/keeper_of_the_light/a.vmdl_c", b"a")],
+            |_| {},
+        );
+        let item = register_for_test(manifest);
+        assert_eq!(
+            parse_variant("wardrobe.x"),
+            ("wardrobe.x", SharedPolicy::Install)
+        );
+        assert_eq!(
+            parse_variant("wardrobe.x.strip"),
+            ("wardrobe.x", SharedPolicy::Strip)
+        );
+        for (id, policy) in [
+            (item.id.clone(), SharedPolicy::Install),
+            (item.catalog_id.clone(), SharedPolicy::Install),
+            (format!("{}.strip", item.id), SharedPolicy::Strip),
+            (format!("{}.strip", item.catalog_id), SharedPolicy::Strip),
+        ] {
+            let (found, found_policy) = find_variant(&id).expect("registry").expect(&id);
+            assert_eq!(found.id, item.id);
+            assert_eq!(found_policy, policy);
+        }
+        assert!(find_variant("wardrobe.unknown.strip")
+            .expect("registry")
+            .is_none());
+        assert!(find_variant(&format!("{}.strip.strip", item.id))
+            .expect("registry")
+            .is_none());
+        assert_eq!(variant_id(item, SharedPolicy::Install), item.id);
+        assert_eq!(
+            variant_id(item, SharedPolicy::Strip),
+            format!("{}.strip", item.id)
+        );
+    }
+
+    #[test]
     fn a_tampered_stored_archive_is_never_analyzed() {
         let (manifest, archive) = synthetic(|_| {});
         let root = temp_root("tamper");
-        content_store::store_pinned_resource(
-            &root,
-            manifest.archive.inner_bytes,
-            &manifest.archive.inner_sha256,
-            &archive,
-        )
-        .expect("store");
+        store(&root, &manifest, &archive);
         let object = root
             .join("content-v1")
             .join("objects")
@@ -736,10 +1356,129 @@ mod tests {
         bytes[0] ^= 0xff;
         std::fs::write(&object, bytes).expect("tamper");
         assert_eq!(
-            load(&root, &manifest).err().as_deref(),
+            load(&root, &manifest, SharedPolicy::Install)
+                .err()
+                .as_deref(),
             Some("content_store_corrupt")
         );
         std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn the_game_check_is_information_by_default_and_strips_only_under_the_opt_in() {
+        let (manifest, archive) = synthetic(|_| {});
+        let root = temp_root("game-check");
+        store(&root, &manifest, &archive);
+        let baseline = load(&root, &manifest, SharedPolicy::Install).expect("loads");
+        assert!(!baseline.item.game_checked);
+        assert!(baseline.item.report.new_in_game.is_empty());
+
+        // A game that ships one of the skin's own files (added since the
+        // audit), the skin's hero file (which the skin replaces on purpose)
+        // and a file the audit already knew as shared.
+        let game = BTreeSet::from([
+            "particles/basic_ember/basic_ember.vpcf_c".to_string(),
+            "models/heroes/keeper_of_the_light/kotl_hood.vmdl_c".to_string(),
+            "materials/default/default_color_tga_1.vtex_c".to_string(),
+            "unrelated/file.vmat_c".to_string(),
+        ]);
+        record_game_check(&root, &manifest, Some(&game)).expect("records");
+
+        // Default: informational, the install is exactly the audited one.
+        let checked = load(&root, &manifest, SharedPolicy::Install).expect("loads");
+        assert!(checked.item.game_checked);
+        assert_eq!(checked.resources.len(), 7);
+        assert_eq!(
+            checked.item.report.new_in_game,
+            vec!["particles/basic_ember/basic_ember.vpcf_c"]
+        );
+        assert_eq!(checked.item.report.install, baseline.item.report.install);
+
+        // Opt-in: the new file is left out as well.
+        let strip = load(&root, &manifest, SharedPolicy::Strip).expect("loads");
+        assert_eq!(strip.resources.len(), 4);
+        assert!(!strip
+            .resources
+            .contains_key("particles/basic_ember/basic_ember.vpcf_c"));
+        // hero files stay: replacing them is the point of the skin
+        assert!(strip
+            .resources
+            .contains_key("models/heroes/keeper_of_the_light/kotl_hood.vmdl_c"));
+        assert_eq!(strip.item.report.install.stripped_shared, 3);
+
+        // The result is stored: a rebuild without the game gives the same files.
+        let again = load(&root, &manifest, SharedPolicy::Strip).expect("rebuild");
+        assert_eq!(
+            again.resources.keys().collect::<Vec<_>>(),
+            strip.resources.keys().collect::<Vec<_>>()
+        );
+
+        // An unreadable or missing game listing is "not checked", never an
+        // error, and it replaces the earlier record.
+        record_game_check(&root, &manifest, None).expect("records");
+        let unchecked = load(&root, &manifest, SharedPolicy::Strip).expect("loads");
+        assert!(!unchecked.item.game_checked);
+        assert_eq!(unchecked.resources.len(), 5);
+
+        // A record for another archive is ignored.
+        let other = GameCheckRecord {
+            package_id: manifest.id.clone(),
+            inner_sha256: "3".repeat(64),
+            install_identity: manifest.audited.install_identity.clone(),
+            checked: true,
+            new_in_game: vec!["darkness/materials/body.vmat_c".to_string()],
+        };
+        write_game_check(&root, &manifest, &other).expect("writes");
+        let ignored = load(&root, &manifest, SharedPolicy::Strip).expect("loads");
+        assert_eq!(ignored.resources.len(), 5);
+        // A garbled record is ignored too.
+        std::fs::write(game_check_path(&root, &manifest.id), b"{not json").expect("garble");
+        assert_eq!(
+            load(&root, &manifest, SharedPolicy::Strip)
+                .expect("loads")
+                .resources
+                .len(),
+            5
+        );
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_game_that_ships_everything_still_leaves_the_hero_files() {
+        let (manifest, archive) = synthetic(|_| {});
+        let root = temp_root("game-everything");
+        store(&root, &manifest, &archive);
+        // Hero files are never stripped, so something always remains.
+        let game = BTreeSet::from([
+            "darkness/materials/body.vmat_c".to_string(),
+            "particles/darkness_snaps/snap1.vsnap_c".to_string(),
+            "particles/basic_ember/basic_ember.vpcf_c".to_string(),
+        ]);
+        record_game_check(&root, &manifest, Some(&game)).expect("records");
+        let loaded = load(&root, &manifest, SharedPolicy::Strip).expect("loads");
+        assert_eq!(loaded.resources.len(), 2);
+        assert_eq!(
+            load(&root, &manifest, SharedPolicy::Install)
+                .expect("loads")
+                .resources
+                .len(),
+            7
+        );
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn the_footprint_counts_the_pinned_size_of_the_mode_selected() {
+        let (manifest, _) = synthetic(|_| {});
+        let item = register_for_test(manifest);
+        let (files, bytes) = install_footprint(&[item.id.clone(), "minify.tree-mod".to_string()]);
+        assert_eq!(files, item.audited.install_files);
+        assert_eq!(bytes, item.audited.install_bytes);
+        let (strip_files, strip_bytes) = install_footprint(&[format!("{}.strip", item.id)]);
+        assert_eq!(strip_files, item.audited.strip_files);
+        assert_eq!(strip_bytes, item.audited.strip_bytes);
+        assert!(strip_bytes < bytes);
+        assert_eq!(install_footprint(&[]), (0, 0));
     }
 
     /// Local-only: checks the embedded pins against the real sample archive
@@ -775,8 +1514,12 @@ mod tests {
             &archive,
         )
         .expect("store");
-        let loaded = load(&root, item).expect("the analyzer reproduces the audit");
+        let loaded =
+            load(&root, item, SharedPolicy::Install).expect("the analyzer reproduces the audit");
         assert_eq!(loaded.resources.len(), item.audited.install_files);
+        let strip = load(&root, item, SharedPolicy::Strip)
+            .expect("the analyzer reproduces the opt-in audit");
+        assert_eq!(strip.resources.len(), item.audited.strip_files);
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 }

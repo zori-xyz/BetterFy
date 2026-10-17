@@ -37,11 +37,16 @@ disagreement as a bug and verify the behavior before changing either side.
 - [Tree Mod pilot ledger](TREE_MOD_PILOT.md) — pinned upstream sources,
   resource hashes, target paths, and Windows evidence for the first pilot
   packages and the later passes on the manifest-driven engine.
-- [Skin archive audit](SKIN_ARCHIVE_AUDIT.md) — what the first third-party
-  hero skin contains, the intake rules built from it, and what the analyzer
-  found. Nothing has been run in Dota.
-- [Skin Windows test plan](SKIN_WINDOWS_TEST_PLAN.md) — the first native pass of
-  that skin: alone, then with tuning packages, with the evidence to capture.
+- [Skin archive audit](SKIN_ARCHIVE_AUDIT.md) — what a third-party hero skin
+  contains, the intake rules built from it (install everything by default, with
+  an opt-in to leave shared game files out), and what the analyzer found.
+  Nothing has been run in Dota.
+- [Wardrobe audit report](WARDROBE_AUDIT_REPORT.md) — the generated, item by
+  item result of auditing the hero and hero-item catalog against Valve's file
+  list: what is allowlisted, what is not and why.
+- [Skin Windows test plan](SKIN_WINDOWS_TEST_PLAN.md) — the native passes of
+  these skins: Scarlet Keeper alone and with tuning packages, then three skins
+  of other shapes, with the evidence to capture.
 
 ## Services and accounts
 

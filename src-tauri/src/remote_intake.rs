@@ -62,7 +62,9 @@ trait DownloadTransport: Send + Sync + 'static {
 /// `cdn.hf.co` (observed once, from `us.aws.cdn.hf.co`, with a signed query
 /// string); other regions are matched by the suffix and unverified. The
 /// pinned SHA-256 decides whether the bytes are accepted, so the allowlist
-/// only decides where BetterFy is willing to connect.
+/// only decides where BetterFy is willing to connect. The other mirror,
+/// `raw.githubusercontent.com`, answered a `HEAD` request for an archive with
+/// 200 directly on 2026-10-17 (no redirect), so it needs no entry here.
 const WARDROBE_REDIRECT_SUFFIXES: &[&str] = &[".cdn.hf.co"];
 
 /// HTTPS download with every address resolved, checked and pinned. By default
@@ -294,22 +296,40 @@ pub(crate) fn fetch_pinned_wardrobe_archive(
     fetch_wardrobe_archive_with(&PinnedHttpsTransport::WARDROBE, manifest, cancelled)
 }
 
+/// Tries the manifest's mirrors in order and returns the first response whose
+/// bytes are exactly the pinned ZIP. A mirror that does not have the file
+/// (an HTTP error), cannot be reached, or serves other bytes (wrong size or
+/// hash) is skipped; the download fails only when no mirror yields the pinned
+/// bytes, with the last mirror's error. Cancelling stops at once. Every
+/// attempt keeps the transport's own rules (HTTPS, public addresses, bounded
+/// redirects), and no bytes from a skipped mirror are kept.
 fn fetch_wardrobe_archive_with<T: DownloadTransport>(
     transport: &T,
     manifest: &crate::wardrobe::WardrobeManifest,
     cancelled: &AtomicBool,
 ) -> Result<Vec<u8>, String> {
-    let spec = RemotePackageSpec {
-        package_id: manifest.id.clone(),
-        version: "pinned-archive".to_string(),
-        format: "zip".to_string(),
-        file_name: "wardrobe-archive.zip".to_string(),
-        download_url: manifest.source.url.clone(),
-        media_type: "application/zip".to_string(),
-        size: manifest.archive.zip_bytes,
-        sha256: manifest.archive.zip_sha256.clone(),
-    };
-    fetch_verified_binary_with(transport, &spec, cancelled)
+    let mut last_error = "download_url_invalid".to_string();
+    for url in &manifest.source.urls {
+        let spec = RemotePackageSpec {
+            package_id: manifest.id.clone(),
+            version: "pinned-archive".to_string(),
+            format: "zip".to_string(),
+            file_name: "wardrobe-archive.zip".to_string(),
+            download_url: url.clone(),
+            media_type: "application/zip".to_string(),
+            size: manifest.archive.zip_bytes,
+            sha256: manifest.archive.zip_sha256.clone(),
+        };
+        match fetch_verified_binary_with(transport, &spec, cancelled) {
+            Ok(bytes) => return Ok(bytes),
+            Err(code) if code == "download_cancelled" => return Err(code),
+            Err(code) => last_error = code,
+        }
+        if cancelled.load(Ordering::Relaxed) {
+            return Err("download_cancelled".to_string());
+        }
+    }
+    Err(last_error)
 }
 
 fn operation_id() -> Result<String, String> {
@@ -732,9 +752,7 @@ mod tests {
 
     #[test]
     fn wardrobe_archive_fetch_accepts_only_the_pinned_bytes() {
-        let manifest = crate::wardrobe::find("heroes-scarlet-keeper-of-the-light")
-            .expect("registry")
-            .expect("scarlet keeper");
+        let manifest = &mirrored_manifest(b"the pinned zip bytes");
         let cancelled = AtomicBool::new(false);
         for chunks in [
             vec![b"short".to_vec()],
@@ -756,6 +774,162 @@ mod tests {
                 .as_deref(),
             Some("download_cancelled")
         );
+    }
+
+    /// Answers per URL, so a test can make one mirror miss, serve other bytes
+    /// or work. Records the URLs it was asked for, in order.
+    struct MirrorTransport {
+        answers: BTreeMap<String, Result<Vec<u8>, String>>,
+        asked: Mutex<Vec<String>>,
+    }
+
+    impl DownloadTransport for MirrorTransport {
+        fn fetch(
+            &self,
+            spec: &RemotePackageSpec,
+            cancelled: &AtomicBool,
+            on_chunk: &mut dyn FnMut(&[u8]) -> Result<(), String>,
+        ) -> Result<(), String> {
+            self.asked
+                .lock()
+                .expect("asked")
+                .push(spec.download_url.clone());
+            match self.answers.get(&spec.download_url) {
+                Some(Ok(bytes)) => {
+                    for chunk in bytes.chunks(7) {
+                        if cancelled.load(Ordering::Relaxed) {
+                            return Err("download_cancelled".to_string());
+                        }
+                        on_chunk(chunk)?;
+                    }
+                    Ok(())
+                }
+                Some(Err(code)) => Err(code.clone()),
+                None => Err("download_http_failed".to_string()),
+            }
+        }
+    }
+
+    fn mirrored_manifest(payload: &[u8]) -> crate::wardrobe::WardrobeManifest {
+        let payload = payload.to_vec();
+        crate::wardrobe::synthetic_item(
+            "mirror-test",
+            &[("models/heroes/keeper_of_the_light/a.vmdl_c", b"a")],
+            |value| {
+                value["archive"]["zipBytes"] = payload.len().into();
+                value["archive"]["zipSha256"] = format!("{:x}", Sha256::digest(&payload)).into();
+            },
+        )
+        .0
+    }
+
+    #[test]
+    fn a_missing_or_wrong_mirror_falls_through_to_the_next_one() {
+        let payload = b"the pinned zip bytes".to_vec();
+        let manifest = mirrored_manifest(&payload);
+        let [first, second] = [0, 1].map(|index| manifest.source.urls[index].clone());
+        let cancelled = AtomicBool::new(false);
+        let run = |first_answer: Option<Result<Vec<u8>, String>>,
+                   second_answer: Option<Result<Vec<u8>, String>>| {
+            let mut answers = BTreeMap::new();
+            if let Some(answer) = first_answer {
+                answers.insert(first.clone(), answer);
+            }
+            if let Some(answer) = second_answer {
+                answers.insert(second.clone(), answer);
+            }
+            let transport = MirrorTransport {
+                answers,
+                asked: Mutex::new(Vec::new()),
+            };
+            let result = fetch_wardrobe_archive_with(&transport, &manifest, &cancelled);
+            let asked = transport.asked.lock().expect("asked").clone();
+            (result, asked)
+        };
+
+        // The first mirror works: the second is never contacted.
+        let (result, asked) = run(Some(Ok(payload.clone())), Some(Ok(b"other".to_vec())));
+        assert_eq!(result.expect("first mirror"), payload);
+        assert_eq!(asked, vec![first.clone()]);
+
+        // A 404 (the file is on one mirror only), a refused connection and a
+        // blocked address each fall through.
+        for failure in [
+            "download_http_failed",
+            "download_transport_failed",
+            "download_address_blocked",
+        ] {
+            let (result, asked) = run(Some(Err(failure.to_string())), Some(Ok(payload.clone())));
+            assert_eq!(result.expect("second mirror"), payload, "{failure}");
+            assert_eq!(asked, vec![first.clone(), second.clone()], "{failure}");
+        }
+
+        // A mirror that serves other bytes (wrong content, short, long) is
+        // skipped too, and nothing of it is kept.
+        for wrong in [
+            b"the pinned zip BYTES".to_vec(),
+            b"short".to_vec(),
+            [payload.clone(), b"!".to_vec()].concat(),
+        ] {
+            let (result, asked) = run(Some(Ok(wrong)), Some(Ok(payload.clone())));
+            assert_eq!(result.expect("second mirror"), payload);
+            assert_eq!(asked, vec![first.clone(), second.clone()]);
+        }
+
+        // The download fails only when no mirror yields the pinned bytes, and
+        // it reports the last mirror's error.
+        let (result, asked) = run(Some(Ok(b"wrong".to_vec())), None);
+        assert_eq!(result.err().as_deref(), Some("download_http_failed"));
+        assert_eq!(asked, vec![first.clone(), second.clone()]);
+        let (result, _) = run(None, Some(Ok(b"wrong".to_vec())));
+        assert_eq!(result.err().as_deref(), Some("download_hash_mismatch"));
+    }
+
+    #[test]
+    fn cancelling_stops_the_mirror_walk() {
+        let payload = b"the pinned zip bytes".to_vec();
+        let manifest = mirrored_manifest(&payload);
+        let transport = MirrorTransport {
+            answers: BTreeMap::from([
+                (
+                    manifest.source.urls[0].clone(),
+                    Err("download_cancelled".to_string()),
+                ),
+                (manifest.source.urls[1].clone(), Ok(payload)),
+            ]),
+            asked: Mutex::new(Vec::new()),
+        };
+        assert_eq!(
+            fetch_wardrobe_archive_with(&transport, &manifest, &AtomicBool::new(false))
+                .err()
+                .as_deref(),
+            Some("download_cancelled")
+        );
+        assert_eq!(transport.asked.lock().expect("asked").len(), 1);
+        // Already cancelled before the first failure is looked at.
+        let miss = MirrorTransport {
+            answers: BTreeMap::new(),
+            asked: Mutex::new(Vec::new()),
+        };
+        assert_eq!(
+            fetch_wardrobe_archive_with(&miss, &manifest, &AtomicBool::new(true))
+                .err()
+                .as_deref(),
+            Some("download_cancelled")
+        );
+        assert_eq!(miss.asked.lock().expect("asked").len(), 1);
+    }
+
+    #[test]
+    fn every_mirror_is_a_url_the_transport_accepts() {
+        // The first hop of each trusted prefix must pass the transport's own
+        // URL rules (HTTPS, port 443, no query) so a mirror is never skipped
+        // for its shape.
+        let manifest = mirrored_manifest(b"x");
+        for url in &manifest.source.urls {
+            let parsed = Url::parse(url).expect("url");
+            assert!(validate_url_with(&parsed, false).is_ok(), "{url}");
+        }
     }
 
     #[test]
