@@ -1,30 +1,39 @@
-# Skin Windows test plan: Scarlet Keeper of the Light
+# Skin Windows test plan
 
-This plan covers the first native Windows pass of a third-party hero skin
-(wardrobe content) through the verified install pipeline: the one allowlisted
-archive, installed alone, played, restored, and then installed together with
-tuning packages. It follows the evidence rules of
-[EA18_WINDOWS_BASELINE.md](EA18_WINDOWS_BASELINE.md): every result names the
-exact artifact, what was actually observed, and what remains unverified. A
-BetterFy success state is not proof that Dota loaded a change; only an in-game
-observation is.
+This plan covers the native Windows passes of third-party hero skins (wardrobe
+content) through the verified install pipeline. Round one is Scarlet Keeper of
+the Light: installed alone, played, restored, and then installed together with
+tuning packages. Round two adds three skins of other shapes. It follows the
+evidence rules of [EA18_WINDOWS_BASELINE.md](EA18_WINDOWS_BASELINE.md): every
+result names the exact artifact, what was actually observed, and what remains
+unverified. A BetterFy success state is not proof that Dota loaded a change;
+only an in-game observation is.
 
-**Status: not run in Dota.** Nothing in this plan has been run on Windows. The
-engine side was exercised on a Mac only (unit tests, and a local run against
-the real archive; see "What the Mac runs already show"). Results are recorded in
-the table at the end, item by item.
+**Status: not run in Dota.** Nothing in this plan has been run on Windows
+through BetterFy. The engine side was exercised on a Mac only (unit tests, and
+local runs against the real archives; see "What the Mac runs already show").
+The founder reports that skin VPKs copied by hand into the language folder show
+the full new look on Windows; that is evidence about the files, not about
+BetterFy's merged install, which is what this plan tests. Results are recorded
+in the tables at the end, item by item.
+
+By default a skin is installed with **every file the analyzer accepts**,
+including the shared game files it overrides. A per-skin switch in the build
+review, "Keep the game's shared files untouched", is off by default and leaves
+those files out. Both modes are tested below, because the second is an opt-in
+that may change how the skin looks.
 
 ## Artifact under test
 
 Fill in before starting; do not test an artifact that is not recorded here.
 
-- Branch: `feature/skin-engine`
+- Branch: `feature/wardrobe-catalog`
 - Source commit: `<record>`
 - Workflow: Windows build, run `<record>` (started with
-  `gh workflow run windows-build.yml --ref feature/skin-engine`)
+  `gh workflow run windows-build.yml --ref feature/wardrobe-catalog`)
 - Artifact: `BetterFy-Windows-x64-nsis`, installer file name and SHA-256
   `<record>`
-- Skin: catalog ID `heroes-scarlet-keeper-of-the-light`, engine ID
+- Round one skin: catalog ID `heroes-scarlet-keeper-of-the-light`, engine ID
   `wardrobe.scarlet-keeper-of-the-light`
 - Pinned ZIP: `Scarlet Keeper.zip`, 24,071,988 bytes, SHA-256
   `f9f0c2f63a9989ea6fd2779cfea1676a2e07bd94eabab9e0c2127a68e7e268a7`
@@ -47,7 +56,8 @@ Fill in before starting; do not test an artifact that is not recorded here.
   the safe diagnostics report, and do not continue on a dirty state.
 - Plan for about 300 MB of free space on the drive that holds
   `%APPDATA%\app.betterfy.desktop` and on the Dota drive: the pinned VPK is
-  stored once (58 MB), the build is staged (53 MB), backed up and deployed.
+  stored once (58 MB), the build is staged (58 MB), backed up and deployed.
+  The big skin of round two needs about 20 MB more per copy.
 
 ## 0. Machine record
 
@@ -63,15 +73,18 @@ Record once, before any test:
 - Whether `%APPDATA%\app.betterfy.desktop\content-v1\objects\sha256\` already
   holds `12137a74...a190` (it should not on a fresh machine).
 
-## 1. The skin alone
+## 1. Scarlet Keeper of the Light alone (default mode)
 
 1. Catalog, Heroes: the Scarlet Keeper of the Light card carries the Windows
-   pilot mark. Cards of other skins do not. Add it to a build. The Build
-   screen's header should say Windows pilot, not preview only.
-2. Prepare the build with the network on. This is the first real download of
-   the archive through BetterFy's transport. Record how long it takes, and on
-   failure the exact error code (for example `download_redirect_blocked`,
-   `download_peer_unverified`, `download_hash_mismatch`).
+   pilot mark, and so do the other hero and hero-item skins that passed the
+   audit (471 cards in all). Add it to a build. The Build screen's header should
+   say Windows pilot, not preview only.
+2. Prepare the build with the network on and Dota connected. This is the first
+   real download of the archive through BetterFy's transport (the first mirror,
+   GitHub, then Hugging Face if that fails). Record how long it takes, which
+   mirror served it if the log shows it, and on failure the exact error code
+   (for example `download_redirect_blocked`, `download_peer_unverified`,
+   `download_hash_mismatch`, `download_http_failed`).
 3. Check `%APPDATA%\app.betterfy.desktop\content-v1\objects\sha256\`: exactly
    one new 58,096,981-byte object named `12137a74...a190`, and no `.part`
    leftover. The ZIP itself is not stored.
@@ -79,20 +92,21 @@ Record once, before any test:
 
    | Field | Expected |
    | --- | --- |
-   | Into the build | 951 files, 50.8 MB (53,280,352 bytes) |
+   | Into the build | 996 files, 55.2 MB (57,855,637 bytes) |
    | Hero files | 214 |
-   | Author's files | 737 |
-   | Shared game files | 45 left out, each listed |
+   | New files (not in the game) | 755 |
+   | Also replaces shared game files | 27, each listed |
    | Dropped | 14, all uncompiled `.vpcf`, each listed |
+   | Compared with your Dota | yes; "skin files your game ships now" empty or short |
    | Overlaps | none |
 
-   Open both lists and read them. The shared list must not contain any path
-   under `models/heroes`, `particles/units/heroes/hero_keeper_of_the_light` or
-   `darkness/`. Record any difference from the table.
+   Open the lists and read them. The shared list must not contain any path under
+   `models/heroes/keeper_of_the_light` or `particles/units/heroes/hero_keeper_of_the_light`.
+   Record any difference from the table, and any "your game ships now" file.
 5. The plan's VPK size and hash should equal what the Mac produced:
-   53,327,413 bytes, SHA-256
-   `c64e4a2913fc83ac111dac259faeb24b3acb1a1edf3baaa37142c555533bdcfa`, plan ID
-   `sha256:327e5d7f140805159422bd713948918c95c1380b47f4bdbcf945d45a27cce4aa`.
+   57,904,917 bytes, SHA-256
+   `69de05a590aa33a01479b166034198ef360ca554c7a0efbf530967a57fcd586b`, plan ID
+   `sha256:ba18ccfe2988d4266a7f9baaf145de4822e03597841948a8df8fe4c4eaf56fa3`.
    After the install in step 6 the installed
    `game/dota_<language>/pak66_dir.vpk` must have the same SHA-256. A mismatch
    is a finding, not a rounding error: the build is meant to be deterministic.
@@ -108,18 +122,16 @@ Record once, before any test:
      the 11 image wrappers);
    - the base attack, and each ability once (Illuminate, Blinding Light, Mana
      Leak, Radiant Bind, Recall, Spirit Form, Will-O-Wisp, Chakra Magic);
-   - Spirit Form specifically: its status effect file is among the shared files
-     that were left out, so note whether it looks wrong.
-8. Check what was not meant to change. Look at two or three other heroes'
-   attacks and spells, and at metal or glossy items and heroes. The stripped
-   shared files (`particles/basic_*`, `materials/default`, cubemaps) must
-   still be the game's own. Note any other hero that looks different.
+   - Spirit Form specifically.
+8. Check what else changed. The 27 shared files (default textures, cubemaps,
+   `net_color`, status effects) are installed in this mode, as they are when the
+   VPK is copied by hand. Look at two or three other heroes' attacks and spells,
+   and at metal or glossy items and heroes, and note any other hero that looks
+   different. Because the founder's hand-copied runs showed the full look, a
+   difference between that look and this one is the finding to chase.
 9. Note every visible failure of the skin: invisible effects, missing or
-   checkerboard textures, a crash, a hang on load. This is the answer to the
-   open question in [SKIN_ARCHIVE_AUDIT.md](SKIN_ARCHIVE_AUDIT.md): whether the
-   skin looks right without the 45 shared files, and whether it works in the
-   current Dota patch at all. If it does not, do not conclude the engine is
-   wrong: save the screenshots and stop.
+   checkerboard textures, a crash, a hang on load. If something fails, do not
+   conclude the engine is wrong: save the screenshots and stop.
 10. Quit Dota. In BetterFy restore the build. Check that the installed
     `pak66_dir.vpk` is gone (or equal to the machine record), that the launch
     options equal the machine record, and that the evidence report says the
@@ -127,6 +139,21 @@ Record once, before any test:
     is back to the game's own look.
 11. Repeat install then restore twice more. Every install must produce the same
     `pak66_dir.vpk` hash.
+
+## 1b. Scarlet Keeper with the shared game files left out (opt-in)
+
+1. Prepare the build again and, in the review, turn on "Keep the game's shared
+   files untouched". The plan is prepared again; the build's package is now
+   `wardrobe.scarlet-keeper-of-the-light.strip`. Expected: 969 files, 51.2 MB
+   (53,708,285 bytes), the 27 shared files listed as left out, a different plan
+   ID and a VPK of 53,756,163 bytes (the hash is recorded on the machine; if the
+   game ships extra files of the skin the plan lists them and is smaller).
+2. Install, start Dota, and compare with section 1: models, icons, abilities,
+   Spirit Form, textures of metal and glossy things. Note exactly what looks
+   different, if anything. This is the question the opt-in answers: whether
+   leaving those files out changes the look.
+3. Restore and confirm the machine record. Turn the switch off again and check
+   that the plan returns to the 996-file plan of section 1.
 
 ## 2. The skin with tuning packages
 
@@ -168,6 +195,52 @@ Record once, before any test:
    skin alone). Recovery must report `PASS`.
 6. Install with Dota or Steam running: BetterFy must ask them to close normally
    and refuse if they stay open.
+7. Mirrors. With the network on, block `raw.githubusercontent.com` (for example
+   in the hosts file) and prepare a build whose archive is not yet stored: the
+   download must fall through to Hugging Face and succeed. Undo the block. If
+   both are blocked the preparation must fail with the last mirror's error and
+   store nothing.
+
+## 4. Round two: three skins of other shapes
+
+Do these after round one has produced a clean machine record. Each is installed
+alone in default mode, played, and restored; the numbers are from the Mac
+build and are the expected values in the review and in the installed file.
+
+| Skin | Catalog ID | Why | Files / bytes (default) | Shared | Dropped | VPK bytes, SHA-256 | Plan ID |
+| --- | --- | --- | --- | ---: | ---: | --- | --- |
+| Pudge, Hood of Defiance | `hero-items-pudge-hood-of-defiance` | tiny hero item: one file, no shared file | 1 / 21,799 | 0 | 0 | 21,864; `60606ccaa3b03de4118a05decbb87e99d2973bbcacfd3a9e9396029ec7bab7d9` | `sha256:ec7d8aaac7e142473011457834f321ca918cd4857c4846954891d88adfb58bec` |
+| Cursed Shadow Fiend | `heroes-cursed-shadow-fiend` | one hero, two internal names (`shadow_fiend` and `nevermore`) | 339 / 5,322,735 | 13 | 0 | 5,338,879; `432e6c759476c2435609b4e37337c15122bdb5728748b875700cc9d4536f52f0` | `sha256:ebbd44d5298e1f3b975ae491e793c8981526900394a5de40e6edc57ff3e50f60` |
+| Bloody Gore Spectre | `heroes-bloody-gore-spectre` | the biggest allowlisted install | 1,126 / 63,934,624 | 20 | 4 | 63,993,491; `162acd1629a922949d24d1ed013dc032c81e2684c1c81486559c4e5b6fa0bc34` | `sha256:ee38299638d39089f1a18ae87f733a25b702381ff5a797f1fdc7fcc0baf80601` |
+
+For each: the card has the pilot mark; the review matches the table; the plan
+hash and the installed `pak66_dir.vpk` hash equal the table (when the review
+says "compared with your Dota" and lists "your game ships now" files, the
+default build is still identical, because those files are information only);
+the skin is visible on the right hero in a demo; restore leaves the machine
+record. Extra checks:
+
+- Pudge, Hood of Defiance: the one file is `models/heroes/pudge/hair.vmdl_c`;
+  Pudge's hood/hair shows the skin's model. The shared list is empty and the
+  opt-in switch is not offered.
+- Cursed Shadow Fiend: the review shows both hero names; the abilities and
+  particles (the `nevermore` names) are the skin's. Then turn the opt-in on
+  (326 files, 4,298,547 bytes, plan `sha256:3fb082653df217c99300d3c4bb7419b0d40127207c183ffbb7e8a5b796d29e29`)
+  and compare the look with the default.
+- Bloody Gore Spectre: preparation downloads a 26,443,411-byte ZIP and stores a
+  64,085,118-byte object; note the time to prepare, install and restore. Select
+  it together with Scarlet Keeper (122 MB of file data, under the 256 MiB limit)
+  and read the plan: the two skins share no path, so there is no conflict block.
+  Then select five of the largest skins (for example this one,
+  `heroes-dawnbreaker-death-knight`, `heroes-hell-muerta`,
+  `heroes-ghost-void-spirit`, `heroes-marci-atri`): the build screen should warn
+  that the skins add about 298 MB against the 256 MB limit, and preparing must
+  stop with the "build is too big" notice before downloading anything.
+- Conflicts between two skins: select `heroes-shadow-fiend-black` and
+  `heroes-shadow-fiend-white` together. The review must list conflicting paths,
+  and the install button must stay disabled until the confirmation is ticked.
+  The Mac plan counts 244 conflicting paths for these two plus the others in the
+  spot check; record the number the Windows review shows for just these two.
 
 ## What to capture
 
@@ -176,8 +249,8 @@ For every step above that touches a file or the game:
 - the in-app evidence report (saved, with its file name);
 - SHA-256 before and after of `game/dota_<language>/pak66_dir.vpk`, the backup,
   and the stored archive object;
-- the review block as a screenshot (counts and both lists), once per plan;
-- the plan ID shown in the journal, to compare with the table in section 1;
+- the review block as a screenshot (counts and the lists), once per plan;
+- the plan ID shown in the journal, to compare with the tables;
 - screenshots or a recording of each in-game check, labelled with the step;
 - the exact error code of any failure, copied from the interface or journal;
 - who observed it: the founder in game, the tester through screen access, or
@@ -187,12 +260,15 @@ For every step above that touches a file or the game:
 
 Run on a Mac, not Windows, and not in Dota:
 
-- the analyzer's findings on the real archive and the pinned identities (see
-  [SKIN_ARCHIVE_AUDIT.md](SKIN_ARCHIVE_AUDIT.md));
-- extraction of the pinned VPK from the real ZIP, and a build of the 951 files
-  into one 53,327,413-byte VPK, byte-identical on a second build;
-- the redirect response of the real download URL, seen once with a `HEAD`
-  request. The engine's own download of it has not been run.
+- the analyzer's findings on the real archives and the pinned identities (see
+  [SKIN_ARCHIVE_AUDIT.md](SKIN_ARCHIVE_AUDIT.md) and
+  [WARDROBE_AUDIT_REPORT.md](WARDROBE_AUDIT_REPORT.md));
+- extraction of the pinned VPK from each real ZIP, and builds of the skins named
+  here into one VPK each, with the sizes and hashes above, byte-identical on a
+  second build for Scarlet Keeper;
+- the mirrors answering `HEAD` requests with the pinned sizes. The engine's own
+  download has not been run against the network; the archives were fetched with
+  `curl` and their SHA-256 matched the pins.
 
 ## Results
 
@@ -209,9 +285,12 @@ the evidence report file name, and hashes where relevant.
 | 1.6 Install and backup | NOT RUN | | |
 | 1.7 Skin visible in Dota | NOT RUN (not run in Dota) | | |
 | 1.8 Other heroes unchanged | NOT RUN (not run in Dota) | | |
-| 1.9 Failures and the shared-files question | NOT RUN (not run in Dota) | | |
+| 1.9 Failures | NOT RUN (not run in Dota) | | |
 | 1.10 Restore and clean state | NOT RUN | | |
 | 1.11 Three install and restore cycles | NOT RUN | | |
+| 1b.1 Opt-in plan (969 files) | NOT RUN | | |
+| 1b.2 Opt-in look compared with default | NOT RUN (not run in Dota) | | |
+| 1b.3 Restore and switch back | NOT RUN | | |
 | 2.1 Skin with Tree Mod and Show NetWorth | NOT RUN (not run in Dota) | | |
 | 2.2 Conflict list and confirmation | NOT RUN | | |
 | 2.3 Conflicting build in Dota | NOT RUN (not run in Dota) | | |
@@ -221,3 +300,9 @@ the evidence report file name, and hashes where relevant.
 | 3.4 Close before restore | NOT RUN | | |
 | 3.5 Stress install | NOT RUN | | |
 | 3.6 Dota or Steam running | NOT RUN | | |
+| 3.7 Mirror fallback | NOT RUN | | |
+| 4.1 Pudge, Hood of Defiance | NOT RUN (not run in Dota) | | |
+| 4.2 Cursed Shadow Fiend, default and opt-in | NOT RUN (not run in Dota) | | |
+| 4.3 Bloody Gore Spectre | NOT RUN (not run in Dota) | | |
+| 4.4 Size limit warning and refusal | NOT RUN | | |
+| 4.5 Two skins of one hero: conflicts | NOT RUN | | |

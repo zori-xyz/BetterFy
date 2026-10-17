@@ -601,87 +601,165 @@ as the tuning packages: one entry in the BetterFy VPK, the same plan identity, b
 journal, deployment and rollback. It differs in where its bytes come from and in how
 much of them is trusted. The rules come from
 [`SKIN_ARCHIVE_AUDIT.md`](SKIN_ARCHIVE_AUDIT.md) and live in `skin_archive.rs` (the
-analyzer), `wardrobe.rs` (the allowlist and the load path) and `src-tauri/wardrobe/*.json`
+analyzer), `wardrobe.rs` (the allowlist and the load path) and `src-tauri/wardrobe/`
 (the entries). The entries are kept apart from `src-tauri/packages` so the signed package
 catalog is unchanged.
 
+**Install everything by default.** An earlier version of this section said shared game
+files are stripped from a skin by default. That rule is superseded by evidence from real
+Windows use, reported by the founder: skin VPKs dropped into the language folder as they
+are give the full look, and leaving files out can break textures and materials. The
+default is now to install every file the analyzer accepts. Leaving the shared game files
+out is an explicit per-skin opt-in (see "Install modes").
+
 **Allowlist.** A wardrobe item is installable only if it has an entry compiled into the
 app, like the audited scripts: a signed catalog cannot add one, and the package registry
-reserves the `wardrobe.` namespace and the catalog IDs of the entries. An entry pins
+reserves the `wardrobe.` namespace and the catalog IDs of the entries. All entries are one
+generated JSON array, `src-tauri/wardrobe/manifests.json` (compact, sorted by ID, about
+0.8 MB for the 471 entries), and `index.json` is the interface's copy (names, authors,
+heroes, sizes; about 0.14 MB). A test requires both files to be exactly what the
+generator would write for the embedded manifests, so the interface cannot list an item the
+engine does not know. An entry pins
 
-- the downloaded ZIP and the single VPK inside it by size and SHA-256, and the HTTPS URL
-  under the project's Hugging Face dataset they come from;
-- the hero, the author namespaces a person declared, and the shared policy;
-- what the analyzer must find: the entry count, an archive identity and an install
-  identity (SHA-256 over sorted path and payload hash), the install file count and size,
-  and the numbers of stripped shared and rejected files;
-- how permission was established, as recorded (`founder_reported_author_consent` for the
-  first entry: no licence file ships in the archive).
+- the downloaded ZIP and the single VPK inside it by size and SHA-256, and the ordered
+  list of mirrors they come from (see "Download hosts");
+- the heroes the skin is for (a set of internal names: `shadow_fiend` and `nevermore`),
+  and the *shared paths*: the files of the archive that Valve's own file list also has
+  and that are not the heroes'. The list is computed at audit time from SteamDatabase's
+  `game/dota/pak01_dir.txt` (its SHA-256 and entry count are in the entry) and decides
+  which files count as shared; no name heuristic does;
+- what the analyzer must find: the entry count and archive identity, the number of
+  dropped and shared files, the default install (file count, size, identity) and the
+  opt-in install (file count, size, identity). Identities are SHA-256 over sorted path
+  and payload hash;
+- how permission was established, as recorded (`founder_reported_author_consent`: no
+  licence file ships in the archives).
 
-The first entry is `wardrobe.scarlet-keeper-of-the-light` (catalog ID
-`heroes-scarlet-keeper-of-the-light`, hero `keeper_of_the_light`).
+**Install modes.** Each item is installed in one of two modes. `install` (default)
+puts every accepted file into the build, including the files that override a Valve file
+outside the hero's own and the files that replace nothing; the shared ones are counted
+and listed in the review as information. `strip` leaves the shared files out. The mode
+is part of the package ID: `wardrobe.<name>` is the default and `wardrobe.<name>.strip`
+the opt-in, so the mode travels wherever the package list travels (plan, journal,
+ownership, rebuilds, restore) and is bound into the plan identity with no new field. A
+build holds a skin once, in one mode. The review shows, per skin, a switch "Keep the
+game's shared files untouched" (default off); turning it on prepares the plan again with
+the `.strip` ID, and the install button works only for the plan that was reviewed.
 
 **Pipeline.** Preparing a build with a wardrobe item downloads the ZIP (bounded, proxy
 bypass, public-address and peer checks, SHA-256), reads exactly the one pinned entry out of
 it behind the ZIP preflight and a hard length bound, checks its SHA-256 and publishes only
 that VPK to the content store, where every later build re-reads and re-hashes it. Each
-build then runs the analyzer on those bytes and requires its result to equal the pinned
-audit field for field; otherwise it stops with `wardrobe_audit_mismatch`. A change to the
-analyzer's rules therefore cannot silently change which files an audited archive
-installs. The files to install become an ordinary bundle package, merged by the existing
-`mod_bundle` with the tuning packages.
+build then runs the analyzer on those bytes in the requested mode and requires its result
+to equal that mode's pinned audit; otherwise it stops with `wardrobe_audit_mismatch`. A
+change to the analyzer's rules therefore cannot silently change which files an audited
+archive installs. The files to install become an ordinary bundle package, merged by the
+existing `mod_bundle` with the tuning packages. The content store holds at most 64 MiB per
+object, so an archive whose VPK is larger is not in the allowlist.
 
 **Analyzer.** It reads a VPK v1 or v2 directory with every entry embedded (side archives
 and CRC mismatches refuse the file) and classifies each path:
 
 - *Type.* Only compiled `vpcf_c`, `vsnap_c`, `vtex_c`, `vmat_c`, `vmdl_c`, `vmesh_c`,
-  `vanim_c`, `vsndevts_c`, `vsnd_c`, `vmorf_c`, `vagrp_c` and `vphys_c` pass. Scripts,
-  uncompiled sources, executables, empty files, oversized files, case-colliding names and
-  every other type are rejected; scripts, executables and unsafe paths also block the
-  whole install. A `vxml_c` passes only when `panorama_layout::image_wrapper_dependency`
-  proves the image-wrapper shape from the parsed KV3 tree and the resource's reference
-  list (details in the audit); what the reader cannot prove is rejected. The existing
-  `audited scripts only` rule is untouched: no skin can bring a script.
-- *Scope.* Hero-scoped (the exact folders of one hero), author-owned (a top-level folder
-  outside Valve's, or a declared namespace below `particles/`, `materials/` or `models/`)
-  or shared (everything else). Shared files are dropped under the `strip` policy, each one
-  listed in the report, and refuse the install under `refuse`.
+  `vanim_c`, `vsndevts_c`, `vsnd_c`, `vmorf_c`, `vagrp_c`, `vphys_c` and `vseq_c` pass.
+  Scripts, uncompiled sources, executables, empty files, oversized files, case-colliding
+  names and every other type are rejected; scripts, executables and unsafe paths also
+  block the whole install. A `vxml_c` passes only when
+  `panorama_layout::image_wrapper_dependency` proves the image-wrapper shape from the
+  parsed KV3 tree and the resource's reference list; what the reader cannot prove is
+  rejected. The `audited scripts only` rule is untouched: no skin can bring a script.
+- *Names.* Upper-case letters are folded to lower case and counted in the report; two
+  names equal once folded are both rejected.
+- *Scope.* Hero-scoped (the hero's folders, sounds, icons, sound events and status
+  effects; see the audit document), shared (a path in the pinned shared list) or
+  author-owned (everything else: files the game does not ship). The classes feed the
+  report; under the default mode they change nothing about what is installed.
 
 The result is a typed, serializable `SkinReport` (counts and bytes per class, rejected and
-shared paths with reasons, the two identities) carried in the plan.
+shared paths with reasons, the identities, folded names, and files the player's game ships
+now) carried in the plan.
 
-**Plan and conflicts.** `TreePilotPlan` gains `wardrobe` (one report per item, with the
-size and the stripped and rejected lists) and `wardrobeConflicts`. A path that a wardrobe
-item and another selected package both write, with different bytes, is a conflict. The
-first package in the selection wins, as for tuning packages, but the plan lists every such
-path and the install command refuses to run unless the request carries
+**Plan, conflicts and size.** `TreePilotPlan` gains `wardrobe` (one report per item, with
+its mode, the sizes and the shared and rejected lists) and `wardrobeConflicts`. A path that
+a wardrobe item and another selected package both write, with different bytes, is a
+conflict. The first package in the selection wins, as for tuning packages, but the plan
+lists every such path and the install command refuses to run unless the request carries
 `acknowledgedConflicts`, which the interface sends only after the person ticks a
 confirmation under that list. Identical bytes are a duplicate, not a conflict. Both are
-already part of the plan identity. No Tauri command was added; `install_tree_pilot` takes
-the optional field, and the stress variant never acknowledges.
+already part of the plan identity. No Tauri command was added.
 
-**Download hosts.** Hugging Face answers a `resolve/...` URL with a redirect to a CDN host
-under `cdn.hf.co`, with a signed query string (observed once, with a `HEAD` request from a
-Mac on 2026-10-09: `us.aws.cdn.hf.co`). The transport for wardrobe archives therefore
-follows redirects to hosts ending in `.cdn.hf.co` in addition to the original origin, and
-allows a query string only there; every hop is still HTTPS on port 443 with resolved
-addresses checked and pinned. Other regions of that CDN are matched by the suffix and have
-not been seen. The SHA-256 pin, not the host, decides whether the bytes are accepted.
+One merged VPK holds at most 256 MiB of file data and 65,536 entries (`mod_bundle.rs`).
+The audited install sizes are known up front, so preparing a build whose selected skins
+(in their chosen modes) already exceed either limit stops at once with
+`bundle_limit_exceeded`, before anything is downloaded, and the build screen shows the
+running total against the limit as skins are added. The merged build is still checked
+against the same limits when it is made, which catches the tuning packages too.
+
+**The player's own game.** When a game folder is connected, preparing a build also reads
+the file list of `game/dota/pak01_dir.vpk` (read-only, bounded) and notes which of the
+skin's author-owned files the game ships now although the audit's Valve list did not (a
+file added since the audit). Under the default mode this is information only (listed in
+the review as files "your game ships now"). Under the opt-in mode those files are also
+left out, because that mode's meaning is to leave the game's files untouched. The result
+is stored per item and read back by every later rebuild, like a blacklist expansion, so a
+Dota update does not change what is considered installed. With no game folder, or an
+unreadable file list, the item is recorded as "not checked", the review says so, and the
+plan never fails because of it.
+
+**Download hosts.** The archives come from the Dota2PornFx project's GitHub repository
+(`raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/files/<category>/<file>`) and
+its Hugging Face dataset (`huggingface.co/datasets/hrdq/Dota2PornFx/resolve/main/...`). A
+manifest lists up to one URL per host, in the order they are tried, all naming the same
+file; every URL must match a trusted prefix exactly. A mirror that answers with an HTTP
+error, cannot be reached, or serves bytes that do not match the pinned size and hash is
+skipped and the next is tried; the download fails only when no mirror yields the pinned
+bytes (with the last mirror's error). Cancelling stops at once. Only mirrors that answered
+200 with the pinned ZIP size to a `HEAD` request are listed (all 471 have both). GitHub
+answered with 200 directly; Hugging Face answers a `resolve/...` URL with a redirect to a
+CDN host under `cdn.hf.co` with a signed query string (observed with a `HEAD` request
+from a Mac on 2026-10-09: `us.aws.cdn.hf.co`). The transport therefore follows redirects
+to hosts ending in `.cdn.hf.co` in addition to the original origin, and allows a query
+string only there; every hop is still HTTPS on port 443 with resolved addresses checked
+and pinned. Other regions of that CDN are matched by the suffix and have not been seen.
+The SHA-256 pin, not the host, decides whether the bytes are accepted.
+
+**The generator.** The entries are not written by hand. The `#[ignore]`d test
+`wardrobe_audit::generate_wardrobe_allowlist` (local only, driven by environment
+variables: a folder of downloaded ZIPs, the fetch manifest, the mirror check, the catalog
+and Valve's file list) audits every `heroes` and `hero-items` catalog item: it opens the
+ZIP, reads the VPK, infers the hero names from the paths Valve's list also has, computes
+the shared paths, runs the analyzer in both modes, lets the app's own load path reproduce
+the audit, and writes `manifests.json`, `index.json` and
+[`WARDROBE_AUDIT_REPORT.md`](WARDROBE_AUDIT_REPORT.md). An item that cannot be audited
+cleanly (no hero found, an unsafe path, a container the reader refuses, an archive over
+the 64 MiB bound, no archive) is not emitted and is listed with its reason. Output is
+sorted and carries no timestamp. A second ignored test, `spot_check_embedded_items`,
+unpacks chosen cached ZIPs as the app does and builds plans from them. The generated
+files are checked by ordinary tests on every run: every embedded manifest is validated,
+the files must be canonical, and the interface copy must be derived from them.
 
 **What has and has not been run.**
 
-- Compiles and passes unit tests on macOS: the analyzer against small synthetic VPKs (v1
-  and v2; hero, author-owned and shared paths; uncompiled sources, scripts, executables,
-  traversal, case-colliding and oversized entries; passing and failing image wrappers),
-  the allowlist and its hostile-entry rejections, ZIP extraction, the audit match,
-  build and conflict behaviour with synthetic items, and the transport's redirect rules.
-- Run locally on a Mac against the real sample (never committed): the analyzer's numbers
-  in the audit document, extraction of the pinned VPK from the real ZIP, and a build from
-  the content store into one VPK of 951 resources and 53,327,413 bytes, reproduced
-  byte for byte on a second build. The real download through the transport has not been
-  exercised: only the redirect response was observed.
+- Compiles and passes unit tests on macOS: the analyzer against small synthetic VPKs
+  (v1 and v2; hero, author-owned and shared paths; both modes; folded and colliding
+  names; uncompiled sources, scripts, executables, traversal and oversized entries;
+  passing and failing image wrappers; several hero names), the allowlist and its
+  hostile-entry rejections, the mode IDs, ZIP extraction, the audit match and its drift
+  cases, the player-side comparison, build and conflict behaviour with synthetic items,
+  the size refusal, and the transport's redirect rules and mirror fallback (with fake
+  transports, not the network).
+- Run locally on a Mac and not committed: the audit of the 512 catalog items from
+  cached downloads (471 allowlisted; numbers in the report); the real Scarlet Keeper
+  archive through extraction, the content store and a build into one VPK of 996 files
+  (57,904,917 bytes, reproduced byte for byte on a second build); and plans built from
+  other cached archives (a one-file hero item, a two-name hero, a 61 MiB skin, six
+  skins together including two for one hero, with 244 conflicting paths, and five large
+  skins that together are refused as over the limit). The archives were fetched with `curl`, not through
+  BetterFy's transport; the transport itself has only been exercised against fakes and a
+  `HEAD` request.
 - Not run: Windows CI for this change (see the PR), an install on Windows, and anything
-  in Dota. Nothing here claims the skin loads or looks right in the game.
+  in Dota. Nothing here claims a skin loads or looks right in the game when BetterFy
+  installs it.
 
 ### Letting go of a stale installation
 
