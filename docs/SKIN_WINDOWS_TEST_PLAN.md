@@ -77,7 +77,7 @@ Record once, before any test:
 
 1. Catalog, Heroes: the Scarlet Keeper of the Light card carries the Windows
    pilot mark, and so do the other hero and hero-item skins that passed the
-   audit (471 cards in all). Add it to a build. The Build screen's header should
+   audit (499 cards in all). Add it to a build. The Build screen's header should
    say Windows pilot, not preview only.
 2. Prepare the build with the network on and Dota connected. This is the first
    real download of the archive through BetterFy's transport (the first mirror,

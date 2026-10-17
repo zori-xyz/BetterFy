@@ -10,7 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const CONTENT_SCHEMA_VERSION: u32 = 1;
 const MAX_MANIFEST_BYTES: usize = 64 * 1024;
-pub(crate) const MAX_ARTIFACT_BYTES: u64 = 64 * 1024 * 1024;
+pub(crate) const MAX_ARTIFACT_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_RELATIONS: usize = 64;
 static PUBLISH_COUNTER: AtomicU64 = AtomicU64::new(0);
 static CONTENT_STORE_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();

@@ -12,64 +12,40 @@ Written by the local-only test `wardrobe_audit::generate_wardrobe_allowlist` (`s
 | Hero inference | folders of Valve-present paths: `models/heroes/<h>`, `models/items/<h>`, `particles/units/heroes/hero_<h>`, `particles/econ/items/<h>`, `materials/models/(heroes\|items)/<h>`; every name with at least 5% of the top name's paths is kept (at most 8) |
 | Mirrors | candidate URLs checked by HEAD request: kept only when they answer 200 with the pinned ZIP size |
 
-Emitted 471 of 512 items.
-Skipped 41 of 512 items.
+Emitted 499 of 512 items.
+Skipped 13 of 512 items.
 
 ## Items that are not in the allowlist
 
 | Reason | Items |
 | --- | ---: |
 | VPK container unreadable | 1 |
-| analyzer blocked the install (skin_archive_hostile) | 21 |
-| archive over the 64 MiB limit | 16 |
+| analyzer blocked the install (skin_archive_hostile) | 6 |
+| analyzer blocked the install (skin_install_too_large) | 1 |
+| archive over the 256 MiB limit | 2 |
 | no archive in the cache | 3 |
 
 ### VPK container unreadable (1)
 
 - `heroes-black-witch-doctor`: vpk_invalid
 
-### analyzer blocked the install (skin_archive_hostile) (21)
+### analyzer blocked the install (skin_archive_hostile) (6)
 
-- `heroes-chaos-knight-flandre-scarlet`: PathUnsafe x1
-- `heroes-chen-lelouch`: PathUnsafe x3
-- `heroes-dawnbreaker-moonbreaker`: PathUnsafe x3
-- `heroes-dazzle-lifeless-devotion`: PathUnsafe x6
-- `heroes-ember-spirit-mai-shiranui`: PathUnsafe x7
-- `heroes-io-pink-arcana`: PathUnsafe x1
-- `heroes-legion-commander-nero`: PathUnsafe x9
+- `hero-items-disruptor-tractor`: PathUnsafe x32
+- `heroes-ember-spirit-mai-shiranui`: PathUnsafe x4
+- `heroes-enigma-blackhole-chan`: PathUnsafe x1, Script x1
 - `heroes-lina-crystal-empress`: PathUnsafe x1
 - `heroes-mirana-suigintou`: PathUnsafe x9
-- `heroes-naga-siren-izayoi-miku`: PathUnsafe x2
-- `heroes-night-stalker-remilia`: PathUnsafe x1
-- `heroes-nude-drow-ranger`: PathUnsafe x9
-- `heroes-nude-naga-siren`: PathUnsafe x2
-- `heroes-sven-yatogami-tohka`: PathUnsafe x1
-- `heroes-sven-yatogami-tohka-v2`: PathUnsafe x7
-- `heroes-tidehunter-squid-girl`: PathUnsafe x1
-- `heroes-toxicpunk-timbersaw`: PathUnsafe x1
-- `heroes-tusk-king-kong`: PathUnsafe x1
-- `heroes-weaver-kurumi`: PathUnsafe x35
-- `heroes-windranger-autumn-arcana`: PathUnsafe x3
-- `heroes-wraith-king-itsuka-kotori`: PathUnsafe x31
+- `heroes-outworld-destroyer-tatsumaki`: PathUnsafe x3
 
-### archive over the 64 MiB limit (16)
+### analyzer blocked the install (skin_install_too_large) (1)
 
-- `hero-items-disruptor-tractor`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
-- `heroes-axe-gawr-gura`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
-- `heroes-blue-muerta`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
-- `heroes-custom-largo`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
-- `heroes-drow-ranger-arcana`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
-- `heroes-drow-ranger-stranger-arcana`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
-- `heroes-emerald-shadow-fiend`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
-- `heroes-enigma-blackhole-chan`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
-- `heroes-juggernaut-ice-and-fire`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
+- `heroes-blue-muerta`: skin_install_too_large
+
+### archive over the 256 MiB limit (2)
+
 - `heroes-legion-commander-chen`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
-- `heroes-legion-commander-persona`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
 - `heroes-nude-drow-ranger-v2`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
-- `heroes-nude-marci`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
-- `heroes-oracle-irisviel-von-einzbern`: ZIP is 98306876 bytes
-- `heroes-outworld-destroyer-tatsumaki`: ZIP is 75707929 bytes
-- `heroes-queen-of-pain-rose`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
 
 ### no archive in the cache (3)
 
@@ -79,53 +55,53 @@ Skipped 41 of 512 items.
 
 ## Emitted items in numbers
 
-Total install bytes of all emitted items in the default mode: 4229.0 MiB (76430 files); with the shared files left out (opt-in): 3960.9 MiB.
-Biggest install: `heroes-bloody-gore-spectre`, 61.0 MiB.
-Install size per item (MiB): median 2.9, p90 26.5, p99 57.0.
-Items that override no shared Valve file: 265; that override more than 100: 0; shared files overridden in total: 2636.
-Hero-name ambiguity: 49 items carry more than one internal hero name (a second name with at least 5% of the top name's Valve-present paths).
-Paths folded to lower case: 33 files in 2 items.
-Classes over all emitted items: 43765 hero-scoped files, 30029 author-owned files (files the game does not ship, installed).
-Items with two verified mirrors: 471; with one: 0.
+Total install bytes of all emitted items in the default mode: 5283.6 MiB (85593 files); with the shared files left out (opt-in): 4985.5 MiB.
+Biggest install: `heroes-oracle-irisviel-von-einzbern`, 124.9 MiB.
+Install size per item (MiB): median 3.5, p90 29.4, p99 76.0.
+Items that override no shared Valve file: 274; that override more than 100: 0; shared files overridden in total: 2862.
+Hero-name ambiguity: 56 items carry more than one internal hero name (a second name with at least 5% of the top name's Valve-present paths).
+Paths folded to lower case: 34 files in 3 items.
+Classes over all emitted items: 48757 hero-scoped files, 33974 author-owned files (files the game does not ship, installed).
+Items with two verified mirrors: 499; with one: 0.
 
 Dropped files by reason (not installed, listed per item in the plan):
 
 | Reason | Files |
 | --- | ---: |
 | empty_resource | 11 |
-| oversized | 1 |
-| panorama_unproven | 202 |
-| type_not_allowed | 133 |
-| uncompiled_source | 667 |
+| oversized | 10 |
+| panorama_unproven | 209 |
+| type_not_allowed | 152 |
+| uncompiled_source | 769 |
 
 Folders where skins override shared Valve files most often (first three path segments):
 
 | Folder | Files |
 | --- | ---: |
-| `materials/default` | 1513 |
-| `materials/models/cubemaps` | 525 |
+| `materials/default` | 1640 |
+| `materials/models/cubemaps` | 579 |
 | `models/creeps/ice_biome` | 70 |
+| `panorama/images/spellicons` | 65 |
 | `particles/econ/taunts` | 64 |
 | `particles/items2_fx` | 60 |
-| `panorama/images/spellicons` | 59 |
+| `particles/error` | 38 |
 | `materials/models/heroes` | 32 |
-| `particles/error` | 32 |
+| `sounds/weapons/hero` | 32 |
 | `particles/units/heroes` | 30 |
-| `sounds/weapons/hero` | 29 |
 | `sounds/physics/footsteps` | 26 |
+| `panorama/images/heroes` | 24 |
 | `particles/econ/courier` | 23 |
-| `particles/status_fx` | 20 |
-| `materials/models/particle` | 19 |
+| `materials/models/particle` | 22 |
+| `particles/status_fx` | 21 |
 | `particles/items_fx` | 19 |
 | `models/items/faceless_void` | 13 |
-| `panorama/images/heroes` | 12 |
+| `materials/particle` | 9 |
 | `particles/econ/events` | 9 |
-| `materials/particle` | 7 |
+| `soundevents/voscripts` | 9 |
 | `particles/econ/items` | 6 |
 | `particles/generic_gameplay` | 6 |
 | `particles/models/heroes` | 6 |
 | `materials/models/items` | 5 |
-| `soundevents/voscripts` | 4 |
 | `materials/particle/antimage_aghanins` | 3 |
 
 ## Emitted items
@@ -156,6 +132,7 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-arc-warden-sakura-winter` | arc_warden | 351 | 7.0 | 31 | 1 | 0 |
 | `heroes-arc-warden-yin-yang` | arc_warden | 329 | 4.4 | 16 | 0 | 0 |
 | `heroes-ashes-arc-warden` | arc_warden | 369 | 11.9 | 27 | 0 | 0 |
+| `heroes-axe-gawr-gura` | axe | 343 | 54.7 | 0 | 10 | 0 |
 | `heroes-axe-heracles` | axe | 313 | 17.2 | 12 | 9 | 0 |
 | `heroes-axe-immortal-bootblack` | axe | 58 | 3.6 | 2 | 1 | 0 |
 | `heroes-axe-immortal-bootblack-brawler` | axe | 64 | 0.7 | 0 | 0 | 0 |
@@ -203,7 +180,9 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-centaur-emerald-marauder` | centaur | 7 | 0.4 | 0 | 0 | 0 |
 | `heroes-chaos-invoker` | invoker, invoker_kid | 341 | 14.9 | 1 | 0 | 0 |
 | `heroes-chaos-io` | wisp | 88 | 3.0 | 0 | 0 | 0 |
+| `heroes-chaos-knight-flandre-scarlet` | chaos_knight | 240 | 9.0 | 0 | 9 | 0 |
 | `heroes-chen-infernal-psychic` | chen | 6 | 0.7 | 1 | 0 | 0 |
+| `heroes-chen-lelouch` | chen | 320 | 12.7 | 0 | 1 | 0 |
 | `heroes-chen-seed-of-strife` | chen | 15 | 0.7 | 0 | 0 | 0 |
 | `heroes-clinkz-silver-metall-pink` | clinkz | 597 | 12.2 | 22 | 30 | 0 |
 | `heroes-clockwerk-apex-automated` | rattletrap | 6 | 0.5 | 0 | 0 | 0 |
@@ -224,6 +203,7 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-cursed-queen-of-pain` | queen_of_pain, queenofpain | 487 | 25.8 | 0 | 0 | 0 |
 | `heroes-cursed-shadow-fiend` | nevermore, shadow_fiend | 339 | 5.1 | 13 | 0 | 0 |
 | `heroes-curseding-anti-mage` | antimage | 185 | 9.3 | 22 | 4 | 0 |
+| `heroes-custom-largo` | largo, bard | 163 | 92.0 | 26 | 0 | 0 |
 | `heroes-custom-slark` | slark | 79 | 0.7 | 0 | 1 | 0 |
 | `heroes-dark-ancient-slark` | slark, invoker | 672 | 9.7 | 20 | 0 | 0 |
 | `heroes-dark-reaper-invoker` | invoker, invoker_kid | 691 | 8.7 | 20 | 0 | 0 |
@@ -233,8 +213,10 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-darkness-naga-siren` | siren | 182 | 6.3 | 19 | 0 | 0 |
 | `heroes-darkness-weaver` | weaver | 452 | 22.5 | 23 | 89 | 0 |
 | `heroes-dawnbreaker-death-knight` | dawnbreaker | 407 | 59.8 | 26 | 16 | 0 |
+| `heroes-dawnbreaker-moonbreaker` | dawnbreaker | 324 | 25.4 | 27 | 0 | 0 |
 | `heroes-dawnbreaker-starlorn-adjudicator` | dawnbreaker | 7 | 0.3 | 0 | 0 | 0 |
 | `heroes-dazzle-darkclaw` | dazzle | 23 | 2.3 | 0 | 2 | 0 |
+| `heroes-dazzle-lifeless-devotion` | dazzle | 231 | 14.8 | 5 | 1 | 0 |
 | `heroes-dazzle-needlepoint-necromance` | dazzle | 5 | 0.4 | 0 | 0 | 0 |
 | `heroes-death-prophet-bb` | death_prophet | 397 | 5.9 | 0 | 12 | 0 |
 | `heroes-death-prophet-unicorn` | death_prophet | 539 | 35.3 | 0 | 9 | 0 |
@@ -247,7 +229,9 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-doom-jeanne-alter` | doom, doom_bringer | 286 | 2.9 | 0 | 8 | 0 |
 | `heroes-dragon-knight-burning-scale` | dragon_knight | 19 | 2.8 | 0 | 0 | 0 |
 | `heroes-dragon-knight-silverwurm-sacrifice` | dragon_knight | 7 | 0.8 | 0 | 0 | 0 |
+| `heroes-drow-ranger-arcana` | drow | 99 | 71.4 | 2 | 0 | 0 |
 | `heroes-drow-ranger-diretide` | drow | 378 | 15.5 | 15 | 0 | 0 |
+| `heroes-drow-ranger-stranger-arcana` | drow | 142 | 76.0 | 16 | 0 | 0 |
 | `heroes-earth-spirit-slitehering-stone` | earth_spirit | 12 | 1.5 | 0 | 0 | 0 |
 | `heroes-earthshaker-deep-magma` | earthshaker | 140 | 24.5 | 4 | 0 | 0 |
 | `heroes-earthshaker-purple-arcana` | earthshaker | 355 | 32.9 | 24 | 0 | 0 |
@@ -257,6 +241,7 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-ember-spirit-master-of-searing-path` | ember_spirit | 17 | 0.4 | 0 | 0 | 0 |
 | `heroes-ember-spirit-shana` | ember_spirit | 594 | 45.6 | 0 | 2 | 0 |
 | `heroes-emerald-dragon-knight` | dragon_knight | 78 | 6.3 | 14 | 0 | 0 |
+| `heroes-emerald-shadow-fiend` | shadow_fiend, nevermore | 613 | 91.7 | 2 | 0 | 0 |
 | `heroes-enchantress-darkwood-witness` | enchantress | 5 | 0.5 | 0 | 0 | 0 |
 | `heroes-enchantress-shiro` | enchantress | 206 | 6.6 | 0 | 1 | 0 |
 | `heroes-enigma-angel-of-the-abyss` | enigma | 6 | 4.0 | 0 | 0 | 0 |
@@ -369,12 +354,14 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-invoker-patchouli` | invoker | 755 | 23.4 | 17 | 41 | 0 |
 | `heroes-io-histoire` | wisp, io | 192 | 11.6 | 0 | 5 | 0 |
 | `heroes-io-madame-scrio` | wisp | 5 | 0.7 | 0 | 0 | 0 |
+| `heroes-io-pink-arcana` | wisp | 209 | 11.6 | 20 | 1 | 0 |
 | `heroes-io-purple` | wisp | 97 | 0.4 | 0 | 0 | 0 |
 | `heroes-jakiro-himera` | jakiro | 144 | 8.3 | 0 | 0 | 0 |
 | `heroes-jakiro-kiyohime` | jakiro | 275 | 11.4 | 0 | 1 | 0 |
 | `heroes-joker-ringmaster` | ringmaster, obsidian_destroyer | 277 | 48.1 | 24 | 0 | 0 |
 | `heroes-juggernaut-ancient-exile` | juggernaut | 6 | 0.4 | 0 | 0 | 0 |
 | `heroes-juggernaut-arcana-purple` | juggernaut | 565 | 11.8 | 7 | 0 | 0 |
+| `heroes-juggernaut-ice-and-fire` | juggernaut | 590 | 53.6 | 0 | 1 | 0 |
 | `heroes-juggernaut-okita-souji` | juggernaut | 611 | 12.0 | 5 | 25 | 0 |
 | `heroes-juggernaut-samurai-of-wind` | juggernaut | 98 | 1.9 | 8 | 1 | 0 |
 | `heroes-kai-meepo` | meepo | 487 | 24.8 | 16 | 0 | 0 |
@@ -387,6 +374,8 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-kez-tensura` | kez | 1945 | 38.3 | 13 | 1 | 0 |
 | `heroes-legion-commander-crimson-black` | legion_commander | 175 | 7.0 | 11 | 0 | 0 |
 | `heroes-legion-commander-holy-paladin` | legion_commander, legion | 450 | 19.8 | 13 | 0 | 0 |
+| `heroes-legion-commander-nero` | legion_commander | 170 | 4.9 | 0 | 10 | 0 |
+| `heroes-legion-commander-persona` | legion_commander | 547 | 109.9 | 0 | 1 | 0 |
 | `heroes-lich-miyuki-shiba` | lich | 239 | 4.7 | 0 | 8 | 0 |
 | `heroes-lich-shokuhou-misaki` | lich | 753 | 33.0 | 3 | 1 | 0 |
 | `heroes-lifestealer-cong-yu` | lifestealer, life_stealer | 782 | 25.2 | 0 | 1 | 0 |
@@ -431,6 +420,7 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-muerta-blackwing-bandolera` | muerta | 5 | 1.6 | 0 | 0 | 0 |
 | `heroes-muerta-soul-warden` | muerta | 5 | 1.3 | 0 | 0 | 0 |
 | `heroes-naga-siren-allure-of-the-deep` | siren | 7 | 1.4 | 0 | 0 | 0 |
+| `heroes-naga-siren-izayoi-miku` | siren | 287 | 12.6 | 10 | 1 | 0 |
 | `heroes-natures-prophet-allfather` | furion | 8 | 0.6 | 0 | 0 | 0 |
 | `heroes-natures-prophet-saya` | furion | 494 | 31.4 | 0 | 1 | 0 |
 | `heroes-natures-prophet-spectral-sage` | furion | 193 | 13.8 | 31 | 0 | 0 |
@@ -440,9 +430,13 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-night-stalker-feasts-of-forever` | nightstalker | 16 | 4.8 | 0 | 0 | 0 |
 | `heroes-night-stalker-frost-walker` | nightstalker | 96 | 6.6 | 17 | 0 | 0 |
 | `heroes-night-stalker-relict` | nightstalker | 117 | 30.2 | 6 | 1 | 0 |
+| `heroes-night-stalker-remilia` | nightstalker | 174 | 13.6 | 4 | 12 | 0 |
 | `heroes-night-ursa` | ursa | 144 | 7.1 | 16 | 0 | 0 |
 | `heroes-nightmare-chaos-knight` | chaos_knight | 480 | 26.7 | 23 | 14 | 0 |
 | `heroes-nuclear-clockwerk` | rattletrap, clockwerk | 110 | 4.3 | 14 | 0 | 0 |
+| `heroes-nude-drow-ranger` | drow | 64 | 7.2 | 6 | 0 | 0 |
+| `heroes-nude-marci` | marci | 286 | 79.3 | 0 | 7 | 0 |
+| `heroes-nude-naga-siren` | siren | 15 | 1.0 | 7 | 0 | 0 |
 | `heroes-nude-queen-of-pain` | queenofpain, queen_of_pain | 160 | 27.3 | 0 | 0 | 0 |
 | `heroes-ogre-magi-amakusa-shiro` | ogre_magi | 261 | 4.0 | 0 | 9 | 0 |
 | `heroes-ogre-magi-custom-arcana` | ogre_magi | 108 | 11.4 | 16 | 1 | 0 |
@@ -453,6 +447,7 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-omniknight-akashi` | omniknight | 285 | 44.7 | 10 | 5 | 0 |
 | `heroes-omniknight-blinding-bastion` | omniknight | 5 | 0.5 | 0 | 0 | 0 |
 | `heroes-oracle-immortal-silence` | oracle | 18 | 0.6 | 0 | 0 | 0 |
+| `heroes-oracle-irisviel-von-einzbern` | oracle | 730 | 124.9 | 8 | 1 | 0 |
 | `heroes-outworld-destroyer-dark-metter` | obsidian_destroyer | 229 | 8.1 | 23 | 0 | 0 |
 | `heroes-outworld-destroyer-yukari` | obsidian_destroyer, outworld_devourer | 364 | 34.9 | 1 | 18 | 0 |
 | `heroes-pangolier-gentleman` | pangolier, antimage | 200 | 11.9 | 13 | 0 | 0 |
@@ -487,6 +482,7 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-purple-legion-commander` | legion, legion_commander | 322 | 11.5 | 24 | 0 | 0 |
 | `heroes-purple-queen-of-pain` | queen_of_pain, queenofpain | 692 | 37.5 | 21 | 0 | 0 |
 | `heroes-purple-witch-broodmother` | broodmother | 170 | 9.7 | 24 | 0 | 0 |
+| `heroes-queen-of-pain-rose` | queen_of_pain, queenofpain | 1112 | 72.4 | 26 | 14 | 0 |
 | `heroes-razor-rainbow-statics` | razor | 146 | 3.4 | 14 | 4 | 0 |
 | `heroes-razor-rizelencer` | razor | 96 | 1.2 | 12 | 0 | 0 |
 | `heroes-razor-silver-rrevenant` | razor | 8 | 0.2 | 0 | 0 | 0 |
@@ -541,6 +537,8 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-sven-berseker` | sven | 196 | 6.5 | 9 | 0 | 0 |
 | `heroes-sven-blue-angel` | sven | 315 | 27.1 | 16 | 0 | 0 |
 | `heroes-sven-indomitable-legacy` | sven | 22 | 0.5 | 0 | 0 | 0 |
+| `heroes-sven-yatogami-tohka` | winter_wyvern, sven | 563 | 37.2 | 0 | 21 | 0 |
+| `heroes-sven-yatogami-tohka-v2` | sven | 321 | 5.6 | 0 | 20 | 0 |
 | `heroes-techies-alien` | techies | 42 | 5.9 | 0 | 0 | 0 |
 | `heroes-techies-arab` | techies | 17 | 5.0 | 0 | 0 | 0 |
 | `heroes-techies-sodbustin-saboteurs` | techies | 5 | 0.7 | 0 | 0 | 0 |
@@ -556,6 +554,7 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-terrorblade-white-fractal-horns` | terrorblade | 212 | 1.7 | 0 | 0 | 0 |
 | `heroes-terrorblade-wrong-arcana` | terrorblade | 483 | 34.7 | 8 | 0 | 0 |
 | `heroes-tidehunter-insatiable-seas` | tidehunter | 33 | 8.8 | 0 | 0 | 0 |
+| `heroes-tidehunter-squid-girl` | tidehunter | 322 | 11.2 | 5 | 1 | 0 |
 | `heroes-timbersaw-clearcut-cavalier` | shredder | 134 | 2.9 | 0 | 0 | 0 |
 | `heroes-tinker-deathsman` | tinker | 30 | 4.2 | 0 | 0 | 0 |
 | `heroes-tinker-deep-hornet` | tinker | 18 | 0.9 | 3 | 0 | 0 |
@@ -564,9 +563,11 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-tinker-submerged-hazard` | tinker | 31 | 0.4 | 0 | 0 | 0 |
 | `heroes-tiny-majesty-of-the-colossus` | tiny | 32 | 3.1 | 1 | 0 | 0 |
 | `heroes-tiny-stone-giant-stronghold` | tiny | 6 | 3.3 | 1 | 0 | 0 |
+| `heroes-toxicpunk-timbersaw` | shredder, timbersaw | 155 | 4.3 | 16 | 0 | 0 |
 | `heroes-treant-protector-frost-hideaway` | treant_protector | 4 | 0.4 | 0 | 0 | 0 |
 | `heroes-troll-warlord-reimu` | troll_warlord | 178 | 20.6 | 0 | 11 | 0 |
 | `heroes-tusk-immortal` | tuskarr | 9 | 0.3 | 3 | 0 | 0 |
+| `heroes-tusk-king-kong` | tusk, tuskarr | 204 | 6.8 | 14 | 0 | 1 |
 | `heroes-tusk-odobenus-footman` | tusk, tuskarr | 145 | 13.2 | 33 | 0 | 0 |
 | `heroes-tusk-odobenus-frost-mage` | tusk, tuskarr | 200 | 17.8 | 36 | 0 | 0 |
 | `heroes-underlord-immortal-ravenous` | underlord, abyssal_underlord | 21 | 0.8 | 8 | 0 | 0 |
@@ -591,12 +592,15 @@ Heroes are the inferred internal names. Files are what goes into the build; shar
 | `heroes-void-spirit-keqing` | void_spirit | 851 | 27.8 | 1 | 2 | 0 |
 | `heroes-warden-phantom-assassin` | phantom_assassin | 519 | 17.3 | 6 | 23 | 0 |
 | `heroes-warlock-puppet-bear` | warlock | 16 | 1.1 | 0 | 0 | 0 |
+| `heroes-weaver-kurumi` | weaver | 328 | 12.5 | 3 | 10 | 0 |
 | `heroes-white-natures-prophet` | furion | 278 | 3.4 | 6 | 0 | 0 |
 | `heroes-white-shadow-shaman` | shadowshaman | 137 | 2.4 | 14 | 0 | 0 |
+| `heroes-windranger-autumn-arcana` | windrunner | 162 | 31.4 | 24 | 0 | 0 |
 | `heroes-winter-ember-spirit` | ember_spirit | 711 | 29.9 | 26 | 0 | 0 |
 | `heroes-winter-lycan` | lycan | 287 | 25.3 | 29 | 0 | 0 |
 | `heroes-wraith-king-arcana` | wraith_king, skeletonking | 336 | 12.6 | 6 | 2 | 0 |
 | `heroes-wraith-king-grim-destiny` | wraith_king | 6 | 0.4 | 0 | 0 | 0 |
+| `heroes-wraith-king-itsuka-kotori` | wraith_king, skeletonking | 449 | 7.0 | 5 | 16 | 0 |
 | `heroes-wraith-king-pizdec` | wraith_king, skeletonking | 32 | 1.4 | 3 | 0 | 0 |
 | `heroes-wraith-king-skeleton` | skeletonking, wraith_king | 251 | 3.0 | 6 | 0 | 0 |
 | `heroes-wraith-king-unbroken-arcana` | wraith_king, skeletonking | 40 | 9.3 | 5 | 0 | 0 |

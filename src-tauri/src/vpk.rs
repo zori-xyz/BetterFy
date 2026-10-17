@@ -52,7 +52,7 @@ pub(crate) fn validate_path(value: &str) -> Result<(), String> {
         return Err("vpk_path_invalid".to_string());
     }
     if value.bytes().any(|byte| {
-        !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"_-/ .".contains(&byte))
+        !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"_-/ .+".contains(&byte))
     }) {
         return Err("vpk_path_invalid".to_string());
     }

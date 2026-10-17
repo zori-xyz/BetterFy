@@ -2,7 +2,7 @@
 
 Status: the analyzer (`src-tauri/src/skin_archive.rs`) classifies the files of a
 third-party hero skin VPK, and the embedded allowlist
-(`src-tauri/wardrobe/manifests.json`, generated) pins 471 audited catalog
+(`src-tauri/wardrobe/manifests.json`, generated) pins 499 audited catalog
 archives so the engine can plan and install them through the normal backup and
 rollback transaction (see "Wardrobe items" in
 [ENGINE_ARCHITECTURE.md](ENGINE_ARCHITECTURE.md) and the catalog-wide numbers in
@@ -136,11 +136,11 @@ local generator (`wardrobe_audit::generate_wardrobe_allowlist`) against
 Valve's file list, `game/dota/pak01_dir.txt` of SteamDatabase/GameTracking-Dota2
 (SHA-256 `6d98c763afe09ba0de5caf0fc965b6b21f26eeb2954ff1e7744996ba056db1b7`,
 388,116 entries). The result, item by item, is in
-[WARDROBE_AUDIT_REPORT.md](WARDROBE_AUDIT_REPORT.md). In short: 471 of 512 items
+[WARDROBE_AUDIT_REPORT.md](WARDROBE_AUDIT_REPORT.md). In short: 499 of 512 items
 are allowlisted; the rest are listed with their reason (an archive over the
-64 MiB content-store bound, an unsafe path, an unreadable container, never
-fetched). Across the 471, 43,765 files are hero-scoped, 30,029 are files the
-game does not ship, and 2,636 override a shared Valve file; 265 items override
+256 MiB bound, an unsafe path or script, an unreadable container, never
+fetched). Across the 499, 48,757 files are hero-scoped, 33,974 are files the
+game does not ship, and 2,862 override a shared Valve file; 274 items override
 none. Valve's list was taken from a public mirror on the day of the audit and
 reflects the game files at that time, not necessarily the player's patch; the
 build can also compare a skin with the player's own `pak01_dir.vpk` and report
