@@ -14,6 +14,7 @@ mod kv3;
 mod mod_bundle;
 mod package_registry;
 mod panorama;
+mod panorama_decor;
 mod panorama_layout;
 mod presets;
 mod remote_intake;
