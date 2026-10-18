@@ -90,7 +90,10 @@ pub struct ArchivePin {
 pub struct AuditedResult {
     pub entries: usize,
     pub archive_identity: String,
+    /// Files really left out (see `SkinReport::rejected`).
     pub rejected: usize,
+    /// Files that are not game files and are left out (`SkinReport::ignored`).
+    pub ignored: usize,
     /// Accepted files that override a Valve file outside the heroes' own.
     pub shared: usize,
     pub install_files: usize,
@@ -371,7 +374,7 @@ pub(crate) fn validate(manifest: &WardrobeManifest) -> Result<(), String> {
     let audit = &manifest.audited;
     if audit.entries == 0
         || audit.install_files == 0
-        || audit.install_files + audit.rejected > audit.entries
+        || audit.install_files + audit.rejected + audit.ignored > audit.entries
         || audit.renamed > audit.entries
         || audit.install_bytes == 0
         || audit.install_bytes > pin.inner_bytes as u64
@@ -573,6 +576,7 @@ pub(crate) fn audit_both_modes(
         entries: install.entries,
         archive_identity: install.archive_identity.clone(),
         rejected: install.rejected.files,
+        ignored: install.ignored.files,
         shared: install.shared.files,
         install_files: install.install.files,
         install_bytes: install.install.bytes,
@@ -680,6 +684,7 @@ fn matches_audit(manifest: &WardrobeManifest, report: &SkinReport) -> bool {
         && report.install.bytes == bytes
         && report.install.identity == identity
         && report.rejected.files == audit.rejected
+        && report.ignored.files == audit.ignored
         && report.renamed == audit.renamed
         // Every audited shared path was found in the archive.
         && report.shared.files == manifest.shared_paths.len()
@@ -889,7 +894,8 @@ mod tests {
         // them outside the hero; the opt-in mode leaves exactly those out.
         let audit = &item.audited;
         assert_eq!(audit.entries, 1010);
-        assert_eq!(audit.rejected, 14);
+        assert_eq!(audit.rejected, 0);
+        assert_eq!(audit.ignored, 14);
         assert_eq!(audit.install_files, 996);
         assert_eq!(audit.shared, 27);
         assert_eq!(audit.strip_files, 969);
@@ -1199,7 +1205,8 @@ mod tests {
         assert_eq!(loaded.item.package_id, manifest.id);
         assert_eq!(loaded.item.report.install.stripped_shared, 0);
         assert_eq!(loaded.item.report.shared.files, 2);
-        assert_eq!(loaded.item.report.rejected.files, 1);
+        assert_eq!(loaded.item.report.rejected.files, 0);
+        assert_eq!(loaded.item.report.ignored.files, 1);
         assert_eq!(loaded.item.heroes, vec!["keeper_of_the_light"]);
         assert!(!loaded.item.game_checked);
         for path in [

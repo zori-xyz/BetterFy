@@ -14,6 +14,16 @@ of audited skins, bot, site and installer), not a change in stability.
 
 Version bump together with the work below.
 
+### Skins (wardrobe)
+- Skin archives are kept whole: Panorama image wrappers are proven from their
+  parsed structure in both compiler containers (209 more installed, 2 layouts
+  carrying a script payload stay rejected), zero-length blank overrides install,
+  and the per-file and install size bounds follow the VPK limit (500 of 512
+  archives are now in the allowlist). The build review counts files that are
+  not game files apart from files that are really dropped. Built and tested in
+  CI only; not installed on Windows or run in Dota yet. Details:
+  [docs/SKIN_ARCHIVE_AUDIT.md](docs/SKIN_ARCHIVE_AUDIT.md).
+
 ## 0.1.4 EA.18 to EA.38 (30 September to 17 October 2026)
 
 ### Engine and mods

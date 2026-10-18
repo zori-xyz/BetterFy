@@ -186,9 +186,10 @@ fn style_text_offset(data: &[u8], version: u16) -> Result<usize, String> {
     Ok(cursor)
 }
 
-/// Returns the CSS text of a compiled style.
-pub(crate) fn style_text(bytes: &[u8]) -> Result<String, String> {
-    let resource = parse(bytes)?;
+/// The text that follows the image table in the `DATA` block: the CSS of a
+/// compiled style, or the XML source an older compiler stores in a compiled
+/// layout.
+pub(crate) fn data_text(resource: &Resource) -> Result<String, String> {
     let data = resource
         .blocks
         .iter()
@@ -197,6 +198,11 @@ pub(crate) fn style_text(bytes: &[u8]) -> Result<String, String> {
     let offset = style_text_offset(&data.bytes, resource.version)?;
     String::from_utf8(data.bytes[offset..].to_vec())
         .map_err(|_| "panorama_resource_invalid".to_string())
+}
+
+/// Returns the CSS text of a compiled style.
+pub(crate) fn style_text(bytes: &[u8]) -> Result<String, String> {
+    data_text(&parse(bytes)?)
 }
 
 /// Appends `addition` to the CSS of the compiled style `bytes`.

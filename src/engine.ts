@@ -264,11 +264,12 @@ export type SkinRejectReason =
   | "path_unsafe"
   | "duplicate_path"
   | "oversized"
-  | "empty_resource"
   | "script"
   | "uncompiled_source"
+  | "not_game_file"
   | "executable"
   | "type_not_allowed"
+  | "panorama_scripted"
   | "panorama_unproven";
 
 /** What the skin-archive analyzer found (src-tauri/src/skin_archive.rs). */
@@ -290,7 +291,18 @@ export type SkinReport = {
    * shared effects, the interface). Installed by default, left out in `strip`.
    */
   shared: SkinClassStat;
+  /**
+   * Files really left out: scripts, executables, layouts that could not be
+   * proven to be plain image wrappers, and types the game may load that
+   * BetterFy does not install.
+   */
   rejected: SkinClassStat;
+  /**
+   * Files that are not game files (uncompiled sources, readmes and tool
+   * leftovers). Leaving them out changes nothing in game. Listed in
+   * `rejectedPaths` with `uncompiled_source` or `not_game_file`.
+   */
+  ignored: SkinClassStat;
   /** Accepted paths whose upper-case letters were folded to lower case. */
   renamed: number;
   imageWrappers: number;

@@ -167,7 +167,8 @@ function demoWardrobeItem(packageId: string): WardrobePlanItem {
           DEMO_SKIN.install.bytes - DEMO_SKIN.heroScoped.bytes - DEMO_SKIN.shared.bytes,
       },
       shared: DEMO_SKIN.shared,
-      rejected: { files: 2, bytes: 20000 },
+      rejected: { files: 0, bytes: 0 },
+      ignored: { files: 2, bytes: 20000 },
       renamed: 0,
       imageWrappers: 11,
       rejectedPaths: [

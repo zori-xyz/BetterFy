@@ -63,9 +63,12 @@ struct ItemStats {
     shared: usize,
     strip_bytes: u64,
     rejected: usize,
+    ignored: usize,
     renamed: usize,
     mirrors: usize,
     rejected_reasons: BTreeMap<String, usize>,
+    /// Every file really dropped (not an ignored one): path, reason, bytes.
+    dropped: Vec<(String, RejectReason, u64)>,
     stripped_dirs: BTreeMap<String, usize>,
 }
 
@@ -451,9 +454,16 @@ fn stats_of(
         shared: report.shared.files,
         strip_bytes: audited.strip_bytes,
         rejected: report.rejected.files,
+        ignored: report.ignored.files,
         renamed: report.renamed,
         mirrors: urls.len(),
         rejected_reasons,
+        dropped: report
+            .rejected_paths
+            .iter()
+            .filter(|entry| !entry.reason.is_ignored())
+            .map(|entry| (entry.path.clone(), entry.reason, entry.bytes))
+            .collect(),
         stripped_dirs,
     }
 }
@@ -627,15 +637,85 @@ fn render_report(
             *reasons.entry(reason.clone()).or_default() += count;
         }
     }
+    let ignored_reasons = ["uncompiled_source", "not_game_file"];
+    let ignored_total: usize = emitted.iter().map(|(_, s)| s.ignored).sum();
+    let dropped_total: usize = emitted.iter().map(|(_, s)| s.rejected).sum();
+    both!(
+        "Files left out of the installs: {dropped_total} dropped (game files or unprovable ones BetterFy does not install), {ignored_total} ignored (not game files)."
+    );
     writeln!(
         out,
-        "\nDropped files by reason (not installed, listed per item in the plan):\n"
+        "\nFiles ignored because they are not game files (uncompiled sources, readmes and tool leftovers; the game loads none of them from a VPK, so leaving them out changes nothing in game):\n"
     )
     .unwrap();
     writeln!(out, "| Reason | Files |\n| --- | ---: |").unwrap();
-    for (reason, count) in &reasons {
+    for (reason, count) in reasons
+        .iter()
+        .filter(|(reason, _)| ignored_reasons.contains(&reason.as_str()))
+    {
+        writeln!(out, "| {reason} | {count} |").unwrap();
+        summary.push_str(&format!("  ignored: {reason}: {count}\n"));
+    }
+    writeln!(
+        out,
+        "\nFiles dropped for real (not installed, listed per item in the plan):\n"
+    )
+    .unwrap();
+    writeln!(out, "| Reason | Files |\n| --- | ---: |").unwrap();
+    for (reason, count) in reasons
+        .iter()
+        .filter(|(reason, _)| !ignored_reasons.contains(&reason.as_str()))
+    {
         writeln!(out, "| {reason} | {count} |").unwrap();
         summary.push_str(&format!("  dropped: {reason}: {count}\n"));
+    }
+    // Dropped for real, by reason and file type, with the biggest folders.
+    let mut by_type = BTreeMap::<(String, String), (usize, u64, BTreeSet<&str>)>::new();
+    for (manifest, s) in emitted {
+        for (path, reason, bytes) in &s.dropped {
+            let name = path.rsplit('/').next().unwrap_or(path);
+            let extension = name.rsplit_once('.').map_or("", |(_, extension)| extension);
+            let entry = by_type
+                .entry((reason_name(*reason), extension.to_ascii_lowercase()))
+                .or_default();
+            entry.0 += 1;
+            entry.1 += bytes;
+            entry.2.insert(manifest.catalog_id.as_str());
+        }
+    }
+    writeln!(
+        out,
+        "\nFiles dropped for real, by reason and file type:\n\n| Reason | Type | Files | MiB | Items |\n| --- | --- | ---: | ---: | ---: |"
+    )
+    .unwrap();
+    for ((reason, extension), (files, bytes, items)) in &by_type {
+        writeln!(
+            out,
+            "| {reason} | `{extension}` | {files} | {} | {} |",
+            mib(*bytes),
+            items.len()
+        )
+        .unwrap();
+    }
+    // Everything that is not a plain unsupported type is listed path by path:
+    // these are the files a reader should look at.
+    writeln!(
+        out,
+        "\nDropped for a reason other than an unsupported type, listed by item:\n"
+    )
+    .unwrap();
+    for (manifest, s) in emitted {
+        for (path, reason, bytes) in &s.dropped {
+            if *reason != RejectReason::TypeNotAllowed {
+                writeln!(
+                    out,
+                    "- `{}`: `{path}` ({bytes} bytes): {}",
+                    manifest.catalog_id,
+                    reason_name(*reason)
+                )
+                .unwrap();
+            }
+        }
     }
     let mut dirs = BTreeMap::<String, usize>::new();
     for (_, s) in emitted {
@@ -659,24 +739,25 @@ fn render_report(
     writeln!(
         out,
         "Heroes are the inferred internal names. Files are what goes into the build; \
-         shared is how many of the files override a shared Valve file (the opt-in mode leaves them out); dropped is files rejected by type.\n"
+         shared is how many of the files override a shared Valve file (the opt-in mode leaves them out); dropped is files really left out and ignored is files that are not game files (see above).\n"
     )
     .unwrap();
     writeln!(
         out,
-        "| Catalog ID | Heroes | Files | MiB | Shared | Dropped | Folded |\n| --- | --- | ---: | ---: | ---: | ---: | ---: |"
+        "| Catalog ID | Heroes | Files | MiB | Shared | Dropped | Ignored | Folded |\n| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |"
     )
     .unwrap();
     for (manifest, s) in emitted {
         writeln!(
             out,
-            "| `{}` | {} | {} | {} | {} | {} | {} |",
+            "| `{}` | {} | {} | {} | {} | {} | {} | {} |",
             manifest.catalog_id,
             s.heroes.join(", "),
             s.install_files,
             mib(s.install_bytes),
             s.shared,
             s.rejected,
+            s.ignored,
             s.renamed
         )
         .unwrap();
@@ -841,7 +922,7 @@ fn spot_check_embedded_items() {
                     .expect("plan");
             let plan = serde_json::to_value(&plan).expect("json");
             println!(
-                "{id}: {} resources, {} payload bytes, vpk {} bytes sha256 {} plan {}, shared {} (left out {}), dropped {}, conflicts {}, {:?}",
+                "{id}: {} resources, {} payload bytes, vpk {} bytes sha256 {} plan {}, shared {} (left out {}), dropped {}, ignored {}, conflicts {}, {:?}",
                 plan["resourceCount"],
                 plan["resourceBytes"],
                 plan["vpkBytes"],
@@ -850,6 +931,7 @@ fn spot_check_embedded_items() {
                 plan["wardrobe"][0]["report"]["shared"]["files"],
                 plan["wardrobe"][0]["report"]["install"]["strippedShared"],
                 plan["wardrobe"][0]["report"]["rejected"]["files"],
+                plan["wardrobe"][0]["report"]["ignored"]["files"],
                 plan["wardrobeConflicts"].as_array().map_or(0, Vec::len),
                 started.elapsed()
             );

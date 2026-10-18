@@ -1578,7 +1578,8 @@ mod tests {
         assert_eq!(report.install.files, 4);
         assert_eq!(report.install.stripped_shared, 0);
         assert_eq!(report.shared.files, 1);
-        assert_eq!(report.rejected.files, 1);
+        assert_eq!(report.rejected.files, 0);
+        assert_eq!(report.ignored.files, 1);
         assert!(verified.wardrobe_conflicts.is_empty());
         verified
             .require_acknowledged_conflicts(false)

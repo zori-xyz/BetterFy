@@ -202,7 +202,10 @@ pub(crate) struct Layout {
 }
 
 pub(crate) fn read(bytes: &[u8]) -> Result<Layout, String> {
-    let resource = panorama::parse(bytes)?;
+    layout_from_resource(panorama::parse(bytes)?)
+}
+
+fn layout_from_resource(resource: panorama::Resource) -> Result<Layout, String> {
     let layout_block = resource
         .blocks
         .iter()
@@ -254,6 +257,16 @@ pub(crate) fn write(layout: &Layout) -> Result<Vec<u8>, String> {
 const MAX_WRAPPER_BYTES: usize = 16 * 1024;
 const MAX_WRAPPER_TEXT: usize = 64;
 
+/// Why a layout is not accepted as an image wrapper.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum WrapperError {
+    /// The layout carries a script, an event handler or an include of another
+    /// file: the things the safety rule keeps out.
+    Scripted,
+    /// The reader could not prove the shape, for any other reason.
+    Unproven,
+}
+
 fn plain_attribute_text(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= MAX_WRAPPER_TEXT
@@ -295,28 +308,57 @@ fn text_value(node: &Node) -> Result<&str, String> {
     }
 }
 
-/// Proves that a compiled layout is nothing but Valve's image wrapper and
-/// returns the single image it points at (`...png.vtex`).
-///
-/// The shape accepted is exactly `root > Panel[class] > Image[id class src]`:
-/// no styles, scripts, includes, snippets or other elements, no event
-/// attributes (the attribute allowlist has none), plain-text attribute values,
-/// and one `src` reference. The resource's own external reference list must
-/// name that same image and nothing else, and the image must be the sibling
-/// `<wrapper stem>_png.vtex` of the wrapper's path. Anything the reader cannot
-/// prove this for is an error, never a pass.
-pub(crate) fn image_wrapper_dependency(path: &str, bytes: &[u8]) -> Result<String, String> {
-    let unproven = || "panorama_wrapper_unproven".to_string();
-    if bytes.len() > MAX_WRAPPER_BYTES {
-        return Err(unproven());
-    }
-    let expected = path
+/// The images a wrapper stored at `path` may stand for, all siblings named
+/// after it. The author's tool compiled `<name>.png` to a wrapper
+/// `<name>.vxml_c` (image `<name>_png.vtex`) or, when the PNG's own name
+/// already ended in `_png`, to `<name>_png.vxml_c`. That wrapper names either
+/// `<name>_png.vtex` (the usual case, 205 files in the cached archives) or,
+/// once, the doubled `<name>_png_png.vtex`.
+fn wrapper_images(path: &str) -> Option<Vec<String>> {
+    let stem = path
         .strip_suffix(".vxml_c")
-        .filter(|stem| stem.starts_with("panorama/images/"))
-        .map(|stem| format!("{stem}_png.vtex"))
-        .ok_or_else(unproven)?;
-    let layout = read(bytes).map_err(|_| unproven())?;
-    let [outer] = layout.root.children.as_slice() else {
+        .filter(|stem| stem.starts_with("panorama/images/"))?;
+    let mut images = vec![format!("{stem}_png.vtex")];
+    if let Some(base) = stem.strip_suffix("_png") {
+        images.insert(0, format!("{base}_png.vtex"));
+    }
+    Some(images)
+}
+
+/// Whether a node, or anything below it, is a script body, an include of
+/// another file or an event attribute (`onactivate`, `onload`, ...).
+fn carries_script(node: &Node) -> bool {
+    let event = node.kind == "PANEL_ATTRIBUTE"
+        && node
+            .name
+            .as_deref()
+            .and_then(|name| name.get(..2))
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("on"));
+    node.kind.starts_with("SCRIPT")
+        || node.kind == "INCLUDE"
+        || event
+        || node.children.iter().any(carries_script)
+}
+
+/// The layout tree of an older compiled layout, which has no `LaCo` block and
+/// stores the layout's XML in `DATA` instead.
+fn text_tree(text: &str) -> Result<Node, String> {
+    let element = parse_snippet(text)?;
+    if element.name != "root" || !element.attributes.is_empty() {
+        return Err(invalid());
+    }
+    let position = Value::Array(vec![Value::Int(1), Value::Int(1)]);
+    let mut root = Node::new("ROOT", None);
+    for child in &element.children {
+        root.children.push(element_to_node(child, &position)?);
+    }
+    Ok(root)
+}
+
+/// The source of the one image of `root > Panel[class] > Image[id class src]`.
+fn wrapper_source(root: &Node) -> Result<&str, String> {
+    let unproven = || "panorama_wrapper_unproven".to_string();
+    let [outer] = root.children.as_slice() else {
         return Err(unproven());
     };
     if outer.kind != "PANEL" || outer.name.as_deref() != Some("Panel") {
@@ -350,20 +392,75 @@ pub(crate) fn image_wrapper_dependency(path: &str, bytes: &[u8]) -> Result<Strin
         }
     }
     let source = attributes.get("src").ok_or_else(unproven)?;
-    let dependency = match (
+    match (
         source.kind.as_str(),
         source.name.as_deref(),
         source.children.len(),
     ) {
-        ("REFERENCE_COMPILED", Some(name), 0) => name,
-        _ => return Err(unproven()),
-    };
-    if dependency != expected {
-        return Err(unproven());
+        ("REFERENCE_COMPILED", Some(name), 0) => Ok(name),
+        _ => Err(unproven()),
     }
-    let references = panorama::external_references(&layout.resource).map_err(|_| unproven())?;
-    if references != [expected.clone()] {
-        return Err(unproven());
+}
+
+/// Proves that a compiled layout is nothing but Valve's image wrapper and
+/// returns the single image it points at (`...png.vtex`).
+///
+/// Two containers occur in third-party archives, and both are read from their
+/// parsed structure, never from the file name:
+///
+/// * the current compiler's, with the layout as a tree in the `LaCo` block
+///   (its `DATA` block must then hold no text of its own);
+/// * an older compiler's, which has no `LaCo` block and keeps the layout's XML
+///   text in `DATA`; that text is parsed with the strict reader used for
+///   Minify's snippets (no text content, quoted attributes, no declarations).
+///
+/// The shape accepted is exactly `root > Panel[class] > Image[id class src]`:
+/// no styles, scripts, includes, snippets or other elements, no event
+/// attributes (the attribute allowlist has none), plain-text attribute values,
+/// and one `src` reference to the wrapper's sibling image (see
+/// [`wrapper_images`]). A reference list (`RERL`) that is present must name that
+/// same image and nothing else; the current compiler leaves the list out for
+/// some wrappers, which is accepted because the tree already names the one
+/// image, but the older container always has it. Anything with a script body,
+/// an include or an event attribute is [`WrapperError::Scripted`]; anything the
+/// reader cannot prove is [`WrapperError::Unproven`]. Never a pass.
+pub(crate) fn image_wrapper_dependency(path: &str, bytes: &[u8]) -> Result<String, WrapperError> {
+    let unproven = WrapperError::Unproven;
+    if bytes.len() > MAX_WRAPPER_BYTES {
+        return Err(unproven);
+    }
+    let resource = panorama::parse(bytes).map_err(|_| unproven)?;
+    let text = panorama::data_text(&resource).map_err(|_| unproven)?;
+    let has_tree = resource.blocks.iter().any(|block| &block.tag == b"LaCo");
+    let root = if has_tree {
+        // The tree is the layout. A DATA block with text of its own would be a
+        // second copy of it that another reader might prefer.
+        if !text.is_empty() {
+            return Err(unproven);
+        }
+        layout_from_resource(resource.clone())
+            .map_err(|_| unproven)?
+            .root
+    } else {
+        text_tree(&text).map_err(|_| unproven)?
+    };
+    // Scripts are reported as such wherever the file is stored.
+    if carries_script(&root) {
+        return Err(WrapperError::Scripted);
+    }
+    let allowed = wrapper_images(path).ok_or(unproven)?;
+    let dependency = wrapper_source(&root).map_err(|_| unproven)?;
+    let expected = allowed
+        .into_iter()
+        .find(|image| image == dependency)
+        .ok_or(unproven)?;
+    if resource.blocks.iter().any(|block| &block.tag == b"RERL") {
+        let references = panorama::external_references(&resource).map_err(|_| unproven)?;
+        if references != [expected.clone()] {
+            return Err(unproven);
+        }
+    } else if !has_tree {
+        return Err(unproven);
     }
     Ok(expected)
 }
@@ -1019,13 +1116,10 @@ pub(crate) fn apply_menus(root: &mut Node, menus: &[String]) -> Result<(), Strin
 /// icons: `root > Panel[class] > Image[id class src]`.
 #[cfg(test)]
 pub(crate) fn test_image_wrapper(path: &str, extra: Option<(&str, &str)>) -> Vec<u8> {
-    let vtex = format!(
-        "{}_png.vtex",
-        path.strip_suffix(".vxml_c").expect("wrapper path")
-    );
+    let vtex = wrapper_images(path).expect("wrapper path").remove(0);
     test_layout_resource(
         &vtex,
-        std::slice::from_ref(&vtex),
+        Some(std::slice::from_ref(&vtex)),
         |image| {
             if let Some((key, value)) = extra {
                 image.children.push(attribute_node(key, value));
@@ -1035,10 +1129,54 @@ pub(crate) fn test_image_wrapper(path: &str, extra: Option<(&str, &str)>) -> Vec
     )
 }
 
+/// Test helper: a reference list (`RERL`) block. An offset to the entries and
+/// a count, then per entry an 8-byte ID and the name's offset from that field.
+#[cfg(test)]
+fn test_reference_list(references: &[String]) -> Vec<u8> {
+    let mut list = Vec::new();
+    list.extend_from_slice(&8u32.to_le_bytes());
+    list.extend_from_slice(&(references.len() as u32).to_le_bytes());
+    let names_start = 8 + 16 * references.len();
+    let mut names = Vec::new();
+    for (index, name) in references.iter().enumerate() {
+        let field = 8 + 16 * index + 8;
+        list.extend_from_slice(&[index as u8; 8]);
+        list.extend_from_slice(&((names_start + names.len() - field) as u64).to_le_bytes());
+        names.extend_from_slice(name.as_bytes());
+        names.push(0);
+    }
+    list.extend_from_slice(&names);
+    list
+}
+
+/// Test helper: the older container, with no `LaCo` block and the layout's XML
+/// text after the (empty) image table in `DATA`.
+#[cfg(test)]
+pub(crate) fn test_text_wrapper(xml: &str, references: Option<&[String]>) -> Vec<u8> {
+    let mut data = vec![0xea, 0x33, 0x30, 0xda, 0, 0];
+    data.extend_from_slice(xml.as_bytes());
+    let mut blocks = Vec::new();
+    if let Some(references) = references {
+        blocks.push(panorama::Block {
+            tag: *b"RERL",
+            bytes: test_reference_list(references),
+        });
+    }
+    blocks.push(panorama::Block {
+        tag: *b"REDI",
+        bytes: vec![1; 24],
+    });
+    blocks.push(panorama::Block {
+        tag: *b"DATA",
+        bytes: data,
+    });
+    panorama::build(&panorama::Resource { version: 3, blocks }).expect("builds")
+}
+
 #[cfg(test)]
 fn test_layout_resource(
     vtex: &str,
-    references: &[String],
+    references: Option<&[String]>,
     edit_image: impl FnOnce(&mut Node),
     edit_root: impl FnOnce(&mut Node),
 ) -> Vec<u8> {
@@ -1057,40 +1195,26 @@ fn test_layout_resource(
     let mut root = Node::new("ROOT", None);
     root.children.push(outer);
     edit_root(&mut root);
-    // Reference list: an offset to the entries and a count, then per entry an
-    // 8-byte ID and the name's offset from that field.
-    let mut list = Vec::new();
-    list.extend_from_slice(&8u32.to_le_bytes());
-    list.extend_from_slice(&(references.len() as u32).to_le_bytes());
-    let names_start = 8 + 16 * references.len();
-    let mut names = Vec::new();
-    for (index, name) in references.iter().enumerate() {
-        let field = 8 + 16 * index + 8;
-        list.extend_from_slice(&[index as u8; 8]);
-        list.extend_from_slice(&((names_start + names.len() - field) as u64).to_le_bytes());
-        names.extend_from_slice(name.as_bytes());
-        names.push(0);
+    // The current compiler's `DATA` for a layout is the CRC and an empty image
+    // table: six bytes, no text.
+    let mut blocks = Vec::new();
+    if let Some(references) = references {
+        blocks.push(panorama::Block {
+            tag: *b"RERL",
+            bytes: test_reference_list(references),
+        });
     }
-    list.extend_from_slice(&names);
+    blocks.push(panorama::Block {
+        tag: *b"DATA",
+        bytes: vec![0xea, 0x33, 0x30, 0xda, 0, 0],
+    });
+    blocks.push(panorama::Block {
+        tag: *b"LaCo",
+        bytes: Vec::new(),
+    });
     let layout = Layout {
-        resource: panorama::Resource {
-            version: 3,
-            blocks: vec![
-                panorama::Block {
-                    tag: *b"RERL",
-                    bytes: list,
-                },
-                panorama::Block {
-                    tag: *b"DATA",
-                    bytes: vec![0; 8],
-                },
-                panorama::Block {
-                    tag: *b"LaCo",
-                    bytes: Vec::new(),
-                },
-            ],
-        },
-        layout_block: 2,
+        resource: panorama::Resource { version: 3, blocks },
+        layout_block: if references.is_some() { 2 } else { 1 },
         format: [7; 16],
         root,
     };
@@ -1114,21 +1238,175 @@ mod tests {
         assert!(panorama::external_references(&read(&bytes).expect("reads").resource).is_ok());
     }
 
+    /// The current compiler's wrapper for a PNG: the layout's own name keeps
+    /// the `_png` spelling, and the image is `<name>_png.vtex`.
+    const PNG_NAMED: &str = "panorama/images/heroes/npc_dota_hero_axe_png.vxml_c";
+    const PNG_NAMED_VTEX: &str = "panorama/images/heroes/npc_dota_hero_axe_png.vtex";
+    const XML: &str = "<root>\n  <Panel class=\"AddonLoadingRoot\">\n      <Image id=\"gamemode\" class=\"SeqImg\" src=\"s2r://panorama/images/heroes/npc_dota_hero_axe_png.vtex\" />\n  </Panel>\n</root>";
+
+    #[test]
+    fn a_wrapper_named_after_its_png_points_at_that_png() {
+        let bytes = test_image_wrapper(PNG_NAMED, None);
+        assert_eq!(
+            image_wrapper_dependency(PNG_NAMED, &bytes).as_deref(),
+            Ok(PNG_NAMED_VTEX)
+        );
+        // The same layout stored under the plain spelling names the same
+        // image, and under a doubled one it would name another.
+        assert_eq!(
+            image_wrapper_dependency("panorama/images/heroes/npc_dota_hero_axe.vxml_c", &bytes),
+            Ok(PNG_NAMED_VTEX.to_string())
+        );
+        assert_eq!(
+            image_wrapper_dependency(
+                "panorama/images/heroes/npc_dota_hero_axe_png_png.vxml_c",
+                &bytes
+            ),
+            Err(WrapperError::Unproven)
+        );
+    }
+
+    #[test]
+    fn a_doubled_png_spelling_is_accepted_only_for_a_png_named_wrapper() {
+        let path = "panorama/images/spellicons/nevermore_frenzy_png.vxml_c";
+        let doubled = "panorama/images/spellicons/nevermore_frenzy_png_png.vtex";
+        let bytes = test_layout_resource(doubled, Some(&[doubled.to_string()]), |_| {}, |_| {});
+        assert_eq!(
+            image_wrapper_dependency(path, &bytes).as_deref(),
+            Ok(doubled)
+        );
+        // A wrapper not named `_png` has no doubled sibling.
+        assert_eq!(
+            image_wrapper_dependency("panorama/images/spellicons/nevermore_frenzy.vxml_c", &bytes),
+            Err(WrapperError::Unproven)
+        );
+    }
+
+    #[test]
+    fn a_wrapper_without_a_reference_list_is_proven_by_its_tree() {
+        let bytes = test_layout_resource(PNG_NAMED_VTEX, None, |_| {}, |_| {});
+        assert_eq!(
+            image_wrapper_dependency(PNG_NAMED, &bytes).as_deref(),
+            Ok(PNG_NAMED_VTEX)
+        );
+        // The tree still has to name the sibling image.
+        assert_eq!(
+            image_wrapper_dependency(WRAPPER, &bytes),
+            Err(WrapperError::Unproven)
+        );
+    }
+
+    #[test]
+    fn the_older_container_keeps_the_layout_as_xml_text() {
+        let references = [PNG_NAMED_VTEX.to_string()];
+        let bytes = test_text_wrapper(XML, Some(&references));
+        assert!(read(&bytes).is_err(), "no layout tree to read");
+        assert_eq!(
+            image_wrapper_dependency(PNG_NAMED, &bytes).as_deref(),
+            Ok(PNG_NAMED_VTEX)
+        );
+        // The older container always has its reference list.
+        assert_eq!(
+            image_wrapper_dependency(PNG_NAMED, &test_text_wrapper(XML, None)),
+            Err(WrapperError::Unproven)
+        );
+        assert_eq!(
+            image_wrapper_dependency(
+                PNG_NAMED,
+                &test_text_wrapper(XML, Some(&["panorama/images/other_png.vtex".to_string()]))
+            ),
+            Err(WrapperError::Unproven)
+        );
+        for (xml, expected) in [
+            // Events, scripts and includes.
+            (
+                XML.replace("<Image ", "<Image onactivate=\"x()\" "),
+                WrapperError::Scripted,
+            ),
+            (
+                XML.replace("<Panel ", "<Panel onmouseover=\"x()\" "),
+                WrapperError::Scripted,
+            ),
+            (
+                XML.replace(
+                    "<root>",
+                    "<root><scripts><include src=\"s2r://panorama/scripts/x.vjs_c\" /></scripts>",
+                ),
+                WrapperError::Scripted,
+            ),
+            (
+                XML.replace(
+                    "<root>",
+                    "<root><Include src=\"file://{resources}/x.vxml\" />",
+                ),
+                WrapperError::Scripted,
+            ),
+            // Anything else off the shape.
+            (
+                XML.replace("<root>", "<root><styles />"),
+                WrapperError::Unproven,
+            ),
+            (
+                XML.replace("</Panel>", "<Label /></Panel>"),
+                WrapperError::Unproven,
+            ),
+            (XML.replace("s2r://", "file://"), WrapperError::Unproven),
+            (XML.replace("SeqImg", "Seq Img"), WrapperError::Unproven),
+            (
+                format!("<?xml version=\"1.0\"?>{XML}"),
+                WrapperError::Unproven,
+            ),
+            (format!("{XML}\n<root />"), WrapperError::Unproven),
+            (
+                XML.replace("<Panel ", "<Panel>text<Panel "),
+                WrapperError::Unproven,
+            ),
+            (String::new(), WrapperError::Unproven),
+        ] {
+            assert_eq!(
+                image_wrapper_dependency(PNG_NAMED, &test_text_wrapper(&xml, Some(&references))),
+                Err(expected),
+                "{xml}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_layout_tree_with_text_in_data_is_not_trusted() {
+        // Both a tree and an XML copy: the reader cannot know which one the
+        // game would use, so it proves neither.
+        let mut resource = panorama::parse(&test_image_wrapper(WRAPPER, None)).expect("parses");
+        let data = resource
+            .blocks
+            .iter_mut()
+            .find(|block| &block.tag == b"DATA")
+            .expect("data");
+        data.bytes.extend_from_slice(XML.as_bytes());
+        assert_eq!(
+            image_wrapper_dependency(WRAPPER, &panorama::build(&resource).expect("builds")),
+            Err(WrapperError::Unproven)
+        );
+    }
+
     #[test]
     fn rejects_anything_that_is_not_provably_an_image_wrapper() {
         let rejected = |bytes: &[u8]| {
             assert_eq!(
-                image_wrapper_dependency(WRAPPER, bytes).err().as_deref(),
-                Some("panorama_wrapper_unproven")
+                image_wrapper_dependency(WRAPPER, bytes),
+                Err(WrapperError::Unproven)
+            );
+        };
+        let scripted = |bytes: &[u8]| {
+            assert_eq!(
+                image_wrapper_dependency(WRAPPER, bytes),
+                Err(WrapperError::Scripted)
             );
         };
         // Event attributes, on the image or anywhere else.
-        for (key, value) in [
-            ("onactivate", "x()"),
-            ("onload", ""),
-            ("style", "a:b;"),
-            ("src", "s2r://other.vtex"),
-        ] {
+        for (key, value) in [("onactivate", "x()"), ("onload", ""), ("OnClick", "y")] {
+            scripted(&test_image_wrapper(WRAPPER, Some((key, value))));
+        }
+        for (key, value) in [("style", "a:b;"), ("src", "s2r://other.vtex")] {
             rejected(&test_image_wrapper(WRAPPER, Some((key, value))));
         }
         // A wrapper for another path than the one it is stored at.
@@ -1139,31 +1417,37 @@ mod tests {
         // Wrong image: not the sibling `<stem>_png.vtex`.
         rejected(&test_layout_resource(
             "panorama/images/spellicons/other_png.vtex",
-            &["panorama/images/spellicons/other_png.vtex".to_string()],
+            Some(&["panorama/images/spellicons/other_png.vtex".to_string()]),
             |_| {},
             |_| {},
         ));
-        // The reference list names a second resource, or a different one.
+        // The reference list names a second resource, or a different one, or
+        // is present and empty.
         rejected(&test_layout_resource(
             WRAPPER_VTEX,
-            &[
+            Some(&[
                 WRAPPER_VTEX.to_string(),
                 "panorama/scripts/x.vjs_c".to_string(),
-            ],
+            ]),
             |_| {},
             |_| {},
         ));
         rejected(&test_layout_resource(
             WRAPPER_VTEX,
-            &["panorama/images/spellicons/other_png.vtex".to_string()],
+            Some(&["panorama/images/spellicons/other_png.vtex".to_string()]),
             |_| {},
             |_| {},
         ));
-        rejected(&test_layout_resource(WRAPPER_VTEX, &[], |_| {}, |_| {}));
+        rejected(&test_layout_resource(
+            WRAPPER_VTEX,
+            Some(&[]),
+            |_| {},
+            |_| {},
+        ));
         // Extra elements: a script include, a style block, a second image.
-        rejected(&test_layout_resource(
+        scripted(&test_layout_resource(
             WRAPPER_VTEX,
-            &[WRAPPER_VTEX.to_string()],
+            Some(&[WRAPPER_VTEX.to_string()]),
             |_| {},
             |root| {
                 let mut scripts = Node::new("SCRIPTS", None);
@@ -1171,15 +1455,31 @@ mod tests {
                 root.children.insert(0, scripts);
             },
         ));
+        scripted(&test_layout_resource(
+            WRAPPER_VTEX,
+            Some(&[WRAPPER_VTEX.to_string()]),
+            |_| {},
+            |root| {
+                let mut body = Node::new("SCRIPT_BODY", Some("$.Msg(1)"));
+                body.position = Some(Value::Array(vec![Value::Int(2), Value::Int(3)]));
+                root.children.insert(0, body);
+            },
+        ));
         rejected(&test_layout_resource(
             WRAPPER_VTEX,
-            &[WRAPPER_VTEX.to_string()],
+            Some(&[WRAPPER_VTEX.to_string()]),
+            |_| {},
+            |root| root.children.insert(0, Node::new("STYLES", None)),
+        ));
+        rejected(&test_layout_resource(
+            WRAPPER_VTEX,
+            Some(&[WRAPPER_VTEX.to_string()]),
             |image| image.children.push(Node::new("PANEL", Some("Label"))),
             |_| {},
         ));
         rejected(&test_layout_resource(
             WRAPPER_VTEX,
-            &[WRAPPER_VTEX.to_string()],
+            Some(&[WRAPPER_VTEX.to_string()]),
             |_| {},
             |root| {
                 let copy = root.children[0].clone();
@@ -1191,7 +1491,7 @@ mod tests {
         rejected(&[0u8; 16]);
         rejected(&test_layout_resource(
             WRAPPER_VTEX,
-            &[WRAPPER_VTEX.to_string()],
+            Some(&[WRAPPER_VTEX.to_string()]),
             |image| image.children.push(attribute_node("id", "")),
             |_| {},
         ));
@@ -1201,10 +1501,8 @@ mod tests {
             image_wrapper_dependency(
                 "panorama/layout/page.vxml_c",
                 &test_image_wrapper(WRAPPER, None)
-            )
-            .err()
-            .as_deref(),
-            Some("panorama_wrapper_unproven")
+            ),
+            Err(WrapperError::Unproven)
         );
     }
 
