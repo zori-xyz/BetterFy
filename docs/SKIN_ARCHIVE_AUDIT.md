@@ -151,7 +151,7 @@ ENGINE_ARCHITECTURE).
 
 - Whether any skin works in the current Dota patch when BetterFy installs it.
   The founder's hand-copy evidence covers the as-is behaviour, not BetterFy's
-  merged `pak66` file; the Windows plan tests it.
+  merged BetterFy VPK; the Windows plan tests it.
 - Whether the Valve resources a skin replaces still exist at those paths after
   the 2026-07-23 patch, beyond what the player-side comparison reports.
 - The meaning of every byte in the `vxml_c` files beyond their parsed

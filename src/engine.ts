@@ -218,6 +218,31 @@ export type GameDeploymentReceipt = {
   rolledBack: boolean;
   bundlePlanId: string | null;
   packageIds: string[];
+  /** The file BetterFy owns in the language folder, e.g. `pak65_dir.vpk`. */
+  vpkName: string;
+};
+
+/** Whose a `pak*` file in a language folder looks like (names only, never contents). */
+export type SlotFileOwner = "betterfy" | "minify_like" | "unknown";
+
+export type SlotFile = {
+  name: string;
+  bytes: number;
+  modifiedMs: number | null;
+  owner: SlotFileOwner;
+};
+
+/** Read-only summary of one language folder (src-tauri/src/game_deployment.rs). */
+export type LanguageSlotReport = {
+  language: GameLanguage;
+  folderExists: boolean;
+  files: SlotFile[];
+  filesTruncated: boolean;
+  /** BetterFy's recorded file here; null when it has no install in this folder. */
+  owned: { name: string; state: "intact" | "missing" | "replaced" } | null;
+  /** The name BetterFy would pick for a new install right now. */
+  nextName: string | null;
+  slotFull: boolean;
 };
 
 export type StaleDeploymentRelease = {
@@ -432,6 +457,7 @@ export type DeploymentEvidenceReport = {
     createdAtMs: number;
     updatedAtMs: number;
     errorCode: string | null;
+    vpkName: string;
   }>;
   steamEntries: Array<{
     sequence: number;
@@ -479,6 +505,8 @@ export interface EngineBridge {
   treePilotDownloadStatus(): Promise<TreePilotDownloadStatus | null>;
   cancelTreePilotDownload(): Promise<TreePilotDownloadStatus>;
   previewTreeLanguage(gamePath: string, language: GameLanguage): Promise<void>;
+  /** Read-only; with an install, that install's folder is described whatever `language` says. */
+  inspectLanguageSlot(gamePath: string, language?: GameLanguage): Promise<LanguageSlotReport>;
   installTreePilot(
     gamePath: string,
     packageIds: string[],
@@ -758,6 +786,9 @@ export const mockEngine: EngineBridge = {
   },
   async previewTreeLanguage() {
     throw new EngineFault("desktop_runtime_required", "preview_tree_language");
+  },
+  async inspectLanguageSlot() {
+    throw new EngineFault("desktop_runtime_required", "inspect_language_slot");
   },
   async installTreePilot() {
     throw new EngineFault("desktop_runtime_required", "install_tree_pilot");
@@ -1124,6 +1155,14 @@ export const engineBridge: EngineBridge = {
     return guardedEngineCall(
       "preview_tree_language",
       invoke<void>("preview_tree_language", { gamePath, language }),
+    );
+  },
+  async inspectLanguageSlot(gamePath, language) {
+    if (!isTauriRuntime()) return mockEngine.inspectLanguageSlot(gamePath, language);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "inspect_language_slot",
+      invoke<LanguageSlotReport>("inspect_language_slot", { gamePath, language: language ?? null }),
     );
   },
   async installTreePilot(gamePath, packageIds, expectedPlanId, language, acknowledgedConflicts) {

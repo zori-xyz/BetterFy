@@ -50,7 +50,7 @@ The deployment foundation now also includes:
 
 - deterministic VPK v1 construction with embedded entries and CRC verification;
 - a second VPK open and validation pass before a staged artifact is accepted;
-- a single BetterFy-owned `pak66_dir.vpk` target under the selected language
+- a single BetterFy-owned `pakNN_dir.vpk` target (first free of 65 down to 50) under the selected language
   folder; the generic debug path remains fixed to `game/dota_dutch`;
 - refusal to replace a target not proven to be owned by BetterFy;
 - verified backup, same-directory publish, installed-hash verification, journal,

@@ -8,7 +8,7 @@ that is not a compatibility or public-release claim.
 - Commit: `3a85572029f2c264e2a17cee1c9b54ce93e4fd93`
 - Upstream directory: `Minify/mods/Tree Mod/files`
 - Upstream license declaration: GPL-3.0
-- Intended target: `game/dota_<selected-language>/pak66_dir.vpk`, with a choice
+- Intended target: `game/dota_<selected-language>/pakNN_dir.vpk` (first free of 65 down to 50), with a choice
   of any Dota 2 language slot (`dutch` and `russian` observed on Windows).
 - `game/dota_betterfy` (English) is offered as experimental and is not a verified
   mount point.
@@ -43,7 +43,7 @@ session, not a recorded compatibility result.
 BetterFy does not rename upstream VPK archives to resolve collisions. It verifies
 the pinned resources, merges their resource maps, applies the visible selected
 order (first package wins a differing same-path collision), and writes one
-deterministic BetterFy-owned `pak66_dir.vpk`. Identical resources are deduplicated.
+deterministic BetterFy-owned VPK (staged as `pak66_dir.vpk`). Identical resources are deduplicated.
 The full ordered inputs remain bound to the reviewed plan even when a later file
 is shadowed.
 

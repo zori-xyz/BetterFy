@@ -92,14 +92,20 @@ evidence for Tree Mod, not a general compatibility result for other languages or
 
 ## 7. Tree Mod internal pilot
 
-- Confirm `pak66_dir.vpk` is absent, or is identified by BetterFy as its own prior
-  install. A foreign file in that slot must block the operation.
+- BetterFy takes the first free name from `pak65_dir.vpk` down to `pak50_dir.vpk`. A
+  file it did not write, including Minify's `pak66_dir.vpk` and `pak66_000.vpk`, must
+  never be overwritten, renamed or removed: BetterFy installs beside it.
+- With Minify's `pak66_dir.vpk` (and chunks) already in the language folder, record
+  their SHA-256, install, and confirm the receipt names `pak65_dir.vpk`, the journal
+  says which file was left alone, and the Minify hashes are unchanged. Restore and
+  confirm `pak65_dir.vpk` is gone and the Minify hashes are still unchanged. Details
+  in `SKIN_WINDOWS_TEST_PLAN.md`, section 5.
 - Run with Dota and Steam open. After clicking Install, confirm BetterFy requests
   graceful shutdown before any write and refuses to continue if either remains
   open after the timeout. No force-kill should occur.
 - Select only Tree Mod in My build. Prepare the 21 resources and check the verified
   plan. Choose the game language before installation, then check that both the
-  receipt and actual target file use `game/dota_<selected-language>/pak66_dir.vpk`.
+  receipt and actual target file use `game/dota_<selected-language>/pakNN_dir.vpk` (`pak65_dir.vpk` unless taken).
   A BetterFy success state alone is not proof that Dota mounted the file.
 - Before confirming installation, verify that merely previewing the selected
   destination did not create a new `dota_<selected-language>` folder in `game`.

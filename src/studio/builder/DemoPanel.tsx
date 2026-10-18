@@ -17,6 +17,13 @@ export function DemoPanel() {
     ["download_fails", "Обрыв загрузки", "Download drops", "download_transport_failed"],
     ["steam_fails", "Steam меняет настройки", "Steam changes settings", "steam_config_plan_stale"],
     ["game_updated", "Dota обновила файл", "Dota updated the file", "deployment_conflict"],
+    [
+      "minify_replaced",
+      "Minify заменил файл BetterFy",
+      "Minify replaced BetterFy's file",
+      "deployment_target_foreign",
+    ],
+    ["minify_beside", "Minify уже в папке", "Minify already in the folder"],
   ];
   return (
     <div className="b-demo">
