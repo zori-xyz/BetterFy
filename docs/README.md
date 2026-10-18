@@ -47,6 +47,12 @@ disagreement as a bug and verify the behavior before changing either side.
 - [Skin Windows test plan](SKIN_WINDOWS_TEST_PLAN.md) — the native passes of
   these skins: Scarlet Keeper alone and with tuning packages, then three skins
   of other shapes, with the evidence to capture.
+- [Map audit report](MAP_AUDIT_REPORT.md) — the generated audit of the 12
+  standard map terrains (whole-map `maps/dota.vpk` packages): sizes, hashes,
+  contents, mirrors and the shared `Guide.txt`.
+- [Map Windows test plan](MAP_WINDOWS_TEST_PLAN.md) — the native pass of the map
+  terrains: a map alone, beside a skin, update chain, failure cases and the
+  evidence to capture. Nothing has been run on Windows.
 
 ## Services and accounts
 
