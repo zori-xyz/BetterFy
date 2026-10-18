@@ -382,6 +382,7 @@ mod tests {
                 "minify.tree-mod".to_string(),
                 "minify.show-networth".to_string(),
             ],
+            vpk_name: "pak65_dir.vpk".to_string(),
         }
     }
 
