@@ -12,13 +12,23 @@ const reasons: Record<SkinRejectReason, [string, string]> = {
   path_unsafe: ["небезопасный путь", "unsafe path"],
   duplicate_path: ["путь повторяется", "duplicate path"],
   oversized: ["слишком большой файл", "file too large"],
-  empty_resource: ["пустой файл", "empty file"],
   script: ["скрипт", "script"],
   uncompiled_source: ["исходник, не скомпилирован", "uncompiled source"],
+  not_game_file: ["служебный файл, не игровой", "tool or reading file, not a game file"],
   executable: ["программа", "executable"],
-  type_not_allowed: ["тип файла не разрешён", "file type not allowed"],
+  type_not_allowed: ["тип файла не устанавливается", "file type not installed"],
+  panorama_scripted: [
+    "в файле интерфейса есть скрипт или обработчик событий",
+    "interface file carries a script, event handler or include",
+  ],
   panorama_unproven: ["файл интерфейса не подтверждён", "interface file not proven"],
 };
+
+/** Reasons for files that are not game files: leaving them out changes nothing in game. */
+const IGNORED_REASONS: ReadonlySet<SkinRejectReason> = new Set([
+  "uncompiled_source",
+  "not_game_file",
+]);
 
 const MAX_LISTED_CONFLICTS = 20;
 
@@ -46,6 +56,8 @@ function Item({
   // `strip` is the opt-in: the shared game files stay out of the build.
   const keepShared = item.sharedPolicy === "strip";
   const sharedCount = report.shared.files;
+  const dropped = report.rejectedPaths.filter((entry) => !IGNORED_REASONS.has(entry.reason));
+  const ignored = report.rejectedPaths.filter((entry) => IGNORED_REASONS.has(entry.reason));
   return (
     <article className="b-wardrobe-item">
       <header>
@@ -101,6 +113,12 @@ function Item({
           <dt>{isRu ? "Отброшено" : "Dropped"}</dt>
           <dd>{report.rejected.files}</dd>
         </div>
+        {report.ignored.files > 0 && (
+          <div>
+            <dt>{isRu ? "Не игровые файлы, пропущены" : "Not game files, ignored"}</dt>
+            <dd>{report.ignored.files}</dd>
+          </div>
+        )}
         {report.renamed > 0 && (
           <div>
             <dt>{isRu ? "Имена в нижний регистр" : "Names lower-cased"}</dt>
@@ -192,15 +210,35 @@ function Item({
             : "The skin's files were not compared with your own Dota file list (no game folder connected, or it could not be read)."}
         </p>
       )}
-      {report.rejectedPaths.length > 0 && (
+      {dropped.length > 0 && (
+        <details className="b-wardrobe-list">
+          <summary>
+            {isRu ? `Отброшенные файлы (${dropped.length})` : `Dropped files (${dropped.length})`}
+          </summary>
+          <ul>
+            {dropped.map((entry) => (
+              <li key={entry.path}>
+                <code>{entry.path}</code>
+                <span>{reasons[entry.reason]?.[isRu ? 0 : 1] ?? entry.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {ignored.length > 0 && (
         <details className="b-wardrobe-list">
           <summary>
             {isRu
-              ? `Отброшенные файлы (${report.rejectedPaths.length})`
-              : `Dropped files (${report.rejectedPaths.length})`}
+              ? `Не игровые файлы, пропущены (${ignored.length})`
+              : `Not game files, ignored (${ignored.length})`}
           </summary>
+          <p className="b-pilot-hint">
+            {isRu
+              ? "Сор из мастерской автора: исходники, readme и служебные файлы. Игра грузит только скомпилированные файлы, так что без них облик выглядит так же."
+              : "Leftovers from the author's workshop: sources, readmes and tool files. The game loads only compiled files, so leaving these out changes nothing in the game."}
+          </p>
           <ul>
-            {report.rejectedPaths.map((entry) => (
+            {ignored.map((entry) => (
               <li key={entry.path}>
                 <code>{entry.path}</code>
                 <span>{reasons[entry.reason]?.[isRu ? 0 : 1] ?? entry.reason}</span>
