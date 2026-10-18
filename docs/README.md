@@ -71,6 +71,7 @@ operation is live.
 - [Windows test checklist](WINDOWS_TEST_CHECKLIST.md) — the first native test
   pass, safe diagnostics, Steam activation, staging recovery, and evidence to
   report.
+- [Changelog](../CHANGELOG.md): what changed in each version
 - [Release and updater guide](RELEASING.md) — versioning, signing, tag-driven
   publication, updater manifests, and rollback expectations.
 
