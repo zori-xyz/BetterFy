@@ -12,10 +12,10 @@ use crate::content_store::{self, ContentIntakeRequest, FixturePackageContract};
 const ENGINE_SCHEMA_VERSION: u32 = 1;
 const VERIFIED_BUNDLE_OWNER: &str = "betterfy.verified-bundle";
 const MAX_OPERATION_FILES: usize = 256;
-const MAX_STAGED_BYTES: u64 = 64 * 1024 * 1024;
-/// A verified VPK may be staged up to the size a VPK can have at all: the
-/// merge builds it, and the deployment accepts it, under that same bound.
-const MAX_STAGED_VPK_BYTES: u64 = crate::vpk::MAX_VPK_BYTES as u64;
+/// The same cap as the merged VPK and the deployment (256 MiB). A single
+/// audited skin is often 50 MiB or more, so a lower bound here refused every
+/// build that carried one.
+const MAX_STAGED_BYTES: u64 = 256 * 1024 * 1024;
 static OPERATION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Deserialize)]
@@ -518,7 +518,7 @@ pub(crate) fn stage_verified_vpk_with_failure(
         return Err("build_plan_stale".to_string());
     }
     crate::vpk::inspect(vpk_bytes).map_err(|_| "verification_failed".to_string())?;
-    if vpk_bytes.len() as u64 > MAX_STAGED_VPK_BYTES {
+    if vpk_bytes.len() as u64 > MAX_STAGED_BYTES {
         return Err("build_too_large".to_string());
     }
     let (operations_root, journals_root) = prepare_owned_roots(app_data_root)?;
@@ -903,6 +903,13 @@ pub fn operation_diagnostic_counts(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn staging_cap_matches_the_deployment_cap() {
+        // An audited skin is tens of MiB; a lower staging cap than the VPK and
+        // deployment caps refused every build that carried one.
+        assert_eq!(MAX_STAGED_BYTES, 256 * 1024 * 1024);
+    }
 
     fn temp_root(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(

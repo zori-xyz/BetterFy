@@ -2,6 +2,9 @@
 // one recommended next step. The code itself stays under "Details" (and in
 // the journal) so support can match it to the engine.
 
+import type { LanguageSlotReport } from "../../engine";
+import { explainSlot } from "./slot";
+
 export type NoticeAction =
   | "retry"
   | "prepare"
@@ -16,6 +19,8 @@ export type Notice = {
   tone: "error" | "warn";
   title: string;
   body: string;
+  /** Facts for the "Details" fold, shown above the code. */
+  details: string[];
   action: NoticeAction;
 };
 
@@ -87,8 +92,8 @@ export const explainError = (code: string, isRu: boolean) => {
       "Steam's settings file could not be read. BetterFy will not change it.",
     ],
     rollback_failed: [
-      "Откат не подтвердился проверкой. Сохрани отчёт и не меняй файлы вручную.",
-      "The restore did not pass verification. Save the report and do not change files manually.",
+      "Откат не прошёл проверку: файл в игре не совпал с ожидаемым. BetterFy остановился на этом шаге и больше ничего не менял. Сохрани отчёт и не правь файлы вручную.",
+      "The restore did not pass verification: the file in the game did not match what was expected. BetterFy stopped at that step and changed nothing else. Save the report and do not edit files by hand.",
     ],
     panorama_resolution_missing: [
       "Сборку нужно подготовить заново: снимок интерфейса игры не найден.",
@@ -110,14 +115,6 @@ export const explainError = (code: string, isRu: boolean) => {
       "План устарел. Подготовь сборку заново.",
       "The plan is stale. Prepare the build again.",
     ],
-    deployment_target_foreign: [
-      "Целевой файл занят другой модификацией. BetterFy не будет его заменять.",
-      "Another modification owns the target. BetterFy will not overwrite it.",
-    ],
-    deployment_language_change_requires_restore: [
-      "Сначала откати установленную сборку, затем выбери другой язык.",
-      "Restore the installed build before choosing another language.",
-    ],
     language_folder_unavailable: [
       "В установке Dota нет папки выбранного языка с gameinfo.gi. Выбери другой язык или восстанови файлы игры через Steam.",
       "This Dota installation lacks the selected language folder with gameinfo.gi. Choose another language or verify game files in Steam.",
@@ -126,25 +123,17 @@ export const explainError = (code: string, isRu: boolean) => {
       "В Steam уже указан другой язык. Восстанови прежние параметры BetterFy или измени их вручную перед установкой.",
       "Steam already specifies a different language. Restore BetterFy's previous settings or change them manually before installing.",
     ],
-    deployment_conflict: [
-      "Файл BetterFy в игре изменили или удалили после установки: чаще всего это обновление Dota или проверка файлов в Steam. BetterFy не будет затирать его старой копией. «Отпустить старую установку» только забудет её: файлы игры не тронуты.",
-      "BetterFy's file in the game was changed or removed after installation, most often by a Dota update or a Steam file check. BetterFy will not overwrite it with an old copy. Letting go of the old install only forgets it: no game files are touched.",
-    ],
     backup_failed: [
-      "Резервная копия BetterFy недоступна. Автоматический откат заблокирован; не заменяй файл вручную, пока не проверишь состояние установки.",
-      "BetterFy's backup is unavailable. Automatic restore is blocked; inspect the installation before changing the file manually.",
+      "BetterFy не смог прочитать или записать свою резервную копию. Поэтому он остановился: автоматический откат заблокирован, чтобы не записать в игру непроверенные данные. Сохрани отчёт и не правь файл вручную.",
+      "BetterFy could not read or write its backup. It stopped, and automatic restore is blocked so unverified data is not written into the game. Save the report and do not edit the file by hand.",
     ],
     backup_verification_failed: [
-      "Резервная копия не прошла проверку. BetterFy не будет восстанавливать её поверх файла игры.",
-      "The backup failed verification. BetterFy will not restore it over the game file.",
-    ],
-    rollback_conflict: [
-      "Файл BetterFy в игре изменили после установки: чаще всего это обновление Dota. Откат остановлен, чтобы не затереть новый файл старым. «Отпустить старую установку» только забудет её: файлы игры не тронуты.",
-      "BetterFy's file in the game was changed after installation, most often by a Dota update. Restore stopped so a new file is not overwritten by an old one. Letting go of the old install only forgets it: no game files are touched.",
+      "Резервная копия не прошла проверку: её содержимое не совпало с тем, что было записано. BetterFy не записывает и не восстанавливает файл, пока не уверен в копии. Сохрани отчёт; файл игры не тронут.",
+      "The backup failed verification: its contents did not match what was recorded. BetterFy will not write or restore a file until it can trust the backup. Save the report; the game file was not touched.",
     ],
     deployment_not_stale: [
-      "Установка BetterFy на месте, отпускать её не нужно. Если что-то не так, используй откат.",
-      "The BetterFy install is intact, so there is nothing to let go of. Use restore if something is off.",
+      "Установка BetterFy на месте и не изменилась, поэтому отпускать её не нужно. Файлы игры не тронуты. Если что-то не так, используй откат.",
+      "The BetterFy install is intact and unchanged, so there is nothing to let go of. No game files were touched. Use restore if something is off.",
     ],
     steam_profile_conflict: [
       "Этот Steam-профиль нельзя менять автоматически. Выбери другой или проверь параметры запуска вручную.",
@@ -155,8 +144,8 @@ export const explainError = (code: string, isRu: boolean) => {
       "Steam settings were not verified. Do not assume the mod is active in game.",
     ],
     steam_recovery_required: [
-      "Найдено прерванное изменение Steam. Сначала восстанови его в диагностике.",
-      "An interrupted Steam change was found. Recover it in diagnostics first.",
+      "Прошлое изменение параметров запуска Steam прервалось и не закончено. Пока оно висит, BetterFy не трогает ни файл игры, ни Steam, чтобы не оставить игру с неверным языком. Сначала восстанови его в диагностике, потом повтори.",
+      "An earlier change to Steam's launch options was interrupted and is unfinished. Until it is resolved BetterFy leaves both the game file and Steam alone, so the game is not left with a wrong language. Recover it in diagnostics first, then retry.",
     ],
     clipboard_unavailable: [
       "Не удалось скопировать параметр. Выдели и скопируй его вручную.",
@@ -206,6 +195,10 @@ export const explainError = (code: string, isRu: boolean) => {
       "Архив меняет общие файлы игры, а для него выбрано «отказать». Установка остановлена.",
       "The archive changes shared game files and is set to refuse them. Installation stopped.",
     ],
+    build_too_large: [
+      "Все выбранные файлы вместе занимают больше 256 МБ: это предел одного файла сборки (pak-файла), который читает Dota. Убери один из крупных скинов или собери его отдельно от остального.",
+      "The selected files add up to more than 256 MB, the limit for the single build file (pak file) Dota reads. Remove one of the large skins or build it separately from the rest.",
+    ],
     skin_install_too_large: [
       "Набор слишком большой для одной сборки.",
       "This item is too large for one build.",
@@ -250,7 +243,7 @@ const groups: Array<{
     tone: "warn",
   },
   {
-    codes: ["bundle_limit_exceeded"],
+    codes: ["bundle_limit_exceeded", "build_too_large"],
     title: ["Сборка слишком большая", "The build is too big"],
     action: null,
     tone: "warn",
@@ -305,9 +298,16 @@ const groups: Array<{
     tone: "warn",
   },
   {
-    codes: ["deployment_conflict", "rollback_conflict"],
+    // Wording and action come from the folder's actual state (slot.ts).
+    codes: [
+      "deployment_conflict",
+      "rollback_conflict",
+      "deployment_target_foreign",
+      "deployment_language_change_requires_restore",
+      "slot_full",
+    ],
     title: ["Файл игры изменился", "The game file changed"],
-    action: "release",
+    action: "report",
     tone: "warn",
   },
   {
@@ -315,9 +315,7 @@ const groups: Array<{
       "rollback_failed",
       "backup_failed",
       "backup_verification_failed",
-      "deployment_target_foreign",
       "steam_recovery_required",
-      "deployment_language_change_requires_restore",
     ],
     title: ["BetterFy остановился, чтобы ничего не сломать", "BetterFy stopped so nothing breaks"],
     action: "report",
@@ -346,13 +344,42 @@ const groups: Array<{
   },
 ];
 
-export function noticeFor(code: string, isRu: boolean): Notice {
+/** The refusals that depend on what sits in the language folder. */
+export const slotCodes = [
+  "deployment_conflict",
+  "rollback_conflict",
+  "deployment_target_foreign",
+  "deployment_language_change_requires_restore",
+  "slot_full",
+];
+
+/**
+ * `slot` is the read-only summary of the language folder, when it has been
+ * read: it turns the general wording into the actual cause.
+ */
+export function noticeFor(
+  code: string,
+  isRu: boolean,
+  slot: LanguageSlotReport | null = null,
+): Notice {
   const group = groups.find((item) => item.codes.includes(code));
+  const slotText = explainSlot(code, isRu, slot);
+  if (slotText) {
+    return {
+      code,
+      tone: "warn",
+      title: slotText.title,
+      body: slotText.body,
+      details: slotText.details,
+      action: slotText.action,
+    };
+  }
   return {
     code,
     tone: group?.tone ?? "error",
     title: group ? group.title[isRu ? 0 : 1] : isRu ? "Операция остановлена" : "Operation stopped",
     body: explainError(code, isRu),
+    details: [],
     action: group?.action ?? "report",
   };
 }

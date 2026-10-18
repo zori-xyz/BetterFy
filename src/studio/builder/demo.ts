@@ -24,7 +24,9 @@ export type DemoScenario =
   | "dota_open"
   | "download_fails"
   | "steam_fails"
-  | "game_updated";
+  | "game_updated"
+  | "minify_replaced"
+  | "minify_beside";
 
 type DemoSettings = { scenario: DemoScenario; developer: boolean };
 const key = "betterfy:builder-demo";
@@ -32,7 +34,15 @@ let settings: DemoSettings = (() => {
   try {
     const stored = JSON.parse(getStorageItem(key) ?? "{}");
     return {
-      scenario: ["success", "dota_open", "download_fails", "steam_fails", "game_updated"].includes(
+      scenario: [
+        "success",
+        "dota_open",
+        "download_fails",
+        "steam_fails",
+        "game_updated",
+        "minify_replaced",
+        "minify_beside",
+      ].includes(
         stored.scenario,
       )
         ? stored.scenario
@@ -347,9 +357,63 @@ export const demoBridge: EngineBridge = {
       confirmationToken: "demo",
     };
   },
+  // The language folder as the demo scenarios see it: empty, with Minify's
+  // pak66 beside BetterFy's pak65, or with BetterFy's file replaced.
+  async inspectLanguageSlot(_path, language = "russian") {
+    await wait(200);
+    const day = 24 * 60 * 60 * 1000;
+    const minify = [
+      { name: "pak66_000.vpk", bytes: 41_943_040, modifiedMs: Date.now() - day, owner: "minify_like" as const },
+      { name: "pak66_dir.vpk", bytes: 18_432, modifiedMs: Date.now() - day, owner: "minify_like" as const },
+    ];
+    if (settings.scenario === "minify_replaced")
+      return {
+        language,
+        folderExists: true,
+        files: minify,
+        filesTruncated: false,
+        owned: { name: "pak66_dir.vpk", state: "replaced" as const },
+        nextName: "pak65_dir.vpk",
+        slotFull: false,
+      };
+    if (settings.scenario === "game_updated")
+      return {
+        language,
+        folderExists: true,
+        files: [
+          { name: "pak65_dir.vpk", bytes: 9_437_184, modifiedMs: Date.now() - 3600_000, owner: "unknown" as const },
+        ],
+        filesTruncated: false,
+        owned: { name: "pak65_dir.vpk", state: "replaced" as const },
+        nextName: "pak64_dir.vpk",
+        slotFull: false,
+      };
+    const ours = installed
+      ? [
+          {
+            name: "pak65_dir.vpk",
+            bytes: 7_340_032,
+            modifiedMs: Date.now(),
+            owner: "betterfy" as const,
+          },
+        ]
+      : [];
+    const beside = settings.scenario === "minify_beside" ? minify : [];
+    return {
+      language,
+      folderExists: beside.length + ours.length > 0,
+      files: [...ours, ...beside].sort((a, b) => a.name.localeCompare(b.name)),
+      filesTruncated: false,
+      owned: installed ? { name: "pak65_dir.vpk", state: "intact" as const } : null,
+      nextName: installed ? null : "pak65_dir.vpk",
+      slotFull: false,
+    };
+  },
   async installTreePilot(_path, ids, _plan, language) {
     if (settings.scenario === "game_updated")
       throw new EngineFault("deployment_conflict", "install_tree_pilot");
+    if (settings.scenario === "minify_replaced")
+      throw new EngineFault("deployment_target_foreign", "install_tree_pilot");
     await wait(2400);
     installed = {
       operationId: `demo-${Date.now()}`,
@@ -366,6 +430,7 @@ export const demoBridge: EngineBridge = {
       committed: true,
       rolledBack: false,
       bundlePlanId: "demo",
+      vpkName: "pak65_dir.vpk",
       packageIds: installed.packageIds,
     };
   },
@@ -405,6 +470,7 @@ export const demoBridge: EngineBridge = {
       committed: true,
       rolledBack: false,
       bundlePlanId: "demo",
+      vpkName: "pak65_dir.vpk",
       packageIds: installed.packageIds,
       packageVerified: true,
       steamOperationId: installed.steamOperationId,
@@ -417,6 +483,7 @@ export const demoBridge: EngineBridge = {
   async releaseStaleDeployment() {
     await wait(900);
     if (settings.scenario === "game_updated") setDemoSettings({ scenario: "success" });
+    else if (settings.scenario === "minify_replaced") setDemoSettings({ scenario: "minify_beside" });
     return { operationId: "demo-stale", language: "russian", reason: "changed" };
   },
   async rollbackSteamLaunchOptions(operationId) {
@@ -447,6 +514,7 @@ export const demoBridge: EngineBridge = {
       committed: true,
       rolledBack: true,
       bundlePlanId: "demo",
+      vpkName: "pak65_dir.vpk",
       packageIds: [],
     };
   },

@@ -113,7 +113,7 @@ or in-game result), with the hero `keeper_of_the_light` and Valve's file list of
   VPKs are 170 and 210 MiB. Staging a build for install enforced its own 64 MiB
   bound (`build_engine::MAX_STAGED_BYTES`), lower than both, so a skin over
   64 MiB could be planned but not installed; the staged VPK is now bounded by
-  the VPK limit like the merge and the deployment. Memory use for the largest
+  the same 256 MiB as the merge and the deployment. Memory use for the largest
   installs (about 207 MiB for `heroes-nude-marci`) has not been measured on
   Windows.
 - **Paths.** Upper-case letters are folded to lower case (the game looks files
@@ -238,7 +238,7 @@ audit did not know (information only, see ENGINE_ARCHITECTURE).
 
 - Whether any skin works in the current Dota patch when BetterFy installs it.
   The founder's hand-copy evidence covers the as-is behaviour, not BetterFy's
-  merged `pak66` file; the Windows plan tests it.
+  merged BetterFy VPK; the Windows plan tests it.
 - Whether the Valve resources a skin replaces still exist at those paths after
   the 2026-07-23 patch, beyond what the player-side comparison reports.
 - The meaning of every byte in the `vxml_c` files beyond their parsed

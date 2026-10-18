@@ -108,7 +108,7 @@ Record once, before any test:
    `69de05a590aa33a01479b166034198ef360ca554c7a0efbf530967a57fcd586b`, plan ID
    `sha256:ba18ccfe2988d4266a7f9baaf145de4822e03597841948a8df8fe4c4eaf56fa3`.
    After the install in step 6 the installed
-   `game/dota_<language>/pak66_dir.vpk` must have the same SHA-256. A mismatch
+   `game/dota_<language>/pakNN_dir.vpk` (the name in the receipt) must have the same SHA-256. A mismatch
    is a finding, not a rounding error: the build is meant to be deterministic.
 6. Language, Steam profile, install, with Dota and Steam closed by BetterFy
    normally. Save the evidence report. The installed file's SHA-256 and the
@@ -133,12 +133,12 @@ Record once, before any test:
    checkerboard textures, a crash, a hang on load. If something fails, do not
    conclude the engine is wrong: save the screenshots and stop.
 10. Quit Dota. In BetterFy restore the build. Check that the installed
-    `pak66_dir.vpk` is gone (or equal to the machine record), that the launch
+    `pakNN_dir.vpk` is gone (or equal to the machine record), that the launch
     options equal the machine record, and that the evidence report says the
     rollback was verified. Start Dota once more and confirm Keeper of the Light
     is back to the game's own look.
 11. Repeat install then restore twice more. Every install must produce the same
-    `pak66_dir.vpk` hash.
+    `pakNN_dir.vpk` hash.
 
 ## 1b. Scarlet Keeper with the shared game files left out (opt-in)
 
@@ -214,7 +214,7 @@ build and are the expected values in the review and in the installed file.
 | Bloody Gore Spectre | `heroes-bloody-gore-spectre` | the biggest allowlisted install | 1,126 / 63,934,624 | 20 | 4 | 63,993,491; `162acd1629a922949d24d1ed013dc032c81e2684c1c81486559c4e5b6fa0bc34` | `sha256:ee38299638d39089f1a18ae87f733a25b702381ff5a797f1fdc7fcc0baf80601` |
 
 For each: the card has the pilot mark; the review matches the table; the plan
-hash and the installed `pak66_dir.vpk` hash equal the table (when the review
+hash and the installed `pakNN_dir.vpk` hash equal the table (when the review
 says "compared with your Dota" and lists "your game ships now" files, the
 default build is still identical, because those files are information only);
 the skin is visible on the right hero in a demo; restore leaves the machine
@@ -242,12 +242,46 @@ record. Extra checks:
   The Mac plan counts 244 conflicting paths for these two plus the others in the
   spot check; record the number the Windows review shows for just these two.
 
+## 5. Installing next to Minify's output
+
+BetterFy picks its file name at install time (see "File names and coexistence with
+Minify" in `ENGINE_ARCHITECTURE.md`). This pass checks it on a machine that also uses
+Minify. Do not use files you care about: work on a copy of the language folder if you
+can.
+
+1. With BetterFy not installed, run Minify once so that `game/dota_<language>/` holds
+   its `pak66_dir.vpk` (and `pak66_000.vpk`, ... when it chunks). Record the SHA-256
+   of every `pak66*` file (`Get-FileHash`) and the folder listing.
+2. In BetterFy prepare a build and open the review. Expected: a line beside the file
+   name says the folder already has `pak66_dir.vpk` (named like Minify's) and that
+   BetterFy will use `pak65_dir.vpk`. Record what it shows.
+3. Install. Expected: the journal says "Using pak65_dir.vpk in dota_<language>;
+   pak66_dir.vpk ... is left alone", the receipt and the evidence report carry
+   `vpkName: pak65_dir.vpk`, and every Minify file has the same SHA-256 as in step 1.
+4. Restore. Expected: `pak65_dir.vpk` is gone, every Minify file again has the step 1
+   SHA-256, the folder listing equals step 1.
+5. Install again, then run Minify so that it rewrites `pak66*`. Open BetterFy: BetterFy's
+   `pak65_dir.vpk` must still match its record (the install is intact), and Minify's
+   files are not BetterFy's concern. Restore and check the hashes again.
+6. The reported case, on a build that installed to `pak66_dir.vpk` before this change
+   (the old record has no `vpkName`): run Minify so that it overwrites `pak66_dir.vpk`.
+   Expected: the notice says BetterFy's file was replaced by another program that uses
+   the same name, names the file, and offers "Let go of the old install"; the file facts
+   (name, size, modified time) are under Details. After letting go, install: BetterFy
+   takes `pak65_dir.vpk` and Minify's files keep their hashes.
+7. Optional: fill every `pak50` to `pak65` number in a folder with dummy files and try
+   to install. Expected: `slot_full`, nothing written.
+8. Start Dota with `-language <language>` and note whether the BetterFy changes and
+   Minify's changes are both visible. Whether Dota loads both, and which wins on a
+   conflicting path (the upstream guide says the lower number wins, so BetterFy's
+   `pak65`), is not yet observed.
+
 ## What to capture
 
 For every step above that touches a file or the game:
 
 - the in-app evidence report (saved, with its file name);
-- SHA-256 before and after of `game/dota_<language>/pak66_dir.vpk`, the backup,
+- SHA-256 before and after of `game/dota_<language>/pakNN_dir.vpk` (the name in the receipt), the backup,
   and the stored archive object;
 - the review block as a screenshot (counts and the lists), once per plan;
 - the plan ID shown in the journal, to compare with the tables;

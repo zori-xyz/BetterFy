@@ -1120,6 +1120,27 @@ async fn preview_tree_language(
     .map_err(|_| "runtime_worker_failed".to_string())?
 }
 
+/// Read-only: which `pak*` files sit in the language folder and whose they
+/// look like. Used to explain a refusal; it changes nothing and returns no
+/// paths or file contents.
+#[tauri::command]
+async fn inspect_language_slot(
+    app: AppHandle,
+    game_path: String,
+    language: Option<GameLanguage>,
+) -> Result<game_deployment::LanguageSlotReport, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "deployment_failed".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        validate_candidate(Path::new(&game_path), "manual")?;
+        game_deployment::inspect_language_slot(&app_data, Path::new(&game_path), language)
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
 #[tauri::command]
 async fn start_steam_after_tree_pilot(
     app: AppHandle,
@@ -1331,6 +1352,7 @@ fn main() {
             open_reports_folder,
             current_tree_pilot,
             preview_tree_language,
+            inspect_language_slot,
             start_steam_after_tree_pilot,
             rollback_game_deployment,
             release_stale_deployment,

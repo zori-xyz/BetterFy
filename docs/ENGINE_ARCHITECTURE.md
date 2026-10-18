@@ -184,7 +184,7 @@ rollback is safe. Tests inject failures after a staged write and before verifica
 
 This fixture flow is not deployment. A separate game-deployment boundary now
 exists, but it accepts only a `Ready` journal containing exactly one verified
-`pak66_dir.vpk`; the current CSS fixtures cannot satisfy that contract. The
+VPK (staged as `pak66_dir.vpk`); the current CSS fixtures cannot satisfy that contract. The
 confirmed activation step stops Dota and Steam, commits BetterFy's owned launch
 option, verifies the profile against its journal, and starts Steam only. The
 generic game-directory write remains closed in release builds. The fixed Tree
@@ -277,12 +277,15 @@ parts remain unsupported and are rejected rather than partially copied.
 
 `deploy_staged_vpk` cannot receive a source or destination from the interface. It
 resolves a confirmed BetterFy staging journal, requires its exact reviewed plan ID,
-requires one verified `pak66_dir.vpk`, rehashes and reopens it, then targets only
-`game/dota_dutch/pak66_dir.vpk` for the generic debug path. The verified-build pilot
+requires one verified staged VPK (staged as `pak66_dir.vpk`; that is the staging name
+only), rehashes and reopens it, then targets only `game/dota_dutch` for the generic
+debug path. The verified-build pilot
 instead chooses an allowlisted language folder before installation and records
 it in the journal and receipt. The runtime must already prove Steam and Dota are
-closed. An existing target is replaceable only when BetterFy's ownership record
-matches its current hash; an unknown target is a hard conflict.
+closed. The file name inside the language folder is chosen at install time (see
+"File names and coexistence with Minify"). An existing owned target is replaceable
+only when BetterFy's ownership record matches its current hash; BetterFy never
+writes over a file it did not write.
 
 The transaction writes and verifies a private backup, writes a same-directory
 temporary VPK, publishes with Windows write-through APIs, reopens and rehashes the
@@ -333,8 +336,8 @@ for journals that predate the choice. Every slot uses the same backup, ownership
 rollback and targeted Steam restore, and changing slot still requires a restore
 first. Only `russian` and `dutch` have been observed in game on Windows.
 
-`betterfy` stands in for English: `game/dota_betterfy/pak66_dir.vpk` with
-`-language betterfy`. The folder holds nothing but BetterFy's VPK and is removed on
+`betterfy` stands in for English: `game/dota_betterfy/pakNN_dir.vpk` (the name
+chosen as for any slot) with `-language betterfy`. The folder holds nothing but BetterFy's VPK and is removed on
 restore when BetterFy created it. Evidence from the pinned Minify commit
 `3a85572029f2c264e2a17cee1c9b54ce93e4fd93`:
 
@@ -704,11 +707,10 @@ The audited install sizes are known up front, so preparing a build whose selecte
 `bundle_limit_exceeded`, before anything is downloaded, and the build screen shows the
 running total against the limit as skins are added. The merged build is still checked
 against the same limits when it is made, which catches the tuning packages too.
-Staging the verified VPK for install used to refuse anything over 64 MiB
-(`build_too_large`), which sat below the audited installs of the larger skins; it now
-uses the VPK limit, like the merge and the deployment. This was changed by reading the
-code and is covered by the build and plan tests, not by a staging test with a VPK of that
-size; no install of such a build has been run on Windows.
+Staging the verified VPK for install is bounded by the same 256 MiB
+(`build_engine::MAX_STAGED_BYTES`; it used to be 64 MiB, below the audited installs of
+the larger skins, and refused them with `build_too_large`). A unit test pins the cap; no
+staging or install of a VPK of that size has been run on Windows.
 
 **The player's own game.** When a game folder is connected, preparing a build also reads
 the file list of `game/dota/pak01_dir.vpk` (read-only, bounded) and notes which of the
@@ -789,10 +791,76 @@ recorded hash (a healthy install answers `deployment_not_stale`), and it
 touches nothing in the game folder. The ownership record is renamed to
 `ownership.released-<ms>.json`, the journal keeps `released_stale` as its error
 code, and the installed-profile record is cleared. The next install then treats
-whatever sits in the slot as foreign: an empty slot installs, and a slot with
-another file asks for a different language. Steam's `-language` option has its
-own restore button. Covered by unit tests; seen on Windows only as the report
-that led to it, not yet exercised there.
+whatever sits in the slot as foreign and does not touch it: it takes the first
+free file name (see below), so the file that replaced BetterFy's stays where it is
+and the new build goes in beside it. Steam's `-language` option has its own
+restore button. Covered by unit tests; seen on Windows only as the report that led
+to it, not yet exercised there.
+
+### File names and coexistence with Minify
+
+Until this change BetterFy owned one fixed file name, `pak66_dir.vpk`. Minify
+(Egezenn/dota2-minify, `Minify/patch/__init__.py` and `vpk_utils.py`) writes its
+output into the same language folder under that same name, `pak66_dir.vpk`, plus
+`pak66_000.vpk`, ... chunk files unless its `non_chunked_vpk` option is set. The two
+tools overwrote each other, and BetterFy, which refuses to touch a file it cannot
+prove it wrote, then stopped with `deployment_conflict`, `rollback_conflict` or
+`deployment_target_foreign`. Reading Minify's source showed that `pak66` is the only
+number its patch step writes (the older `pak65`/`pak67`/`pak99` names noted above
+belong to the pinned commit, and the allocation below does not depend on either).
+
+What Dota loads comes from the upstream install guide
+(https://d2pfxwiki.pages.dev/en/install.html): any `pak01_dir.vpk` to `pak99_dir.vpk`
+in the language folder; names outside that range are ignored or crash the game; a
+`!` prefix means top priority; on a conflict the lower number wins; an archive may be
+split into `pakNN_dir.vpk` plus `pakNN_000.vpk`, ... chunk files. These rules come from
+that guide. BetterFy has not run them in game.
+
+The name is now a recorded fact, not a constant:
+
+- A **new install** takes the first number of a fixed preference list, 65 down to 50,
+  such that no entry named `pakNN_dir.vpk`, `!pakNN_dir.vpk` or `pakNN_<digits>.vpk`
+  (case-insensitive; directories count) exists in that language folder. 66 is never
+  chosen because it is Minify's; 65 to 50 stay clear of it and of the numbers most
+  mods use, and sit below 66 so that on a conflict BetterFy's files win over Minify's
+  blanks (per the guide, not observed). BetterFy never writes, renames or deletes a
+  file it did not write. If all sixteen numbers are taken the install stops with
+  `slot_full` and writes nothing.
+- The chosen name is stored as `vpkName` in the ownership record and the journal, and
+  returned in the receipt and the evidence report. A record without the field means
+  `pak66_dir.vpk`, so every earlier record, receipt and backup keeps working. Names in
+  a record must be exactly `pak` + two digits + `_dir.vpk`; anything else is
+  `deployment_journal_invalid`.
+- An **existing healthy install keeps its recorded name**: an update of an owned
+  install, rollback to the previous chain entry (which must carry the same name),
+  recovery, `current_owned_deployment` and `release_stale_deployment` all use the
+  recorded name. Language changes still require a restore first.
+- Steam activation names no file, so nothing there changed.
+
+`inspect_language_slot(gamePath, language?)` is the read-only explanation. It lists the
+`pak*.vpk` entries of the language folder (at most 64) with name, size, modified time and
+a label: `betterfy` (the recorded file, same SHA-256), `minify_like` (named
+`pak66_dir.vpk` or `pak66_<digits>.vpk` and not BetterFy's; only the name is known, the
+contents are never read) or `unknown`. It also returns BetterFy's recorded file and its
+state (`intact`, `missing`, `replaced`), the name a new install would take now, and
+whether the slot is full. It hashes only BetterFy's own recorded file, creates nothing,
+and returns no paths or contents; with an existing install it describes that install's
+folder whatever language is asked for. The builder calls it when an install, restore or
+prepare stops with one of the folder codes and shows the cause (for example BetterFy's
+file was replaced by another program that uses the same name) and the next step, with
+the file facts under Details; before an install it says where BetterFy's file will go
+next to files named like Minify's, and after an install it writes one journal line naming
+the file taken and what was left alone.
+
+**What has and has not been run.** Compiles, passes clippy and the unit tests on macOS:
+a foreign `pak66_dir.vpk` plus `pak66_000.vpk` left byte-identical through install,
+update and rollback; the first free number with `!`-prefixed, chunk-only and directory
+entries; `slot_full`; an old record without a name through update and rollback; the
+reported Minify-replaced case through inspect, refusal, release and a fresh install
+beside it; and the notice wording in the browser preview against the demo bridge. Not
+run: Windows CI for this change (see the PR), an install next to a real Minify output on
+Windows, and whether Dota loads BetterFy's `pak65` beside Minify's `pak66` or resolves
+conflicts in the order the guide describes.
 
 ### Installed profile
 

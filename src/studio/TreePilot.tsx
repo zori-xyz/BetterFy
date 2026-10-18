@@ -22,6 +22,7 @@ import {
   type DetectedLanguage,
   type GameInstallation,
   type GameLanguage,
+  type LanguageSlotReport,
   type SteamProfileSummary,
   type TreePilotDownloadStatus,
   type TreePilotPlan,
@@ -41,7 +42,8 @@ import {
 } from "./packages";
 import { setEngineActive } from "./engineActivity";
 import { journal } from "./builder/journal";
-import { noticeFor } from "./builder/notices";
+import { noticeFor, slotCodes } from "./builder/notices";
+import { installedLine, slotNote } from "./builder/slot";
 import { demoActive, demoBridge, isDesktopRuntime, useDemoSettings } from "./builder/demo";
 import { usePhrase } from "./builder/phrases";
 import { NoticeCard } from "./builder/NoticeCard";
@@ -166,6 +168,12 @@ export default function TreePilot({
   const languageFieldRef = useRef<HTMLDivElement>(null);
   const [installedLanguage, setInstalledLanguage] = useState<GameLanguage | null>(null);
   const [installedPackageIds, setInstalledPackageIds] = useState<string[]>([]);
+  // The file BetterFy owns in the language folder (pakNN_dir.vpk).
+  const [installedVpkName, setInstalledVpkName] = useState<string | null>(null);
+  // Read-only summaries of the language folder: one to explain a refusal, one
+  // to say before installing where BetterFy's file will go.
+  const [errorSlot, setErrorSlot] = useState<LanguageSlotReport | null>(null);
+  const [previewSlot, setPreviewSlot] = useState<LanguageSlotReport | null>(null);
   const [steamStarted, setSteamStarted] = useState(false);
   const [steamRestarted, setSteamRestarted] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -332,6 +340,7 @@ export default function TreePilot({
         if (!active) return;
         setOperationId(receipt?.operationId ?? null);
         setInstalledLanguage(receipt?.language ?? null);
+        setInstalledVpkName(receipt?.vpkName ?? null);
         setInstalledPackageIds(receipt?.packageIds ?? []);
         setVerifiedInstall(Boolean(receipt));
         setPackageVerified(receipt?.packageVerified ?? false);
@@ -443,6 +452,39 @@ export default function TreePilot({
     };
   }, [canManage, installation.path, demoDeveloper]);
 
+  // When the engine refuses because of what sits in the language folder, read
+  // the folder (names, sizes, times only) so the notice can say the real cause.
+  useEffect(() => {
+    setErrorSlot(null);
+    if (!canManage || !slotCodes.includes(error)) return;
+    let active = true;
+    bridge
+      .inspectLanguageSlot(installation.path, installedLanguage ?? (selectedLanguage || undefined))
+      .then((report) => {
+        if (active) setErrorSlot(report);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [error, canManage, installation.path]);
+  // Before installing: say where BetterFy's file will go, and what stays.
+  const previewLanguage = plan && !operationId && selectedLanguage ? selectedLanguage : null;
+  useEffect(() => {
+    setPreviewSlot(null);
+    if (!canManage || !previewLanguage) return;
+    let active = true;
+    bridge
+      .inspectLanguageSlot(installation.path, previewLanguage)
+      .then((report) => {
+        if (active) setPreviewSlot(report);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [canManage, previewLanguage, installation.path, plan?.planId]);
+
   async function prepare(keep: ReadonlySet<string> = keepShared) {
     if (!desktop || phase !== "idle") return;
     const sendIds = idsFor(keep);
@@ -517,7 +559,7 @@ export default function TreePilot({
         "step",
         "Сохраняем исходный файл и записываем сборку.",
         "Backing up the original file and writing the build.",
-        plan.targetFile,
+        previewSlot?.owned?.state === "intact" ? previewSlot.owned.name : previewSlot?.nextName ?? undefined,
       );
       const receipt = await bridge.installTreePilot(
         installation.path,
@@ -532,8 +574,16 @@ export default function TreePilot({
         "ok",
         "Сборка записана, бэкап проверен.",
         "Build written, backup verified.",
-        `dota_${receipt.language}/${plan.targetFile}`,
+        `dota_${receipt.language}/${receipt.vpkName}`,
       );
+      // Which file BetterFy took and what it left alone, from a read-only look
+      // at the folder; the install does not depend on it.
+      const slotAfter = await bridge
+        .inspectLanguageSlot(installation.path, receipt.language)
+        .catch(() => null);
+      const [lineRu, lineEn] = installedLine(receipt.vpkName, receipt.language, slotAfter);
+      say("ok", lineRu, lineEn);
+      setInstalledVpkName(receipt.vpkName);
       setDotaPatched(false);
       setOperationId(receipt.operationId);
       setInstalledLanguage(receipt.language);
@@ -659,6 +709,7 @@ export default function TreePilot({
       say("ok", "Исходные файлы Dota 2 на месте.", "Original Dota 2 files are back.");
       setOperationId(null);
       setInstalledLanguage(null);
+      setInstalledVpkName(null);
       setInstalledPackageIds([]);
       setVerifiedInstall(false);
       setPackageVerified(false);
@@ -746,6 +797,7 @@ export default function TreePilot({
       setError("");
       setOperationId(null);
       setInstalledLanguage(null);
+      setInstalledVpkName(null);
       setInstalledPackageIds([]);
       setVerifiedInstall(false);
       setPackageVerified(false);
@@ -755,10 +807,10 @@ export default function TreePilot({
         isRu
           ? steamOperationId
             ? "Старая установка забыта. Параметр -language в Steam можно вернуть кнопкой «Восстановить параметры Steam». Потом подготовь сборку заново."
-            : "Старая установка забыта. Подготовь сборку заново; если в слоте остался чужой файл, выбери другой язык."
+            : "Старая установка забыта. Подготовь сборку заново: BetterFy выберет свободное имя файла и не тронет чужие."
           : steamOperationId
             ? "The old install is forgotten. Use Restore Steam settings to remove the -language option, then prepare the build again."
-            : "The old install is forgotten. Prepare the build again; if another file sits in this slot, pick a different language.",
+            : "The old install is forgotten. Prepare the build again: BetterFy picks a free file name and leaves other files alone.",
       );
     } catch (cause) {
       const code = codeOf(cause);
@@ -1127,7 +1179,13 @@ export default function TreePilot({
   ]);
   const activePhrase = usePhrase(phase === "idle" ? (recovering ? "restore" : null) : phase, isRu);
   if (!ids.length && !operationId && !steamOperationId && !steamRecoveryRequired) return null;
-  const notice = error ? noticeFor(error, isRu) : null;
+  const notice = error ? noticeFor(error, isRu, errorSlot) : null;
+  // The file name is chosen at install time (the first free pakNN number), so
+  // before that the review shows the name BetterFy would take now.
+  const plannedFile =
+    (previewSlot?.owned?.state === "intact" ? previewSlot.owned.name : previewSlot?.nextName) ??
+    "pakNN_dir.vpk";
+  const planNote = slotNote(previewSlot, isRu);
   // Relation fixes act on catalog IDs; a package the catalog does not list
   // (a superseded one) gets the message without a button.
   const catalogIdOf = (packageId: string) => {
@@ -1226,7 +1284,7 @@ export default function TreePilot({
       label: isRu ? "Записать с бэкапом" : "Write with a backup",
       hint:
         operationId && installedLanguage
-          ? `dota_${installedLanguage}/pak66_dir.vpk`
+          ? `dota_${installedLanguage}${installedVpkName ? `/${installedVpkName}` : ""}`
           : isRu
             ? "Исходный файл можно вернуть"
             : "The original can be restored",
@@ -1645,7 +1703,7 @@ export default function TreePilot({
             <div className="b-field-head">
               <span id="tree-pilot-language">{isRu ? "Язык Dota" : "Dota language"}</span>
               {selectedLanguage && (
-                <code title={`game/dota_${selectedLanguage}/${plan.targetFile}`}>
+                <code title={`game/dota_${selectedLanguage}/${plannedFile}`}>
                   -language {selectedLanguage}
                 </code>
               )}
@@ -1896,11 +1954,17 @@ export default function TreePilot({
                 <dd>
                   <code>
                     {selectedLanguage
-                      ? `game/dota_${selectedLanguage}/${plan.targetFile}`
-                      : plan.targetFile}
+                      ? `game/dota_${selectedLanguage}/${plannedFile}`
+                      : plannedFile}
                   </code>
                 </dd>
               </div>
+              {planNote && (
+                <div className="b-facts-note">
+                  <dt>{isRu ? "Рядом" : "Beside"}</dt>
+                  <dd>{planNote}</dd>
+                </div>
+              )}
               <div>
                 <dt>{isRu ? "Состав" : "Bundle"}</dt>
                 <dd>
