@@ -7,7 +7,9 @@ const VPK_SIGNATURE: u32 = 0x55aa_1234;
 const VPK_VERSION: u32 = 1;
 const DIRECTORY_ARCHIVE_INDEX: u16 = 0x7fff;
 const ENTRY_TERMINATOR: u16 = 0xffff;
-const MAX_VPK_BYTES: usize = 256 * 1024 * 1024;
+/// The most a BetterFy VPK may hold, header and directory included. A merged
+/// build, its staged copy and the deployment all share this one bound.
+pub(crate) const MAX_VPK_BYTES: usize = 256 * 1024 * 1024;
 const MAX_VPK_ENTRIES: usize = 65_536;
 const MAX_TREE_STRING_BYTES: usize = 260;
 

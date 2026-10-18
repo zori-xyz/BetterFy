@@ -8,10 +8,19 @@
 //! Rules (see `docs/SKIN_ARCHIVE_AUDIT.md`):
 //!
 //! * Types. Only compiled resource types in [`ALLOWED_TYPES`] are accepted.
-//!   Compiled Panorama scripts, uncompiled sources, executables and anything
-//!   unknown are rejected. A `vxml_c` is accepted only when the layout reader
-//!   proves it is an image wrapper (`panorama_layout::image_wrapper_dependency`);
-//!   if the reader cannot prove it, the file is rejected.
+//!   Compiled Panorama scripts, executables and anything unknown are rejected.
+//!   A `vxml_c` is accepted only when the layout reader proves it is an image
+//!   wrapper (`panorama_layout::image_wrapper_dependency`); a layout with a
+//!   script, an event handler or an include is rejected as scripted, and one
+//!   the reader cannot prove is rejected as unproven.
+//! * Empty files. A zero-length compiled resource is a deliberate blank
+//!   override (VPK authors ship them to silence a model, a sound or a snapshot)
+//!   and carries nothing to execute, so it is accepted like any other file of
+//!   an allowed type. A zero-length layout proves nothing and is rejected.
+//! * Ignored files. Uncompiled sources and tool or reading leftovers
+//!   ([`RejectReason::UncompiledSource`], [`RejectReason::NotGameFile`]) are not
+//!   something the game loads from a VPK, so leaving them out changes nothing
+//!   in game. They are counted apart from the files that are really dropped.
 //! * Paths. Upper-case letters are folded to lower case (the game looks files
 //!   up case-insensitively and BetterFy's own VPK writer is lower-case only);
 //!   every such rename is counted in the report, and two entries that are equal
@@ -40,6 +49,7 @@
 //! is not a parser of every Source 2 resource. The archive is therefore
 //! installable only when its hash is pinned (see `wardrobe.rs`).
 
+use crate::panorama_layout::WrapperError;
 use crate::vpk;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -64,13 +74,25 @@ pub(crate) const ALLOWED_TYPES: &[&str] = &[
 ];
 const LAYOUT_TYPE: &str = "vxml_c";
 
-/// Uncompiled sources the game never loads from a VPK. Their presence is a
-/// leftover of the author's work tree, so they are dropped.
+/// Uncompiled sources the game never loads from a VPK: Valve's own file list
+/// (`pak01_dir.txt`, 2026-10-17, 388,116 entries) holds none of these
+/// extensions, and the game loads only the compiled `_c` form. Their presence
+/// is a leftover of the author's work tree.
 const SOURCE_TYPES: &[&str] = &[
     "vpcf", "vmdl", "vmat", "vtex", "vmesh", "vanim", "vsnd", "vsndevts", "vxml", "vcss", "vts",
-    "vmap", "vsnap", "vmorf", "vagrp", "vphys", "vseq", "fbx", "dmx", "tga", "png", "jpg", "jpeg",
-    "psd", "vsvg", "svg",
+    "vmap", "vsnap", "vmorf", "vagrp", "vphys", "vseq", "fbx", "tga", "psd", "vsvg", "svg",
 ];
+/// Raw images. Valve ships PNGs of its own under `resource/` (the legacy
+/// interface, cursors), `materials/vgui/` and `panorama/` (a few spell icons),
+/// so a PNG there may be a file the game loads; anywhere else (texture sources
+/// under `materials/`, `models/`) it is a leftover of the author's work tree.
+const RAW_IMAGE_TYPES: &[&str] = &["png", "jpg", "jpeg"];
+const RAW_IMAGE_GAME_FOLDERS: &[&str] = &["resource/", "materials/vgui/", "panorama/"];
+/// Tool, system and reading leftovers that no game loader reads (none of
+/// these extensions is in Valve's file list). `txt` is not here: Valve ships
+/// thousands of them (localisation, scripts), so only a readme counts, see
+/// [`classify_type`].
+const LEFTOVER_TYPES: &[&str] = &["db", "xml", "md", "log", "ini", "url", "bak", "tmp"];
 const SCRIPT_TYPES: &[&str] = &["vjs_c", "vjs", "js", "jse", "lua", "py", "ts"];
 const EXECUTABLE_TYPES: &[&str] = &[
     "exe", "dll", "bat", "cmd", "ps1", "com", "scr", "msi", "vbs", "vbe", "lnk", "sys", "drv",
@@ -112,14 +134,20 @@ pub(crate) enum RejectReason {
     /// Two entries whose paths are equal when case is ignored.
     DuplicatePath,
     Oversized,
-    EmptyResource,
     /// A compiled or plain script.
     Script,
-    /// Uncompiled source such as `.vpcf`, `.vmdl`, `.vmat`.
+    /// Uncompiled source such as `.vpcf`, `.vmdl`, `.vmat`. Not a game file.
     UncompiledSource,
+    /// A tool, system or reading leftover (a readme, `thumbs.db`, an
+    /// `imageCompiler.xml`). Not a game file.
+    NotGameFile,
     Executable,
-    /// Any other type, including compiled types that are not allowed.
+    /// Any other type, including compiled types that are not allowed and
+    /// files the game may load (videos, styles, `scripts/*.txt`). These are
+    /// really dropped.
     TypeNotAllowed,
+    /// A `vxml_c` that carries a script, an event handler or an include.
+    PanoramaScripted,
     /// A `vxml_c` the layout reader could not prove to be an image wrapper.
     PanoramaUnproven,
 }
@@ -129,6 +157,12 @@ impl RejectReason {
     /// block the install instead of being dropped.
     pub(crate) fn is_hostile(self) -> bool {
         matches!(self, Self::PathUnsafe | Self::Script | Self::Executable)
+    }
+
+    /// Files that are not game files: leaving them out changes nothing in
+    /// game, so they are counted apart from the files that are really dropped.
+    pub(crate) fn is_ignored(self) -> bool {
+        matches!(self, Self::UncompiledSource | Self::NotGameFile)
     }
 }
 
@@ -149,11 +183,25 @@ pub(crate) struct Limits {
     pub max_install_bytes: usize,
 }
 
+/// Room kept for the directory of a merged VPK: 65,536 entries at no more than
+/// 120 bytes each is under 8 MiB.
+const VPK_DIRECTORY_RESERVE: usize = 8 * 1024 * 1024;
+
+/// One skin may fill the merged VPK, less the room its directory needs. The
+/// limit is the VPK's own (`vpk::MAX_VPK_BYTES`, the bound the merge, the
+/// staged copy and the deployment all enforce), not a policy of its own: a
+/// skin that fits can be installed alone, and a selection of several is
+/// checked against the same bound when the build is prepared. The earlier
+/// 16 MiB bound on one file dropped 4K textures and morph targets of 18 to
+/// 22 MiB, and the 128 MiB bound on the install refused two skins whose VPKs
+/// are 170 and 210 MiB.
+const MAX_INSTALL_BYTES: usize = vpk::MAX_VPK_BYTES - VPK_DIRECTORY_RESERVE;
+
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            max_entry_bytes: 16 * 1024 * 1024,
-            max_install_bytes: 128 * 1024 * 1024,
+            max_entry_bytes: MAX_INSTALL_BYTES,
+            max_install_bytes: MAX_INSTALL_BYTES,
         }
     }
 }
@@ -214,7 +262,14 @@ pub(crate) struct SkinReport {
     pub hero_scoped: ClassStat,
     pub author_owned: ClassStat,
     pub shared: ClassStat,
+    /// Files really left out: scripts, executables, layouts the reader could
+    /// not prove, oversized and unsafe entries, and types the game may load
+    /// that BetterFy does not install.
     pub rejected: ClassStat,
+    /// Files that are not game files (uncompiled sources, tool and reading
+    /// leftovers). Leaving them out changes nothing in game. Listed in
+    /// `rejected_paths` with their reasons, counted apart from `rejected`.
+    pub ignored: ClassStat,
     /// Accepted paths whose upper-case letters were folded to lower case.
     pub renamed: usize,
     /// `vxml_c` files proven to be image wrappers (counted in the classes).
@@ -324,7 +379,11 @@ enum Kind {
     Layout,
 }
 
-fn classify_type(extension: &str) -> Result<Kind, RejectReason> {
+/// Classifies a lower-case path by its type. Scripts and executables come
+/// first, so no rule below can turn one of them into an ignored file.
+fn classify_type(path: &str) -> Result<Kind, RejectReason> {
+    let extension = extension(path);
+    let name = path.rsplit('/').next().unwrap_or(path);
     if ALLOWED_TYPES.contains(&extension) {
         Ok(Kind::Compiled)
     } else if extension == LAYOUT_TYPE {
@@ -335,6 +394,18 @@ fn classify_type(extension: &str) -> Result<Kind, RejectReason> {
         Err(RejectReason::Executable)
     } else if SOURCE_TYPES.contains(&extension) {
         Err(RejectReason::UncompiledSource)
+    } else if RAW_IMAGE_TYPES.contains(&extension) {
+        if RAW_IMAGE_GAME_FOLDERS
+            .iter()
+            .any(|folder| path.starts_with(folder))
+        {
+            Err(RejectReason::TypeNotAllowed)
+        } else {
+            Err(RejectReason::UncompiledSource)
+        }
+    } else if LEFTOVER_TYPES.contains(&extension) || (extension == "txt" && name.contains("readme"))
+    {
+        Err(RejectReason::NotGameFile)
     } else {
         Err(RejectReason::TypeNotAllowed)
     }
@@ -518,6 +589,7 @@ pub(crate) fn analyze<'a>(
     let mut author_owned = ClassStat::default();
     let mut shared = ClassStat::default();
     let mut rejected = ClassStat::default();
+    let mut ignored = ClassStat::default();
     let mut renamed = 0usize;
     let mut image_wrappers = 0usize;
     let mut hostile = false;
@@ -537,18 +609,20 @@ pub(crate) fn analyze<'a>(
             if !path_safe(&lower) {
                 return Err(RejectReason::PathUnsafe);
             }
-            let kind = classify_type(extension(&lower))?;
-            if payload.is_empty() {
-                return Err(RejectReason::EmptyResource);
-            }
+            let kind = classify_type(&lower)?;
             if payload.len() > limits.max_entry_bytes {
                 return Err(RejectReason::Oversized);
             }
+            // A zero-length compiled resource is a deliberate blank override
+            // and installs; a zero-length layout proves nothing and does not.
             let wrapper = matches!(kind, Kind::Layout);
-            if wrapper
-                && crate::panorama_layout::image_wrapper_dependency(&lower, &payload).is_err()
-            {
-                return Err(RejectReason::PanoramaUnproven);
+            if wrapper {
+                crate::panorama_layout::image_wrapper_dependency(&lower, &payload).map_err(
+                    |error| match error {
+                        WrapperError::Scripted => RejectReason::PanoramaScripted,
+                        WrapperError::Unproven => RejectReason::PanoramaUnproven,
+                    },
+                )?;
             }
             Ok((scope_of(&lower, &spec.heroes, &shared_set), wrapper))
         })();
@@ -556,7 +630,11 @@ pub(crate) fn analyze<'a>(
         match outcome {
             Err(reason) => {
                 hostile |= reason.is_hostile();
-                rejected.add(payload.len());
+                if reason.is_ignored() {
+                    ignored.add(payload.len());
+                } else {
+                    rejected.add(payload.len());
+                }
                 if rejected_paths.len() < MAX_REPORTED_PATHS {
                     rejected_paths.push(RejectedPath {
                         path: entry.path.clone(),
@@ -621,6 +699,7 @@ pub(crate) fn analyze<'a>(
             author_owned,
             shared,
             rejected,
+            ignored,
             renamed,
             image_wrappers,
             rejected_paths,
@@ -919,12 +998,16 @@ mod tests {
         // 4 files in the author's folders and the 2 new basic_ember files.
         assert_eq!(report.author_owned.files, 6);
         assert_eq!(report.shared.files, 10);
-        assert_eq!(report.rejected.files, 3);
+        // The unproven wrapper is really dropped; the two uncompiled sources
+        // are not game files and are counted apart.
+        assert_eq!(report.rejected.files, 1);
+        assert_eq!(report.ignored.files, 2);
         assert_eq!(
             report.hero_scoped.files
                 + report.author_owned.files
                 + report.shared.files
-                + report.rejected.files,
+                + report.rejected.files
+                + report.ignored.files,
             report.entries
         );
         assert!(!report.hostile);
@@ -947,7 +1030,7 @@ mod tests {
                 ),
                 (
                     "panorama/images/heroes/npc_dota_hero_keeper_of_the_light.vxml_c",
-                    RejectReason::PanoramaUnproven
+                    RejectReason::PanoramaScripted
                 ),
                 (
                     "particles/darkness/sparks.vpcf",
@@ -1006,7 +1089,8 @@ mod tests {
         assert_eq!(report.hero_scoped.files, 11);
         assert_eq!(report.author_owned.files, 6);
         assert_eq!(report.shared.files, 10);
-        assert_eq!(report.rejected.files, 3);
+        assert_eq!(report.rejected.files, 1);
+        assert_eq!(report.ignored.files, 2);
         assert_eq!(report.shared_paths.len(), 10);
         assert_eq!(report.install.files, 27);
         assert_eq!(report.install.stripped_shared, 0);
@@ -1306,17 +1390,13 @@ mod tests {
     }
 
     #[test]
-    fn oversized_empty_and_unknown_entries_are_dropped() {
+    fn oversized_entries_are_dropped_at_the_entry_bound() {
         let big = vec![7u8; 33];
         let bytes = build_unchecked(
             2,
             &[
                 ("models/heroes/keeper_of_the_light/ok.vmdl_c", b"ok"),
                 ("models/heroes/keeper_of_the_light/big.vmdl_c", &big),
-                ("models/heroes/keeper_of_the_light/empty.vmdl_c", b""),
-                ("darkness/notes.txt", b"readme"),
-                ("darkness/compiled.vcss_c", b"css"),
-                ("darkness/clip.webm", b"video"),
             ],
         );
         let limits = Limits {
@@ -1324,29 +1404,17 @@ mod tests {
             max_install_bytes: 1024,
         };
         let analysis = analyze(&bytes, &spec(SharedPolicy::Strip), &limits).expect("analysis");
-        let reasons = analysis
-            .report
-            .rejected_paths
-            .iter()
-            .map(|item| (item.path.as_str(), item.reason))
-            .collect::<BTreeMap<_, _>>();
+        assert_eq!(analysis.report.rejected_paths.len(), 1);
         assert_eq!(
-            reasons["models/heroes/keeper_of_the_light/big.vmdl_c"],
+            analysis.report.rejected_paths[0].reason,
             RejectReason::Oversized
         );
-        assert_eq!(
-            reasons["models/heroes/keeper_of_the_light/empty.vmdl_c"],
-            RejectReason::EmptyResource
-        );
-        assert_eq!(reasons["darkness/notes.txt"], RejectReason::TypeNotAllowed);
-        assert_eq!(reasons["darkness/clip.webm"], RejectReason::TypeNotAllowed);
-        assert_eq!(
-            reasons["darkness/compiled.vcss_c"],
-            RejectReason::TypeNotAllowed
-        );
+        assert_eq!(analysis.report.rejected.files, 1);
+        assert_eq!(analysis.report.ignored.files, 0);
         assert!(!analysis.report.hostile);
         assert_eq!(analysis.report.install.files, 1);
 
+        // The install bound still applies to the sum.
         let small = Limits {
             max_entry_bytes: 32,
             max_install_bytes: 1,
@@ -1359,6 +1427,246 @@ mod tests {
                 .as_deref(),
             Some("skin_install_too_large")
         );
+    }
+
+    #[test]
+    fn the_default_entry_bound_is_the_install_bound() {
+        // One 4K texture or morph target is 18 to 22 MiB; the old 16 MiB bound
+        // dropped them. An entry may now be as large as the whole install.
+        let limits = Limits::default();
+        assert_eq!(limits.max_entry_bytes, limits.max_install_bytes);
+        assert!(limits.max_entry_bytes >= 22 * 1024 * 1024);
+        let texture = vec![3u8; 22 * 1024 * 1024];
+        let bytes = build_unchecked(
+            2,
+            &[
+                ("models/heroes/keeper_of_the_light/ok.vmdl_c", b"ok"),
+                (
+                    "materials/models/heroes/keeper_of_the_light/body_png_ab12.vtex_c",
+                    &texture,
+                ),
+            ],
+        );
+        let selection = select_install_files(&bytes, &spec(SharedPolicy::Install), &limits)
+            .expect("a 22 MiB texture installs");
+        assert_eq!(selection.report.rejected.files, 0);
+        assert_eq!(selection.files.len(), 2);
+    }
+
+    #[test]
+    fn empty_compiled_resources_install_as_blank_overrides() {
+        let bytes = build_unchecked(
+            2,
+            &[
+                ("models/heroes/keeper_of_the_light/ok.vmdl_c", b"ok"),
+                ("models/items/keeper_of_the_light/blank.vmdl_c", b""),
+                (
+                    "particles/models/items/keeper_of_the_light/hat/edge_fx.vsnap_c",
+                    b"",
+                ),
+            ],
+        );
+        let analysis =
+            analyze(&bytes, &spec(SharedPolicy::Install), &Limits::default()).expect("analysis");
+        assert_eq!(analysis.report.rejected.files, 0);
+        assert_eq!(analysis.report.hero_scoped.files, 2);
+        assert_eq!(analysis.report.author_owned.files, 1);
+        assert_eq!(analysis.report.install.files, 3);
+        let selection = analysis.into_selection().expect("selection");
+        assert_eq!(selection.files.len(), 3);
+        assert!(selection.files["models/items/keeper_of_the_light/blank.vmdl_c"].is_empty());
+
+        // The merged VPK keeps the zero-length entries (the game treats them
+        // as blanks) and reads them back.
+        let inputs = selection
+            .files
+            .iter()
+            .map(|(path, bytes)| VpkInput { path, bytes })
+            .collect::<Vec<_>>();
+        let merged = build(inputs).expect("a zero-length entry is a valid VPK entry");
+        let back = crate::vpk::extract_embedded(&merged).expect("reads back");
+        assert_eq!(back, selection.files);
+    }
+
+    #[test]
+    fn an_empty_file_is_not_a_way_around_the_type_rules() {
+        let bytes = build_unchecked(
+            2,
+            &[
+                ("models/heroes/keeper_of_the_light/ok.vmdl_c", b"ok"),
+                // Empty script and executable stay hostile.
+                ("panorama/scripts/empty.vjs_c", b""),
+                ("darkness/empty.exe", b""),
+                // An empty layout proves nothing.
+                (
+                    "panorama/images/spellicons/keeper_of_the_light_recall.vxml_c",
+                    b"",
+                ),
+                // An empty file of a type that is not installed is still that type.
+                ("darkness/blank.vcss_c", b""),
+            ],
+        );
+        let analysis =
+            analyze(&bytes, &spec(SharedPolicy::Install), &Limits::default()).expect("analysis");
+        let reasons = analysis
+            .report
+            .rejected_paths
+            .iter()
+            .map(|item| (item.path.as_str(), item.reason))
+            .collect::<BTreeMap<_, _>>();
+        assert_eq!(
+            reasons["panorama/scripts/empty.vjs_c"],
+            RejectReason::Script
+        );
+        assert_eq!(reasons["darkness/empty.exe"], RejectReason::Executable);
+        assert_eq!(
+            reasons["panorama/images/spellicons/keeper_of_the_light_recall.vxml_c"],
+            RejectReason::PanoramaUnproven
+        );
+        assert_eq!(
+            reasons["darkness/blank.vcss_c"],
+            RejectReason::TypeNotAllowed
+        );
+        assert!(analysis.report.hostile);
+    }
+
+    #[test]
+    fn files_the_game_does_not_load_are_ignored_and_counted_apart() {
+        let bytes = build_unchecked(
+            2,
+            &[
+                ("models/heroes/keeper_of_the_light/ok.vmdl_c", b"ok"),
+                // Uncompiled sources, tool and reading leftovers.
+                ("darkness/flame.vpcf", b"source"),
+                ("models/heroes/keeper_of_the_light/hood.fbx", b"fbx"),
+                ("darkness/README.txt", b"read me"),
+                ("darkness/effects_readme.txt", b"read me"),
+                ("README.txt", b""),
+                ("panorama/images/spellicons/thumbs.db", b"db"),
+                ("panorama/images/spellicons/imageCompiler.xml", b"<x/>"),
+                // A PNG outside the folders where Valve ships its own is a
+                // texture source.
+                (
+                    "materials/models/heroes/keeper_of_the_light/body.png",
+                    b"png",
+                ),
+                // Types that are dropped for real, so they are not ignored:
+                // media and styles the game may load, text the game reads,
+                // PNGs in the folders Valve ships PNGs in.
+                (
+                    "panorama/videos/heroes/npc_dota_hero_keeper_of_the_light.webm",
+                    b"v",
+                ),
+                ("panorama/styles/ui_econ_item.vcss_c", b"css"),
+                ("scripts/npc/npc_abilities_custom.txt", b"kv"),
+                ("resource/flash3/images/heroes/keeper.png", b"png"),
+                ("panorama/images/spellicons/x.png", b"png"),
+                (
+                    "resource/flash3/videos/portraits/npc_dota_hero_keeper.usm",
+                    b"usm",
+                ),
+            ],
+        );
+        let analysis =
+            analyze(&bytes, &spec(SharedPolicy::Install), &Limits::default()).expect("analysis");
+        let report = &analysis.report;
+        let reason_of = |path: &str| {
+            report
+                .rejected_paths
+                .iter()
+                .find(|item| item.path == path)
+                .unwrap_or_else(|| panic!("{path} is listed"))
+                .reason
+        };
+        for path in [
+            "darkness/flame.vpcf",
+            "models/heroes/keeper_of_the_light/hood.fbx",
+            "materials/models/heroes/keeper_of_the_light/body.png",
+        ] {
+            assert_eq!(reason_of(path), RejectReason::UncompiledSource, "{path}");
+        }
+        for path in [
+            "darkness/README.txt",
+            "darkness/effects_readme.txt",
+            "README.txt",
+            "panorama/images/spellicons/thumbs.db",
+            "panorama/images/spellicons/imageCompiler.xml",
+        ] {
+            assert_eq!(reason_of(path), RejectReason::NotGameFile, "{path}");
+        }
+        for path in [
+            "panorama/videos/heroes/npc_dota_hero_keeper_of_the_light.webm",
+            "panorama/styles/ui_econ_item.vcss_c",
+            "scripts/npc/npc_abilities_custom.txt",
+            "resource/flash3/images/heroes/keeper.png",
+            "panorama/images/spellicons/x.png",
+            "resource/flash3/videos/portraits/npc_dota_hero_keeper.usm",
+        ] {
+            assert_eq!(reason_of(path), RejectReason::TypeNotAllowed, "{path}");
+        }
+        assert_eq!(report.ignored.files, 8);
+        assert_eq!(report.rejected.files, 6);
+        assert!(!report.hostile);
+        assert_eq!(report.install.files, 1);
+        assert!(RejectReason::UncompiledSource.is_ignored());
+        assert!(RejectReason::NotGameFile.is_ignored());
+        assert!(!RejectReason::TypeNotAllowed.is_ignored());
+        assert!(!RejectReason::PanoramaScripted.is_ignored());
+    }
+
+    #[test]
+    fn layouts_are_installed_when_proven_and_listed_with_the_exact_reason_when_not() {
+        use crate::panorama_layout::{test_image_wrapper, test_text_wrapper};
+        // The three container spellings seen in third-party archives, each
+        // proven from its parsed structure.
+        let png_named = "panorama/images/heroes/npc_dota_hero_keeper_of_the_light_png.vxml_c";
+        let png_vtex = "panorama/images/heroes/npc_dota_hero_keeper_of_the_light_png.vtex";
+        let xml = format!(
+            "<root><Panel class=\"AddonLoadingRoot\"><Image id=\"gamemode\" class=\"SeqImg\" src=\"s2r://{png_vtex}\" /></Panel></root>"
+        );
+        let old_container =
+            "panorama/images/heroes/selection/npc_dota_hero_keeper_of_the_light_png.vxml_c";
+        let old_vtex =
+            "panorama/images/heroes/selection/npc_dota_hero_keeper_of_the_light_png.vtex";
+        let old_xml = xml.replace(png_vtex, old_vtex);
+        let scripted_xml = xml.replace("<Image ", "<Image onactivate=\"x()\" ");
+        let not_a_layout = "panorama/images/heroes/npc_dota_hero_keeper_of_the_light.vxml_c";
+        let files = vec![
+            (
+                "models/heroes/keeper_of_the_light/ok.vmdl_c".to_string(),
+                b"ok".to_vec(),
+            ),
+            (png_named.to_string(), test_image_wrapper(png_named, None)),
+            (
+                old_container.to_string(),
+                test_text_wrapper(&old_xml, Some(&[old_vtex.to_string()])),
+            ),
+            (
+                "panorama/images/spellicons/keeper_of_the_light_blink_png.vxml_c".to_string(),
+                test_text_wrapper(&scripted_xml, Some(&[png_vtex.to_string()])),
+            ),
+            (not_a_layout.to_string(), b"not even a resource".to_vec()),
+        ];
+        let bytes = archive(&files);
+        let analysis =
+            analyze(&bytes, &spec(SharedPolicy::Install), &Limits::default()).expect("analysis");
+        let report = &analysis.report;
+        assert_eq!(report.image_wrappers, 2);
+        assert_eq!(report.install.files, 3);
+        assert!(!report.hostile);
+        let reasons = report
+            .rejected_paths
+            .iter()
+            .map(|item| (item.path.as_str(), item.reason))
+            .collect::<BTreeMap<_, _>>();
+        assert_eq!(
+            reasons["panorama/images/spellicons/keeper_of_the_light_blink_png.vxml_c"],
+            RejectReason::PanoramaScripted
+        );
+        assert_eq!(reasons[not_a_layout], RejectReason::PanoramaUnproven);
+        // A scripted layout is a drop, not an ignored file.
+        assert_eq!(report.rejected.files, 2);
+        assert_eq!(report.ignored.files, 0);
     }
 
     #[test]
