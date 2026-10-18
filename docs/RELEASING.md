@@ -40,6 +40,19 @@ gh secret set TAURI_SIGNING_PRIVATE_KEY --repo zori-xyz/BetterFy < .release-sign
 Back up `.release-signing/updater.key` in a secure password manager or encrypted
 vault. Losing it prevents existing installations from accepting future updates.
 
+## Versions and Early Access numbers
+
+The product version is one SemVer kept in `package.json` (and
+`package-lock.json`), `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`
+(`Cargo.lock` follows). The installer, the registry entry and the About screen
+read it from there. Early Access builds are tagged `v<version>-ea.<run>`, where
+`<run>` is the GitHub Actions run number of the `Early Access Windows installer`
+workflow; it keeps counting across version bumps and is never reset. Bump the
+minor version for a milestone a person would call a different product (0.5.0
+marked the engine, builder, skin catalog, bot and installer together), the patch
+version for fixes in between, and record each bump in
+[CHANGELOG.md](../CHANGELOG.md). A signed updater accepts any higher SemVer.
+
 ## Publish a release
 
 1. Increase the same SemVer in `package.json`, `src-tauri/tauri.conf.json`, and
