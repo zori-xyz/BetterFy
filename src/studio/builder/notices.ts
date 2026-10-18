@@ -206,6 +206,10 @@ export const explainError = (code: string, isRu: boolean) => {
       "Архив меняет общие файлы игры, а для него выбрано «отказать». Установка остановлена.",
       "The archive changes shared game files and is set to refuse them. Installation stopped.",
     ],
+    build_too_large: [
+      "Все выбранные файлы вместе занимают больше 256 МБ: это предел одного файла сборки (pak-файла), который читает Dota. Убери один из крупных скинов или собери его отдельно от остального.",
+      "The selected files add up to more than 256 MB, the limit for the single build file (pak file) Dota reads. Remove one of the large skins or build it separately from the rest.",
+    ],
     skin_install_too_large: [
       "Набор слишком большой для одной сборки.",
       "This item is too large for one build.",
@@ -250,7 +254,7 @@ const groups: Array<{
     tone: "warn",
   },
   {
-    codes: ["bundle_limit_exceeded"],
+    codes: ["bundle_limit_exceeded", "build_too_large"],
     title: ["Сборка слишком большая", "The build is too big"],
     action: null,
     tone: "warn",
