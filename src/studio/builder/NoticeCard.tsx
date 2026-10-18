@@ -42,10 +42,17 @@ export function NoticeCard({
               {actionLabel}
             </button>
           )}
-          {!developer && (
+          {(!developer || notice.details.length > 0) && (
             <details>
               <summary>{isRu ? "Подробности" : "Details"}</summary>
-              <code>{notice.code}</code>
+              {notice.details.length > 0 && (
+                <ul className="b-notice-facts">
+                  {notice.details.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              )}
+              {!developer && <code>{notice.code}</code>}
             </details>
           )}
         </div>

@@ -998,7 +998,8 @@
   font-size: var(--s-text-md);
   overflow-wrap: anywhere;
 }
-.b-facts div:first-child {
+.b-facts div:first-child,
+.b-facts .b-facts-note {
   grid-column: 1 / -1;
 }
 .b-facts code,
@@ -1464,6 +1465,18 @@
   color: var(--s-quiet);
   cursor: pointer;
   font-size: var(--s-text-sm);
+}
+.b-notice-facts {
+  display: grid;
+  gap: 2px;
+  margin: 6px 0 4px;
+  padding: 0;
+  list-style: none;
+  color: var(--s-muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: var(--s-text-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 .b-notice-close {
   width: 28px;
