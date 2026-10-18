@@ -161,6 +161,8 @@ fn audit_cached_decor_archives() {
     // and what the other file types in these archives are.
     let (mut old_pass, mut old_scripted, mut old_unproven, mut layouts) = (0, 0, 0, 0);
     let mut other_types: BTreeMap<String, (usize, u64)> = BTreeMap::new();
+    let mut videos: BTreeMap<String, usize> = BTreeMap::new();
+    let mut video_sizes: Vec<usize> = Vec::new();
     let mut rng = 0x2545_F491_4F6C_DD1Du64;
     let mut mutations = 0usize;
     for folder in [
@@ -186,6 +188,17 @@ fn audit_cached_decor_archives() {
                         Err(panorama_layout::WrapperError::Scripted) => old_scripted += 1,
                         Err(panorama_layout::WrapperError::Unproven) => old_unproven += 1,
                     }
+                }
+                if name.ends_with(".webm") {
+                    let facts = check_webm(&bytes).expect("audited video");
+                    *videos
+                        .entry(format!(
+                            "{} + {}",
+                            facts.video_codec,
+                            facts.audio_codec.as_deref().unwrap_or("no audio")
+                        ))
+                        .or_default() += 1;
+                    video_sizes.push(bytes.len());
                 }
                 if kind_of(&name).is_none() {
                     let entry = other_types
@@ -234,6 +247,12 @@ fn audit_cached_decor_archives() {
         "== earlier image-wrapper rule over the same {layouts} layouts: {old_pass} accepted, {old_scripted} scripted, {old_unproven} unproven"
     );
     println!("== files of other types in these archives: {other_types:?}");
+    println!(
+        "== videos: {videos:?}, {} files, {}..{} bytes",
+        video_sizes.len(),
+        video_sizes.iter().min().unwrap_or(&0),
+        video_sizes.iter().max().unwrap_or(&0)
+    );
     println!("== {mutations} mutated real files read without a panic");
     if std::env::var("DECOR_PRINT_PINS").is_ok() {
         for (tag, id, attribute, code) in &pins {

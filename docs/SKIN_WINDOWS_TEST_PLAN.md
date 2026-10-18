@@ -276,6 +276,55 @@ can.
    conflicting path (the upstream guide says the lower number wins, so BetterFy's
    `pak65`), is not yet observed.
 
+## 6. Menu backgrounds, HUD skins and versus screens (draft until wired)
+
+Applies once the Panorama decor categories are installable (see
+[PANORAMA_DECOR_AUDIT.md](PANORAMA_DECOR_AUDIT.md); until then there is nothing
+to install and this section is a plan only). One item of each kind, chosen to
+cover the shapes the audit found. Do each alone first, then restore. Record the
+Dota build (`steam.inf`) and whether the Windows machine has a plain (non-ultrawide)
+display; backgrounds behave differently on 21:9.
+
+**6a. A background with a video** (suggest `backgrounds-ichigo`, about 7.5 MB).
+1. Install. The review should list the layouts, styles and the one video as
+   accepted, the layout kinds (pure decor and with Valve-bound handlers), and
+   `panorama/version.txt` as dropped (file type not installed). Record exactly what
+   it shows.
+2. Start Dota. Expected: the main menu shows the video behind the dashboard.
+   Check, and write down which of these still work, because the archive replaces
+   Valve's `dashboard.vxml_c` and `dashboard_page_home.vxml_c` with its own copies:
+   the Play, Heroes, Armory, Watch, Learn and Mods tabs, the search box, the
+   friends list, the settings button, Dota Plus menu, notifications, the Quit
+   button, and opening the Heroes page (the hero loadout background style is also
+   replaced). Anything missing, misplaced or unstyled is a finding, not a pass.
+3. Does the video loop, and does it have sound? (5 of 61 videos carry audio.)
+4. Restore. Expected: the default menu is back, `pakNN_dir.vpk` is gone.
+
+**6b. A HUD skin** (suggest `huds-green-hud`, 7.3 MB, then `huds-blue-web-hud`,
+textures only).
+1. Install, start a bot match (hero, abilities, inventory visible).
+2. Expected: the HUD shows the skin's colours and textures. Write down any element
+   that is unstyled, overlapping or illegible, the minimap, ability bar,
+   inventory, the Roshan timer and the top bar.
+3. Restore, and check the default HUD is back.
+
+**6c. A versus screen** (suggest `versus-screens-winter-versus-screen`, 4.7 KB).
+1. Install, start a match with a hero pick and watch the versus screen before the
+   loading finishes.
+2. Expected: the chosen scene instead of the default. If the default scene shows,
+   record it: it is possible that Dota does not read this layout from a mod VPK.
+3. Check the debug buttons that the layout contains (Play Scene, Fade Out When
+   Complete) are not visible during the normal screen.
+4. Restore.
+
+**6d. Failure behaviour.** Take a background archive, change one byte of its
+`dashboard.vxml_c` payload in a copy (the audit pins the archive hash, so the
+build must stop with the audit mismatch before anything is written). Record the
+code shown. This checks the pin, not the proof.
+
+Record for 6a to 6c: what Dota shows, what the review showed, the plan ID, the
+evidence report, and whether the main menu was usable throughout.
+
 ## What to capture
 
 For every step above that touches a file or the game:

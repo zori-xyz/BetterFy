@@ -234,6 +234,18 @@ time, not necessarily the player's patch; the build can also compare a skin with
 the player's own `pak01_dir.vpk` and report files the game ships now that the
 audit did not know (information only, see ENGINE_ARCHITECTURE).
 
+## Panorama decor (backgrounds, HUD skins, versus screens)
+
+Hero skins keep the rule above: `vcss_c`, `webm` and any layout that is not an image
+wrapper stay dropped. The other Panorama-based catalog categories bring whole layouts,
+style sheets and videos, and have their own proofs, which do not relax the hero-skin
+rule: see [PANORAMA_DECOR_AUDIT.md](PANORAMA_DECOR_AUDIT.md) and "Panorama decor proofs"
+in [ENGINE_ARCHITECTURE.md](ENGINE_ARCHITECTURE.md). In short: the real archives contain
+layouts that are copies of Valve's own with event handlers and Valve script includes, so
+those handlers pass only as pinned bindings; the styles and layouts are accepted only
+from a closed grammar; the videos only after a container check that does not decode. The
+proofs exist and are tested; they are not wired into the install pipeline.
+
 ## Not verified
 
 - Whether any skin works in the current Dota patch when BetterFy installs it.
