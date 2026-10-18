@@ -1,6 +1,8 @@
 //! Download, verification and bundling for the pinned, data-only packages
 //! described by `package_registry` manifests.
 
+use crate::game_deployment::{DeploymentPayload, DeploymentReceipt, PayloadFile};
+use crate::map_terrain::{self, LoadedMap, MapManifest, MapPlanItem};
 use crate::mod_bundle::{
     self, BundleContribution, BundleDuplicate, BundleOverride, BundlePackage, BundlePlan,
 };
@@ -606,6 +608,18 @@ fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
             Ok(contract.engine_id())
         })
         .collect::<Result<Vec<_>, String>>()?;
+    // A map terrain replaces the game's map package as a whole, so two of them
+    // cannot be installed together: the plan says so before anything is
+    // downloaded.
+    let mut maps = 0usize;
+    for id in &ids {
+        if matches!(resolve(id)?, Contract::Map(_)) {
+            maps += 1;
+        }
+    }
+    if maps > 1 {
+        return Err("map_terrain_conflict".to_string());
+    }
     // Minify's own conflicts and dependencies, checked before anything is
     // downloaded or built. A wardrobe item declares neither.
     for id in &ids {
@@ -629,6 +643,8 @@ enum Contract {
     /// An item and how it is installed: everything the analyzer accepts (the
     /// default) or, for the `.strip` ID, without the shared game files.
     Wardrobe(&'static WardrobeManifest, SharedPolicy),
+    /// A whole-map package installed as its own file, `maps/dota.vpk`.
+    Map(&'static MapManifest),
 }
 
 impl Contract {
@@ -636,6 +652,7 @@ impl Contract {
         match self {
             Self::Tuning(manifest) => manifest.id.clone(),
             Self::Wardrobe(item, policy) => wardrobe::variant_id(item, *policy),
+            Self::Map(item) => item.id.clone(),
         }
     }
 
@@ -645,6 +662,7 @@ impl Contract {
         match self {
             Self::Tuning(manifest) => &manifest.id,
             Self::Wardrobe(item, _) => &item.id,
+            Self::Map(item) => &item.id,
         }
     }
 }
@@ -652,6 +670,9 @@ impl Contract {
 fn resolve(id: &str) -> Result<Contract, String> {
     if let Some((item, policy)) = wardrobe::find_variant(id)? {
         return Ok(Contract::Wardrobe(item, policy));
+    }
+    if let Some(item) = map_terrain::find(id)? {
+        return Ok(Contract::Map(item));
     }
     package_registry::find(id).map(Contract::Tuning)
 }
@@ -661,7 +682,7 @@ fn resolve(id: &str) -> Result<Contract, String> {
 fn tuning(id: &str) -> Result<Option<&'static PackageManifest>, String> {
     match resolve(id)? {
         Contract::Tuning(manifest) => Ok(Some(manifest)),
-        Contract::Wardrobe(..) => Ok(None),
+        Contract::Wardrobe(..) | Contract::Map(_) => Ok(None),
     }
 }
 
@@ -671,9 +692,20 @@ fn contract(id: &str) -> Result<&'static PackageManifest, String> {
 }
 
 pub(crate) struct VerifiedTreeVpk {
+    /// The merged `pakNN_dir.vpk`; empty for a map-only build.
     bytes: Vec<u8>,
     sha256: String,
+    /// The plan of the merged packages. A map-only build has an empty one.
     bundle_plan: BundlePlan,
+    /// The map terrain of the build, installed as `maps/dota.vpk` beside (never
+    /// inside) the merged VPK.
+    map: Option<LoadedMap>,
+    /// Every package of the build in selection order, map included.
+    package_ids: Vec<String>,
+    /// The identity of the reviewed build: the bundle plan's when there is no
+    /// map (unchanged for every build that had none), otherwise a hash that
+    /// also binds the map package and the full ordered package list.
+    plan_id: String,
     /// What the analyzer found for each selected wardrobe item, in selection
     /// order. Empty for a build of tuning packages only.
     wardrobe: Vec<WardrobePlanItem>,
@@ -693,6 +725,11 @@ pub(crate) struct TreePilotPlan {
     resource_bytes: usize,
     vpk_bytes: usize,
     vpk_sha256: String,
+    /// Whether the build writes a `pakNN_dir.vpk` at all (a map-only build
+    /// does not).
+    has_pak: bool,
+    /// The map terrain of the build, written as `maps/dota.vpk`.
+    map: Option<MapPlanItem>,
     bundle_plan_id: String,
     package_count: usize,
     duplicate_resources: usize,
@@ -719,11 +756,66 @@ impl VerifiedTreeVpk {
     }
 
     pub(crate) fn plan_id(&self) -> &str {
-        &self.bundle_plan.plan_id
+        &self.plan_id
     }
 
     pub(crate) fn bundle_plan(&self) -> &BundlePlan {
         &self.bundle_plan
+    }
+
+    /// Every package of the build in selection order, map included; this is
+    /// the list the deployment records.
+    pub(crate) fn package_ids(&self) -> &[String] {
+        &self.package_ids
+    }
+
+    pub(crate) fn has_pak(&self) -> bool {
+        !self.bytes.is_empty()
+    }
+
+    pub(crate) fn map(&self) -> Option<&LoadedMap> {
+        self.map.as_ref()
+    }
+
+    /// The files an install writes.
+    pub(crate) fn payload(&self) -> DeploymentPayload<'_> {
+        DeploymentPayload {
+            pak: self.has_pak().then_some(PayloadFile {
+                bytes: &self.bytes,
+                sha256: &self.sha256,
+            }),
+            map: self.map.as_ref().map(|map| PayloadFile {
+                bytes: &map.bytes,
+                sha256: &map.sha256,
+            }),
+        }
+    }
+
+    /// The hash that identifies what the build installs: the merged VPK's, or
+    /// the map's for a map-only build.
+    pub(crate) fn primary_sha256(&self) -> &str {
+        if self.has_pak() {
+            &self.sha256
+        } else {
+            self.map.as_ref().map_or("", |map| map.sha256.as_str())
+        }
+    }
+
+    /// Whether an installed deployment is exactly this build: same files, same
+    /// reviewed plan. A record from before plans were bound is compared by
+    /// its hashes alone.
+    pub(crate) fn matches_receipt(&self, receipt: &DeploymentReceipt) -> bool {
+        receipt.has_pak == self.has_pak()
+            && receipt.installed_sha256 == self.primary_sha256()
+            && receipt
+                .map
+                .as_ref()
+                .and_then(|map| map.installed_sha256.as_deref())
+                == self.map.as_ref().map(|map| map.sha256.as_str())
+            && receipt
+                .bundle_plan_id
+                .as_deref()
+                .is_none_or(|plan| plan == self.plan_id())
     }
 
     /// A build with a wardrobe path conflict installs only after the person
@@ -751,6 +843,9 @@ pub(crate) fn verified_test_vpk() -> VerifiedTreeVpk {
         bytes: bundle.bytes().to_vec(),
         sha256: bundle.sha256().to_string(),
         bundle_plan: bundle.plan().clone(),
+        map: None,
+        package_ids: bundle.plan().package_ids.clone(),
+        plan_id: bundle.plan().plan_id.clone(),
         wardrobe: Vec::new(),
         wardrobe_conflicts: Vec::new(),
     }
@@ -808,6 +903,17 @@ fn acquire_verified_resources_with_progress(
                     return Err("download_cancelled".to_string());
                 }
                 wardrobe::acquire(app_data_root, item, cancelled)?;
+                index += 1;
+                progress(index);
+                continue;
+            }
+            // One pinned archive as well: its map package is fetched,
+            // verified and stored as a unit.
+            Contract::Map(item) => {
+                if cancelled.load(Ordering::Relaxed) {
+                    return Err("download_cancelled".to_string());
+                }
+                map_terrain::acquire(app_data_root, item, cancelled)?;
                 index += 1;
                 progress(index);
                 continue;
@@ -1001,11 +1107,22 @@ pub(crate) fn build_from_verified_store(
     requested_package_ids: &[String],
 ) -> Result<VerifiedTreeVpk, String> {
     let package_ids = normalize_package_ids(requested_package_ids)?;
+    // The map is not merged into the VPK: it is read on its own, and the
+    // merged packages are everything else, in selection order.
+    let mut map = None;
+    let mut bundle_ids = Vec::new();
+    for package_id in &package_ids {
+        match resolve(package_id)? {
+            Contract::Map(item) => map = Some(map_terrain::load(app_data_root, item)?),
+            _ => bundle_ids.push(package_id.clone()),
+        }
+    }
     let mut wardrobe_items = Vec::new();
-    let packages = package_ids
+    let packages = bundle_ids
         .iter()
         .map(|package_id| {
             let manifest = match resolve(package_id)? {
+                Contract::Map(_) => return Err("pilot_package_invalid".to_string()),
                 Contract::Tuning(manifest) => manifest,
                 // The analyzer re-checks the stored archive against its audit
                 // and returns only the files that audit allows.
@@ -1071,31 +1188,93 @@ pub(crate) fn build_from_verified_store(
         })
         .collect::<Result<Vec<_>, String>>()?;
     let mut packages = packages;
-    apply_panorama_styles(app_data_root, &package_ids, &mut packages)?;
-    apply_panorama_layouts(app_data_root, &package_ids, &mut packages)?;
-    build_verified_bundle(packages, wardrobe_items)
+    apply_panorama_styles(app_data_root, &bundle_ids, &mut packages)?;
+    apply_panorama_layouts(app_data_root, &bundle_ids, &mut packages)?;
+    assemble(package_ids, packages, wardrobe_items, map)
+}
+
+/// The identity of a build that carries a map: the merged packages' plan (if
+/// any), the full ordered package list and the map package itself (its hash
+/// and the analyzer's contents identity). A build without a map keeps its
+/// bundle plan's identity unchanged.
+fn map_plan_id(bundle: &BundlePlan, package_ids: &[String], map: &LoadedMap) -> String {
+    let mut hasher = Sha256::new();
+    for part in [
+        "betterfy-map-plan-v1",
+        bundle.plan_id.as_str(),
+        &package_ids.join("\n"),
+        map.item.package_id.as_str(),
+        map.sha256.as_str(),
+        map.item.report.identity.as_str(),
+    ] {
+        hasher.update((part.len() as u64).to_le_bytes());
+        hasher.update(part.as_bytes());
+    }
+    format!("sha256:{:x}", hasher.finalize())
+}
+
+/// Joins the merged packages and the map into one reviewed build.
+fn assemble(
+    package_ids: Vec<String>,
+    packages: Vec<BundlePackage>,
+    wardrobe: Vec<WardrobePlanItem>,
+    map: Option<LoadedMap>,
+) -> Result<VerifiedTreeVpk, String> {
+    let mut verified = if packages.is_empty() {
+        // A map and nothing to merge: there is no `pakNN_dir.vpk`.
+        if map.is_none() {
+            return Err("pilot_package_unsupported".to_string());
+        }
+        VerifiedTreeVpk {
+            bytes: Vec::new(),
+            sha256: String::new(),
+            bundle_plan: BundlePlan {
+                plan_id: String::new(),
+                package_ids: Vec::new(),
+                resource_count: 0,
+                payload_bytes: 0,
+                duplicates: Vec::new(),
+                overrides: Vec::new(),
+                contributions: Vec::new(),
+            },
+            map: None,
+            package_ids: Vec::new(),
+            plan_id: String::new(),
+            wardrobe,
+            wardrobe_conflicts: Vec::new(),
+        }
+    } else {
+        build_verified_bundle(packages, wardrobe)?
+    };
+    if let Some(map) = map {
+        verified.plan_id = map_plan_id(&verified.bundle_plan, &package_ids, &map);
+        verified.map = Some(map);
+    }
+    verified.package_ids = package_ids;
+    Ok(verified)
 }
 
 fn plan_for(verified: &VerifiedTreeVpk) -> TreePilotPlan {
     let hash = verified.sha256().to_string();
     let commits = verified
-        .bundle_plan()
-        .package_ids
+        .package_ids()
         .iter()
         .filter_map(|id| source_commit(id).ok())
         .collect::<BTreeSet<_>>();
     TreePilotPlan {
         plan_id: verified.plan_id().to_string(),
-        package_id: verified.bundle_plan().package_ids.join("+"),
-        package_ids: verified.bundle_plan().package_ids.clone(),
+        package_id: verified.package_ids().join("+"),
+        package_ids: verified.package_ids().to_vec(),
         source_commit: commits.into_iter().collect::<Vec<_>>().join(","),
         target_file: TARGET_FILE,
         resource_count: verified.bundle_plan().resource_count,
         resource_bytes: verified.bundle_plan().payload_bytes,
         vpk_bytes: verified.bytes().len(),
         vpk_sha256: hash,
+        has_pak: verified.has_pak(),
+        map: verified.map().map(|map| map.item.clone()),
         bundle_plan_id: verified.bundle_plan().plan_id.clone(),
-        package_count: verified.bundle_plan().package_ids.len(),
+        package_count: verified.package_ids().len(),
         duplicate_resources: verified.bundle_plan().duplicates.len(),
         overridden_resources: verified.bundle_plan().overrides.len(),
         duplicates: verified.bundle_plan().duplicates.clone(),
@@ -1212,6 +1391,9 @@ fn build_verified_bundle(
         bytes: bundle.bytes().to_vec(),
         sha256: bundle.sha256().to_string(),
         bundle_plan: bundle.plan().clone(),
+        map: None,
+        package_ids: bundle.plan().package_ids.clone(),
+        plan_id: bundle.plan().plan_id.clone(),
         wardrobe,
         wardrobe_conflicts,
     })
@@ -1893,6 +2075,240 @@ mod tests {
         assert_eq!(again.plan_id(), verified.plan_id());
         let reopened = vpk::inspect(verified.bytes()).expect("the VPK reopens");
         assert_eq!(reopened.entries, item.audited.install_files);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    // -- map terrains -------------------------------------------------------
+
+    /// Registers a synthetic map and stores its package, as acquiring does.
+    fn stored_map(
+        root: &Path,
+        slug: &str,
+        label: &'static [u8],
+    ) -> &'static crate::map_terrain::MapManifest {
+        let (manifest, _zip, vpk) = crate::map_terrain::fixtures::synthetic_item(slug, label);
+        crate::content_store::store_pinned_resource(
+            root,
+            manifest.archive.inner_bytes,
+            &manifest.archive.inner_sha256,
+            &vpk,
+        )
+        .expect("store map");
+        crate::map_terrain::register_for_test(manifest)
+    }
+
+    fn fake_game(base: &Path) -> std::path::PathBuf {
+        let dota = base.join("dota 2 beta");
+        std::fs::create_dir_all(dota.join("game/dota")).expect("game");
+        std::fs::write(dota.join("game/dota/pak01_dir.vpk"), b"official-marker").expect("marker");
+        let executable = if cfg!(target_os = "windows") {
+            dota.join("game/bin/win64/dota2.exe")
+        } else if cfg!(target_os = "macos") {
+            dota.join("game/bin/osx64/dota2")
+        } else {
+            dota.join("game/bin/linuxsteamrt64/dota2")
+        };
+        std::fs::create_dir_all(executable.parent().expect("parent")).expect("bin");
+        std::fs::write(executable, b"executable-marker").expect("exe");
+        dota
+    }
+
+    #[test]
+    fn a_map_alone_builds_a_plan_with_no_pak_file() {
+        let root = wardrobe_root("map-alone");
+        let map = stored_map(&root, "plan-alone", b"alone");
+        let ids = vec![map.catalog_id.clone()];
+        assert_eq!(
+            normalize_package_ids(&ids).expect("resolves"),
+            vec![map.id.clone()]
+        );
+        // Everything is already in the store, so acquiring needs no network.
+        let mut seen = 0;
+        acquire_verified_resources_with_progress(&root, &ids, &AtomicBool::new(false), |count| {
+            seen = count
+        })
+        .expect("stored map is reused");
+        assert_eq!(seen, 1);
+        let verified = build_from_verified_store(&root, &ids).expect("builds");
+        assert!(!verified.has_pak());
+        assert!(verified.bytes().is_empty());
+        assert_eq!(verified.package_ids(), std::slice::from_ref(&map.id));
+        assert_eq!(verified.primary_sha256(), map.archive.inner_sha256);
+        assert!(verified.plan_id().starts_with("sha256:") && verified.plan_id().len() == 71);
+        let payload = verified.payload();
+        assert!(payload.pak.is_none());
+        assert_eq!(
+            payload.map.map(|file| file.sha256),
+            Some(map.archive.inner_sha256.as_str())
+        );
+        let json = serde_json::to_value(plan_for(&verified)).expect("plan json");
+        assert_eq!(json["hasPak"], false);
+        assert_eq!(json["vpkBytes"], 0);
+        assert_eq!(json["packageCount"], 1);
+        assert_eq!(json["map"]["packageId"], map.id.as_str());
+        assert_eq!(json["map"]["file"], "maps/dota.vpk");
+        assert_eq!(json["map"]["sha256"], map.archive.inner_sha256.as_str());
+        assert_eq!(json["map"]["valveOverlap"], 0);
+        assert_eq!(json["map"]["report"]["mainMap"], true);
+        assert_eq!(json["map"]["report"]["entries"], 4);
+        assert_eq!(json["wardrobe"], serde_json::json!([]));
+        let again = build_from_verified_store(&root, &ids).expect("rebuild");
+        assert_eq!(again.plan_id(), verified.plan_id(), "deterministic");
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_map_beside_a_skin_binds_the_map_into_the_plan_and_leaves_the_pak_alone() {
+        let root = wardrobe_root("map-and-skin");
+        let skin = stored_item(&root, "plan-skin", b"hood");
+        let map = stored_map(&root, "plan-with-skin", b"with skin");
+        let other = stored_map(&root, "plan-other", b"other map");
+        let skin_only =
+            build_from_verified_store(&root, std::slice::from_ref(&skin.id)).expect("skin alone");
+        let ids = vec![skin.id.clone(), map.id.clone()];
+        let both = build_from_verified_store(&root, &ids).expect("skin and map");
+        // The merged VPK is the very same file; only the identity changes.
+        assert_eq!(both.bytes(), skin_only.bytes());
+        assert_eq!(both.sha256(), skin_only.sha256());
+        assert_eq!(both.bundle_plan().plan_id, skin_only.bundle_plan().plan_id);
+        assert_ne!(both.plan_id(), skin_only.plan_id());
+        assert_eq!(both.plan_id().len(), 71);
+        assert_eq!(both.package_ids(), [skin.id.clone(), map.id.clone()]);
+        assert_eq!(both.primary_sha256(), both.sha256());
+        // The reviewed identity moves with the map and with the order.
+        let other_ids = vec![skin.id.clone(), other.id.clone()];
+        let with_other = build_from_verified_store(&root, &other_ids).expect("other map");
+        assert_ne!(with_other.plan_id(), both.plan_id());
+        let swapped = vec![map.id.clone(), skin.id.clone()];
+        let reordered = build_from_verified_store(&root, &swapped).expect("map first");
+        assert_ne!(reordered.plan_id(), both.plan_id());
+        let json = serde_json::to_value(plan_for(&both)).expect("plan json");
+        assert_eq!(json["hasPak"], true);
+        assert_eq!(json["packageCount"], 2);
+        assert_eq!(json["packageIds"], serde_json::json!([skin.id, map.id]));
+        assert_eq!(json["map"]["packageId"], map.id.as_str());
+        assert_eq!(json["wardrobe"][0]["packageId"], skin.id.as_str());
+        // Two maps conflict, and the engine says so before downloading.
+        let two = vec![map.id.clone(), other.id.clone()];
+        assert_eq!(
+            normalize_package_ids(&two).err().as_deref(),
+            Some("map_terrain_conflict")
+        );
+        assert_eq!(
+            build_from_verified_store(&root, &two).err().as_deref(),
+            Some("map_terrain_conflict")
+        );
+        // A map has no shared-files mode.
+        assert!(normalize_package_ids(&[format!("{}.strip", map.id)]).is_err());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_map_that_is_not_in_the_store_or_drifted_from_its_audit_is_refused() {
+        let root = wardrobe_root("map-drift");
+        let (manifest, _zip, _vpk) =
+            crate::map_terrain::fixtures::synthetic_item("plan-missing", b"missing");
+        let missing = crate::map_terrain::register_for_test(manifest);
+        assert!(build_from_verified_store(&root, std::slice::from_ref(&missing.id)).is_err());
+        // A manifest whose audit does not describe the stored bytes.
+        let (mut drifted, _zip, vpk) =
+            crate::map_terrain::fixtures::synthetic_item("plan-drifted", b"drifted");
+        crate::content_store::store_pinned_resource(
+            &root,
+            drifted.archive.inner_bytes,
+            &drifted.archive.inner_sha256,
+            &vpk,
+        )
+        .expect("store");
+        drifted.audited.report.entries += 0;
+        drifted.audited.report.identity = "e".repeat(64);
+        let drifted = crate::map_terrain::register_for_test(drifted);
+        assert_eq!(
+            build_from_verified_store(&root, std::slice::from_ref(&drifted.id))
+                .err()
+                .as_deref(),
+            Some("map_audit_mismatch")
+        );
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_staged_map_build_reopens_and_installs_and_restores_end_to_end() {
+        use crate::game_deployment as deployment;
+        let root = wardrobe_root("map-e2e");
+        let dota = fake_game(&root);
+        let app = root.clone();
+        let skin = stored_item(&root, "e2e-skin", b"hood");
+        let map = stored_map(&root, "e2e-map", b"e2e");
+        let ids = vec![skin.id.clone(), map.id.clone()];
+        let verified = build_from_verified_store(&root, &ids).expect("builds");
+        let staged = stage_from_verified_store(&root, verified.plan_id(), &ids, true)
+            .expect("stages both files");
+        assert_eq!(
+            serde_json::to_value(&staged).expect("receipt json")["stagedFiles"],
+            2
+        );
+        let reopened = crate::build_engine::verified_staged_files(
+            &root,
+            &staged.operation_id,
+            verified.plan_id(),
+        )
+        .expect("reopens");
+        assert_eq!(
+            reopened.pak.as_ref().map(|file| file.sha256.as_str()),
+            Some(verified.sha256())
+        );
+        assert_eq!(
+            reopened.map.as_ref().map(|file| file.bytes.as_slice()),
+            verified.map().map(|map| map.bytes.as_slice())
+        );
+        // The single-file contract does not accept a build with a map.
+        assert_eq!(
+            crate::build_engine::verified_staged_vpk(
+                &root,
+                &staged.operation_id,
+                verified.plan_id()
+            )
+            .err()
+            .as_deref(),
+            Some("staged_vpk_not_ready")
+        );
+        // A different reviewed plan does not reopen it.
+        assert!(crate::build_engine::verified_staged_files(
+            &root,
+            &staged.operation_id,
+            &format!("sha256:{}", "0".repeat(64)),
+        )
+        .is_err());
+
+        let receipt = deployment::deploy_verified_payload_for_language(
+            &app,
+            &dota,
+            verified.payload(),
+            crate::game_language::GameLanguage::Russian,
+            deployment::DeploymentBundleIdentity {
+                plan_id: Some(verified.plan_id().to_string()),
+                package_ids: verified.package_ids().to_vec(),
+            },
+        )
+        .expect("deploys both");
+        assert!(verified.matches_receipt(&receipt));
+        assert_eq!(receipt.package_ids, [skin.id.clone(), map.id.clone()]);
+        let current = deployment::current_owned_deployment(&app, &dota)
+            .expect("current")
+            .expect("owned");
+        assert!(verified.matches_receipt(&current));
+        // The same build without the map is a different build.
+        let skin_only =
+            build_from_verified_store(&root, std::slice::from_ref(&skin.id)).expect("skin alone");
+        assert!(!skin_only.matches_receipt(&current));
+        // And so is a map-only build.
+        let map_only =
+            build_from_verified_store(&root, std::slice::from_ref(&map.id)).expect("map alone");
+        assert!(!map_only.matches_receipt(&current));
+        assert!(dota.join("game/dota_russian/maps/dota.vpk").is_file());
+        deployment::rollback(&app, &dota, &receipt.operation_id).expect("restore");
+        assert!(!dota.join("game/dota_russian").exists());
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 }

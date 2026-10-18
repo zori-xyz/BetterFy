@@ -11,6 +11,10 @@ use crate::content_store::{self, ContentIntakeRequest, FixturePackageContract};
 
 const ENGINE_SCHEMA_VERSION: u32 = 1;
 const VERIFIED_BUNDLE_OWNER: &str = "betterfy.verified-bundle";
+const VERIFIED_MAP_OWNER: &str = "betterfy.verified-map";
+/// Where a staged map package sits in the staging folder, as it will sit in
+/// the language folder.
+const STAGED_MAP_FILE: &str = "maps/dota.vpk";
 const MAX_OPERATION_FILES: usize = 256;
 /// The same cap as the merged VPK and the deployment (256 MiB). A single
 /// audited skin is often 50 MiB or more, so a lower bound here refused every
@@ -509,7 +513,6 @@ pub(crate) fn stage_verified_vpk_with_failure(
     confirmed: bool,
     failure: FailurePoint,
 ) -> Result<BuildReceipt, String> {
-    let vpk_bytes = verified.bytes();
     if !confirmed {
         return Err("build_confirmation_required".to_string());
     }
@@ -517,9 +520,27 @@ pub(crate) fn stage_verified_vpk_with_failure(
     if expected_plan_id != actual_plan_id {
         return Err("build_plan_stale".to_string());
     }
-    crate::vpk::inspect(vpk_bytes).map_err(|_| "verification_failed".to_string())?;
-    if vpk_bytes.len() as u64 > MAX_STAGED_BYTES {
-        return Err("build_too_large".to_string());
+    // What the build writes: the merged VPK (unless the build is a map alone)
+    // and, for a map terrain, `maps/dota.vpk` beside it.
+    let mut staged_inputs: Vec<(&str, &str, &[u8])> = Vec::new();
+    if verified.has_pak() {
+        staged_inputs.push((
+            VERIFIED_BUNDLE_OWNER,
+            crate::tree_pilot::TARGET_FILE,
+            verified.bytes(),
+        ));
+    }
+    if let Some(map) = verified.map() {
+        staged_inputs.push((VERIFIED_MAP_OWNER, STAGED_MAP_FILE, map.bytes.as_slice()));
+    }
+    if staged_inputs.is_empty() {
+        return Err("verification_failed".to_string());
+    }
+    for (owner, _, bytes) in &staged_inputs {
+        inspect_staged(owner, bytes)?;
+        if bytes.len() as u64 > MAX_STAGED_BYTES {
+            return Err("build_too_large".to_string());
+        }
     }
     let (operations_root, journals_root) = prepare_owned_roots(app_data_root)?;
     let operation_id = new_operation_id()?;
@@ -531,40 +552,50 @@ pub(crate) fn stage_verified_vpk_with_failure(
     reject_symlink(&staging_root)?;
     let journal_path = journals_root.join(format!("{operation_id}.json"));
     let timestamp = now_ms()?;
-    let file_hash = sha256(vpk_bytes);
     let mut journal = BuildJournal {
         schema_version: ENGINE_SCHEMA_VERSION,
         operation_id: operation_id.clone(),
         plan_id: actual_plan_id.clone(),
-        package_ids: verified.bundle_plan().package_ids.clone(),
+        package_ids: verified.package_ids().to_vec(),
         phase: OperationPhase::Staging,
         created_at_ms: timestamp,
         updated_at_ms: timestamp,
         staged_root: staging_root.to_string_lossy().into_owned(),
-        files: vec![JournalFile {
-            owner_id: VERIFIED_BUNDLE_OWNER.to_string(),
-            destination: crate::tree_pilot::TARGET_FILE.to_string(),
-            expected_sha256: file_hash.clone(),
-            actual_sha256: None,
-            size: vpk_bytes.len() as u64,
-            staged: false,
-        }],
+        files: staged_inputs
+            .iter()
+            .map(|(owner, destination, bytes)| JournalFile {
+                owner_id: (*owner).to_string(),
+                destination: (*destination).to_string(),
+                expected_sha256: sha256(bytes),
+                actual_sha256: None,
+                size: bytes.len() as u64,
+                staged: false,
+            })
+            .collect(),
         error_code: None,
     };
     atomic_write_json(&journal_path, &journal)?;
     let result = (|| {
-        let target = staging_root.join(crate::tree_pilot::TARGET_FILE);
-        let mut file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&target)
-            .map_err(|_| "build_failed".to_string())?;
-        file.write_all(vpk_bytes)
-            .and_then(|_| file.sync_all())
-            .map_err(|_| "build_failed".to_string())?;
-        journal.files[0].staged = true;
-        if failure == FailurePoint::AfterFirstWrite {
-            return Err("injected_failure".to_string());
+        for (index, (_, destination, bytes)) in staged_inputs.iter().enumerate() {
+            let target = staging_root.join(destination);
+            if let Some(parent) = target.parent() {
+                if parent != staging_root {
+                    fs::create_dir_all(parent).map_err(|_| "build_failed".to_string())?;
+                    reject_symlink(parent)?;
+                }
+            }
+            let mut file = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&target)
+                .map_err(|_| "build_failed".to_string())?;
+            file.write_all(bytes)
+                .and_then(|_| file.sync_all())
+                .map_err(|_| "build_failed".to_string())?;
+            journal.files[index].staged = true;
+            if failure == FailurePoint::AfterFirstWrite && index == 0 {
+                return Err("injected_failure".to_string());
+            }
         }
         journal.phase = OperationPhase::Verifying;
         journal.updated_at_ms = now_ms()?;
@@ -572,12 +603,17 @@ pub(crate) fn stage_verified_vpk_with_failure(
         if failure == FailurePoint::BeforeVerification {
             return Err("injected_failure".to_string());
         }
-        let reopened = fs::read(&target).map_err(|_| "verification_failed".to_string())?;
-        if reopened.len() != vpk_bytes.len() || sha256(&reopened) != file_hash {
-            return Err("verification_failed".to_string());
+        for (index, (owner, destination, bytes)) in staged_inputs.iter().enumerate() {
+            let target = staging_root.join(destination);
+            reject_symlink(&target)?;
+            let reopened = fs::read(&target).map_err(|_| "verification_failed".to_string())?;
+            let file_hash = sha256(bytes);
+            if reopened.len() != bytes.len() || sha256(&reopened) != file_hash {
+                return Err("verification_failed".to_string());
+            }
+            inspect_staged(owner, &reopened)?;
+            journal.files[index].actual_sha256 = Some(file_hash);
         }
-        crate::vpk::inspect(&reopened).map_err(|_| "verification_failed".to_string())?;
-        journal.files[0].actual_sha256 = Some(file_hash);
         journal.phase = OperationPhase::Ready;
         journal.updated_at_ms = now_ms()?;
         atomic_write_json(&journal_path, &journal)?;
@@ -595,10 +631,27 @@ pub(crate) fn stage_verified_vpk_with_failure(
         plan_id: actual_plan_id,
         phase: OperationPhase::Ready,
         staged_root: staging_root.to_string_lossy().into_owned(),
-        staged_files: 1,
-        staged_bytes: vpk_bytes.len() as u64,
+        staged_files: staged_inputs.len(),
+        staged_bytes: staged_inputs
+            .iter()
+            .map(|(_, _, bytes)| bytes.len() as u64)
+            .sum(),
         checksums_verified: true,
     })
+}
+
+/// A staged file must still be what its owner says it is: a well-formed
+/// merged VPK, or a well-formed whole-map package.
+fn inspect_staged(owner: &str, bytes: &[u8]) -> Result<(), String> {
+    if owner == VERIFIED_MAP_OWNER {
+        crate::map_package::analyze(bytes)
+            .map(|_| ())
+            .map_err(|_| "verification_failed".to_string())
+    } else {
+        crate::vpk::inspect(bytes)
+            .map(|_| ())
+            .map_err(|_| "verification_failed".to_string())
+    }
 }
 
 fn execute_build_with_failure(
@@ -743,11 +796,21 @@ fn validate_operation_id(operation_id: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) fn verified_staged_vpk(
+/// The files of a staged build, each re-read and re-hashed.
+pub(crate) struct VerifiedStagedFiles {
+    pub pak: Option<VerifiedStagedVpk>,
+    pub map: Option<VerifiedStagedVpk>,
+}
+
+/// Re-opens a staged build: its journal must be `Ready` for exactly the
+/// reviewed plan, and every file named in it must still match its recorded
+/// size and SHA-256 and be a well-formed VPK. A build holds the merged VPK, a
+/// map package, or both.
+pub(crate) fn verified_staged_files(
     app_data_root: &Path,
     operation_id: &str,
     expected_plan_id: &str,
-) -> Result<VerifiedStagedVpk, String> {
+) -> Result<VerifiedStagedFiles, String> {
     validate_operation_id(operation_id)?;
     if expected_plan_id.len() != 71 || !expected_plan_id.starts_with("sha256:") {
         return Err("build_plan_stale".to_string());
@@ -757,14 +820,8 @@ pub(crate) fn verified_staged_vpk(
     if journal.operation_id != operation_id
         || journal.plan_id != expected_plan_id
         || journal.phase != OperationPhase::Ready
-        || journal.files.len() != 1
-    {
-        return Err("staged_vpk_not_ready".to_string());
-    }
-    let file = &journal.files[0];
-    if !file.staged
-        || file.destination != "pak66_dir.vpk"
-        || file.actual_sha256.as_deref() != Some(file.expected_sha256.as_str())
+        || journal.files.is_empty()
+        || journal.files.len() > 2
     {
         return Err("staged_vpk_not_ready".to_string());
     }
@@ -788,23 +845,66 @@ pub(crate) fn verified_staged_vpk(
     {
         return Err("staged_vpk_not_ready".to_string());
     }
-    let target = canonical_staging.join("pak66_dir.vpk");
-    reject_symlink(&target)?;
-    let canonical_target = target
-        .canonicalize()
-        .map_err(|_| "staged_vpk_not_ready".to_string())?;
-    if !canonical_target.starts_with(&canonical_staging) || !canonical_target.is_file() {
-        return Err("staged_vpk_not_ready".to_string());
+    let mut files = VerifiedStagedFiles {
+        pak: None,
+        map: None,
+    };
+    for file in &journal.files {
+        let is_map = match (file.owner_id.as_str(), file.destination.as_str()) {
+            (VERIFIED_BUNDLE_OWNER, "pak66_dir.vpk") => false,
+            (VERIFIED_MAP_OWNER, STAGED_MAP_FILE) => true,
+            _ => return Err("staged_vpk_not_ready".to_string()),
+        };
+        if !file.staged || file.actual_sha256.as_deref() != Some(file.expected_sha256.as_str()) {
+            return Err("staged_vpk_not_ready".to_string());
+        }
+        let target = canonical_staging.join(&file.destination);
+        if let Some(parent) = target.parent() {
+            reject_symlink(parent)?;
+        }
+        reject_symlink(&target)?;
+        let canonical_target = target
+            .canonicalize()
+            .map_err(|_| "staged_vpk_not_ready".to_string())?;
+        if !canonical_target.starts_with(&canonical_staging) || !canonical_target.is_file() {
+            return Err("staged_vpk_not_ready".to_string());
+        }
+        let bytes = fs::read(canonical_target).map_err(|_| "staged_vpk_not_ready".to_string())?;
+        if bytes.len() as u64 != file.size || sha256(&bytes) != file.expected_sha256 {
+            return Err("verification_failed".to_string());
+        }
+        inspect_staged(&file.owner_id, &bytes).map_err(|_| "staged_vpk_not_ready".to_string())?;
+        let slot = if is_map {
+            &mut files.map
+        } else {
+            &mut files.pak
+        };
+        if slot.is_some() {
+            return Err("staged_vpk_not_ready".to_string());
+        }
+        *slot = Some(VerifiedStagedVpk {
+            bytes,
+            sha256: file.expected_sha256.clone(),
+        });
     }
-    let bytes = fs::read(canonical_target).map_err(|_| "staged_vpk_not_ready".to_string())?;
-    if bytes.len() as u64 != file.size || sha256(&bytes) != file.expected_sha256 {
-        return Err("verification_failed".to_string());
+    Ok(files)
+}
+
+/// The merged VPK of a staged build that has no map (the debug deployment
+/// command and the single-file contract).
+pub(crate) fn verified_staged_vpk(
+    app_data_root: &Path,
+    operation_id: &str,
+    expected_plan_id: &str,
+) -> Result<VerifiedStagedVpk, String> {
+    let files = verified_staged_files(app_data_root, operation_id, expected_plan_id)?;
+    match files {
+        VerifiedStagedFiles {
+            pak: Some(pak),
+            map: None,
+        } => Ok(pak),
+        _ => Err("staged_vpk_not_ready".to_string()),
     }
-    crate::vpk::inspect(&bytes).map_err(|_| "staged_vpk_not_ready".to_string())?;
-    Ok(VerifiedStagedVpk {
-        bytes,
-        sha256: file.expected_sha256.clone(),
-    })
 }
 
 pub fn rollback_operation(
