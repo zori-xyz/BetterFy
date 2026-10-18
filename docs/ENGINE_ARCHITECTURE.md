@@ -616,7 +616,7 @@ out is an explicit per-skin opt-in (see "Install modes").
 app, like the audited scripts: a signed catalog cannot add one, and the package registry
 reserves the `wardrobe.` namespace and the catalog IDs of the entries. All entries are one
 generated JSON array, `src-tauri/wardrobe/manifests.json` (compact, sorted by ID, about
-0.8 MB for the 499 entries), and `index.json` is the interface's copy (names, authors,
+0.87 MB for the 500 entries), and `index.json` is the interface's copy (names, authors,
 heroes, sizes; about 0.14 MB). A test requires both files to be exactly what the
 generator would write for the embedded manifests, so the interface cannot list an item the
 engine does not know. An entry pins
@@ -662,12 +662,22 @@ and CRC mismatches refuse the file) and classifies each path:
 
 - *Type.* Only compiled `vpcf_c`, `vsnap_c`, `vtex_c`, `vmat_c`, `vmdl_c`, `vmesh_c`,
   `vanim_c`, `vsndevts_c`, `vsnd_c`, `vmorf_c`, `vagrp_c`, `vphys_c` and `vseq_c` pass.
-  Scripts, uncompiled sources, executables, empty files, oversized files, case-colliding
-  names and every other type are rejected; scripts, executables and unsafe paths also
-  block the whole install. A `vxml_c` passes only when
-  `panorama_layout::image_wrapper_dependency` proves the image-wrapper shape from the
-  parsed KV3 tree and the resource's reference list; what the reader cannot prove is
-  rejected. The `audited scripts only` rule is untouched: no skin can bring a script.
+  Scripts and executables, case-colliding names and every other type are rejected;
+  scripts, executables and unsafe paths also block the whole install. A zero-length
+  file of an allowed type is a deliberate blank override and installs. One file may
+  be as large as the install, and the install as large as the merged VPK less
+  8 MiB for its directory (`skin_archive::MAX_INSTALL_BYTES`). A `vxml_c` passes only
+  when `panorama_layout::image_wrapper_dependency` proves the image-wrapper shape
+  from the parsed structure, in either of the two containers seen in third-party
+  archives (a `LaCo` tree, or the older XML text in `DATA`); a layout with a script
+  body, include or event attribute is rejected as `panorama_scripted`, anything else
+  unprovable as `panorama_unproven`. The `audited scripts only` rule is untouched:
+  no skin can bring a script. Rejected files are split in the report into *dropped*
+  (scripts, executables, unprovable layouts, types the game may load such as `webm`
+  and `vcss_c`) and *ignored* (uncompiled sources and tool or reading leftovers, which
+  the game does not load from a VPK); the review shows "Not game files, ignored: N"
+  apart from "Dropped". The evidence for the wrapper shape is in
+  [`SKIN_ARCHIVE_AUDIT.md`](SKIN_ARCHIVE_AUDIT.md).
 - *Names.* Upper-case letters are folded to lower case and counted in the report; two
   names equal once folded are both rejected.
 - *Scope.* Hero-scoped (the hero's folders, sounds, icons, sound events and status
@@ -694,6 +704,11 @@ The audited install sizes are known up front, so preparing a build whose selecte
 `bundle_limit_exceeded`, before anything is downloaded, and the build screen shows the
 running total against the limit as skins are added. The merged build is still checked
 against the same limits when it is made, which catches the tuning packages too.
+Staging the verified VPK for install used to refuse anything over 64 MiB
+(`build_too_large`), which sat below the audited installs of the larger skins; it now
+uses the VPK limit, like the merge and the deployment. This was changed by reading the
+code and is covered by the build and plan tests, not by a staging test with a VPK of that
+size; no install of such a build has been run on Windows.
 
 **The player's own game.** When a game folder is connected, preparing a build also reads
 the file list of `game/dota/pak01_dir.vpk` (read-only, bounded) and notes which of the
@@ -714,7 +729,7 @@ file; every URL must match a trusted prefix exactly. A mirror that answers with 
 error, cannot be reached, or serves bytes that do not match the pinned size and hash is
 skipped and the next is tried; the download fails only when no mirror yields the pinned
 bytes (with the last mirror's error). Cancelling stops at once. Only mirrors that answered
-200 with the pinned ZIP size to a `HEAD` request are listed (all 471 have both). GitHub
+200 with the pinned ZIP size to a `HEAD` request are listed (all 500 have both). GitHub
 answered with 200 directly; Hugging Face answers a `resolve/...` URL with a redirect to a
 CDN host under `cdn.hf.co` with a signed query string (observed with a `HEAD` request
 from a Mac on 2026-10-09: `us.aws.cdn.hf.co`). The transport therefore follows redirects
@@ -732,7 +747,7 @@ the shared paths, runs the analyzer in both modes, lets the app's own load path 
 the audit, and writes `manifests.json`, `index.json` and
 [`WARDROBE_AUDIT_REPORT.md`](WARDROBE_AUDIT_REPORT.md). An item that cannot be audited
 cleanly (no hero found, an unsafe path, a container the reader refuses, an archive over
-the 64 MiB bound, no archive) is not emitted and is listed with its reason. Output is
+the 256 MiB bound, no archive) is not emitted and is listed with its reason. Output is
 sorted and carries no timestamp. A second ignored test, `spot_check_embedded_items`,
 unpacks chosen cached ZIPs as the app does and builds plans from them. The generated
 files are checked by ordinary tests on every run: every embedded manifest is validated,
@@ -749,7 +764,7 @@ the files must be canonical, and the interface copy must be derived from them.
   the size refusal, and the transport's redirect rules and mirror fallback (with fake
   transports, not the network).
 - Run locally on a Mac and not committed: the audit of the 512 catalog items from
-  cached downloads (471 allowlisted; numbers in the report); the real Scarlet Keeper
+  cached downloads (500 allowlisted; numbers in the report); the real Scarlet Keeper
   archive through extraction, the content store and a build into one VPK of 996 files
   (57,904,917 bytes, reproduced byte for byte on a second build); and plans built from
   other cached archives (a one-file hero item, a two-name hero, a 61 MiB skin, six
