@@ -203,6 +203,78 @@ export const explainError = (code: string, isRu: boolean) => {
       "Набор слишком большой для одной сборки.",
       "This item is too large for one build.",
     ],
+    map_target_foreign: [
+      "В папке языка уже лежит файл maps/dota.vpk, который записал не BetterFy. Он его не тронул и ничего не записал. Убери карту из сборки или перенеси этот файл сам и повтори.",
+      "The language folder already has a maps/dota.vpk that BetterFy did not write. It left it alone and wrote nothing. Remove the map from the build, or move that file yourself and retry.",
+    ],
+    map_conflict: [
+      "Карта BetterFy в игре изменилась или пропала после установки. BetterFy не затирает её старой копией. Отпусти старую установку и поставь сборку заново.",
+      "BetterFy's map in the game was changed or removed after installation. BetterFy does not overwrite it with an old copy. Let go of the old install and install the build again.",
+    ],
+    map_folder_invalid: [
+      "Под именем maps в папке языка лежит не обычная папка. BetterFy ничего не записал. Убери или переименуй это и повтори.",
+      "Something named maps in the language folder is not a plain folder. BetterFy wrote nothing. Remove or rename it and retry.",
+    ],
+    deployment_path_unsafe: [
+      "Путь записи проходит через ссылку (symlink или junction). BetterFy не пишет через ссылки. Ничего не записано.",
+      "The write path goes through a link (a symlink or a junction). BetterFy does not write through links. Nothing was written.",
+    ],
+    map_terrain_conflict: [
+      "В сборке две карты, а ставится только одна: карта заменяет файл карты целиком. Оставь одну из них, остальное в сборке не изменится.",
+      "The build has two maps, and only one can be installed: a map replaces the game's map file as a whole. Keep one of them; the rest of the build stays as is.",
+    ],
+    map_audit_mismatch: [
+      "Карта не совпала с проверенным описанием: внутри не то, что записано при аудите. BetterFy не будет её ставить.",
+      "The map does not match its audited description: what is inside is not what the audit recorded. BetterFy will not install it.",
+    ],
+    map_archive_hash_mismatch: [
+      "Скачанный архив карты не совпал с ожидаемой контрольной суммой. BetterFy его не сохранил.",
+      "The downloaded map archive did not match the expected checksum. BetterFy did not keep it.",
+    ],
+    map_hash_mismatch: [
+      "Файл карты не совпал с ожидаемой контрольной суммой. Ничего не записано.",
+      "The map file did not match the expected checksum. Nothing was written.",
+    ],
+    map_archive_unexpected: [
+      "Внутри архива карты не то, что ожидалось (нужны только maps/dota.vpk и Guide.txt). BetterFy не будет его ставить.",
+      "The map archive does not contain what was expected (only maps/dota.vpk and Guide.txt). BetterFy will not install it.",
+    ],
+    map_archive_unreadable: [
+      "Архив карты не удалось прочитать. Подготовь сборку заново.",
+      "The map archive could not be read. Prepare the build again.",
+    ],
+    map_package_invalid: [
+      "Файл карты не прошёл проверку формата: это не целый и корректный пакет карты. BetterFy не будет его ставить.",
+      "The map file failed the format check: it is not a complete, well-formed map package. BetterFy will not install it.",
+    ],
+    map_package_unsupported: [
+      "Пакет карты в формате, который BetterFy не читает (части в других файлах, подпись или неизвестная версия). Он не будет его ставить.",
+      "The map package is in a format BetterFy does not read (parts in other files, a signature, or an unknown version). It will not install it.",
+    ],
+    map_entry_script: [
+      "В пакете карты есть скрипт или программа. BetterFy такое не ставит ни при каких условиях.",
+      "The map package holds a script or a program. BetterFy never installs that.",
+    ],
+    map_entry_type_blocked: [
+      "В пакете карты есть файл типа, который не входит в проверенный набор для карт. BetterFy не будет его ставить.",
+      "The map package holds a file of a type outside the audited set for maps. BetterFy will not install it.",
+    ],
+    map_entry_path_invalid: [
+      "В пакете карты есть файл с небезопасным или некорректным именем. BetterFy не будет его ставить.",
+      "The map package holds a file with an unsafe or malformed name. BetterFy will not install it.",
+    ],
+    map_entry_outside_maps: [
+      "В пакете карты есть файлы вне папки maps: карта не должна заменять ничего другого. BetterFy не будет её ставить.",
+      "The map package holds files outside the maps folder: a map must not replace anything else. BetterFy will not install it.",
+    ],
+    map_entry_duplicate: [
+      "В пакете карты один и тот же путь указан дважды. BetterFy не будет его ставить.",
+      "The map package lists the same path twice. BetterFy will not install it.",
+    ],
+    map_main_missing: [
+      "В пакете нет основного файла карты (maps/dota.vmap_c). BetterFy не будет его ставить.",
+      "The package has no main map file (maps/dota.vmap_c). BetterFy will not install it.",
+    ],
   };
   return (
     messages[code]?.[isRu ? 0 : 1] ??
@@ -237,6 +309,12 @@ const groups: Array<{
     tone: "warn",
   },
   {
+    codes: ["map_terrain_conflict"],
+    title: ["В сборке две карты", "Two maps in one build"],
+    action: null,
+    tone: "warn",
+  },
+  {
     codes: ["wardrobe_conflict_unacknowledged"],
     title: ["Нужно подтвердить общие файлы", "Shared files need your confirmation"],
     action: null,
@@ -256,6 +334,19 @@ const groups: Array<{
       "skin_archive_hostile",
       "skin_shared_paths_refused",
       "skin_install_too_large",
+      "map_audit_mismatch",
+      "map_archive_hash_mismatch",
+      "map_hash_mismatch",
+      "map_archive_unexpected",
+      "map_archive_unreadable",
+      "map_package_invalid",
+      "map_package_unsupported",
+      "map_entry_script",
+      "map_entry_type_blocked",
+      "map_entry_path_invalid",
+      "map_entry_outside_maps",
+      "map_entry_duplicate",
+      "map_main_missing",
     ],
     title: ["Набор не прошёл проверку", "This item did not pass the check"],
     action: null,
@@ -305,8 +396,22 @@ const groups: Array<{
       "deployment_target_foreign",
       "deployment_language_change_requires_restore",
       "slot_full",
+      "map_conflict",
     ],
     title: ["Файл игры изменился", "The game file changed"],
+    action: "report",
+    tone: "warn",
+  },
+  {
+    // Wording and action come from the folder's actual state (slot.ts).
+    codes: ["map_target_foreign", "map_folder_invalid"],
+    title: ["В папке языка уже есть файл карты", "The language folder already has a map file"],
+    action: "retry",
+    tone: "warn",
+  },
+  {
+    codes: ["deployment_path_unsafe"],
+    title: ["Путь записи — это ссылка", "The write path is a link"],
     action: "report",
     tone: "warn",
   },
@@ -351,6 +456,10 @@ export const slotCodes = [
   "deployment_target_foreign",
   "deployment_language_change_requires_restore",
   "slot_full",
+  "map_target_foreign",
+  "map_conflict",
+  "map_folder_invalid",
+  "deployment_path_unsafe",
 ];
 
 /**

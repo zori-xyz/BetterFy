@@ -24,6 +24,13 @@ export function DemoPanel() {
       "deployment_target_foreign",
     ],
     ["minify_beside", "Minify уже в папке", "Minify already in the folder"],
+    [
+      "map_foreign",
+      "В папке чужая карта",
+      "A foreign map is in the folder",
+      "map_target_foreign",
+    ],
+    ["map_changed", "Dota обновила карту", "Dota updated the map", "map_conflict"],
   ];
   return (
     <div className="b-demo">
