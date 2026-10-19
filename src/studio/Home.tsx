@@ -4,13 +4,11 @@ import {
   Check,
   Gamepad2,
   Gauge,
-  Globe2,
   Layers3,
   LoaderCircle,
   Monitor,
   Paintbrush,
   Plus,
-  Send,
   Shirt,
   Sparkles,
   Trees,
@@ -27,7 +25,7 @@ import EmoteStage, { EmoteBackdrop, emoteStyle } from "./EmoteStage";
 import { useEngineActive } from "./engineActivity";
 import { useState } from "react";
 import LookCarousel from "./LookCarousel";
-import { ModCard } from "./ui";
+import { BotStage } from "./BotStage";
 import { CountUp } from "./delight";
 import "./home.css";
 
@@ -47,7 +45,6 @@ const iconFor = (mod: StudioMod) =>
 // Dota's default item hotkeys, one per inventory slot.
 const hotkeys = ["Z", "X", "C", "V", "B", "N"];
 const backpackSlots = 3;
-const shelfOrder = ["world", "interface", "core", "audio", "utility", "custom"];
 
 const known = (ids: string[]) => ids.flatMap((id) => (modById.has(id) ? [modById.get(id)!] : []));
 const modForPackage = (id: string) => modById.get(findPackage(id)?.catalogId ?? id);
@@ -75,8 +72,8 @@ export default function Home({
   const { language, isRu } = useLocale();
   const [mood, setMood] = useState(0);
   return (
-    <div className="s-home">
-      <section className="s-hero" style={emoteStyle(mood)}>
+    <div className="s-home" style={emoteStyle(mood)}>
+      <section className="s-hero">
         <EmoteBackdrop active={mood} />
         <div className="s-hero-copy">
           <span className="s-eyebrow">
@@ -127,25 +124,7 @@ export default function Home({
         onOpen={onOpen}
         onToggle={onToggle}
       />
-      <PilotShelf selected={selected} onCatalog={onCatalog} onOpen={onOpen} onToggle={onToggle} />
-      <footer className="h-community">
-        <p>
-          <strong>{isRu ? "Не хватает мода?" : "Missing a mod?"}</strong>{" "}
-          {isRu ? "Расскажи нам, добавим." : "Tell us and we'll look into it."}
-        </p>
-        <nav>
-          <a href="https://t.me/BeterHelp" target="_blank" rel="noreferrer">
-            <Send />
-            Telegram
-            <ArrowUpRight />
-          </a>
-          <a href="https://zori-xyz.github.io/BetterFy/" target="_blank" rel="noreferrer">
-            <Globe2 />
-            {isRu ? "Сайт BetterFy" : "BetterFy website"}
-            <ArrowUpRight />
-          </a>
-        </nav>
-      </footer>
+      <BotStage motion={motion} />
     </div>
   );
 }
@@ -368,70 +347,6 @@ function BuildDock({
           </button>
         </div>
       )}
-    </section>
-  );
-}
-
-function PilotShelf({
-  selected,
-  onCatalog,
-  onOpen,
-  onToggle,
-}: {
-  selected: string[];
-  onCatalog: (domain?: Domain) => void;
-  onOpen: (mod: StudioMod) => void;
-  onToggle: (mod: StudioMod) => void;
-}) {
-  const { language, isRu } = useLocale();
-  const pilots = mods.filter((mod) => mod.domain === "game" && isInstallable(mod.id));
-  const groups = shelfOrder
-    .map((id) => ({ id, items: pilots.filter((mod) => mod.category === id) }))
-    .filter((group) => group.items.length > 0);
-  const [tab, setTab] = useState(groups[0]?.id ?? "");
-  const active = groups.find((group) => group.id === tab) ?? groups[0];
-  if (!active) return null;
-  const picked = new Set(selected);
-  // The same cards and tabs as the catalog, so Home reads as the same app.
-  return (
-    <section className="h-section h-pilot">
-      <header className="s-section-head">
-        <div>
-          <span className="s-eyebrow">{isRu ? "НАСТРОЙКА ИГРЫ" : "GAME TUNING"}</span>
-          <h2>{isRu ? "Настрой саму Dota" : "Tune Dota itself"}</h2>
-        </div>
-        <button className="s-text-button" onClick={() => onCatalog("game")}>
-          {isRu ? "Все настройки" : "All tuning mods"}
-          <ArrowRight />
-        </button>
-      </header>
-      <div
-        className="s-domain-tabs h-pilot-tabs"
-        role="tablist"
-        aria-label={isRu ? "Категории" : "Categories"}
-      >
-        {groups.map((group) => (
-          <button
-            key={group.id}
-            role="tab"
-            aria-selected={group.id === active.id}
-            onClick={() => setTab(group.id)}
-          >
-            {group.items[0].categoryName[language]}
-          </button>
-        ))}
-      </div>
-      <div className="s-mod-grid h-pilot-grid" role="tabpanel" key={active.id}>
-        {active.items.slice(0, 4).map((mod) => (
-          <ModCard
-            key={mod.id}
-            mod={mod}
-            selected={picked.has(mod.id)}
-            onOpen={() => onOpen(mod)}
-            onToggle={() => onToggle(mod)}
-          />
-        ))}
-      </div>
     </section>
   );
 }

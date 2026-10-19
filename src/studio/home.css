@@ -222,75 +222,319 @@
   color: var(--s-text);
 }
 
-/* Game tuning shelf: catalog cards and catalog tabs. */
-.h-pilot-tabs {
-  margin-bottom: 18px;
-}
-/* One row of four, lower than in the catalog: Home is a taste, not a list. */
-.h-pilot-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  animation: h-items-in 0.24s var(--s-ease-out) both;
-}
-.h-pilot-grid .s-mod-image {
-  height: auto;
-  aspect-ratio: 16 / 9;
-}
-@media (max-width: 1080px) {
-  .h-pilot-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 560px) {
-  .h-pilot-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* Community: one quiet line at the end of the page. */
-.h-community {
-  display: flex;
+/* BetterFy on Telegram: copy on the left, a live chat with the bot on the
+   right, emoticon stickers floating around it in the page's mood colour. */
+.h-bot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 12px 24px;
-  flex-wrap: wrap;
-  margin-top: 42px;
-  padding: 20px 0 28px;
-  border-top: 1px solid var(--s-line-soft);
-  font-size: var(--s-text-md);
+  gap: 40px;
+  margin-top: 56px;
+  padding-bottom: 40px;
+}
+.h-bot-copy .s-eyebrow {
+  color: var(--mood-color, var(--s-accent));
+  transition: color 0.7s ease;
+}
+.h-bot-copy .s-eyebrow svg {
+  width: 13px;
+  height: 13px;
+}
+.h-bot-copy h2 {
+  margin-top: 12px;
+  font: 400 clamp(26px, 2.6vw, 38px) / 1.12 "Days One BetterFy", Manrope, system-ui, sans-serif;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+.h-bot-copy h2 span {
+  color: var(--mood-color, var(--s-accent));
+  transition: color 0.7s ease;
+}
+:root[data-theme="light"] .h-bot-copy h2 span,
+:root[data-theme="light"] .h-bot-copy .s-eyebrow {
+  color: var(--mood-ink, var(--s-accent));
+}
+.h-bot-copy ul {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.h-bot-copy li {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  font-size: var(--s-text-base);
+  line-height: 1.55;
   color: var(--s-muted);
 }
-.h-community strong {
+.h-bot-copy li svg {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
   color: var(--s-text);
-  font-weight: 700;
 }
-.h-community nav {
+.h-bot-actions {
   display: flex;
-  gap: 18px;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 26px;
 }
-.h-community a {
+.h-bot-actions .s-btn {
+  min-height: 44px;
+  gap: 8px;
+}
+.h-bot-actions .s-btn svg {
+  width: 15px;
+  height: 15px;
+}
+.h-bot-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-top: 20px;
+}
+.h-bot-links a {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: var(--s-text);
+  gap: 7px;
+  font-size: var(--s-text-sm);
   font-weight: 600;
+  color: var(--s-quiet);
 }
-.h-community a > svg {
+.h-bot-links a svg {
   width: 14px;
   height: 14px;
 }
-.h-community a > svg:first-child {
-  color: var(--s-accent);
+
+/* The stage */
+.h-bot-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 470px;
 }
-.h-community a > svg:last-child {
+.h-bot-stage::before {
+  content: "";
+  position: absolute;
+  inset: 4% 6%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(var(--mood-rgb, 180 92 239) / 0.3), transparent);
+  filter: blur(8px);
+  transition: background 0.7s ease;
+}
+.h-bot-chat {
+  width: min(390px, 100%);
+  height: 440px;
+  display: flex;
+  flex-direction: column;
+  overflow: clip;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgb(28 25 38 / 0.92), rgb(17 15 24 / 0.96));
+  box-shadow:
+    0 30px 80px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+  transform: rotate(-2deg);
+  backdrop-filter: blur(10px);
+}
+.h-bot-chat header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 13px 16px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.07);
+  color: #f4f0f8;
+}
+.h-bot-chat header img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+}
+.h-bot-chat header span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.h-bot-chat header strong {
+  font-size: var(--s-text-base);
+}
+.h-bot-chat header small {
+  font-size: var(--s-text-xs);
+  color: #a9a2b5;
+}
+.h-bot-chat ol {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 9px;
+  margin: 0;
+  padding: 14px;
+  list-style: none;
+  overflow: hidden;
+}
+.h-bot-line {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-width: 86%;
+  animation: h-bot-in 0.38s var(--s-ease-spring) both;
+}
+.h-bot-line p {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 14px 14px 14px 4px;
+  background: rgb(255 255 255 / 0.07);
+  color: #ece7f2;
+  font-size: var(--s-text-sm);
+  line-height: 1.5;
+}
+.h-bot-line.is-me {
+  align-self: flex-end;
+}
+.h-bot-line.is-me p {
+  border-radius: 14px 14px 4px 14px;
+  background: var(--mood-color, var(--s-accent));
+  color: #160a21;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 600;
+  transition: background 0.7s ease;
+}
+.h-bot-keys {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+.h-bot-keys.is-column {
+  grid-template-columns: minmax(0, 1fr);
+}
+.h-bot-keys i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: rgb(255 255 255 / 0.1);
+  color: #f4f0f8;
+  font-style: normal;
+  font-size: var(--s-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.3s ease;
+}
+.h-bot-keys i.is-pressed {
+  background: color-mix(in srgb, var(--s-ready) 32%, transparent);
+}
+.h-bot-keys i svg {
   width: 12px;
   height: 12px;
-  color: var(--s-quiet);
-  transition: transform var(--s-motion-fast) var(--s-ease-out);
+}
+.h-bot-line.is-typing p {
+  display: inline-flex;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 12px 14px;
+}
+.h-bot-line.is-typing i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #cfc6da;
+  animation: h-bot-dot 1s ease-in-out infinite;
+}
+.h-bot-line.is-typing i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.h-bot-line.is-typing i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+/* Die-cut emoticon stickers, like the one on the headline. */
+.h-bot-sticker {
+  position: absolute;
+  z-index: 2;
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+  filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff)
+    drop-shadow(0 -2px 0 #fff) drop-shadow(0 8px 10px rgb(0 0 0 / 0.4));
+  animation: h-bot-float 6s ease-in-out infinite;
+}
+.h-bot-sticker.is-0 {
+  top: -2%;
+  left: 2%;
+  --tilt: -12deg;
+}
+.h-bot-sticker.is-1 {
+  top: 40%;
+  right: 4%;
+  --tilt: 14deg;
+  animation-delay: -2s;
+}
+.h-bot-sticker.is-2 {
+  bottom: 4%;
+  left: 14%;
+  --tilt: 8deg;
+  animation-delay: -4s;
+}
+@keyframes h-bot-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+}
+@keyframes h-bot-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+@keyframes h-bot-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--tilt));
+  }
+  50% {
+    transform: translateY(-9px) rotate(calc(var(--tilt) * -0.4));
+  }
+}
+:root.motion-disabled .h-bot-line,
+:root.motion-disabled .h-bot-sticker,
+:root.motion-disabled .h-bot-line.is-typing i {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .h-bot-line,
+  .h-bot-sticker,
+  .h-bot-line.is-typing i {
+    animation: none;
+  }
+  .h-bot-sticker {
+    transform: rotate(var(--tilt));
+  }
 }
 @media (hover: hover) and (pointer: fine) {
-  .h-community a:hover > svg:last-child {
-    transform: translate(2px, -2px);
-    color: var(--s-accent);
+  .h-bot-links a:hover {
+    color: var(--s-text);
+  }
+}
+@media (max-width: 980px) {
+  .h-bot {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .h-bot-stage {
+    min-height: 0;
+    padding: 30px 0;
   }
 }
 
@@ -321,12 +565,6 @@
   from {
     opacity: 0;
     transform: scale(0.6);
-  }
-}
-@keyframes h-items-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
   }
 }
 
