@@ -54,6 +54,11 @@ const packIndex = import.meta.glob<PackageManifest[]>("../../src-tauri/gamefiles
   eager: true,
   import: "default",
 });
+// Minify's Custom Hero Grids: grids compiled into the app (src-tauri/herogrids).
+const gridIndex = import.meta.glob<PackageManifest[]>("../../src-tauri/herogrids/index.json", {
+  eager: true,
+  import: "default",
+});
 const manifests: PackageManifest[] = [
   ...Object.values(
     import.meta.glob<PackageManifest>("../../src-tauri/packages/*.json", {
@@ -64,6 +69,7 @@ const manifests: PackageManifest[] = [
   ...Object.values(wardrobeIndex).flat(),
   ...Object.values(mapIndex).flat(),
   ...Object.values(packIndex).flat(),
+  ...Object.values(gridIndex).flat(),
 ];
 
 export const installablePackages: PackageManifest[] = manifests

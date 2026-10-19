@@ -31,6 +31,27 @@ Dota 2 and remain property of Valve Corporation. Included previews are approved
 for the BetterFy prototype only and require a redistribution review or
 replacement before release.
 
+## Precompiled hero grids
+
+BetterFy compiles in one release of
+[Egezenn/dota2-precompiled-grids](https://github.com/Egezenn/dota2-precompiled-grids)
+for Minify's "Custom Hero Grids" mod.
+
+- Release: `2026-10-19`, `hero_grid_config.json` (3,557 bytes, SHA-256
+  `f30d85db7d5a9798a362b30a2c1be571a1da19068406f55ee3bfc69eec8ec98a`)
+- Upstream license: MIT
+- Where: `src-tauri/herogrids/hero_grid_config.json`
+
+## OpenDotaGuides
+
+For Minify's "OpenDotaGuides Guides" mod, BetterFy downloads one pinned release
+of [Egezenn/OpenDotaGuides](https://github.com/Egezenn/OpenDotaGuides)
+(`2026-10-19`, `itembuilds.zip`) and installs its item build files. The
+release is not part of the repository; its size and SHA-256 are pinned in
+`src-tauri/gamefiles/manifests.json`.
+
+- Upstream license: MIT
+
 ## License compatibility
 
 BetterFy is licensed under GPL-3.0 (see [LICENSE](LICENSE)). Both third-party

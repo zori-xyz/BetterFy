@@ -223,6 +223,14 @@ export const explainError = (code: string, isRu: boolean) => {
       "В сборке две карты, а ставится только одна: карта заменяет файл карты целиком. Оставь одну из них, остальное в сборке не изменится.",
       "The build has two maps, and only one can be installed: a map replaces the game's map file as a whole. Keep one of them; the rest of the build stays as is.",
     ],
+    hero_grids_no_profile: [
+      "Не нашли на компьютере профиль Steam, в котором уже запускалась Dota. Запусти Dota хотя бы раз, потом поставь сборку снова.",
+      "No Steam profile on this computer has run Dota yet. Launch Dota once, then install the build again.",
+    ],
+    hero_grids_recovery_required: [
+      "Прошлая запись сеток героев оборвалась. Нажми «Проверить» в подробностях, затем повтори.",
+      "An earlier write of hero grids stopped half way. Use Check under Details, then retry.",
+    ],
     user_styles_selection_required: [
       "Для «Пользовательских стилей» не выбран ни один стиль. Открой карточку мода и отметь нужные.",
       "No style is picked for User Styles. Open the mod's card and tick the ones you want.",

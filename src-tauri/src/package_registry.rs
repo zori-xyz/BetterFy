@@ -492,6 +492,8 @@ fn validate(manifest: &PackageManifest) -> Result<(), String> {
             .id
             .starts_with(&format!("{}.", crate::game_packs::NAMESPACE))
         || crate::game_packs::catalog_id_taken(&manifest.catalog_id)
+        || manifest.id == crate::hero_grids::PACKAGE_ID
+        || manifest.catalog_id == crate::hero_grids::CATALOG_ID
     {
         return invalid("id");
     }

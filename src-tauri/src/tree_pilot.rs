@@ -675,6 +675,9 @@ enum Contract {
     Pack(&'static crate::game_packs::PackManifest),
     /// Minify's User Styles with the snippets the player picked (a bit mask).
     UserStyles(&'static PackageManifest, u32),
+    /// Minify's Custom Hero Grids: grids compiled into the app, added to the
+    /// Steam accounts' own (`hero_grids`).
+    HeroGrids,
 }
 
 impl Contract {
@@ -685,6 +688,7 @@ impl Contract {
             Self::Map(item) => item.id.clone(),
             Self::Pack(item) => item.id.clone(),
             Self::UserStyles(_, mask) => crate::user_styles::variant_id(*mask),
+            Self::HeroGrids => crate::hero_grids::PACKAGE_ID.to_string(),
         }
     }
 
@@ -697,6 +701,7 @@ impl Contract {
             Self::Map(item) => &item.id,
             Self::Pack(item) => &item.id,
             Self::UserStyles(manifest, _) => &manifest.id,
+            Self::HeroGrids => crate::hero_grids::PACKAGE_ID,
         }
     }
 }
@@ -711,6 +716,9 @@ fn resolve(id: &str) -> Result<Contract, String> {
     if let Some(item) = crate::game_packs::find(id)? {
         return Ok(Contract::Pack(item));
     }
+    if id == crate::hero_grids::PACKAGE_ID || id == crate::hero_grids::CATALOG_ID {
+        return Ok(Contract::HeroGrids);
+    }
     if let Some((base, mask)) = crate::user_styles::parse_variant(id) {
         return package_registry::find(base).map(|manifest| Contract::UserStyles(manifest, mask));
     }
@@ -722,7 +730,9 @@ fn resolve(id: &str) -> Result<Contract, String> {
 fn tuning(id: &str) -> Result<Option<&'static PackageManifest>, String> {
     match resolve(id)? {
         Contract::Tuning(manifest) | Contract::UserStyles(manifest, _) => Ok(Some(manifest)),
-        Contract::Wardrobe(..) | Contract::Map(_) | Contract::Pack(_) => Ok(None),
+        Contract::Wardrobe(..) | Contract::Map(_) | Contract::Pack(_) | Contract::HeroGrids => {
+            Ok(None)
+        }
     }
 }
 
@@ -757,6 +767,8 @@ pub(crate) struct VerifiedTreeVpk {
     game_files: BTreeMap<String, Option<Vec<u8>>>,
     /// The cursor and font packs of the build, in selection order.
     packs: Vec<crate::game_packs::PackPlanItem>,
+    /// The build adds the pinned hero grids to the Steam accounts' own.
+    hero_grids: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -820,6 +832,11 @@ impl VerifiedTreeVpk {
     /// The game's own loose files the build replaces (`None`: removes).
     pub(crate) fn game_files(&self) -> &BTreeMap<String, Option<Vec<u8>>> {
         &self.game_files
+    }
+
+    /// Whether the build adds the pinned hero grids.
+    pub(crate) fn hero_grids(&self) -> bool {
+        self.hero_grids
     }
 
     pub(crate) fn has_pak(&self) -> bool {
@@ -903,6 +920,7 @@ pub(crate) fn verified_test_vpk() -> VerifiedTreeVpk {
         wardrobe_conflicts: Vec::new(),
         game_files: BTreeMap::new(),
         packs: Vec::new(),
+        hero_grids: false,
     }
 }
 
@@ -969,6 +987,12 @@ fn acquire_verified_resources_with_progress(
                     return Err("download_cancelled".to_string());
                 }
                 map_terrain::acquire(app_data_root, item, cancelled)?;
+                index += 1;
+                progress(index);
+                continue;
+            }
+            // The grids are compiled into the app: nothing to download.
+            Contract::HeroGrids => {
                 index += 1;
                 progress(index);
                 continue;
@@ -1185,6 +1209,7 @@ pub(crate) fn build_from_verified_store(
     let mut wardrobe_items = Vec::new();
     let mut game_files = BTreeMap::new();
     let mut packs = Vec::new();
+    let mut hero_grids = false;
     let packages = bundle_ids
         .iter()
         .map(|package_id| {
@@ -1203,6 +1228,14 @@ pub(crate) fn build_from_verified_store(
                     }
                     packs.push(loaded.item);
                     let (marker, text) = crate::game_packs::marker(item);
+                    return Ok(BundlePackage {
+                        package_id: package_id.clone(),
+                        resources: BTreeMap::from([(marker, text)]),
+                    });
+                }
+                Contract::HeroGrids => {
+                    hero_grids = true;
+                    let (marker, text) = crate::hero_grids::marker();
                     return Ok(BundlePackage {
                         package_id: package_id.clone(),
                         resources: BTreeMap::from([(marker, text)]),
@@ -1277,6 +1310,7 @@ pub(crate) fn build_from_verified_store(
     let mut verified = assemble(package_ids, packages, wardrobe_items, map)?;
     verified.game_files = game_files;
     verified.packs = packs;
+    verified.hero_grids = hero_grids;
     Ok(verified)
 }
 
@@ -1331,6 +1365,7 @@ fn assemble(
             wardrobe_conflicts: Vec::new(),
             game_files: BTreeMap::new(),
             packs: Vec::new(),
+            hero_grids: false,
         }
     } else {
         build_verified_bundle(packages, wardrobe)?
@@ -1488,6 +1523,7 @@ fn build_verified_bundle(
         wardrobe_conflicts,
         game_files: BTreeMap::new(),
         packs: Vec::new(),
+        hero_grids: false,
     })
 }
 

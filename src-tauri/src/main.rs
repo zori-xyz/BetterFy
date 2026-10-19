@@ -13,6 +13,7 @@ mod game_language;
 mod game_packs;
 #[cfg(test)]
 mod game_packs_audit;
+mod hero_grids;
 mod installed_profile;
 mod kv3;
 #[cfg(test)]
@@ -825,7 +826,20 @@ async fn install_tree_pilot(
                 game_root,
                 &receipt.operation_id,
                 verified.game_files(),
-            ) {
+            )
+            .and_then(|_| {
+                // Hero grids go to the Steam accounts' own grid files; a
+                // build without the mod takes BetterFy's grids out again.
+                hero_grids::apply(
+                    &app_data,
+                    &receipt.operation_id,
+                    verified.hero_grids(),
+                    &steam_accounts::platform_dota_cfg_folders(),
+                )
+                .inspect_err(|_| {
+                    let _ = game_files::rollback(&app_data, game_root, &receipt.operation_id);
+                })
+            }) {
                 Ok(_) => Ok(receipt),
                 Err(code) => {
                     let _ = game_deployment::rollback(&app_data, game_root, &receipt.operation_id);
@@ -1255,8 +1269,9 @@ async fn rollback_game_deployment(
         .map_err(|_| "rollback_failed".to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
         require_patch_ready_runtime()?;
-        // The game's files first: if they cannot be put back, nothing else
-        // changes and the restore can be tried again.
+        // The grids and the game's files first: if they cannot be put back,
+        // nothing else changes and the restore can be tried again.
+        hero_grids::rollback(&app_data, &request.operation_id)?;
         game_files::rollback(
             &app_data,
             Path::new(&request.game_path),
@@ -1304,6 +1319,7 @@ async fn release_stale_deployment(
             &operation,
             &std::collections::BTreeMap::new(),
         )?;
+        hero_grids::apply(&app_data, &operation, false, &[])?;
         let _ = installed_profile::clear(&app_data);
         Ok(released)
     })
@@ -1332,7 +1348,8 @@ async fn recover_game_deployments(
         .map_err(|_| "rollback_failed".to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
         require_patch_ready_runtime()?;
-        let files = game_files::recover_pending(&app_data, Path::new(&request.game_path))?;
+        let files = game_files::recover_pending(&app_data, Path::new(&request.game_path))?
+            + hero_grids::recover_pending(&app_data)?;
         let mut receipt =
             game_deployment::recover_pending(&app_data, Path::new(&request.game_path))?;
         receipt.inspected += files;

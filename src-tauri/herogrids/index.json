@@ -1,0 +1,12 @@
+[
+  {
+    "id": "minify.custom-hero-grids",
+    "catalogId": "minify-custom-hero-grids",
+    "kind": "herogrids",
+    "name": {
+      "ru": "Свои сетки героев",
+      "en": "Custom Hero Grids"
+    },
+    "author": "Egezenn"
+  }
+]

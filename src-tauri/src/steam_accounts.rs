@@ -438,6 +438,29 @@ fn confirmation_token(
     format!("confirm-v1:{:x}", hasher.finalize())
 }
 
+/// Dota's cloud config folder (`userdata/<account>/570/remote/cfg`) of every
+/// Steam account on this computer that has one: Dota creates it the first
+/// time it runs for that account.
+pub(crate) fn dota_cfg_folders_in(roots: &[PathBuf]) -> Vec<PathBuf> {
+    let Ok(profiles) = discover_profiles_in_roots(roots) else {
+        return Vec::new();
+    };
+    profiles
+        .iter()
+        .filter_map(|profile| {
+            let account = profile.localconfig_path.parent()?.parent()?;
+            let cfg = account.join("570").join("remote").join("cfg");
+            canonical_directory(&cfg, "steam_profile_invalid")
+                .ok()
+                .filter(|cfg| cfg.starts_with(account))
+        })
+        .collect()
+}
+
+pub(crate) fn platform_dota_cfg_folders() -> Vec<PathBuf> {
+    dota_cfg_folders_in(&platform_steam_roots())
+}
+
 pub fn list_platform_profiles() -> Result<Vec<SteamProfileSummary>, String> {
     list_profiles(&platform_steam_roots())
 }

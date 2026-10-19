@@ -5,3 +5,5 @@ website/public/bot/catalog/** -text
 src-tauri/tests/fixtures/catalog_sequence_*.json* -text
 # Exact bytes of the Workshop Tools template (CRLF); its hash is pinned.
 src-tauri/tests/fixtures/workshop_addon_game_mode.lua -text
+# Exact bytes of the pinned hero grids release; its hash is in the build's marker.
+src-tauri/herogrids/hero_grid_config.json -text
