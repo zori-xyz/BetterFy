@@ -385,7 +385,12 @@ function demoPlan(ids: string[]): TreePilotPlan {
         {
           packageId: pack.id,
           catalogId: pack.catalogId,
-          category: pack.category === "fonts" ? ("fonts" as const) : ("cursors" as const),
+          category:
+            pack.category === "fonts"
+              ? ("fonts" as const)
+              : pack.category === "item_builds"
+                ? ("item_builds" as const)
+                : ("cursors" as const),
           files: pack.installFiles ?? 0,
           bytes: pack.installBytes ?? 0,
           removes: pack.category === "fonts" ? 36 : 0,

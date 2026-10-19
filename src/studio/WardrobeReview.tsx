@@ -174,8 +174,8 @@ export function PackReview({
   const packs = plan.packs ?? [];
   if (packs.length === 0) return null;
   return (
-    <section className="b-wardrobe" aria-label={isRu ? "Курсоры и шрифты" : "Cursors and fonts"}>
-      <h3>{isRu ? "Курсоры и шрифты" : "Cursors and fonts"}</h3>
+    <section className="b-wardrobe" aria-label={isRu ? "Файлы игры" : "Game files"}>
+      <h3>{isRu ? "Файлы игры" : "Game files"}</h3>
       {packs.map((pack) => (
         <article className="b-wardrobe-item" key={pack.packageId}>
           <header>
@@ -185,9 +185,13 @@ export function PackReview({
                 ? isRu
                   ? "Шрифты"
                   : "Fonts"
-                : isRu
-                  ? "Курсор"
-                  : "Cursor"}
+                : pack.category === "item_builds"
+                  ? isRu
+                    ? "Гайды"
+                    : "Guides"
+                  : isRu
+                    ? "Курсор"
+                    : "Cursor"}
             </span>
           </header>
           <dl className="b-facts">
@@ -201,7 +205,11 @@ export function PackReview({
               ? isRu
                 ? "Шрифты игры уходят в резервную копию, шрифты пака встают на их место."
                 : "The game's fonts go into a backup and the pack's fonts take their place."
-              : isRu
+              : pack.category === "item_builds"
+                ? isRu
+                  ? `Гайды предметов для ${pack.files} героев встают на место стандартных; стандартные уходят в резервную копию.`
+                  : `Item build guides for ${pack.files} heroes take the place of the default ones, which go into a backup.`
+                : isRu
                 ? "Файлы курсора игры уходят в резервную копию, файлы пака встают на их место."
                 : "The game's cursor files go into a backup and the pack's take their place."}
           </p>

@@ -614,5 +614,19 @@
     "downloadBytes": 25968903,
     "installFiles": 4,
     "installBytes": 330340
+  },
+  {
+    "id": "gamefiles.minify-opendotaguides-guides",
+    "catalogId": "minify-opendotaguides-guides",
+    "kind": "gamefiles",
+    "category": "item_builds",
+    "name": {
+      "ru": "Гайды OpenDotaGuides",
+      "en": "OpenDotaGuides Guides"
+    },
+    "author": "Egezenn",
+    "downloadBytes": 82649,
+    "installFiles": 127,
+    "installBytes": 177842
   }
 ]

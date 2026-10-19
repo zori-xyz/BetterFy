@@ -42,12 +42,19 @@ const SCHEMA_VERSION: u32 = 1;
 const MAX_ARCHIVE_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_ZIP_ENTRIES: usize = 256;
 const MAX_CURSOR_RES_BYTES: usize = 256 * 1024;
+const MAX_ITEM_BUILD_BYTES: usize = 64 * 1024;
+/// OpenDotaGuides publishes its guides as a dated release asset.
+const GUIDES_RELEASE_PREFIX: &str = "https://github.com/Egezenn/OpenDotaGuides/releases/download/";
+const GUIDES_ASSET: &str = "/itembuilds.zip";
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum PackCategory {
     Cursors,
     Fonts,
+    /// Item build guides (`default_<hero>.txt`), as Minify's OpenDotaGuides
+    /// mod installs them.
+    ItemBuilds,
 }
 
 impl PackCategory {
@@ -55,6 +62,7 @@ impl PackCategory {
         match self {
             Self::Cursors => "resource/cursor/",
             Self::Fonts => "panorama/fonts/",
+            Self::ItemBuilds => "itembuilds/",
         }
     }
 
@@ -62,6 +70,7 @@ impl PackCategory {
         match self {
             Self::Cursors => "cursors-",
             Self::Fonts => "fonts-",
+            Self::ItemBuilds => "minify-opendotaguides",
         }
     }
 }
@@ -185,6 +194,26 @@ fn slug(value: &str) -> bool {
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
+/// The one URL of a guides pack: a dated release (`YYYY-MM-DD`) of
+/// OpenDotaGuides.
+fn valid_guides_url(urls: &[String]) -> bool {
+    let [url] = urls else {
+        return false;
+    };
+    url.strip_prefix(GUIDES_RELEASE_PREFIX)
+        .and_then(|rest| rest.strip_suffix(GUIDES_ASSET))
+        .is_some_and(|tag| {
+            tag.len() == 10
+                && tag.bytes().enumerate().all(|(index, byte)| {
+                    if index == 4 || index == 7 {
+                        byte == b'-'
+                    } else {
+                        byte.is_ascii_digit()
+                    }
+                })
+        })
+}
+
 fn valid_archive_urls(urls: &[String]) -> bool {
     if urls.is_empty() || urls.len() > TRUSTED_ARCHIVE_PREFIXES.len() {
         return false;
@@ -246,6 +275,28 @@ pub(crate) fn check_content(to: &str, bytes: &[u8]) -> Result<(), String> {
             _ => invalid(),
         };
     }
+    if let Some(name) = to.strip_prefix(PackCategory::ItemBuilds.folder()) {
+        let hero = name
+            .strip_prefix("default_")
+            .and_then(|rest| rest.strip_suffix(".txt"));
+        return match (hero, std::str::from_utf8(bytes)) {
+            (Some(hero), Ok(text))
+                if !hero.is_empty()
+                    && hero.bytes().all(|byte| {
+                        byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_'
+                    })
+                    && bytes.len() <= MAX_ITEM_BUILD_BYTES
+                    && !text.chars().any(|c| c.is_control() && !c.is_whitespace())
+                    && text
+                        .trim_start_matches('\u{feff}')
+                        .trim_start()
+                        .starts_with("\"itembuilds\"") =>
+            {
+                Ok(())
+            }
+            _ => invalid(),
+        };
+    }
     if let Some(name) = to.strip_prefix(PackCategory::Fonts.folder()) {
         let sfnt = bytes.len() >= 12 && matches!(&bytes[..4], [0, 1, 0, 0] | b"OTTO" | b"true");
         return if matches!(extension(name), "otf" | "ttf") && sfnt {
@@ -280,7 +331,11 @@ pub(crate) fn validate(manifest: &PackManifest) -> Result<(), String> {
     {
         return invalid("name");
     }
-    if !valid_archive_urls(&manifest.source.urls) {
+    let urls_ok = match category {
+        PackCategory::ItemBuilds => valid_guides_url(&manifest.source.urls),
+        _ => valid_archive_urls(&manifest.source.urls),
+    };
+    if !urls_ok {
         return invalid("source");
     }
     let archive = &manifest.archive;
@@ -316,7 +371,7 @@ pub(crate) fn validate(manifest: &PackManifest) -> Result<(), String> {
             return invalid("file");
         }
     }
-    if category == PackCategory::Cursors && !manifest.removes.is_empty() {
+    if category != PackCategory::Fonts && !manifest.removes.is_empty() {
         return invalid("removes");
     }
     let mut removed = BTreeSet::new();
@@ -641,6 +696,22 @@ mod tests {
         assert!(check_content("panorama/fonts/a.otf", b"wOFF\0\0\0\0\0\0\0\0").is_err());
         assert!(check_content("panorama/fonts/a.uifont", b"OTTO\0\0\0\0\0\0\0\0").is_err());
         assert!(check_content("itembuilds/default_axe.txt", b"x").is_err());
+        assert!(check_content(
+            "itembuilds/default_axe.txt",
+            b"\"itembuilds\"\r\n{\r\n\t\"Author\" \"x\"\r\n}\r\n"
+        )
+        .is_ok());
+        assert!(check_content("itembuilds/axe.txt", b"\"itembuilds\" {}").is_err());
+        assert!(check_content("itembuilds/default_axe.txt", b"\"other\" {}").is_err());
+        assert!(valid_guides_url(&[format!(
+            "{GUIDES_RELEASE_PREFIX}2026-10-19{GUIDES_ASSET}"
+        )]));
+        assert!(!valid_guides_url(&[format!(
+            "{GUIDES_RELEASE_PREFIX}latest{GUIDES_ASSET}"
+        )]));
+        assert!(!valid_guides_url(&[format!(
+            "https://github.com/other/OpenDotaGuides/releases/download/2026-10-19{GUIDES_ASSET}"
+        )]));
     }
 
     #[test]

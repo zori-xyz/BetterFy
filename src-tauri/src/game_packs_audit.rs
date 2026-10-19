@@ -210,6 +210,7 @@ fn generate_game_packs() {
             match manifest.category {
                 PackCategory::Cursors => "cursors",
                 PackCategory::Fonts => "fonts",
+                PackCategory::ItemBuilds => "item builds",
             },
             manifest.files.len(),
             manifest.files.iter().map(|file| file.bytes).sum::<usize>() as f64 / 1_048_576.0,
@@ -222,6 +223,73 @@ fn generate_game_packs() {
                     .collect::<Vec<_>>()
                     .join(", ")
             },
+        );
+        manifests.push(manifest);
+    }
+    // Minify's OpenDotaGuides mod: one dated release of the guides, every
+    // `default_<hero>.txt` of it into `itembuilds/`.
+    if let (Ok(zip_path), Ok(url)) = (
+        std::env::var("BETTERFY_PACKS_GUIDES"),
+        std::env::var("BETTERFY_PACKS_GUIDES_URL"),
+    ) {
+        let zip = std::fs::read(zip_path).expect("guides zip");
+        let mut archive = zip::ZipArchive::new(Cursor::new(&zip[..])).expect("zip");
+        let mut files = Vec::new();
+        for index in 0..archive.len() {
+            let mut entry = archive.by_index(index).expect("entry");
+            if entry.is_dir() {
+                continue;
+            }
+            let name = entry.name().to_string();
+            let mut bytes = Vec::new();
+            entry.read_to_end(&mut bytes).expect("read");
+            let to = format!("itembuilds/{}", name.to_ascii_lowercase());
+            assert!(check_content(&to, &bytes).is_ok(), "{name} is not a guide");
+            files.push(PackFile {
+                from: name,
+                to,
+                bytes: bytes.len(),
+                sha256: sha256_hex(&bytes),
+            });
+        }
+        files.sort_by(|a, b| a.to.cmp(&b.to));
+        let manifest = PackManifest {
+            schema_version: 1,
+            kind: "gamefiles".to_string(),
+            id: format!("{}.minify-opendotaguides-guides", game_packs::NAMESPACE),
+            catalog_id: "minify-opendotaguides-guides".to_string(),
+            category: PackCategory::ItemBuilds,
+            name: LocalizedName {
+                ru: "Гайды OpenDotaGuides".to_string(),
+                en: "OpenDotaGuides Guides".to_string(),
+            },
+            author: "Egezenn".to_string(),
+            distribution: "internal_pilot".to_string(),
+            source: PackSource {
+                urls: vec![url.clone()],
+                catalog_snapshot: format!(
+                    "OpenDotaGuides {}",
+                    url.rsplit('/').nth(1).expect("release tag")
+                ),
+                permission: "MIT (Egezenn/OpenDotaGuides)".to_string(),
+            },
+            archive: PackArchive {
+                zip_bytes: zip.len() as u64,
+                zip_sha256: sha256_hex(&zip),
+                entries: archive.len(),
+                scripts: Vec::new(),
+            },
+            files,
+            removes: Vec::new(),
+        };
+        game_packs::validate(&manifest).expect("valid guides");
+        game_packs::extract_pinned_files(&zip, &manifest).expect("extracts as audited");
+        let _ = writeln!(
+            report,
+            "| `{}` | item builds | {} | {:.1} | 0 | none |",
+            manifest.catalog_id,
+            manifest.files.len(),
+            manifest.files.iter().map(|file| file.bytes).sum::<usize>() as f64 / 1_048_576.0,
         );
         manifests.push(manifest);
     }
@@ -247,6 +315,10 @@ fn generate_game_packs() {
         "Catalog snapshot {snapshot}. Emitted {} of {} items. Every pack's `Install.bat` (and `Uninstall.bat`) is pinned by name and never extracted.\n",
         manifests.len(),
         items.len()
+            + manifests
+                .iter()
+                .filter(|manifest| manifest.category == PackCategory::ItemBuilds)
+                .count()
     );
     doc.push_str("| Item | Category | Files written | MiB | Game files removed | Entries left in the ZIP |\n| --- | --- | ---: | ---: | ---: | --- |\n");
     doc.push_str(&report);

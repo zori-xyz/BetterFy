@@ -23022,5 +23022,794 @@
       "panorama/fonts/thai.uifont",
       "panorama/fonts/unifrakturcook-bold.ttf"
     ]
+  },
+  {
+    "schemaVersion": 1,
+    "kind": "gamefiles",
+    "id": "gamefiles.minify-opendotaguides-guides",
+    "catalogId": "minify-opendotaguides-guides",
+    "category": "item_builds",
+    "name": {
+      "ru": "Гайды OpenDotaGuides",
+      "en": "OpenDotaGuides Guides"
+    },
+    "author": "Egezenn",
+    "distribution": "internal_pilot",
+    "source": {
+      "urls": [
+        "https://github.com/Egezenn/OpenDotaGuides/releases/download/2026-10-19/itembuilds.zip"
+      ],
+      "catalogSnapshot": "OpenDotaGuides 2026-10-19",
+      "permission": "MIT (Egezenn/OpenDotaGuides)"
+    },
+    "archive": {
+      "zipBytes": 82649,
+      "zipSha256": "e849c356f59f62135d418cb6e18933c140b11042c2db5f22b66915f51ef28fd4",
+      "entries": 127
+    },
+    "files": [
+      {
+        "from": "default_abaddon.txt",
+        "to": "itembuilds/default_abaddon.txt",
+        "bytes": 1876,
+        "sha256": "b183f58f5362777f54d825d8402e0ff7e760881e60a96cffe007da75679e22a8"
+      },
+      {
+        "from": "default_abyssal_underlord.txt",
+        "to": "itembuilds/default_abyssal_underlord.txt",
+        "bytes": 1382,
+        "sha256": "9387beac820b2f8326c49d971032768b8a2d110a2b254d77c61b063a4a81d818"
+      },
+      {
+        "from": "default_alchemist.txt",
+        "to": "itembuilds/default_alchemist.txt",
+        "bytes": 1774,
+        "sha256": "b3af4cce5aa91d0b9197b013c6e7f195f3e1a42f972ed8e2d0ca744ba9631704"
+      },
+      {
+        "from": "default_ancient_apparition.txt",
+        "to": "itembuilds/default_ancient_apparition.txt",
+        "bytes": 1372,
+        "sha256": "d222c67e194e6d0bdfdb169afdf0c92fb7708e9c2e5c6a697db61c4db3676570"
+      },
+      {
+        "from": "default_antimage.txt",
+        "to": "itembuilds/default_antimage.txt",
+        "bytes": 1153,
+        "sha256": "345c3440041e6dc246b1de372edf79c91904ce6b77da55f86a1fc79a82d41ef9"
+      },
+      {
+        "from": "default_arc_warden.txt",
+        "to": "itembuilds/default_arc_warden.txt",
+        "bytes": 1739,
+        "sha256": "ea09b57047577122b384674c8f5be5bd9ade8d88e79ce821fe2cbedcfe2994e9"
+      },
+      {
+        "from": "default_axe.txt",
+        "to": "itembuilds/default_axe.txt",
+        "bytes": 1658,
+        "sha256": "83434b79bdb755be6f79b307beb436e8e4cb37b3deba1e256eab51c1b2321c20"
+      },
+      {
+        "from": "default_bane.txt",
+        "to": "itembuilds/default_bane.txt",
+        "bytes": 714,
+        "sha256": "5bd42e668c6acbf84a57b82ca9ef4e36d996df48046e5ebaad2a675793744a59"
+      },
+      {
+        "from": "default_batrider.txt",
+        "to": "itembuilds/default_batrider.txt",
+        "bytes": 1419,
+        "sha256": "36ba8a178fbc4d99630d0ff69576abf97587906254e2ef78eabd64c2f2823385"
+      },
+      {
+        "from": "default_beastmaster.txt",
+        "to": "itembuilds/default_beastmaster.txt",
+        "bytes": 1655,
+        "sha256": "1c62f24cb7a5d294d66bacfd7f21623e36eb9ed6b94cfd436586d5addb32e9a4"
+      },
+      {
+        "from": "default_bloodseeker.txt",
+        "to": "itembuilds/default_bloodseeker.txt",
+        "bytes": 1647,
+        "sha256": "2925eafc12cb44df077cf0b39caaeb530ccdcf12b3f9416f08edcfe18377c8f7"
+      },
+      {
+        "from": "default_bounty_hunter.txt",
+        "to": "itembuilds/default_bounty_hunter.txt",
+        "bytes": 1182,
+        "sha256": "aa12e322103544ddde62af716e47c73d847d1c8766e908bbc036bf24f92083d9"
+      },
+      {
+        "from": "default_brewmaster.txt",
+        "to": "itembuilds/default_brewmaster.txt",
+        "bytes": 1065,
+        "sha256": "dc29e84ccbd3f52fd6dd8ef192da99e7db47cbd597c3205a625896dff3526565"
+      },
+      {
+        "from": "default_bristleback.txt",
+        "to": "itembuilds/default_bristleback.txt",
+        "bytes": 1847,
+        "sha256": "91551d16648c5eb57a1447460cbe063ef14a0fdddcfe8b1aac16a8ab3bb5101e"
+      },
+      {
+        "from": "default_broodmother.txt",
+        "to": "itembuilds/default_broodmother.txt",
+        "bytes": 1533,
+        "sha256": "c59a97418bbfffb3e32a19ba8d7c7977b5237ec19f1dd10df72574c3814953b5"
+      },
+      {
+        "from": "default_centaur.txt",
+        "to": "itembuilds/default_centaur.txt",
+        "bytes": 1032,
+        "sha256": "66d739a61afeee0bb01f13e5168ca5879a04024a14860b7b66bb3364c18eeaa8"
+      },
+      {
+        "from": "default_chaos_knight.txt",
+        "to": "itembuilds/default_chaos_knight.txt",
+        "bytes": 1198,
+        "sha256": "7937cdb5da651c9c799a5c109f6b065299314694f66f6f2090506374c2190663"
+      },
+      {
+        "from": "default_chen.txt",
+        "to": "itembuilds/default_chen.txt",
+        "bytes": 1105,
+        "sha256": "2584fd9e45dea02a72756626946540b058efeca936624afe4e13136dddbf1287"
+      },
+      {
+        "from": "default_clinkz.txt",
+        "to": "itembuilds/default_clinkz.txt",
+        "bytes": 1295,
+        "sha256": "8ea0adb24c3993058fa0eb5803f8bb937d77372a54feeef1d8af90ede05ace8d"
+      },
+      {
+        "from": "default_crystal_maiden.txt",
+        "to": "itembuilds/default_crystal_maiden.txt",
+        "bytes": 1163,
+        "sha256": "284e3445ffc10b5b045245286e2cd3a87ddaaf3c8226668b30e50ef49cbe139a"
+      },
+      {
+        "from": "default_dark_seer.txt",
+        "to": "itembuilds/default_dark_seer.txt",
+        "bytes": 1476,
+        "sha256": "de0fd138488e47cf0fadb2e1d09d2cf2c18c92cb3b5e7e30ae536318f1b77fef"
+      },
+      {
+        "from": "default_dark_willow.txt",
+        "to": "itembuilds/default_dark_willow.txt",
+        "bytes": 1001,
+        "sha256": "91c7f504820cdea47e7569fba631c934f0478b47e66df9c42fa15559f7a55f20"
+      },
+      {
+        "from": "default_dawnbreaker.txt",
+        "to": "itembuilds/default_dawnbreaker.txt",
+        "bytes": 1536,
+        "sha256": "16975f28ef32bd207b0fdb1ad50c2c1157c37bd3239aa77cf441c3a814e2d627"
+      },
+      {
+        "from": "default_dazzle.txt",
+        "to": "itembuilds/default_dazzle.txt",
+        "bytes": 996,
+        "sha256": "9620e31cabd481461e893844e3a6388518a8f59c9003894eaee8b503ff5eb17b"
+      },
+      {
+        "from": "default_death_prophet.txt",
+        "to": "itembuilds/default_death_prophet.txt",
+        "bytes": 1880,
+        "sha256": "d52f803ca68f818c9c31c67108dc22aefe81c6cf458e9cec145b78a216e20abc"
+      },
+      {
+        "from": "default_disruptor.txt",
+        "to": "itembuilds/default_disruptor.txt",
+        "bytes": 886,
+        "sha256": "0c4a7e7975b36c03683fda6ffba921c2b3dbbe24f5c170474984797c9d3a9556"
+      },
+      {
+        "from": "default_doom_bringer.txt",
+        "to": "itembuilds/default_doom_bringer.txt",
+        "bytes": 1352,
+        "sha256": "9b84426ba1e7b1ab1d4efc32dae35a308c65b72db35763eb04c946452fa55ef9"
+      },
+      {
+        "from": "default_dragon_knight.txt",
+        "to": "itembuilds/default_dragon_knight.txt",
+        "bytes": 1554,
+        "sha256": "f739762d98985bbd7a6953c544ab379933faec849e7addf66141114a88cf0802"
+      },
+      {
+        "from": "default_drow_ranger.txt",
+        "to": "itembuilds/default_drow_ranger.txt",
+        "bytes": 1180,
+        "sha256": "51247bbba8a432d838002e802041beff2bbbebeb7fb8641232af1fe64e60af4d"
+      },
+      {
+        "from": "default_earth_spirit.txt",
+        "to": "itembuilds/default_earth_spirit.txt",
+        "bytes": 1274,
+        "sha256": "3c9cb48754963be6ee2d289896da732252fd228c4683d30a240343e28c268d37"
+      },
+      {
+        "from": "default_earthshaker.txt",
+        "to": "itembuilds/default_earthshaker.txt",
+        "bytes": 1384,
+        "sha256": "5e0efd2546e67dd819b32bdcf3ced2dd619e61020c8451fda712f563fddfdcf7"
+      },
+      {
+        "from": "default_elder_titan.txt",
+        "to": "itembuilds/default_elder_titan.txt",
+        "bytes": 1790,
+        "sha256": "87272bfe4d5e88407cf71b3c91a00fe8a91c26a0b89adf6cab206de12f2352bd"
+      },
+      {
+        "from": "default_ember_spirit.txt",
+        "to": "itembuilds/default_ember_spirit.txt",
+        "bytes": 1385,
+        "sha256": "b9722c2be7ff13a1bcccca7ae94ce896800cac3565d3e062ac26eae89fdefd28"
+      },
+      {
+        "from": "default_enchantress.txt",
+        "to": "itembuilds/default_enchantress.txt",
+        "bytes": 1396,
+        "sha256": "a555f3031cb950d1471cd969bacc7fda90383deca9d3873172bb3a39704dcc22"
+      },
+      {
+        "from": "default_enigma.txt",
+        "to": "itembuilds/default_enigma.txt",
+        "bytes": 1433,
+        "sha256": "eef7cdcc76464a24076f13f4f418cf76c111f9f515a20c5886577ec889f8c05b"
+      },
+      {
+        "from": "default_faceless_void.txt",
+        "to": "itembuilds/default_faceless_void.txt",
+        "bytes": 1471,
+        "sha256": "78b8043c9cc3c86dd0248dbee4772b524eed10e3634b759dce415b015d481832"
+      },
+      {
+        "from": "default_furion.txt",
+        "to": "itembuilds/default_furion.txt",
+        "bytes": 1762,
+        "sha256": "fc47f155fd64eabac12b8aced6418a14ad1f402040d4220d4cec2576d2244235"
+      },
+      {
+        "from": "default_grimstroke.txt",
+        "to": "itembuilds/default_grimstroke.txt",
+        "bytes": 1117,
+        "sha256": "b97ab5107f0d8864b8b634ae29c091b9cb6ac7b38a61a3553f9afc09e1875118"
+      },
+      {
+        "from": "default_gyrocopter.txt",
+        "to": "itembuilds/default_gyrocopter.txt",
+        "bytes": 1749,
+        "sha256": "6adb74bba668000a6795570050e2465f6176ae173dbbabeec32111b29d911b27"
+      },
+      {
+        "from": "default_hoodwink.txt",
+        "to": "itembuilds/default_hoodwink.txt",
+        "bytes": 1032,
+        "sha256": "2fb3b78d4c5ecfea645a5be5aedd77c8e85e5831137b9982f5992f35b89e8352"
+      },
+      {
+        "from": "default_huskar.txt",
+        "to": "itembuilds/default_huskar.txt",
+        "bytes": 1281,
+        "sha256": "566b68d4f3c2fc9f0c8c001d8f2e9fa4ee56993b218d9335c39d29132cb585cd"
+      },
+      {
+        "from": "default_invoker.txt",
+        "to": "itembuilds/default_invoker.txt",
+        "bytes": 1228,
+        "sha256": "e06fd4dfed844f9c75321e7557d263fa6fd75510f102128d65df2bf934088533"
+      },
+      {
+        "from": "default_jakiro.txt",
+        "to": "itembuilds/default_jakiro.txt",
+        "bytes": 1125,
+        "sha256": "35435fcc7a138559c7636c26293a2b8a0c24a899748beed1ea195466cde9b06f"
+      },
+      {
+        "from": "default_juggernaut.txt",
+        "to": "itembuilds/default_juggernaut.txt",
+        "bytes": 1243,
+        "sha256": "e45c232ac2e87919828be37949470e2538f59d692fddd60800de2a6a664c4297"
+      },
+      {
+        "from": "default_keeper_of_the_light.txt",
+        "to": "itembuilds/default_keeper_of_the_light.txt",
+        "bytes": 1401,
+        "sha256": "de03e71e9be223f72ce42ab114cf2cd51f0a9d22c2c7142c9c9ba76a434c99b5"
+      },
+      {
+        "from": "default_kez.txt",
+        "to": "itembuilds/default_kez.txt",
+        "bytes": 1171,
+        "sha256": "9c5d4bad519a2d8f66fc8a22138ce8e365e1f293aca8dbff893fc8dfe94edd1a"
+      },
+      {
+        "from": "default_kunkka.txt",
+        "to": "itembuilds/default_kunkka.txt",
+        "bytes": 1713,
+        "sha256": "f8b4f8739f16a62e672d0b9f8080f9895de6c360345961fd00f038d6ff3286ff"
+      },
+      {
+        "from": "default_largo.txt",
+        "to": "itembuilds/default_largo.txt",
+        "bytes": 1499,
+        "sha256": "597f1234b96d4378c5684e801a4fcd7bdc6373a71618a1edb309fb4d5f6b9902"
+      },
+      {
+        "from": "default_legion_commander.txt",
+        "to": "itembuilds/default_legion_commander.txt",
+        "bytes": 1544,
+        "sha256": "1da283525907c972016636525c07423f1b7f73c13d781b0735465b417a3c220c"
+      },
+      {
+        "from": "default_leshrac.txt",
+        "to": "itembuilds/default_leshrac.txt",
+        "bytes": 1451,
+        "sha256": "3605bdfe385d4050ef5c81e9209f3e97c49786d571ea5575fe654b68b0d7b9f7"
+      },
+      {
+        "from": "default_lich.txt",
+        "to": "itembuilds/default_lich.txt",
+        "bytes": 929,
+        "sha256": "e7511f3c893c435bb8aa49033209ad73047edc9df211768018fc0eb9c743ae2a"
+      },
+      {
+        "from": "default_life_stealer.txt",
+        "to": "itembuilds/default_life_stealer.txt",
+        "bytes": 1214,
+        "sha256": "ba2479e6f566bfe7080383b8a1e949586d81671565e5b2cf088a2eb1b26abc69"
+      },
+      {
+        "from": "default_lina.txt",
+        "to": "itembuilds/default_lina.txt",
+        "bytes": 1706,
+        "sha256": "96ea61902b5576468540e102016652e282f6e3c501e3241d0eed2c1c3d1de766"
+      },
+      {
+        "from": "default_lion.txt",
+        "to": "itembuilds/default_lion.txt",
+        "bytes": 1155,
+        "sha256": "311ee7f4bbc6a9f8f8f703dc5edb7012270c7b9786c2ebf6be6a0f284a10eb86"
+      },
+      {
+        "from": "default_lone_druid.txt",
+        "to": "itembuilds/default_lone_druid.txt",
+        "bytes": 1244,
+        "sha256": "173e3bcc16d1f4cd2da53e7dce1c42d728aac0beac6ab940ede5e0b956faa6ea"
+      },
+      {
+        "from": "default_luna.txt",
+        "to": "itembuilds/default_luna.txt",
+        "bytes": 1329,
+        "sha256": "57a3eb3211a04c2cdfdaa917c3c41e1b323fd1313d51c07028ee88612cf1d8dc"
+      },
+      {
+        "from": "default_lycan.txt",
+        "to": "itembuilds/default_lycan.txt",
+        "bytes": 1172,
+        "sha256": "c422c074e6d18cf8141233c9e9b72be3138c9b5ed635aa5dae1f4e40dc81d701"
+      },
+      {
+        "from": "default_magnataur.txt",
+        "to": "itembuilds/default_magnataur.txt",
+        "bytes": 1807,
+        "sha256": "d40ddcb880f1f53b7b4a54e1037990e8b75f968ebc80f12ef442dd0931328b80"
+      },
+      {
+        "from": "default_marci.txt",
+        "to": "itembuilds/default_marci.txt",
+        "bytes": 1798,
+        "sha256": "6da195426a55e1c2f837a278cecc2d0615ecf1f3192e9a346142d3ec38dfffd4"
+      },
+      {
+        "from": "default_mars.txt",
+        "to": "itembuilds/default_mars.txt",
+        "bytes": 1534,
+        "sha256": "6ae8bf97fa8a98a829710b3fb33cf90071e31a99d4768a19237df2d932448306"
+      },
+      {
+        "from": "default_medusa.txt",
+        "to": "itembuilds/default_medusa.txt",
+        "bytes": 1317,
+        "sha256": "4fff0d85744055bc70a04d6686d2c40cd6cf68236642633ac34bac3f20730dd3"
+      },
+      {
+        "from": "default_meepo.txt",
+        "to": "itembuilds/default_meepo.txt",
+        "bytes": 1600,
+        "sha256": "9aa7fd74c8481538721da2d55053b210cfe2695dff574f632ae7831a6801cfd3"
+      },
+      {
+        "from": "default_mirana.txt",
+        "to": "itembuilds/default_mirana.txt",
+        "bytes": 1219,
+        "sha256": "d97dd111ccbd03636227c1fb5f5cd0ee5049df50d0aa8567138dcc9be727872e"
+      },
+      {
+        "from": "default_monkey_king.txt",
+        "to": "itembuilds/default_monkey_king.txt",
+        "bytes": 1629,
+        "sha256": "1ac46fefa14b954c797f03fa1f5328fe7de254f4e5ad0ee76bbb202d121702f0"
+      },
+      {
+        "from": "default_morphling.txt",
+        "to": "itembuilds/default_morphling.txt",
+        "bytes": 1422,
+        "sha256": "4df92cec28de598e3094fde6c4b497313634ad3197f61e7ae0e8a39737f65ec2"
+      },
+      {
+        "from": "default_muerta.txt",
+        "to": "itembuilds/default_muerta.txt",
+        "bytes": 1596,
+        "sha256": "3dd1434cf77f22affe8ba9a6173533ad210c7cea9a63ffc63a9b1f9ee7894f59"
+      },
+      {
+        "from": "default_naga_siren.txt",
+        "to": "itembuilds/default_naga_siren.txt",
+        "bytes": 1352,
+        "sha256": "7201201da43138764c8c9593eaa1a55f17e38f3455125ba67d2d297c07dd775a"
+      },
+      {
+        "from": "default_necrolyte.txt",
+        "to": "itembuilds/default_necrolyte.txt",
+        "bytes": 1492,
+        "sha256": "8743fc7f928cb38e694231c89ad007b0eb4ecb6820a8c89ee318ea32c390ff9b"
+      },
+      {
+        "from": "default_nevermore.txt",
+        "to": "itembuilds/default_nevermore.txt",
+        "bytes": 1529,
+        "sha256": "14b1a6f61f1fb37cb4c46b91ef0104b1ab37b16e78a5a61540066c7659dca8dc"
+      },
+      {
+        "from": "default_night_stalker.txt",
+        "to": "itembuilds/default_night_stalker.txt",
+        "bytes": 1602,
+        "sha256": "65dca0757726eb5019c1a107a00022882e1c7304d756a67c5d416eead21fe131"
+      },
+      {
+        "from": "default_nyx_assassin.txt",
+        "to": "itembuilds/default_nyx_assassin.txt",
+        "bytes": 1257,
+        "sha256": "353317f7449349de92bf5c8db02d1b342480127d1da1c851768150fda71294ff"
+      },
+      {
+        "from": "default_obsidian_destroyer.txt",
+        "to": "itembuilds/default_obsidian_destroyer.txt",
+        "bytes": 1325,
+        "sha256": "1c604ac5751e4c7319467eed42fd14202c94570bd13187a2d737eccb8a2273c4"
+      },
+      {
+        "from": "default_ogre_magi.txt",
+        "to": "itembuilds/default_ogre_magi.txt",
+        "bytes": 1606,
+        "sha256": "5f93b3ef3873fd714c7fd201724a06dea11be72fef761af4deaebfd274f28bb7"
+      },
+      {
+        "from": "default_omniknight.txt",
+        "to": "itembuilds/default_omniknight.txt",
+        "bytes": 1947,
+        "sha256": "15b834c7ce8836c3d93e618e8166d586b458560ff4be04c95aad0b818aabcac1"
+      },
+      {
+        "from": "default_oracle.txt",
+        "to": "itembuilds/default_oracle.txt",
+        "bytes": 1074,
+        "sha256": "faf093d24673589b49124ddf4098e9d125878ecd5a71455407585c1d6c09f89c"
+      },
+      {
+        "from": "default_pangolier.txt",
+        "to": "itembuilds/default_pangolier.txt",
+        "bytes": 1165,
+        "sha256": "d9e495fb62853ef27100af5270dcb7a2d90964df72428f29a9f8def68d27ebd5"
+      },
+      {
+        "from": "default_phantom_assassin.txt",
+        "to": "itembuilds/default_phantom_assassin.txt",
+        "bytes": 1262,
+        "sha256": "e9018de3083e45485c04eb6bc64ca164897df0100820c8f73e44a33ee90db47a"
+      },
+      {
+        "from": "default_phantom_lancer.txt",
+        "to": "itembuilds/default_phantom_lancer.txt",
+        "bytes": 1163,
+        "sha256": "9806af3e63ba7f0aba6056e6fe9497f25fed98817dfae797aef881739e2a5e70"
+      },
+      {
+        "from": "default_phoenix.txt",
+        "to": "itembuilds/default_phoenix.txt",
+        "bytes": 1392,
+        "sha256": "acba17f0e2fd511c12c5f246572330cd8f589c569e8cbe8367be1af38e83be59"
+      },
+      {
+        "from": "default_primal_beast.txt",
+        "to": "itembuilds/default_primal_beast.txt",
+        "bytes": 1361,
+        "sha256": "05f433ad8353d21f7702db373b1cab42d70ccbe7f66e86fb8f545618f0f9d092"
+      },
+      {
+        "from": "default_puck.txt",
+        "to": "itembuilds/default_puck.txt",
+        "bytes": 1494,
+        "sha256": "148df3d94297b2640027565dcbae77bab6b3d772073b53b62cc4c1af44447ace"
+      },
+      {
+        "from": "default_pudge.txt",
+        "to": "itembuilds/default_pudge.txt",
+        "bytes": 1518,
+        "sha256": "65fc4819904e082677d4dd9342426200edfd56aa4209f5439e86749835a6b1df"
+      },
+      {
+        "from": "default_pugna.txt",
+        "to": "itembuilds/default_pugna.txt",
+        "bytes": 1515,
+        "sha256": "eab562ae0bda59fbb64ac05affb44da7d5f47fe5363918dacbe853dbf3e61ccb"
+      },
+      {
+        "from": "default_queenofpain.txt",
+        "to": "itembuilds/default_queenofpain.txt",
+        "bytes": 1713,
+        "sha256": "4203d4aa653a9370bc37cdce0daea3cdeb2849f0e74759517b7e0c87b1d0dff8"
+      },
+      {
+        "from": "default_rattletrap.txt",
+        "to": "itembuilds/default_rattletrap.txt",
+        "bytes": 940,
+        "sha256": "88e4a6513ff78131d27a8e15fb332bb1f004183aed4295e35e609c6ffdbc3e00"
+      },
+      {
+        "from": "default_razor.txt",
+        "to": "itembuilds/default_razor.txt",
+        "bytes": 2029,
+        "sha256": "3f7b42e598175ef9ea629792c88f28a5ca0a080fe81ba7aa55cf5660f985edd1"
+      },
+      {
+        "from": "default_riki.txt",
+        "to": "itembuilds/default_riki.txt",
+        "bytes": 1567,
+        "sha256": "38aa357680194385e0de98670cf04a33129fdb994f02e3b71196167f453097dd"
+      },
+      {
+        "from": "default_ringmaster.txt",
+        "to": "itembuilds/default_ringmaster.txt",
+        "bytes": 1051,
+        "sha256": "0eeacf579f6ef04a8982361a26ac0cec7a05afd4ee7ca7b51be9fc61dcad1f83"
+      },
+      {
+        "from": "default_rubick.txt",
+        "to": "itembuilds/default_rubick.txt",
+        "bytes": 1130,
+        "sha256": "18e4de74ae419ccad1434864510ed9ad8f3c4ff233bd39dc805c9180ae737e63"
+      },
+      {
+        "from": "default_sand_king.txt",
+        "to": "itembuilds/default_sand_king.txt",
+        "bytes": 1654,
+        "sha256": "e7f2f3e802918d7967ffedf4ba5b8516d9d41feb95ea34c18402b66e2fd4b311"
+      },
+      {
+        "from": "default_shadow_demon.txt",
+        "to": "itembuilds/default_shadow_demon.txt",
+        "bytes": 1018,
+        "sha256": "5c458deef97561b28f75071e5561b4f362b92b0661916e2e1df6f43112e62680"
+      },
+      {
+        "from": "default_shadow_shaman.txt",
+        "to": "itembuilds/default_shadow_shaman.txt",
+        "bytes": 923,
+        "sha256": "bbbbcd0e07bcb2edef7991439efb58a4155fb0517fa740c7dc93ab913516bc59"
+      },
+      {
+        "from": "default_shredder.txt",
+        "to": "itembuilds/default_shredder.txt",
+        "bytes": 1409,
+        "sha256": "68e26a5e59861ed935facd7bcc2691654ebadef9a6eee60d3cff783d14fcd17e"
+      },
+      {
+        "from": "default_silencer.txt",
+        "to": "itembuilds/default_silencer.txt",
+        "bytes": 1462,
+        "sha256": "00f44029bcbfe9353842074f16617c18d1edfc7c55caa5d2d8379b7d641d45c6"
+      },
+      {
+        "from": "default_skeleton_king.txt",
+        "to": "itembuilds/default_skeleton_king.txt",
+        "bytes": 1525,
+        "sha256": "57487c33424a6047aaabcd98ccf604ca235c2ed95b55f46929c0c6257f655138"
+      },
+      {
+        "from": "default_skywrath_mage.txt",
+        "to": "itembuilds/default_skywrath_mage.txt",
+        "bytes": 1329,
+        "sha256": "9db55bd5c126035f726f775d218108f50ea40cd99c381d97f58b00db5a1cd881"
+      },
+      {
+        "from": "default_slardar.txt",
+        "to": "itembuilds/default_slardar.txt",
+        "bytes": 1141,
+        "sha256": "62fd8c84061999f15cedf095cca9711eed2f0c1ac847d48c2c4e9672f5af362d"
+      },
+      {
+        "from": "default_slark.txt",
+        "to": "itembuilds/default_slark.txt",
+        "bytes": 1582,
+        "sha256": "196ced00be427f30fc477d6607e074c589f88c3f40fdb730a29b4fe9afb4fdbc"
+      },
+      {
+        "from": "default_snapfire.txt",
+        "to": "itembuilds/default_snapfire.txt",
+        "bytes": 1430,
+        "sha256": "f7bd71f43d641c8b1654dfc46648432936760d6965b89260356249620d3732c6"
+      },
+      {
+        "from": "default_sniper.txt",
+        "to": "itembuilds/default_sniper.txt",
+        "bytes": 1595,
+        "sha256": "76a6dea67535974bc4106aa35d33c172b5c7e83d5103d4c5fe9a4d7bff911388"
+      },
+      {
+        "from": "default_spectre.txt",
+        "to": "itembuilds/default_spectre.txt",
+        "bytes": 1251,
+        "sha256": "d4feacb5e5ede37ff79629e7bf132045e563726ba591ca60aed6e010c849a0b3"
+      },
+      {
+        "from": "default_spirit_breaker.txt",
+        "to": "itembuilds/default_spirit_breaker.txt",
+        "bytes": 1484,
+        "sha256": "3ade4e3c01a28d5b2459ee75a8c30e27ef8a6ba283a49545acb0bcfca6af6fb8"
+      },
+      {
+        "from": "default_storm_spirit.txt",
+        "to": "itembuilds/default_storm_spirit.txt",
+        "bytes": 1241,
+        "sha256": "f1e52a1f171ba1677d8f0863ce0cac06b66877044a5e291626d4b69d62ecfab5"
+      },
+      {
+        "from": "default_sven.txt",
+        "to": "itembuilds/default_sven.txt",
+        "bytes": 1511,
+        "sha256": "b6eb8da1bda95aeadec1bd6e830d49378f66983a94a3bb343d762ec931f7516c"
+      },
+      {
+        "from": "default_techies.txt",
+        "to": "itembuilds/default_techies.txt",
+        "bytes": 1113,
+        "sha256": "6cc0738f82ef11d1bc0d7aa78fee5fdc01bfb81b4a9e65bea3bcfec215348ce4"
+      },
+      {
+        "from": "default_templar_assassin.txt",
+        "to": "itembuilds/default_templar_assassin.txt",
+        "bytes": 1182,
+        "sha256": "c4703d250301949f44ca484e6d790728eea717345b78ca2fff3d4182d4880ef2"
+      },
+      {
+        "from": "default_terrorblade.txt",
+        "to": "itembuilds/default_terrorblade.txt",
+        "bytes": 1375,
+        "sha256": "471967a41a8caf62a656d6c8407754eca5006cd981e8af56ebd9c2e8c47e0b8c"
+      },
+      {
+        "from": "default_tidehunter.txt",
+        "to": "itembuilds/default_tidehunter.txt",
+        "bytes": 1488,
+        "sha256": "21cda799c722959614ee4a154056ef31310f0c65b45ce61edca1945845961e00"
+      },
+      {
+        "from": "default_tinker.txt",
+        "to": "itembuilds/default_tinker.txt",
+        "bytes": 1240,
+        "sha256": "a52956ade1feadce2a3e8ab80ebaa7f6ed25622756e10a81420996268a34f671"
+      },
+      {
+        "from": "default_tiny.txt",
+        "to": "itembuilds/default_tiny.txt",
+        "bytes": 1474,
+        "sha256": "ae5fcee58df2dd056960aaf704860d51d72cbe301448155b215edaf7aa9a78a7"
+      },
+      {
+        "from": "default_treant.txt",
+        "to": "itembuilds/default_treant.txt",
+        "bytes": 1229,
+        "sha256": "722496846c32e6acea18e9c102c8dd4ca9a20a97619185148cab30ac2be013b4"
+      },
+      {
+        "from": "default_troll_warlord.txt",
+        "to": "itembuilds/default_troll_warlord.txt",
+        "bytes": 1584,
+        "sha256": "71927c5c28d13d3570f208fed894ce23b57423f6d9240688cd8e524c4af9faf7"
+      },
+      {
+        "from": "default_tusk.txt",
+        "to": "itembuilds/default_tusk.txt",
+        "bytes": 1096,
+        "sha256": "8b9b79201beb824c47decb95bd94afc7a5631c02ef973f775f373a9ed20c68be"
+      },
+      {
+        "from": "default_undying.txt",
+        "to": "itembuilds/default_undying.txt",
+        "bytes": 1595,
+        "sha256": "550e44c097e0794f8ead7f5bd394d7d6c73c17351cb9d3f0314ee0b9fabe886a"
+      },
+      {
+        "from": "default_ursa.txt",
+        "to": "itembuilds/default_ursa.txt",
+        "bytes": 1148,
+        "sha256": "6a47335bdf080cac87bbae58471ed167895dd0f77558c3719c89ef0370203828"
+      },
+      {
+        "from": "default_vengefulspirit.txt",
+        "to": "itembuilds/default_vengefulspirit.txt",
+        "bytes": 1754,
+        "sha256": "1ae3cdaf4e09b014cc04785837b9580fab7c2ad0801e980dbb4a7c8b872916fd"
+      },
+      {
+        "from": "default_venomancer.txt",
+        "to": "itembuilds/default_venomancer.txt",
+        "bytes": 1713,
+        "sha256": "6881e6351285f133eee6ccd7e40724dbb51a443645c7dd6e4caee3576ad3ae57"
+      },
+      {
+        "from": "default_viper.txt",
+        "to": "itembuilds/default_viper.txt",
+        "bytes": 1877,
+        "sha256": "1a516a94d8f24a8d2812b2013fff0781ba965c13d4939fcc1699ba51cf1690b7"
+      },
+      {
+        "from": "default_visage.txt",
+        "to": "itembuilds/default_visage.txt",
+        "bytes": 1547,
+        "sha256": "84826ad0a7fa1be78c7f1b8667a4b28fe5bd1f53522371ec40af89be8b6b40c3"
+      },
+      {
+        "from": "default_void_spirit.txt",
+        "to": "itembuilds/default_void_spirit.txt",
+        "bytes": 1767,
+        "sha256": "bf46053c7fcf318920a57010411a37d1e4c2477b03133c779f0d8558e86f8e7b"
+      },
+      {
+        "from": "default_warlock.txt",
+        "to": "itembuilds/default_warlock.txt",
+        "bytes": 1072,
+        "sha256": "22fcc79f4147729e019d19bf14962b5b565fcec93326854f5b2ddca0ce8cadbc"
+      },
+      {
+        "from": "default_weaver.txt",
+        "to": "itembuilds/default_weaver.txt",
+        "bytes": 1692,
+        "sha256": "62c91a7394e2c4b156c27fce9c23554db1d5cb93c1a26918aa807d7886071927"
+      },
+      {
+        "from": "default_windrunner.txt",
+        "to": "itembuilds/default_windrunner.txt",
+        "bytes": 1700,
+        "sha256": "c5c47fd8ad61eb1b0e70a943fa446e1ebf0e98402f039be52ab09ebbadbbc831"
+      },
+      {
+        "from": "default_winter_wyvern.txt",
+        "to": "itembuilds/default_winter_wyvern.txt",
+        "bytes": 1110,
+        "sha256": "f4bed9717fac868077233648955135c8ea1493b88d8247e303738fc717acf99c"
+      },
+      {
+        "from": "default_wisp.txt",
+        "to": "itembuilds/default_wisp.txt",
+        "bytes": 1903,
+        "sha256": "cf4a40c4f39f2c9bfe2fec176016ce58f876bc2febea88822990e1b826461097"
+      },
+      {
+        "from": "default_witch_doctor.txt",
+        "to": "itembuilds/default_witch_doctor.txt",
+        "bytes": 970,
+        "sha256": "3e51e927b826b40b06ea03ff96c7c0062cd6308aa23d23c51fcbf3b159fc5cf0"
+      },
+      {
+        "from": "default_zuus.txt",
+        "to": "itembuilds/default_zuus.txt",
+        "bytes": 1384,
+        "sha256": "6d9369719e1c0357199f3e78080296b6f0a7554ddd9ac4fe1349723bd375d66f"
+      }
+    ]
   }
 ]

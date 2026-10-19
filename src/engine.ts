@@ -480,7 +480,7 @@ export type CatalogStatus = {
 export type GamePackPlanItem = {
   packageId: string;
   catalogId: string;
-  category: "cursors" | "fonts";
+  category: "cursors" | "fonts" | "item_builds";
   files: number;
   bytes: number;
   removes: number;
