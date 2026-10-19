@@ -172,8 +172,8 @@ export const explainError = (code: string, isRu: boolean) => {
       "Some files are changed by more than one item in the build. Review the list, confirm it, and retry.",
     ],
     bundle_limit_exceeded: [
-      "Сборка не помещается в один файл: образ может занимать не больше 256 МБ. Ничего не скачано. Убери один из крупных обликов или пакетов (музыка, деревья, курьеры с моделями) или, для облика героя, включи «Не трогать общие файлы игры» (так сборка меньше), затем подготовь заново.",
-      "The build does not fit in one file: the merged VPK can hold at most 256 MB. Nothing was downloaded. Remove one of the large skins or packs (music, trees, courier models) or, for a hero skin, turn on \"Keep the game's shared files untouched\" (it makes the build smaller), then prepare again.",
+      "Сборка слишком большая: в одну сборку помещается до 512 МБ. Ничего не скачано. Убери один из крупных обликов или пакетов (музыка, деревья, курьеры с моделями) или, для облика героя, включи «Менять только этого героя» (так сборка меньше), затем подготовь заново.",
+      "The build is too large: one build holds up to 512 MB. Nothing was downloaded. Remove one of the large skins or packs (music, trees, courier models) or, for a hero skin, turn on \"Change only this hero\" (it makes the build smaller), then prepare again.",
     ],
     wardrobe_audit_mismatch: [
       "Архив не совпал с проверенным описанием. BetterFy не будет его ставить.",
@@ -188,16 +188,16 @@ export const explainError = (code: string, isRu: boolean) => {
       "The archive does not contain what was expected. BetterFy will not install it.",
     ],
     skin_archive_hostile: [
-      "В архиве есть файлы, которые BetterFy не ставит ни при каких условиях (скрипты, программы или небезопасные пути).",
-      "The archive holds files BetterFy never installs (scripts, programs or unsafe paths).",
+      "В архиве есть файлы, которые BetterFy не ставит ни при каких условиях (скрипты или программы).",
+      "The archive holds files BetterFy never installs (scripts or programs).",
     ],
     skin_shared_paths_refused: [
       "Архив меняет общие файлы игры, а для него выбрано «отказать». Установка остановлена.",
       "The archive changes shared game files and is set to refuse them. Installation stopped.",
     ],
     build_too_large: [
-      "Все выбранные файлы вместе занимают больше 256 МБ: это предел одного файла сборки (pak-файла), который читает Dota. Убери один из крупных скинов или собери его отдельно от остального.",
-      "The selected files add up to more than 256 MB, the limit for the single build file (pak file) Dota reads. Remove one of the large skins or build it separately from the rest.",
+      "Всё выбранное вместе больше 512 МБ, а это предел одной сборки. Убери один из крупных обликов или собери его отдельно от остального.",
+      "Everything selected adds up to more than 512 MB, the limit for one build. Remove one of the large skins or build it separately from the rest.",
     ],
     skin_install_too_large: [
       "Набор слишком большой для одной сборки.",

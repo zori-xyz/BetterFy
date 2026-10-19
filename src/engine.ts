@@ -297,7 +297,8 @@ export type SkinRejectReason =
   | "panorama_scripted"
   | "panorama_unproven"
   | "outside_category"
-  | "decor_refused";
+  | "decor_refused"
+  | "name_not_ascii";
 
 /** What the skin-archive analyzer found (src-tauri/src/skin_archive.rs). */
 export type SkinReport = {

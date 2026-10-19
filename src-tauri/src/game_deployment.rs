@@ -25,7 +25,7 @@ const PREFERRED_SLOT_NUMBERS: [u8; 16] = [
 /// Minify writes its output as `pak66_dir.vpk` plus `pak66_000.vpk`, ...
 const MINIFY_SLOT_NUMBER: u8 = 66;
 const MAX_SLOT_FILES: usize = 64;
-const MAX_PACKAGE_BYTES: usize = 256 * 1024 * 1024;
+const MAX_PACKAGE_BYTES: usize = 512 * 1024 * 1024;
 /// Where a map package goes, below the language folder: `maps/dota.vpk`.
 const MAPS_FOLDER: &str = "maps";
 const MAP_FILE: &str = "dota.vpk";

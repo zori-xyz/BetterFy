@@ -2068,8 +2068,8 @@ mod tests {
                     ("particles/basic_ambient/basic_ambient.vpcf_c", b"b"),
                 ],
                 |value| {
-                    value["archive"]["innerBytes"] = 61_000_000.into();
-                    value["audited"]["installBytes"] = 60_000_000.into();
+                    value["archive"]["innerBytes"] = 121_000_000.into();
+                    value["audited"]["installBytes"] = 120_000_000.into();
                     value["audited"]["stripBytes"] = 1_000.into();
                 },
             );
@@ -2079,7 +2079,7 @@ mod tests {
             .map(|index| big(&format!("budget-skin-{index}")))
             .collect::<Vec<_>>();
         let ids = items.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
-        // 5 x 60 MB is more than the 256 MiB the merged VPK can hold.
+        // 5 x 120 MB is more than the 512 MiB the merged VPK can hold.
         assert_eq!(
             begin_download(root.clone(), ids.clone(), None)
                 .err()
@@ -2089,7 +2089,7 @@ mod tests {
         // Four fit under the limit, which the check only reads from the pins.
         assert_eq!(
             wardrobe::install_footprint(&ids[..4]).1,
-            240_000_000,
+            480_000_000,
             "four skins stay under the limit"
         );
         // The opt-in mode counts the smaller pinned size.

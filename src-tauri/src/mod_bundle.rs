@@ -9,7 +9,7 @@ const MAX_PACKAGES: usize = 64;
 /// bytes). The builder checks a wardrobe selection against them before it
 /// downloads anything.
 pub(crate) const MAX_RESOURCES: usize = 65_536;
-pub(crate) const MAX_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
+pub(crate) const MAX_PAYLOAD_BYTES: usize = 512 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
 pub(crate) struct BundlePackage {

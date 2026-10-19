@@ -12,17 +12,17 @@ Written by the local-only test `wardrobe_audit::generate_wardrobe_allowlist` (`s
 | Hero inference (hero skins only) | folders of Valve-present paths: `models/heroes/<h>`, `models/items/<h>`, `particles/units/heroes/hero_<h>`, `particles/econ/items/<h>`, `materials/models/(heroes\|items)/<h>`; every name with at least 5% of the top name's paths is kept (at most 8) |
 | Other categories | no hero: every accepted file installs; "overrides a Valve file" and "new file" are computed against the same list and pinned (information, not a policy) |
 | Mirrors | candidate URLs checked by HEAD request: kept only when they answer 200 with the pinned size |
-| Embedded allowlist | 5 files, 2.31 MB in all (`manifests.json` 0.89 MB, `manifests-effects.json` 0.56 MB, `manifests-world.json` 0.46 MB, `manifests-panorama.json` 0.16 MB, `manifests-audio-ui.json` 0.24 MB); interface copy `index.json` 0.35 MB |
+| Embedded allowlist | 5 files, 2.49 MB in all (`manifests.json` 0.92 MB, `manifests-effects.json` 0.56 MB, `manifests-world.json` 0.60 MB, `manifests-panorama.json` 0.17 MB, `manifests-audio-ui.json` 0.24 MB); interface copy `index.json` 0.36 MB |
 
-Emitted 1011 of 1044 items.
-Skipped 33 of 1044 items.
+Emitted 1028 of 1044 items.
+Skipped 16 of 1044 items.
 
 ## Categories
 
 | Category | Scope | Types | Items | Emitted | Skipped | Install MiB | Overrides a Valve file | New files |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `heroes` | hero | compiled resources | 460 | 449 | 11 | 5621.5 | 2845 | 33984 |
-| `hero-items` | hero | compiled resources | 52 | 51 | 1 | 38.7 | 42 | 30 |
+| `heroes` | hero | compiled resources | 460 | 459 | 1 | 7212.4 | 3072 | 35739 |
+| `hero-items` | hero | compiled resources | 52 | 52 | 0 | 105.3 | 42 | 94 |
 | `ancient` | none | compiled resources | 2 | 2 | 0 | 10.6 | 11 | 12 |
 | `backgrounds` | none | panorama backgrounds (proven layouts, styles, videos) | 62 | 62 | 0 | 261.4 | 428 | 122 |
 | `announcers` | none | sounds | 7 | 7 | 0 | 0.1 | 7 | 0 |
@@ -33,7 +33,7 @@ Skipped 33 of 1044 items.
 | `hero-sounds` | none | sounds | 15 | 15 | 0 | 31.4 | 26 | 0 |
 | `herofx` | none | compiled resources | 5 | 5 | 0 | 0.6 | 53 | 7 |
 | `high-five` | none | compiled resources | 2 | 2 | 0 | 0.2 | 16 | 0 |
-| `huds` | none | panorama HUD (proven styles, textures) | 4 | 3 | 1 | 10.8 | 121 | 2 |
+| `huds` | none | panorama HUD (proven styles, textures) | 4 | 4 | 0 | 18.9 | 174 | 5 |
 | `item-effects` | none | compiled resources | 143 | 143 | 0 | 13.7 | 846 | 381 |
 | `item-icons` | none | panorama textures | 8 | 8 | 0 | 23.4 | 1533 | 318 |
 | `mega-kill` | none | sounds | 34 | 34 | 0 | 15.6 | 171 | 83 |
@@ -46,10 +46,10 @@ Skipped 33 of 1044 items.
 | `roshan` | none | compiled resources | 10 | 10 | 0 | 3.9 | 10 | 0 |
 | `shaders` | none | materials and textures | 32 | 32 | 0 | 12.2 | 37 | 78 |
 | `sounds` | none | sounds | 9 | 8 | 1 | 50.4 | 43 | 0 |
-| `terrains` | none | compiled resources | 20 | 4 | 16 | 119.9 | 3598 | 327 |
+| `terrains` | none | compiled resources | 20 | 8 | 12 | 242.0 | 5974 | 1522 |
 | `ti-bp-effects` | none | compiled resources | 16 | 16 | 0 | 5.4 | 1273 | 309 |
 | `towers` | none | compiled resources | 1 | 1 | 0 | 0.2 | 1 | 0 |
-| `trees` | none | compiled resources | 18 | 17 | 1 | 104.7 | 1475 | 261 |
+| `trees` | none | compiled resources | 18 | 18 | 0 | 106.7 | 1490 | 285 |
 | `versus-screens` | none | panorama versus screens (proven layouts) | 7 | 7 | 0 | 0.0 | 14 | 0 |
 | `wards` | none | compiled resources | 5 | 5 | 0 | 1.3 | 5 | 0 |
 
@@ -73,16 +73,9 @@ Skipped 33 of 1044 items.
 
 | Reason | Items |
 | --- | ---: |
-| VPK container unreadable | 1 |
 | ZIP does not hold exactly one pakNN_dir.vpk | 12 |
-| analyzer blocked the install (skin_archive_hostile) | 12 |
-| archive over the 256 MiB limit | 2 |
-| no archive in the cache | 1 |
-| the catalog's file is an external link, not a mirrored file | 5 |
-
-### VPK container unreadable (1)
-
-- `heroes-black-witch-doctor`: vpk_invalid
+| no archive in the cache | 2 |
+| the catalog's file is an external link, not a mirrored file | 2 |
 
 ### ZIP does not hold exactly one pakNN_dir.vpk (12)
 
@@ -99,80 +92,63 @@ Skipped 33 of 1044 items.
 - `terrains-ti8-emerald-abyss`: 2 entries: maps/dota.vpk, Guide.txt
 - `terrains-ti9-overgrown-empire`: 2 entries: maps/dota.vpk, Guide.txt
 
-### analyzer blocked the install (skin_archive_hostile) (12)
-
-- `hero-items-disruptor-tractor`: PathUnsafe x32
-- `heroes-ember-spirit-mai-shiranui`: PathUnsafe x4
-- `heroes-enigma-blackhole-chan`: PathUnsafe x1, Script x1
-- `heroes-lina-crystal-empress`: PathUnsafe x1
-- `heroes-mirana-suigintou`: PathUnsafe x9
-- `heroes-outworld-destroyer-tatsumaki`: PathUnsafe x3
-- `huds-black-hud`: PathUnsafe x2
-- `terrains-darkpoly`: PathUnsafe x1
-- `terrains-darkpoly-trees`: PathUnsafe x1
-- `terrains-lowpoly`: PathUnsafe x1
-- `terrains-lowpoly-trees`: PathUnsafe x1
-- `trees-cartoon-trees`: PathUnsafe x1
-
-### archive over the 256 MiB limit (2)
-
-- `heroes-legion-commander-chen`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
-- `heroes-nude-drow-ranger-v2`: the VPK inside the ZIP is over the unpacked-size bound of the archive inspector
-
-### no archive in the cache (1)
+### no archive in the cache (2)
 
 - `heroes-crimson-anti-mage`: never fetched: the survey could not read its ZIP directory or no mirror had the file
+- `sounds-warcraft-iii-allstars-voices`: never fetched: the survey could not read its ZIP directory or no mirror had the file
 
-### the catalog's file is an external link, not a mirrored file (5)
+### the catalog's file is an external link, not a mirrored file (2)
 
-- `heroes-phantom-assassin-yor-forger`: https://huggingface.co/datasets/hrdq/d2pfx/resolve/main/Phantom%20Assassin%20Yor%20Forger.zip
-- `heroes-tinker-alexander-prime`: https://huggingface.co/datasets/hrdq/d2pfx/resolve/main/Tinker%20Alexander%20Prime.zip
 - `optimization-commands`: https://github.com/h6rd/Dota2PornFxWeb/tree/main/assets/files/optimization/Commands.md
 - `optimization-dota2-minify`: https://egezenn.github.io/dota2-minify/
-- `sounds-warcraft-iii-allstars-voices`: https://huggingface.co/datasets/hrdq/d2pfx/resolve/main/Warcraft%20III%20AllStars%20Voices.zip
 
 ## Emitted items in numbers
 
-Total install bytes of all emitted items: 7351.1 MiB (102305 files) from 4507.2 MiB of downloads; hero skins with the shared files left out (opt-in): 5339.2 MiB of 5660.3 MiB.
-Biggest install: `heroes-nude-marci`, 207.3 MiB.
-Install size per item (MiB): median 0.8, p90 20.0, p99 74.9.
-Items that override no Valve file: 273; that override more than 100: 26; Valve files overridden in total: 15531.
-Hero-name ambiguity: 56 items carry more than one internal hero name (a second name with at least 5% of the top name's Valve-present paths).
-Paths folded to lower case: 34 files in 3 items.
-Classes over all emitted items: 49143 hero-scoped files, 37631 files the game does not ship (installed), 15531 files that override a Valve file (installed).
-Items with two verified mirrors: 1010; with one: 1.
-Files left out of the installs: 404 dropped (game files or unprovable ones BetterFy does not install), 585 ignored (not game files).
+Total install bytes of all emitted items: 9140.6 MiB (111668 files) from 5218.0 MiB of downloads; hero skins with the shared files left out (opt-in): 6965.5 MiB of 7317.7 MiB.
+Biggest install: `heroes-phantom-assassin-yor-forger`, 467.3 MiB.
+Install size per item (MiB): median 0.8, p90 22.9, p99 90.7.
+Items that override no Valve file: 275; that override more than 100: 30; Valve files overridden in total: 18202.
+Hero-name ambiguity: 58 items carry more than one internal hero name (a second name with at least 5% of the top name's Valve-present paths).
+Paths folded to lower case: 38 files in 6 items.
+Classes over all emitted items: 52794 hero-scoped files, 40672 files the game does not ship (installed), 18202 files that override a Valve file (installed).
+Items with two verified mirrors: 1025; with one: 3.
+Files left out of the installs: 421 dropped (game files or unprovable ones BetterFy does not install), 587 ignored (not game files).
 
 Files ignored because they are not game files (uncompiled sources, readmes and tool leftovers; the game loads none of them from a VPK, so leaving them out changes nothing in game):
 
 | Reason | Files |
 | --- | ---: |
-| not_game_file | 46 |
-| uncompiled_source | 539 |
+| not_game_file | 47 |
+| uncompiled_source | 540 |
 
 Files dropped for real (not installed, listed per item in the plan):
 
 | Reason | Files |
 | --- | ---: |
+| name_not_ascii | 1 |
 | panorama_scripted | 2 |
-| type_not_allowed | 402 |
+| type_not_allowed | 418 |
 
 Files dropped for real, by reason and file type:
 
 | Reason | Type | Files | MiB | Items |
 | --- | --- | ---: | ---: | ---: |
+| name_not_ascii | `vtex_c` | 1 | 0.0 | 1 |
 | panorama_scripted | `vxml_c` | 2 | 0.0 | 2 |
 | type_not_allowed | `dds` | 1 | 0.0 | 1 |
 | type_not_allowed | `png` | 231 | 19.5 | 21 |
 | type_not_allowed | `psf` | 15 | 0.0 | 4 |
-| type_not_allowed | `txt` | 58 | 15.6 | 58 |
+| type_not_allowed | `txt` | 64 | 15.7 | 59 |
 | type_not_allowed | `usm` | 17 | 11.6 | 17 |
+| type_not_allowed | `vcdlist_c` | 2 | 0.4 | 2 |
 | type_not_allowed | `vcss_c` | 11 | 0.2 | 5 |
 | type_not_allowed | `vmat_` | 2 | 0.0 | 1 |
-| type_not_allowed | `webm` | 67 | 81.2 | 64 |
+| type_not_allowed | `vpcf_` | 1 | 0.0 | 1 |
+| type_not_allowed | `webm` | 74 | 85.5 | 71 |
 
 Dropped for a reason other than an unsupported type, listed by item:
 
+- `huds-black-hud`: `panorama/images/hud/reborn/inventory_bg_psd — копия.vtex_c` (34116 bytes): name_not_ascii
 - `heroes-pudge-clown-toy`: `models/heroes/76561199168196947.vxml_c` (1608 bytes): panorama_scripted
 - `heroes-void-spirit-keqing`: `models/heroes/76561199380779061.vxml_c` (1608 bytes): panorama_scripted
 
@@ -180,57 +156,46 @@ Folders where items override Valve files most often (first three path segments):
 
 | Folder | Files |
 | --- | ---: |
-| `materials/default` | 1682 |
+| `materials/default` | 1739 |
 | `panorama/images/items` | 1552 |
 | `particles/econ/events` | 1361 |
-| `models/props_tree` | 1119 |
+| `materials/overlays` | 1270 |
+| `models/props_tree` | 1186 |
 | `particles/units/heroes` | 905 |
-| `materials/overlays` | 728 |
-| `particles/econ/items` | 596 |
-| `materials/models/cubemaps` | 585 |
+| `models/props_nature` | 678 |
+| `particles/econ/items` | 602 |
+| `materials/models/cubemaps` | 586 |
+| `models/props_debris` | 558 |
 | `sounds/music/valve_dota_001` | 558 |
-| `models/props_nature` | 432 |
-| `models/props_debris` | 368 |
-| `materials/water` | 290 |
-| `models/props_structures` | 286 |
-| `materials/models/props_debris` | 280 |
-| `particles/items2_fx` | 269 |
+| `materials/models/props_debris` | 500 |
+| `models/props_structures` | 430 |
+| `materials/models/props_nature` | 368 |
+| `particles/items2_fx` | 344 |
+| `materials/water` | 296 |
+| `materials/models/props_structures` | 282 |
 | `panorama/layout` | 245 |
 | `particles/items_fx` | 240 |
-| `materials/models/props_nature` | 234 |
-| `panorama/styles` | 188 |
+| `materials/nature` | 216 |
+| `models/props_bones` | 203 |
+| `panorama/styles` | 191 |
+| `models/props_rock` | 186 |
 | `sounds/vo/announcer_killing_spree` | 146 |
-| `materials/nature` | 144 |
-| `materials/models/props_structures` | 136 |
-| `models/props_bones` | 135 |
-| `panorama/images/rank_tier_icons` | 132 |
-| `models/props_rock` | 124 |
+| `panorama/images/hud` | 142 |
 
 ## Per category
 
 ### `heroes`
 
-- Emitted 449 of 460 (11 skipped); source: zip; downloads 2800.0 MiB.
-- Install: 85452 files, 5621.5 MiB in all; per item median 5.4 MiB, largest `heroes-nude-marci` 207.3 MiB.
-- Overrides a Valve file: 2845 files; new files (the game does not ship them): 33984; dropped: 350; ignored: 561.
-- skipped `heroes-black-witch-doctor`: VPK container unreadable (vpk_invalid)
+- Emitted 459 of 460 (1 skipped); source: zip; downloads 3343.7 MiB.
+- Install: 91042 files, 7212.4 MiB in all; per item median 5.8 MiB, largest `heroes-phantom-assassin-yor-forger` 467.3 MiB.
+- Overrides a Valve file: 3072 files; new files (the game does not ship them): 35739; dropped: 366; ignored: 563.
 - skipped `heroes-crimson-anti-mage`: no archive in the cache (never fetched: the survey could not read its ZIP directory or no mirror had the file)
-- skipped `heroes-ember-spirit-mai-shiranui`: analyzer blocked the install (skin_archive_hostile) (PathUnsafe x4)
-- skipped `heroes-enigma-blackhole-chan`: analyzer blocked the install (skin_archive_hostile) (PathUnsafe x1, Script x1)
-- skipped `heroes-legion-commander-chen`: archive over the 256 MiB limit (the VPK inside the ZIP is over the unpacked-size bound of the archive inspector)
-- skipped `heroes-lina-crystal-empress`: analyzer blocked the install (skin_archive_hostile) (PathUnsafe x1)
-- skipped `heroes-mirana-suigintou`: analyzer blocked the install (skin_archive_hostile) (PathUnsafe x9)
-- skipped `heroes-nude-drow-ranger-v2`: archive over the 256 MiB limit (the VPK inside the ZIP is over the unpacked-size bound of the archive inspector)
-- skipped `heroes-outworld-destroyer-tatsumaki`: analyzer blocked the install (skin_archive_hostile) (PathUnsafe x3)
-- skipped `heroes-phantom-assassin-yor-forger`: the catalog's file is an external link, not a mirrored file (https://huggingface.co/datasets/hrdq/d2pfx/resolve/main/Phantom%20Assassin%20Yor%20Forger.zip)
-- skipped `heroes-tinker-alexander-prime`: the catalog's file is an external link, not a mirrored file (https://huggingface.co/datasets/hrdq/d2pfx/resolve/main/Tinker%20Alexander%20Prime.zip)
 
 ### `hero-items`
 
-- Emitted 51 of 52 (1 skipped); source: zip; downloads 23.5 MiB.
-- Install: 592 files, 38.7 MiB in all; per item median 0.2 MiB, largest `hero-items-tinker-cripple` 16.1 MiB.
-- Overrides a Valve file: 42 files; new files (the game does not ship them): 30; dropped: 0; ignored: 12.
-- skipped `hero-items-disruptor-tractor`: analyzer blocked the install (skin_archive_hostile) (PathUnsafe x32)
+- Emitted 52 of 52 (0 skipped); source: zip; downloads 58.3 MiB.
+- Install: 699 files, 105.3 MiB in all; per item median 0.2 MiB, largest `hero-items-disruptor-tractor` 66.5 MiB.
+- Overrides a Valve file: 42 files; new files (the game does not ship them): 94; dropped: 0; ignored: 12.
 
 ### `ancient`
 
@@ -294,10 +259,9 @@ Folders where items override Valve files most often (first three path segments):
 
 ### `huds`
 
-- Emitted 3 of 4 (1 skipped); source: vpk; downloads 10.9 MiB.
-- Install: 123 files, 10.8 MiB in all; per item median 2.1 MiB, largest `huds-green-hud` 7.0 MiB.
-- Overrides a Valve file: 121 files; new files (the game does not ship them): 2; dropped: 0; ignored: 0.
-- skipped `huds-black-hud`: analyzer blocked the install (skin_archive_hostile) (PathUnsafe x2)
+- Emitted 4 of 4 (0 skipped); source: vpk; downloads 19.0 MiB.
+- Install: 179 files, 18.9 MiB in all; per item median 2.1 MiB, largest `huds-black-hud` 8.1 MiB.
+- Overrides a Valve file: 174 files; new files (the game does not ship them): 5; dropped: 1; ignored: 0.
 
 ### `item-effects`
 
@@ -372,22 +336,18 @@ Folders where items override Valve files most often (first three path segments):
 - Emitted 8 of 9 (1 skipped); source: zip; downloads 48.9 MiB.
 - Install: 43 files, 50.4 MiB in all; per item median 2.1 MiB, largest `sounds-sora-main-menu` 14.8 MiB.
 - Overrides a Valve file: 43 files; new files (the game does not ship them): 0; dropped: 0; ignored: 0.
-- skipped `sounds-warcraft-iii-allstars-voices`: the catalog's file is an external link, not a mirrored file (https://huggingface.co/datasets/hrdq/d2pfx/resolve/main/Warcraft%20III%20AllStars%20Voices.zip)
+- skipped `sounds-warcraft-iii-allstars-voices`: no archive in the cache (never fetched: the survey could not read its ZIP directory or no mirror had the file)
 
 ### `terrains`
 
-- Emitted 4 of 20 (16 skipped); source: vpk; downloads 120.1 MiB.
-- Install: 3925 files, 119.9 MiB in all; per item median 26.8 MiB, largest `terrains-simple-dark-terrain-minify` 33.5 MiB.
-- Overrides a Valve file: 3598 files; new files (the game does not ship them): 327; dropped: 0; ignored: 0.
+- Emitted 8 of 20 (12 skipped); source: vpk; downloads 242.3 MiB.
+- Install: 7496 files, 242.0 MiB in all; per item median 26.8 MiB, largest `terrains-darkpoly-trees` 46.3 MiB.
+- Overrides a Valve file: 5974 files; new files (the game does not ship them): 1522; dropped: 0; ignored: 0.
 - skipped `terrains-crownfall`: ZIP does not hold exactly one pakNN_dir.vpk (2 entries: maps/dota.vpk, Guide.txt)
-- skipped `terrains-darkpoly`: analyzer blocked the install (skin_archive_hostile) (PathUnsafe x1)
-- skipped `terrains-darkpoly-trees`: analyzer blocked the install (skin_archive_hostile) (PathUnsafe x1)
 - skipped `terrains-dota-autumn`: ZIP does not hold exactly one pakNN_dir.vpk (2 entries: maps/dota.vpk, Guide.txt)
 - skipped `terrains-dota-spring`: ZIP does not hold exactly one pakNN_dir.vpk (2 entries: maps/dota.vpk, Guide.txt)
 - skipped `terrains-dota-summer`: ZIP does not hold exactly one pakNN_dir.vpk (2 entries: maps/dota.vpk, Guide.txt)
 - skipped `terrains-dota-winter`: ZIP does not hold exactly one pakNN_dir.vpk (2 entries: maps/dota.vpk, Guide.txt)
-- skipped `terrains-lowpoly`: analyzer blocked the install (skin_archive_hostile) (PathUnsafe x1)
-- skipped `terrains-lowpoly-trees`: analyzer blocked the install (skin_archive_hostile) (PathUnsafe x1)
 - skipped `terrains-the-kings-new-journey`: ZIP does not hold exactly one pakNN_dir.vpk (2 entries: maps/dota.vpk, Guide.txt)
 - skipped `terrains-ti10-sanctum-of-the-divine`: ZIP does not hold exactly one pakNN_dir.vpk (2 entries: maps/dota.vpk, Guide.txt)
 - skipped `terrains-ti5-desert-terrain`: ZIP does not hold exactly one pakNN_dir.vpk (2 entries: maps/dota.vpk, Guide.txt)
@@ -410,10 +370,9 @@ Folders where items override Valve files most often (first three path segments):
 
 ### `trees`
 
-- Emitted 17 of 18 (1 skipped); source: vpk; downloads 104.7 MiB.
-- Install: 1736 files, 104.7 MiB in all; per item median 3.2 MiB, largest `trees-metal-barrel-trees` 44.1 MiB.
-- Overrides a Valve file: 1475 files; new files (the game does not ship them): 261; dropped: 0; ignored: 0.
-- skipped `trees-cartoon-trees`: analyzer blocked the install (skin_archive_hostile) (PathUnsafe x1)
+- Emitted 18 of 18 (0 skipped); source: vpk; downloads 106.7 MiB.
+- Install: 1775 files, 106.7 MiB in all; per item median 3.1 MiB, largest `trees-metal-barrel-trees` 44.1 MiB.
+- Overrides a Valve file: 1490 files; new files (the game does not ship them): 285; dropped: 0; ignored: 0.
 
 ### `versus-screens`
 
@@ -542,6 +501,7 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `heroes-beastmaster-bone-armor` | beastmaster | 9 | 0.7 | 0 | 0 | 0 | 0 |
 | `heroes-beastmaster-yuuki-yuuna` | beastmaster | 705 | 26.5 | 0 | 1 | 0 | 0 |
 | `heroes-black-phoenix` | phoenix | 262 | 9.9 | 0 | 0 | 0 | 0 |
+| `heroes-black-witch-doctor` | witchdoctor, witch_doctor | 238 | 9.7 | 14 | 1 | 1 | 0 |
 | `heroes-bloodelf-silencer` | silencer | 225 | 18.5 | 6 | 0 | 0 | 0 |
 | `heroes-bloodseeker-harvest-hound` | blood_seeker | 7 | 0.4 | 0 | 0 | 0 | 0 |
 | `heroes-bloodseeker-strygwyr` | blood_seeker | 42 | 2.0 | 4 | 8 | 0 | 4 |
@@ -691,6 +651,7 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `heroes-earthshaker-red-arcana` | earthshaker | 371 | 27.2 | 14 | 0 | 0 | 0 |
 | `heroes-ember-spirit-cinder-sensei` | ember_spirit | 18 | 0.4 | 0 | 0 | 0 | 0 |
 | `heroes-ember-spirit-green-samurai` | ember_spirit | 233 | 13.3 | 21 | 0 | 0 | 0 |
+| `heroes-ember-spirit-mai-shiranui` | ember_spirit | 808 | 50.7 | 40 | 1 | 0 | 0 |
 | `heroes-ember-spirit-master-of-searing-path` | ember_spirit | 17 | 0.4 | 0 | 0 | 0 | 0 |
 | `heroes-ember-spirit-shana` | ember_spirit | 594 | 45.6 | 0 | 2 | 0 | 0 |
 | `emblems-aghanims-emblem` |  | 1 | 0.0 | 1 | 0 | 0 | 0 |
@@ -714,6 +675,7 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `heroes-enchantress-darkwood-witness` | enchantress | 5 | 0.5 | 0 | 0 | 0 | 0 |
 | `heroes-enchantress-shiro` | enchantress | 206 | 6.6 | 0 | 1 | 0 | 0 |
 | `heroes-enigma-angel-of-the-abyss` | enigma | 6 | 4.0 | 0 | 0 | 0 | 0 |
+| `heroes-enigma-blackhole-chan` | enigma | 668 | 74.4 | 7 | 7 | 1 | 0 |
 | `heroes-faceless-void-arcana` | faceless_void | 54 | 10.1 | 0 | 2 | 0 | 0 |
 | `heroes-faceless-void-esdeath` | faceless_void | 287 | 4.5 | 0 | 1 | 0 | 0 |
 | `heroes-faceless-void-rita` | faceless_void | 679 | 49.8 | 13 | 1 | 0 | 0 |
@@ -750,6 +712,7 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `hero-items-dark-seer-forlorn-precipice` | dark_seer | 7 | 0.9 | 0 | 0 | 0 | 0 |
 | `hero-items-dazzle-gates-of-nothl` | dazzle | 5 | 0.2 | 0 | 0 | 0 | 0 |
 | `hero-items-disruptor-faceless-rex` | disruptor | 10 | 1.5 | 0 | 0 | 0 | 0 |
+| `hero-items-disruptor-tractor` | disruptor | 107 | 66.5 | 0 | 0 | 0 | 0 |
 | `hero-items-earthshaker-carrot` | earthshaker | 16 | 0.7 | 8 | 0 | 0 | 0 |
 | `hero-items-faceless-void-battlefury` | faceless_void | 3 | 0.0 | 1 | 0 | 0 | 0 |
 | `hero-items-invoker-magus-accord` | invoker | 9 | 0.2 | 1 | 0 | 0 | 0 |
@@ -812,6 +775,7 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `heroes-homelander-invoker` | invoker | 79 | 15.8 | 6 | 0 | 0 | 0 |
 | `heroes-hoodwink-bilge-rat-buccaneer` | hoodwink | 5 | 0.4 | 0 | 0 | 0 | 0 |
 | `heroes-hoodwink-tomokan-footsoldier` | hoodwink | 4 | 0.3 | 0 | 0 | 0 | 0 |
+| `huds-black-hud` |  | 56 | 8.1 | 53 | 1 | 0 | 0 |
 | `huds-blue-web-hud` |  | 29 | 1.8 | 27 | 0 | 0 | 0 |
 | `huds-green-hud` |  | 42 | 7.0 | 42 | 0 | 0 | 0 |
 | `huds-white-sora-hud` |  | 52 | 2.1 | 52 | 0 | 0 | 0 |
@@ -1017,6 +981,7 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `heroes-kez-nanami-yachiyo-kai` | kez | 374 | 7.3 | 0 | 1 | 0 | 0 |
 | `heroes-kez-peacock` | kez | 35 | 5.6 | 0 | 0 | 0 | 0 |
 | `heroes-kez-tensura` | kez | 1945 | 38.3 | 13 | 1 | 0 | 0 |
+| `heroes-legion-commander-chen` | legion_commander, legion | 764 | 296.1 | 45 | 1 | 0 | 0 |
 | `heroes-legion-commander-crimson-black` | legion_commander | 175 | 7.0 | 11 | 0 | 0 | 0 |
 | `heroes-legion-commander-holy-paladin` | legion_commander, legion | 450 | 19.8 | 13 | 0 | 0 | 0 |
 | `heroes-legion-commander-nero` | legion_commander | 170 | 4.9 | 0 | 10 | 0 | 0 |
@@ -1027,6 +992,7 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `heroes-lifestealer-diretide-shimmer` | life_stealer | 4 | 0.1 | 0 | 0 | 0 | 0 |
 | `heroes-lifestealer-golden-maw` | life_stealer | 47 | 5.4 | 1 | 0 | 0 | 0 |
 | `heroes-lina-aerial-aphrodite-flame` | lina | 235 | 26.8 | 10 | 0 | 0 | 0 |
+| `heroes-lina-crystal-empress` | lina | 260 | 6.2 | 18 | 0 | 0 | 1 |
 | `heroes-lion-cannonroar-confessor` | lion | 53 | 4.2 | 14 | 0 | 0 | 0 |
 | `heroes-lion-immortal-chimera` | lion | 40 | 1.6 | 0 | 0 | 0 | 0 |
 | `heroes-lion-witcher` | lion | 290 | 17.2 | 25 | 0 | 0 | 0 |
@@ -1087,6 +1053,7 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `mega-kill-trine` |  | 1 | 0.0 | 1 | 0 | 0 | 0 |
 | `mega-kill-umbrella-mega-kill` |  | 25 | 0.9 | 14 | 0 | 0 | 0 |
 | `mega-kill-voice-of-the-international` |  | 1 | 0.0 | 1 | 0 | 0 | 0 |
+| `heroes-mirana-suigintou` | mirana | 250 | 41.7 | 0 | 1 | 0 | 0 |
 | `heroes-monkey-king-arcana` | monkey_king | 6 | 0.3 | 0 | 0 | 0 | 0 |
 | `heroes-monkey-king-simian-sovereign` | monkey_king | 4 | 2.4 | 0 | 0 | 0 | 0 |
 | `heroes-monkey-king-water-demon` | monkey_king | 242 | 8.8 | 5 | 0 | 0 | 0 |
@@ -1128,6 +1095,7 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `heroes-nightmare-chaos-knight` | chaos_knight | 480 | 26.7 | 23 | 0 | 14 | 0 |
 | `heroes-nuclear-clockwerk` | rattletrap, clockwerk | 110 | 4.3 | 14 | 0 | 0 | 0 |
 | `heroes-nude-drow-ranger` | drow | 64 | 7.2 | 6 | 0 | 0 | 0 |
+| `heroes-nude-drow-ranger-v2` | drow | 194 | 301.5 | 1 | 0 | 0 | 0 |
 | `heroes-nude-marci` | marci | 292 | 207.3 | 0 | 1 | 0 | 0 |
 | `heroes-nude-naga-siren` | siren | 15 | 1.0 | 7 | 0 | 0 | 0 |
 | `heroes-nude-queen-of-pain` | queenofpain, queen_of_pain | 160 | 27.3 | 0 | 0 | 0 | 0 |
@@ -1144,12 +1112,14 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `heroes-oracle-immortal-silence` | oracle | 18 | 0.6 | 0 | 0 | 0 | 0 |
 | `heroes-oracle-irisviel-von-einzbern` | oracle | 730 | 124.9 | 8 | 1 | 0 | 0 |
 | `heroes-outworld-destroyer-dark-metter` | obsidian_destroyer | 229 | 8.1 | 23 | 0 | 0 | 0 |
+| `heroes-outworld-destroyer-tatsumaki` | obsidian_destroyer | 736 | 146.4 | 23 | 2 | 0 | 0 |
 | `heroes-outworld-destroyer-yukari` | obsidian_destroyer, outworld_devourer | 364 | 34.9 | 1 | 18 | 0 | 0 |
 | `heroes-pangolier-gentleman` | pangolier, antimage | 200 | 11.9 | 13 | 0 | 0 | 0 |
 | `heroes-phantom-assassin-arcana` | phantom_assassin | 426 | 5.9 | 0 | 6 | 0 | 0 |
 | `heroes-phantom-assassin-persona` | phantom_assassin | 113 | 46.0 | 0 | 0 | 0 | 0 |
 | `heroes-phantom-assassin-rory` | phantom_assassin | 469 | 5.9 | 0 | 14 | 0 | 0 |
 | `heroes-phantom-assassin-skull-arcana` | phantom_assassin | 319 | 16.2 | 17 | 0 | 0 | 0 |
+| `heroes-phantom-assassin-yor-forger` | phantom_assassin | 1152 | 467.3 | 12 | 2 | 0 | 1 |
 | `heroes-phantom-lancer-crimson-v2` | phantom_lancer | 268 | 9.7 | 1 | 0 | 0 | 0 |
 | `heroes-phantom-lancer-dark-carnival` | phantom_lancer | 5 | 0.5 | 0 | 0 | 0 | 0 |
 | `heroes-phantom-lancer-humble-drifter` | phantom_lancer | 4 | 0.1 | 0 | 0 | 0 | 0 |
@@ -1333,6 +1303,10 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `heroes-templar-assassin-whisper-gates` | lanaya | 29 | 4.4 | 0 | 0 | 0 | 0 |
 | `terrains-bedrock` |  | 968 | 26.8 | 892 | 0 | 0 | 0 |
 | `terrains-dark-terrain-minify` |  | 981 | 32.8 | 896 | 0 | 0 | 0 |
+| `terrains-darkpoly` |  | 1304 | 46.1 | 980 | 0 | 0 | 0 |
+| `terrains-darkpoly-trees` |  | 1320 | 46.3 | 995 | 0 | 0 | 0 |
+| `terrains-lowpoly` |  | 464 | 14.7 | 193 | 0 | 0 | 0 |
+| `terrains-lowpoly-trees` |  | 483 | 14.8 | 208 | 0 | 0 | 0 |
 | `terrains-mossy-cobblestone` |  | 966 | 26.8 | 890 | 0 | 0 | 0 |
 | `terrains-simple-dark-terrain-minify` |  | 1010 | 33.5 | 920 | 0 | 0 | 0 |
 | `heroes-terrorblade-666-fractal-horns` | terrorblade | 84 | 1.0 | 5 | 0 | 0 | 0 |
@@ -1361,6 +1335,7 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `heroes-tidehunter-insatiable-seas` | tidehunter | 33 | 8.8 | 0 | 0 | 0 | 0 |
 | `heroes-tidehunter-squid-girl` | tidehunter | 322 | 11.2 | 5 | 1 | 0 | 0 |
 | `heroes-timbersaw-clearcut-cavalier` | shredder | 134 | 2.9 | 0 | 0 | 0 | 0 |
+| `heroes-tinker-alexander-prime` | tinker | 520 | 196.8 | 67 | 1 | 0 | 2 |
 | `heroes-tinker-deathsman` | tinker | 30 | 4.2 | 0 | 0 | 0 | 0 |
 | `heroes-tinker-deep-hornet` | tinker | 18 | 0.9 | 3 | 0 | 0 | 0 |
 | `heroes-tinker-fortified-fabricator` | tinker | 6 | 0.7 | 0 | 0 | 0 | 0 |
@@ -1371,6 +1346,7 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `towers-holiday-radiant-tower` |  | 1 | 0.2 | 1 | 0 | 0 | 0 |
 | `heroes-toxicpunk-timbersaw` | shredder, timbersaw | 155 | 4.3 | 16 | 0 | 0 | 0 |
 | `heroes-treant-protector-frost-hideaway` | treant_protector | 4 | 0.4 | 0 | 0 | 0 | 0 |
+| `trees-cartoon-trees` |  | 39 | 2.0 | 15 | 0 | 0 | 0 |
 | `trees-catbuns-trees` |  | 21 | 11.0 | 15 | 0 | 0 | 0 |
 | `trees-cone-trees` |  | 18 | 0.5 | 15 | 0 | 0 | 0 |
 | `trees-crystals-trees` |  | 273 | 1.4 | 257 | 0 | 0 | 0 |

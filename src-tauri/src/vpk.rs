@@ -9,7 +9,7 @@ const DIRECTORY_ARCHIVE_INDEX: u16 = 0x7fff;
 const ENTRY_TERMINATOR: u16 = 0xffff;
 /// The most a BetterFy VPK may hold, header and directory included. A merged
 /// build, its staged copy and the deployment all share this one bound.
-pub(crate) const MAX_VPK_BYTES: usize = 256 * 1024 * 1024;
+pub(crate) const MAX_VPK_BYTES: usize = 512 * 1024 * 1024;
 const MAX_VPK_ENTRIES: usize = 65_536;
 const MAX_TREE_STRING_BYTES: usize = 260;
 
@@ -53,8 +53,13 @@ pub(crate) fn validate_path(value: &str) -> Result<(), String> {
     {
         return Err("vpk_path_invalid".to_string());
     }
+    // Valve's own names use `a-z 0-9 _ - . + /` and space. Brackets and
+    // apostrophes come from Windows copies and exported files (`name (2)`,
+    // `{guid}`, `chixiao'deep_strike`); an entry is never written to disk
+    // under its name, so they carry no risk, and the material or sound event
+    // that points at the file needs the exact name.
     if value.bytes().any(|byte| {
-        !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"_-/ .+".contains(&byte))
+        !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"_-/ .+()[]{}'".contains(&byte))
     }) {
         return Err("vpk_path_invalid".to_string());
     }
@@ -411,14 +416,20 @@ pub(crate) fn read_embedded_directory(bytes: &[u8]) -> Result<Vec<DirectoryEntry
                     .ok_or_else(|| "vpk_invalid".to_string())?;
                 let preload = &bytes[cursor..preload_end];
                 cursor = preload_end;
-                let data_start = tree_end
-                    .checked_add(offset)
-                    .ok_or_else(|| "vpk_invalid".to_string())?;
-                let data_end = data_start
-                    .checked_add(length)
-                    .filter(|end| *end <= bytes.len())
-                    .ok_or_else(|| "vpk_invalid".to_string())?;
-                let data = &bytes[data_start..data_end];
+                // An entry with no data has nothing to read, whatever its
+                // offset says; some tools leave a stale offset on it.
+                let data = if length == 0 {
+                    &bytes[0..0]
+                } else {
+                    let data_start = tree_end
+                        .checked_add(offset)
+                        .ok_or_else(|| "vpk_invalid".to_string())?;
+                    let data_end = data_start
+                        .checked_add(length)
+                        .filter(|end| *end <= bytes.len())
+                        .ok_or_else(|| "vpk_invalid".to_string())?;
+                    &bytes[data_start..data_end]
+                };
                 let mut crc = Crc32::new();
                 crc.update(preload);
                 crc.update(data);
@@ -847,5 +858,29 @@ mod tests {
             inspect(&bytes).err().as_deref(),
             Some("vpk_archive_unsupported")
         );
+    }
+
+    #[test]
+    fn an_empty_entry_with_a_stale_offset_reads_as_empty() {
+        let mut bytes = build_unchecked(
+            2,
+            &[("particles/a.vpcf_c", b"data"), ("particles/b.vpcf_c", b"")],
+        );
+        // Point the empty entry far past the end of the file, as a tool
+        // that left a stale offset does.
+        let tree_size = u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize;
+        let stem = bytes[28..28 + tree_size]
+            .windows(2)
+            .position(|pair| pair == b"b\0")
+            .expect("stem")
+            + 28
+            + 2;
+        bytes[stem + 8..stem + 12].copy_from_slice(&0x3456_7890u32.to_le_bytes());
+        let entries = read_embedded_directory(&bytes).expect("reads");
+        let empty = entries
+            .iter()
+            .find(|entry| entry.path == "particles/b.vpcf_c")
+            .expect("b");
+        assert!(empty.data.is_empty() && empty.preload.is_empty());
     }
 }

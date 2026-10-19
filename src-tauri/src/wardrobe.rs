@@ -101,13 +101,18 @@ pub(crate) const SHARDS: &[Shard] = &[
 const INDEX: &str = include_str!("../wardrobe/index.json");
 
 /// Where archives are downloaded from, in the order a manifest lists them:
-/// the Dota2PornFx project's GitHub mirror and its Hugging Face dataset, both
-/// over HTTPS. The pinned hash decides whether the bytes are accepted; the
-/// host only decides where to look.
-pub(crate) const TRUSTED_ARCHIVE_PREFIXES: [&str; 2] = [
+/// the Dota2PornFx project's GitHub mirror, its Hugging Face dataset and the
+/// project's second dataset, all over HTTPS. The pinned hash decides whether
+/// the bytes are accepted; the host only decides where to look.
+pub(crate) const TRUSTED_ARCHIVE_PREFIXES: [&str; 3] = [
     "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/files/",
     "https://huggingface.co/datasets/hrdq/Dota2PornFx/resolve/main/assets/files/",
+    FLAT_ARCHIVE_PREFIX,
 ];
+/// The project's second dataset keeps a few large skins at its root, with no
+/// category folder; the catalog links them directly.
+pub(crate) const FLAT_ARCHIVE_PREFIX: &str =
+    "https://huggingface.co/datasets/hrdq/d2pfx/resolve/main/";
 /// Wardrobe IDs share the package ID shape (`namespace.name`) under their own
 /// namespace, which `package_registry` reserves.
 pub(crate) const NAMESPACE: &str = "wardrobe";
@@ -439,15 +444,17 @@ fn catalog_slug(value: &str) -> bool {
 
 /// `<category>/<file>` of a URL under one of the trusted prefixes whose file
 /// ends in `extension` (`.zip` or `.vpk`): exactly two percent-encoded path
-/// segments, no query, no fragment, no traversal.
+/// segments (one, `<file>`, under [`FLAT_ARCHIVE_PREFIX`]), no query, no
+/// fragment, no traversal.
 pub(crate) fn archive_tail<'a>(url: &'a str, extension: &str) -> Option<&'a str> {
-    let rest = TRUSTED_ARCHIVE_PREFIXES
+    let (prefix, rest) = TRUSTED_ARCHIVE_PREFIXES
         .iter()
-        .find_map(|prefix| url.strip_prefix(prefix))?;
+        .find_map(|prefix| url.strip_prefix(prefix).map(|rest| (*prefix, rest)))?;
     let segments = rest.split('/').collect::<Vec<_>>();
+    let expected = if prefix == FLAT_ARCHIVE_PREFIX { 1 } else { 2 };
     (rest.ends_with(extension)
         && rest.len() <= 160
-        && segments.len() == 2
+        && segments.len() == expected
         && segments.iter().all(|segment| {
             !segment.is_empty()
                 && *segment != "."
@@ -1439,6 +1446,16 @@ mod tests {
             array_with(|v| v["source"]["urls"] = serde_json::json!([hf("heroes/a.exe")])),
             array_with(|v| v["source"]["urls"] = serde_json::json!([hf("a.zip")])),
             array_with(|v| v["source"]["urls"] = serde_json::json!([hf("heroes/x/a.zip")])),
+            // the second dataset holds files at its root only
+            array_with(|v| {
+                v["source"]["urls"] =
+                    serde_json::json!([format!("{FLAT_ARCHIVE_PREFIX}heroes/Test%20Skin.zip")])
+            }),
+            array_with(|v| {
+                v["source"]["urls"] = serde_json::json!([
+                    "https://huggingface.co/datasets/hrdq/d2pfx2/resolve/main/Test%20Skin.zip"
+                ])
+            }),
             // mirrors must name the same file, and each host appears once
             array_with(|v| {
                 v["source"]["urls"] =
@@ -1459,9 +1476,9 @@ mod tests {
             array_with(|v| v["archive"]["innerSha256"] = "A".repeat(64).into()),
             array_with(|v| v["archive"]["innerPath"] = "../pak01_dir.vpk".into()),
             array_with(|v| v["archive"]["innerPath"] = "payload.exe".into()),
-            array_with(|v| v["archive"]["innerBytes"] = 300_000_000.into()),
+            array_with(|v| v["archive"]["innerBytes"] = 600_000_000.into()),
             array_with(|v| v["archive"]["zipBytes"] = 0.into()),
-            array_with(|v| v["archive"]["zipBytes"] = 300_000_000.into()),
+            array_with(|v| v["archive"]["zipBytes"] = 600_000_000.into()),
             array_with(|v| v["audited"]["installFiles"] = 0.into()),
             array_with(|v| v["audited"]["installFiles"] = 2000.into()),
             array_with(|v| v["audited"]["installIdentity"] = "abc".into()),

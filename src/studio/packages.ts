@@ -148,8 +148,8 @@ export function withSharedMode(id: string, keepShared: boolean) {
   return keepShared && hasKeepSharedMode(manifest) ? `${base}${STRIP_SUFFIX}` : base;
 }
 
-/** Upper bound on the merged VPK (mod_bundle.rs): 256 MiB of file data. */
-export const MAX_BUNDLE_BYTES = 256 * 1024 * 1024;
+/** Upper bound on the merged VPK (mod_bundle.rs): 512 MiB of file data. */
+export const MAX_BUNDLE_BYTES = 512 * 1024 * 1024;
 
 /**
  * What the selected skins add to the merged VPK, from the audited sizes. Each

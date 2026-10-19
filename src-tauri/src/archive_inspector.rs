@@ -6,8 +6,8 @@ use zip::read::ZipArchive;
 use zip::CompressionMethod;
 
 const MAX_ENTRIES: usize = 2_048;
-const MAX_EXPANDED_BYTES: u64 = 256 * 1024 * 1024;
-const MAX_ENTRY_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_EXPANDED_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_ENTRY_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_NAME_BYTES: usize = 240;
 const MAX_COMPRESSION_RATIO: u64 = 200;
 

@@ -16,10 +16,10 @@ const VERIFIED_MAP_OWNER: &str = "betterfy.verified-map";
 /// the language folder.
 const STAGED_MAP_FILE: &str = "maps/dota.vpk";
 const MAX_OPERATION_FILES: usize = 256;
-/// The same cap as the merged VPK and the deployment (256 MiB). A single
+/// The same cap as the merged VPK and the deployment (512 MiB). A single
 /// audited skin is often 50 MiB or more, so a lower bound here refused every
 /// build that carried one.
-const MAX_STAGED_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_STAGED_BYTES: u64 = 512 * 1024 * 1024;
 static OPERATION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Deserialize)]
@@ -1008,7 +1008,7 @@ mod tests {
     fn staging_cap_matches_the_deployment_cap() {
         // An audited skin is tens of MiB; a lower staging cap than the VPK and
         // deployment caps refused every build that carried one.
-        assert_eq!(MAX_STAGED_BYTES, 256 * 1024 * 1024);
+        assert_eq!(MAX_STAGED_BYTES, 512 * 1024 * 1024);
     }
 
     fn temp_root(name: &str) -> PathBuf {
