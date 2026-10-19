@@ -1,12 +1,11 @@
 # Panorama decor audit
 
 Status: the proofs (`src-tauri/src/panorama_decor.rs`) exist, are tested on a Mac
-and in CI, and have been run over the real catalog archives of the categories
-below. **They are not wired into the archive pipeline yet, and no category is
-installable because of this change.** The pipeline that installs audited archives
-is being generalised from hero skins to the other catalog categories on a
-separate branch; wiring these categories in awaits that work (see "What is left").
-Nothing here has been installed by BetterFy on Windows or run in Dota.
+and in CI, have been run over the real catalog archives of the categories below,
+and are now wired into the archive pipeline for `backgrounds`, `huds` and
+`versus-screens` (see "In the pipeline" in ENGINE_ARCHITECTURE and
+CATALOG_CATEGORIES.md). Nothing here has been installed by BetterFy on Windows or
+run in Dota.
 
 The project rule behind it is the founder's decision "only audited scripts and
 layouts": BetterFy never installs a script, and installs a Panorama layout

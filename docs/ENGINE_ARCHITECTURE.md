@@ -810,8 +810,9 @@ says; its catalog ID must start with the category.
   under `sounds/` and `soundevents/`), `textures` (`vtex_c` under `panorama/images/`;
   ranks, item icons) and `materials` (`vmat_c`, `vtex_c`; shaders). A file of an
   accepted type outside the policy's folders is dropped as `outside_category`
-  (none occurs in the current catalog). A policy never admits a `vxml_c`, `vcss_c` or
-  `webm` it could not before, and scripts, executables, traversal and unproven layouts
+  (none occurs in the current catalog). Three Panorama policies (`backgrounds`, `huds`,
+  `versus-screens`) admit `vxml_c`, `vcss_c` and `webm` only through the proofs below;
+  no other policy admits them, and scripts, executables, traversal and unproven layouts
   are rejected under every policy.
 
 **Source kind.** The manifest's `archive.kind` is `zip` (a ZIP holding one
@@ -868,8 +869,8 @@ Windows, and anything in Dota.
 
 `src-tauri/src/panorama_decor.rs` proves, from parsed structure and never from a file
 name, that the layouts, style sheets and videos of these catalog categories cannot run
-code or reach outside the game. It is **not wired into the wardrobe pipeline yet**: no
-category is installable because of it. The evidence, the numbers and the decisions are in
+code or reach outside the game. It is **wired into the wardrobe pipeline** for three
+categories (`backgrounds`, `huds`, `versus-screens`, see the end of this section). The evidence, the numbers and the decisions are in
 [`PANORAMA_DECOR_AUDIT.md`](PANORAMA_DECOR_AUDIT.md); this section states exactly what each
 proof accepts and why.
 
@@ -925,6 +926,26 @@ bindings (the 14 versus layouts also include Valve scripts). Because the binding
 acceptance of the handler-bearing layouts is by construction; with the bindings tier off,
 123 background layouts and the 14 versus layouts are refused. The earlier image-wrapper rule
 accepted 5 of the same 325 layouts and none of the 215 styles and 61 videos.
+
+**In the pipeline.** `skin_archive::analyze` runs `prove_archive` once over the whole archive
+for the three Panorama type policies (`TypePolicy::Backgrounds`, `Huds`, `VersusScreens`,
+each ScopeKind `none`) before it classifies entries. A layout, style or video is accepted
+exactly when its proof is (and the category takes that path); otherwise it is dropped as
+`decor_refused` and the report's `rejectedPaths` entry carries `detail`, the proof's exact
+code and offending name. Other files follow the ordinary rules (a `huds` `vtex_c` only under
+`panorama/images/`; scripts, executables and unsafe names still reject or block the archive).
+The proofs resolve references against Valve's file list, which the app does not carry, so the
+audit pins per archive the Valve files its accepted layouts and styles point at
+(`ScopeSpec::valve_references`, manifest field `valveReferences`, sorted, safe paths, empty and
+refused for every other category). The proofs run in the app against those paths plus the
+audited shared paths and must reproduce the audit (rejected, ignored and install identity are
+checked as for every item). The generator derives the list with the whole Valve list and skips
+an archive whose verdicts differ between that run and the pinned one. Manifests are in
+`src-tauri/wardrobe/manifests-panorama.json`. Result: 62 backgrounds, 3 of 4 HUD skins (one is
+blocked by two unsafe texture file names) and 7 versus screens are in the allowlist, no
+layout, style or video refused (by construction, as above), 54 `panorama/version.txt` dropped.
+This is proof of structure on a Mac, not a result in the game: whether Dota loads these
+layouts from a mod VPK, and how they look, is unobserved.
 
 Tests: synthetic hostile layouts (HTML and other unlisted panels, `url`, `layout` and
 `href` attributes, `$.DispatchEvent` and other handlers on every `on*` spelling, a pinned

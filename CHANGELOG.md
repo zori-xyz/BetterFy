@@ -19,6 +19,16 @@ Windows observation of the catalog categories (EA.45): the founder reported soun
 First Windows observation of skins: three catalog skins installed together by EA.41 and seen applied on the Dota hero pages, with BetterFy using `pak65_dir.vpk` and the "Let go of the old install" action used once; see [docs/EA41_SKIN_WINDOWS_OBSERVATION.md](docs/EA41_SKIN_WINDOWS_OBSERVATION.md). Not yet checked in a match, with restore, or for the other skins.
 
 ### Skins (wardrobe)
+- Menu backgrounds, HUD skins and versus screens are installable through the
+  audited-archive pipeline: 62 backgrounds, 3 of 4 HUD skins and 7 versus screens
+  (1,011 archives in all, 31 categories). A layout, style or video installs only
+  when the Panorama proofs of `panorama_decor` establish it, the build review
+  says what was proven, what was dropped with the exact reason, and how to undo,
+  and it states that the container of a video is checked but no frame is
+  decoded. One HUD skin (`huds-black-hud`) is blocked by two unsafe file names.
+  Built and tested in CI only; not installed on Windows or run in Dota yet (test
+  section 6 of
+  [docs/SKIN_WINDOWS_TEST_PLAN.md](docs/SKIN_WINDOWS_TEST_PLAN.md)).
 - Skin archives are kept whole: Panorama image wrappers are proven from their
   parsed structure in both compiler containers (209 more installed, 2 layouts
   carrying a script payload stay rejected), zero-length blank overrides install,
