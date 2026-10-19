@@ -231,6 +231,22 @@ export const explainError = (code: string, isRu: boolean) => {
       "Прошлая запись сеток героев оборвалась. Нажми «Проверить» в подробностях, затем повтори.",
       "An earlier write of hero grids stopped half way. Use Check under Details, then retry.",
     ],
+    custom_background_required: [
+      "Для «Своих фонов» не выбран фон. Открой карточку мода и выбери экран загрузки или видео.",
+      "No background is picked for Custom Backgrounds. Open the mod's card and pick a loading screen or a video.",
+    ],
+    custom_video_missing: [
+      "Выбранное видео больше не найдено. Выбери его в карточке мода ещё раз.",
+      "The picked video is no longer there. Choose it in the mod's card again.",
+    ],
+    custom_video_invalid: [
+      "Это видео не подходит: нужен файл WebM (VP8, VP9 или AV1) без вложений и глав.",
+      "This video does not fit: it has to be a WebM file (VP8, VP9 or AV1) without attachments or chapters.",
+    ],
+    custom_video_too_large: [
+      "Видео слишком большое: подойдёт файл до 64 МБ.",
+      "The video is too large: a file up to 64 MB fits.",
+    ],
     custom_font_required: [
       "Для «Своих шрифтов» не выбран шрифт. Открой карточку мода и выбери файл .ttf или .otf.",
       "No font is picked for Custom Fonts. Open the mod's card and choose a .ttf or .otf file.",

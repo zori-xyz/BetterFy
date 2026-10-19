@@ -30,6 +30,12 @@ import { findPackage, usePackagesRevision } from "./packages";
 import { formatBytes } from "./WardrobeReview";
 import { Empty, Media, Modal, ModCard, PageHead } from "./ui";
 import { CUSTOM_FONTS_CATALOG_ID, setCustomFont, useCustomFont } from "./customFont";
+import {
+  CUSTOM_BACKGROUNDS_CATALOG_ID,
+  loadingScreens,
+  setBackgroundChoice,
+  useBackgroundChoice,
+} from "./customBackground";
 import { engineBridge } from "../engine";
 import { noticeFor } from "./builder/notices";
 import {
@@ -364,6 +370,7 @@ export function ModDetails({
         <p className="s-detail-description">{mod.description[language].split("\n\n")[0]}</p>
         {mod.id === USER_STYLES_CATALOG_ID && <UserStylesPicker />}
         {mod.id === CUSTOM_FONTS_CATALOG_ID && <CustomFontPicker />}
+        {mod.id === CUSTOM_BACKGROUNDS_CATALOG_ID && <BackgroundPicker />}
         {mod.variants.length > 1 && (
           <fieldset className="s-variants">
             <legend>{isRu ? "Вариант" : "Style"}</legend>
@@ -581,6 +588,85 @@ function CustomFontPicker() {
         {isRu
           ? "Шрифт заменит Radiance и Reaver во всём интерфейсе Dota. Нужны русские буквы — выбирай шрифт с кириллицей. Шрифты Windows лежат в C:\\Windows\\Fonts."
           : "The font replaces Radiance and Reaver across Dota's interface. Pick a font with the letters your language needs. Windows keeps its fonts in C:\\Windows\\Fonts."}
+      </small>
+    </div>
+  );
+}
+
+/** Minify's Custom Backgrounds: a loading screen of the game or a WebM. */
+function BackgroundPicker() {
+  const { isRu } = useLocale();
+  const choice = useBackgroundChoice();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function pickVideo(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ""));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      const video = await engineBridge.storeCustomVideo(base64);
+      setBackgroundChoice({ kind: "video", packageId: video.packageId, bytes: video.bytes });
+    } catch (cause) {
+      const code =
+        typeof cause === "object" && cause && "code" in cause
+          ? String((cause as { code: unknown }).code)
+          : String(cause);
+      setError(noticeFor(code, isRu)?.body ?? code);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="s-style-picker s-font-picker">
+      <strong>{isRu ? "Фон меню" : "Menu background"}</strong>
+      <label className="s-select s-background-select">
+        <select
+          aria-label={isRu ? "Экран загрузки" : "Loading screen"}
+          value={choice.kind === "screen" ? choice.id : "video"}
+          onChange={(event) => {
+            if (event.target.value !== "video")
+              setBackgroundChoice({ kind: "screen", id: event.target.value });
+          }}
+        >
+          {loadingScreens.map((screen) => (
+            <option key={screen.id} value={screen.id}>
+              {screen.label}
+            </option>
+          ))}
+          {choice.kind === "video" && (
+            <option value="video">
+              {isRu ? "Своё видео" : "Your video"} · {formatBytes(choice.bytes, isRu)}
+            </option>
+          )}
+        </select>
+        <ChevronDown />
+      </label>
+      <label className="s-btn">
+        <input
+          type="file"
+          accept=".webm,video/webm"
+          disabled={busy}
+          onChange={(event) => void pickVideo(event.target.files?.[0])}
+        />
+        {busy
+          ? isRu
+            ? "Проверяем видео…"
+            : "Checking the video…"
+          : isRu
+            ? "Своё видео (.webm)"
+            : "Your own video (.webm)"}
+      </label>
+      {error && <p className="s-font-error">{error}</p>}
+      <small>
+        {isRu
+          ? "Экран загрузки берётся из самой Dota. Видео — файл WebM до 64 МБ; другие форматы можно перевести в WebM любым конвертером."
+          : "The loading screen comes from Dota itself. A video has to be a WebM file up to 64 MB; other formats convert to WebM with any converter."}
       </small>
     </div>
   );

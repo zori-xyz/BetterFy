@@ -203,6 +203,10 @@ fn read_styling(
         let (_, mask) = crate::user_styles::parse_variant(package_id)
             .ok_or_else(|| "user_styles_selection_required".to_string())?;
         crate::user_styles::select(&text, mask)?
+    } else if manifest.id == crate::custom_backgrounds::PACKAGE_ID {
+        let background = crate::custom_backgrounds::parse_variant(package_id)
+            .ok_or_else(|| "custom_background_required".to_string())?;
+        crate::custom_backgrounds::fill_style(&text, &background)?
     } else {
         text
     };
@@ -635,6 +639,9 @@ fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
         if id == crate::user_styles::PACKAGE_ID {
             return Err("user_styles_selection_required".to_string());
         }
+        if id == crate::custom_backgrounds::PACKAGE_ID {
+            return Err("custom_background_required".to_string());
+        }
     }
     // A cursor or font pack replaces the whole set of the game's cursors or
     // fonts: one of each per build.
@@ -681,6 +688,11 @@ enum Contract {
     /// Minify's Custom Fonts: the font file the player picked (its SHA-256
     /// and size), stored by `custom_fonts::store`.
     CustomFont(String, usize),
+    /// Minify's Custom Backgrounds with the background the player chose.
+    CustomBackground(
+        &'static PackageManifest,
+        crate::custom_backgrounds::Background,
+    ),
 }
 
 impl Contract {
@@ -693,6 +705,9 @@ impl Contract {
             Self::UserStyles(_, mask) => crate::user_styles::variant_id(*mask),
             Self::HeroGrids => crate::hero_grids::PACKAGE_ID.to_string(),
             Self::CustomFont(sha, bytes) => crate::custom_fonts::variant_id(sha, *bytes),
+            Self::CustomBackground(_, background) => {
+                crate::custom_backgrounds::variant_id(background)
+            }
         }
     }
 
@@ -707,6 +722,7 @@ impl Contract {
             Self::UserStyles(manifest, _) => &manifest.id,
             Self::HeroGrids => crate::hero_grids::PACKAGE_ID,
             Self::CustomFont(..) => crate::custom_fonts::PACKAGE_ID,
+            Self::CustomBackground(manifest, _) => &manifest.id,
         }
     }
 }
@@ -730,6 +746,10 @@ fn resolve(id: &str) -> Result<Contract, String> {
     if let Some((sha, bytes)) = crate::custom_fonts::parse_variant(id) {
         return Ok(Contract::CustomFont(sha, bytes));
     }
+    if let Some(background) = crate::custom_backgrounds::parse_variant(id) {
+        return package_registry::find(crate::custom_backgrounds::PACKAGE_ID)
+            .map(|manifest| Contract::CustomBackground(manifest, background));
+    }
     if let Some((base, mask)) = crate::user_styles::parse_variant(id) {
         return package_registry::find(base).map(|manifest| Contract::UserStyles(manifest, mask));
     }
@@ -740,7 +760,9 @@ fn resolve(id: &str) -> Result<Contract, String> {
 /// no blacklist, style or layout edits.
 fn tuning(id: &str) -> Result<Option<&'static PackageManifest>, String> {
     match resolve(id)? {
-        Contract::Tuning(manifest) | Contract::UserStyles(manifest, _) => Ok(Some(manifest)),
+        Contract::Tuning(manifest)
+        | Contract::UserStyles(manifest, _)
+        | Contract::CustomBackground(manifest, _) => Ok(Some(manifest)),
         Contract::Wardrobe(..)
         | Contract::Map(_)
         | Contract::Pack(_)
@@ -983,6 +1005,15 @@ fn acquire_verified_resources_with_progress(
     for (package_id, contract) in package_ids.iter().zip(contracts) {
         let manifest = match contract {
             Contract::Tuning(manifest) | Contract::UserStyles(manifest, _) => manifest,
+            // The pinned style and layouts download like any tuning package;
+            // the player's video is already stored.
+            Contract::CustomBackground(manifest, background) => {
+                if let crate::custom_backgrounds::Background::Video { sha256, bytes } = &background
+                {
+                    crate::custom_backgrounds::load_video(app_data_root, sha256, *bytes)?;
+                }
+                manifest
+            }
             // One pinned archive: fetched, verified and stored as a unit.
             Contract::Wardrobe(item, _) => {
                 if cancelled.load(Ordering::Relaxed) {
@@ -1234,9 +1265,25 @@ pub(crate) fn build_from_verified_store(
     let packages = bundle_ids
         .iter()
         .map(|package_id| {
-            let manifest = match resolve(package_id)? {
+            let contract = resolve(package_id)?;
+            // The player's own background video goes into the VPK as the file
+            // the background layout plays.
+            let video = match &contract {
+                Contract::CustomBackground(
+                    _,
+                    crate::custom_backgrounds::Background::Video { sha256, bytes },
+                ) => Some(crate::custom_backgrounds::load_video(
+                    app_data_root,
+                    sha256,
+                    *bytes,
+                )?),
+                _ => None,
+            };
+            let manifest = match contract {
                 Contract::Map(_) => return Err("pilot_package_invalid".to_string()),
-                Contract::Tuning(manifest) | Contract::UserStyles(manifest, _) => manifest,
+                Contract::Tuning(manifest)
+                | Contract::UserStyles(manifest, _)
+                | Contract::CustomBackground(manifest, _) => manifest,
                 // The pack's files go into the game folder on their own; the
                 // VPK carries the list of them, which binds the reviewed build
                 // to those exact files.
@@ -1301,6 +1348,9 @@ pub(crate) fn build_from_verified_store(
                 })
                 .collect::<Result<BTreeMap<_, _>, _>>()?;
             verify_resources(&manifest.resources, &resources)?;
+            if let Some(video) = video {
+                resources.insert(crate::custom_backgrounds::VIDEO_PATH.to_string(), video);
+            }
             // Blacklisted game resources get the placeholder of their type.
             // A file the package ships itself always wins over a blank.
             if let (Some(blacklist), Some(expansion)) = (
@@ -1865,6 +1915,30 @@ mod tests {
         .is_err());
         let manifest = contract("minify.user-styles.pick-5").expect("tuning contract");
         assert_eq!(manifest.id, "minify.user-styles");
+    }
+
+    #[test]
+    fn custom_backgrounds_install_only_with_a_choice_kept_in_the_id() {
+        for plain in ["minify.custom-backgrounds", "minify-custom-backgrounds"] {
+            assert_eq!(
+                normalize_package_ids(&[plain.to_string()]).err().as_deref(),
+                Some("custom_background_required")
+            );
+        }
+        let screen = "minify.custom-backgrounds.ls-international_2025_ls_3".to_string();
+        assert_eq!(
+            normalize_package_ids(std::slice::from_ref(&screen)).expect("screen"),
+            vec![screen.clone()]
+        );
+        assert_eq!(
+            contract(&screen).expect("tuning").id,
+            "minify.custom-backgrounds"
+        );
+        // A screen that is not in the list is not a package.
+        assert!(normalize_package_ids(&[
+            "minify.custom-backgrounds.ls-unlisted_screen".to_string()
+        ])
+        .is_err());
     }
 
     #[test]

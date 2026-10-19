@@ -54,6 +54,7 @@ import { getStorageItem, setStorageItem } from "../storage";
 import { PackReview, WardrobeReview, formatBytes } from "./WardrobeReview";
 import { USER_STYLES_ID, userStylesRequestId, useUserStylesMask } from "./userStyles";
 import { CUSTOM_FONTS_ID, customFontRequestId, useCustomFont } from "./customFont";
+import { CUSTOM_BACKGROUNDS_ID, backgroundRequestId, useBackgroundChoice } from "./customBackground";
 import { MapReview } from "./MapReview";
 
 const LANGUAGE_KEY = "betterfy:build-language";
@@ -204,13 +205,17 @@ export default function TreePilot({
   const userStylesMask = useUserStylesMask();
   // Custom Fonts carries the picked font file in its ID.
   const customFont = useCustomFont();
+  // Custom Backgrounds carries the chosen screen or video in its ID.
+  const backgroundChoice = useBackgroundChoice();
   const idsFor = (keep: ReadonlySet<string>) =>
     ids.map((id) =>
       engineIdFor(id) === USER_STYLES_ID
         ? userStylesRequestId(userStylesMask)
         : engineIdFor(id) === CUSTOM_FONTS_ID
           ? customFontRequestId(customFont)
-          : withSharedMode(id, keep.has(engineIdFor(id))),
+          : engineIdFor(id) === CUSTOM_BACKGROUNDS_ID
+            ? backgroundRequestId(backgroundChoice)
+            : withSharedMode(id, keep.has(engineIdFor(id))),
     );
   // What the engine is asked for: the ID of each item in the chosen mode, so
   // the mode is part of the reviewed plan.

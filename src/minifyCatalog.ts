@@ -51,6 +51,10 @@ const descriptions: Record<string, Record<Language, string>> = {
     ru: "Ставит твой шрифт вместо шрифтов интерфейса Dota: выбери файл .ttf или .otf в карточке ниже. BetterFy переименует его под каждое начертание игры, а откат вернёт стандартные шрифты.",
     en: "Puts your own font in place of Dota's interface fonts: choose a .ttf or .otf file in the card below. BetterFy renames it for every weight the game uses, and restore brings the standard fonts back.",
   },
+  "minify-custom-backgrounds": {
+    ru: "Меняет фон главного меню: на экран загрузки одного из событий Dota (The International, Compendium, Diretide и другие) или на твоё видео WebM. Выбери фон в карточке ниже.",
+    en: "Changes the main menu background: to a loading screen of one of Dota's events (The International, Compendium, Diretide and more) or to your own WebM video. Pick it in the card below.",
+  },
   "minify-custom-hero-grids": {
     ru: "Добавляет готовые сетки героев (Stratz — мета Immortal по позициям и другие) к твоим собственным во всех профилях Steam, где есть Dota. Твои сетки не трогаем; откат убирает только добавленные.",
     en: "Adds ready-made hero grids (Stratz Immortal meta by position and more) beside your own in every Steam profile that has Dota. Your grids stay untouched; restore removes only the added ones.",

@@ -39,6 +39,7 @@ const MANIFESTS: &[&str] = &[
     include_str!("../packages/minify-auto-accept-match.json"),
     include_str!("../packages/minify-stat-site-buttons.json"),
     include_str!("../packages/minify-user-styles.json"),
+    include_str!("../packages/minify-custom-backgrounds.json"),
 ];
 
 /// Only this repository is trusted as a source, and only through
@@ -94,6 +95,14 @@ const AUDITED_LAYOUT_SOURCES: &[(&str, usize, &str)] = &[
         "Minify/mods/Stat Site Buttons/xml.json",
         5033,
         "206c2437af444129cdf372255442b0ae7b9ce563ae440b9607064ed4e1b3be4b",
+    ),
+    // A `Movie` panel that plays BetterFy's own `background.webm`, the 3D
+    // menu background turned off and the last-match background forced; no
+    // event handler or script.
+    (
+        "Minify/mods/Custom Backgrounds/xml.json",
+        938,
+        "a22bb5cb040243a1813f15b6fdb5664398e28763e8c69b3d3e085b85b50af63c",
     ),
     (
         "Minify/mods/Repopulate Unit Query HUD/xml.json",

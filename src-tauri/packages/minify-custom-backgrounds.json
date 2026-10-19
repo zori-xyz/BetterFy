@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "minify.custom-backgrounds",
+  "catalogId": "minify-custom-backgrounds",
+  "name": {
+    "ru": "Свои фоны",
+    "en": "Custom Backgrounds"
+  },
+  "author": "Egezenn",
+  "source": {
+    "repository": "Egezenn/dota2-minify",
+    "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+    "directory": "Minify/mods/Custom Backgrounds",
+    "license": "GPL-3.0"
+  },
+  "distribution": "internal_pilot",
+  "verifiedLanguages": [],
+  "panoramaStyles": {
+    "from": "Minify/mods/Custom Backgrounds/styling.css",
+    "bytes": 978,
+    "sha256": "17ba204e3d235867306ee2c58c7bad949f7c0263507738b05ab9fbe1c0c52512"
+  },
+  "panoramaLayouts": {
+    "from": "Minify/mods/Custom Backgrounds/xml.json",
+    "bytes": 938,
+    "sha256": "a22bb5cb040243a1813f15b6fdb5664398e28763e8c69b3d3e085b85b50af63c"
+  }
+}

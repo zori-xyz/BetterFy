@@ -483,6 +483,12 @@ export type CustomFontInfo = {
   bytes: number;
 };
 
+/** The video picked for Minify's Custom Backgrounds. */
+export type CustomVideoInfo = {
+  packageId: string;
+  bytes: number;
+};
+
 /** A cursor or font pack of a build (src-tauri/src/game_packs.rs). */
 export type GamePackPlanItem = {
   packageId: string;
@@ -648,6 +654,8 @@ export interface EngineBridge {
   refreshCatalog(): Promise<CatalogStatus | null>;
   /** Keeps the font file picked for Minify's Custom Fonts (base64). */
   storeCustomFont(fontBase64: string): Promise<CustomFontInfo>;
+  /** Keeps the WebM picked for Minify's Custom Backgrounds (base64). */
+  storeCustomVideo(videoBase64: string): Promise<CustomVideoInfo>;
   applyTreeSteamLaunchOptions(request: TreeSteamActivationRequest): Promise<SteamConfigReceipt>;
   applyTreeSteamLaunchOptionsStress(
     request: TreeSteamActivationRequest,
@@ -929,6 +937,13 @@ export const mockEngine: EngineBridge = {
   },
   async refreshCatalog() {
     return null;
+  },
+  async storeCustomVideo(videoBase64: string) {
+    const bytes = Math.floor((videoBase64.length * 3) / 4);
+    return {
+      packageId: `minify.custom-backgrounds.video-${"e".repeat(64)}-${Math.max(bytes, 1)}`,
+      bytes,
+    };
   },
   async storeCustomFont(fontBase64: string) {
     // The browser preview cannot keep files; it shows what the app would.
@@ -1338,6 +1353,15 @@ export const engineBridge: EngineBridge = {
     if (!isTauriRuntime()) return mockEngine.refreshCatalog();
     const { invoke } = await import("@tauri-apps/api/core");
     return guardedEngineCall("refresh_catalog", invoke<CatalogStatus>("refresh_catalog"), 30_000);
+  },
+  async storeCustomVideo(videoBase64: string) {
+    if (!isTauriRuntime()) return mockEngine.storeCustomVideo(videoBase64);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "store_custom_video",
+      invoke<CustomVideoInfo>("store_custom_video", { videoBase64 }),
+      120_000,
+    );
   },
   async storeCustomFont(fontBase64: string) {
     if (!isTauriRuntime()) return mockEngine.storeCustomFont(fontBase64);

@@ -211,3 +211,9 @@
 .s-font-picker .s-font-error {
   color: var(--s-danger, #ff7a7a);
 }
+.s-background-select {
+  width: 100%;
+}
+.s-background-select select {
+  width: 100%;
+}
