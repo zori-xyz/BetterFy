@@ -103,13 +103,13 @@ export function testerSummary(report, login, now) {
   const head = [
     `🐞 <b>Отчёт тестировщика</b> · ${escapeHtml(login)}`,
     `BetterFy ${escapeHtml(report.appVersion)} · ${escapeHtml(report.platform)}`,
-    `Сессия ${sessionLength(report.startedAt, now)} · экраны ${counts.screens} · клики ${counts.clicks} · сбои ${counts.failures} · флажки ${counts.flags}`,
+    `Сессия ${sessionLength(report.startedAt, now)} · экраны ${counts.screens} · клики ${counts.clicks} · сбои ${counts.failures} · пинги ${counts.flags}`,
   ];
   const tail = [];
   const snapshots = report.images.filter((image) => image.kind === "snapshot").length;
   const pictures = report.images.length - snapshots;
   if (report.images.length) tail.push(`🖼 Снимки окна: ${snapshots} · картинки: ${pictures}`);
-  tail.push(`📎 Полный журнал (${report.events.length} событий) в файле ниже`);
+  tail.push(`📎 Полный журнал в файле ниже, событий: ${report.events.length}`);
 
   let budget = MAX_SUMMARY_CHARS - [...head, ...tail].join("\n").length - 40;
   const lines = [];

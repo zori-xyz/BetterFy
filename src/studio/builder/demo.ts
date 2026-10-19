@@ -39,7 +39,7 @@ export type DemoScenario =
   | "map_foreign"
   | "map_changed";
 
-type DemoSettings = { scenario: DemoScenario; developer: boolean };
+type DemoSettings = { scenario: DemoScenario; developer: boolean; tester: boolean };
 const key = "betterfy:builder-demo";
 let settings: DemoSettings = (() => {
   try {
@@ -61,9 +61,10 @@ let settings: DemoSettings = (() => {
         ? stored.scenario
         : "success",
       developer: stored.developer === true,
+      tester: stored.tester === true,
     };
   } catch {
-    return { scenario: "success", developer: false };
+    return { scenario: "success", developer: false, tester: false };
   }
 })();
 const listeners = new Set<() => void>();

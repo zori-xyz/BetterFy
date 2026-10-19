@@ -45,6 +45,8 @@ import {
 import { Media, Modal } from "./ui";
 import Shortcuts from "./Shortcuts";
 import { currentBuildName } from "./builder/buildName";
+import { testerRecorder } from "../tester/recorder";
+import { TesterProgram } from "../tester/TesterProgram";
 
 type Route = "home" | "catalog" | "build" | "library" | "settings" | "profile";
 type Theme = "dark" | "light";
@@ -190,6 +192,7 @@ export default function Workspace({
     observer.observe(nav);
     return () => observer.disconnect();
   }, [route]);
+  useEffect(() => testerRecorder.screen(route), [route]);
   const navigate = (next: Route) => {
     if (next === route) return;
     if (scrollRef.current) scrollPositions.current[route] = scrollRef.current.scrollTop;
@@ -673,6 +676,7 @@ export default function Workspace({
         </div>
       </section>
       {shortcuts && <Shortcuts onClose={() => setShortcuts(false)} />}
+      <TesterProgram session={session} />
       <div className="s-toast-region" role="status" aria-live="polite">
         {toast && (
           <div className={`s-toast ${toast.action ? "has-action" : ""}`} key={toast.key}>
