@@ -87,7 +87,8 @@ type RawItem = {
 };
 const rawById = new Map((rawCatalog.items as RawItem[]).map((item) => [item.id, item]));
 // The same fixed commit as PREVIEW_ROOT in modCatalog.ts.
-const previewRoot = "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/511426c/assets/previews/";
+const previewRoot =
+  "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/511426c/assets/previews/";
 const singleSlots = new Set([
   "terrains",
   "river",

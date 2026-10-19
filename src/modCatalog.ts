@@ -88,7 +88,8 @@ export type BetterFyCatalogMod = {
 // previews were repainted on 2026-10-19; 1,143 of the 1,144 previews the
 // catalog uses are there (Crimson Anti-Mage is missing upstream and is not
 // offered). The author is credited in the item details ("Resource author").
-const PREVIEW_ROOT = "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/511426c/assets/previews/";
+const PREVIEW_ROOT =
+  "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/511426c/assets/previews/";
 
 const groupCategories: Record<Exclude<ModCatalogGroup, "all">, Set<string>> = {
   characters: new Set(["heroes", "hero-items", "couriers"]),
