@@ -190,6 +190,7 @@ fn write_json_atomically(target: &Path, value: &impl Serialize) -> Result<(), St
 fn read_styling(
     app_data_root: &Path,
     manifest: &PackageManifest,
+    package_id: &str,
 ) -> Result<Option<BTreeMap<String, String>>, String> {
     let Some(styles) = &manifest.panorama_styles else {
         return Ok(None);
@@ -197,6 +198,18 @@ fn read_styling(
     let bytes =
         crate::content_store::read_pinned_resource(app_data_root, styles.bytes, &styles.sha256)?;
     let text = String::from_utf8(bytes).map_err(|_| "panorama_styling_invalid".to_string())?;
+    // User Styles installs only the snippets its ID names.
+    let text = if manifest.id == crate::user_styles::PACKAGE_ID {
+        let (_, mask) = crate::user_styles::parse_variant(package_id)
+            .ok_or_else(|| "user_styles_selection_required".to_string())?;
+        crate::user_styles::select(&text, mask)?
+    } else if manifest.id == crate::custom_backgrounds::PACKAGE_ID {
+        let background = crate::custom_backgrounds::parse_variant(package_id)
+            .ok_or_else(|| "custom_background_required".to_string())?;
+        crate::custom_backgrounds::fill_style(&text, &background)?
+    } else {
+        text
+    };
     crate::panorama::split_styling(&text).map(Some)
 }
 
@@ -210,7 +223,7 @@ fn resolve_styles(
         let Some(manifest) = tuning(package_id)? else {
             continue;
         };
-        let Some(sections) = read_styling(app_data_root, manifest)? else {
+        let Some(sections) = read_styling(app_data_root, manifest, package_id)? else {
             continue;
         };
         let game_path = game_path.ok_or_else(|| "game_path_required".to_string())?;
@@ -285,7 +298,7 @@ fn apply_panorama_styles(
         let Some(manifest) = tuning(package_id)? else {
             continue;
         };
-        let Some(sections) = read_styling(app_data_root, manifest)? else {
+        let Some(sections) = read_styling(app_data_root, manifest, package_id)? else {
             continue;
         };
         let styles = manifest
@@ -620,6 +633,26 @@ fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
     if maps > 1 {
         return Err("map_terrain_conflict".to_string());
     }
+    // User Styles installs only the snippets the player picked; without a
+    // pick it has nothing to install.
+    for id in &ids {
+        if id == crate::user_styles::PACKAGE_ID {
+            return Err("user_styles_selection_required".to_string());
+        }
+        if id == crate::custom_backgrounds::PACKAGE_ID {
+            return Err("custom_background_required".to_string());
+        }
+    }
+    // A cursor or font pack replaces the whole set of the game's cursors or
+    // fonts: one of each per build.
+    let mut pack_categories = BTreeSet::new();
+    for id in &ids {
+        if let Contract::Pack(item) = resolve(id)? {
+            if !pack_categories.insert(item.category) {
+                return Err("game_pack_conflict".to_string());
+            }
+        }
+    }
     // Minify's own conflicts and dependencies, checked before anything is
     // downloaded or built. A wardrobe item declares neither.
     for id in &ids {
@@ -645,6 +678,21 @@ enum Contract {
     Wardrobe(&'static WardrobeManifest, SharedPolicy),
     /// A whole-map package installed as its own file, `maps/dota.vpk`.
     Map(&'static MapManifest),
+    /// A cursor or font pack: the game's own loose files (`game_files`).
+    Pack(&'static crate::game_packs::PackManifest),
+    /// Minify's User Styles with the snippets the player picked (a bit mask).
+    UserStyles(&'static PackageManifest, u32),
+    /// Minify's Custom Hero Grids: grids compiled into the app, added to the
+    /// Steam accounts' own (`hero_grids`).
+    HeroGrids,
+    /// Minify's Custom Fonts: the font file the player picked (its SHA-256
+    /// and size), stored by `custom_fonts::store`.
+    CustomFont(String, usize),
+    /// Minify's Custom Backgrounds with the background the player chose.
+    CustomBackground(
+        &'static PackageManifest,
+        crate::custom_backgrounds::Background,
+    ),
 }
 
 impl Contract {
@@ -653,6 +701,13 @@ impl Contract {
             Self::Tuning(manifest) => manifest.id.clone(),
             Self::Wardrobe(item, policy) => wardrobe::variant_id(item, *policy),
             Self::Map(item) => item.id.clone(),
+            Self::Pack(item) => item.id.clone(),
+            Self::UserStyles(_, mask) => crate::user_styles::variant_id(*mask),
+            Self::HeroGrids => crate::hero_grids::PACKAGE_ID.to_string(),
+            Self::CustomFont(sha, bytes) => crate::custom_fonts::variant_id(sha, *bytes),
+            Self::CustomBackground(_, background) => {
+                crate::custom_backgrounds::variant_id(background)
+            }
         }
     }
 
@@ -663,6 +718,11 @@ impl Contract {
             Self::Tuning(manifest) => &manifest.id,
             Self::Wardrobe(item, _) => &item.id,
             Self::Map(item) => &item.id,
+            Self::Pack(item) => &item.id,
+            Self::UserStyles(manifest, _) => &manifest.id,
+            Self::HeroGrids => crate::hero_grids::PACKAGE_ID,
+            Self::CustomFont(..) => crate::custom_fonts::PACKAGE_ID,
+            Self::CustomBackground(manifest, _) => &manifest.id,
         }
     }
 }
@@ -674,6 +734,25 @@ fn resolve(id: &str) -> Result<Contract, String> {
     if let Some(item) = map_terrain::find(id)? {
         return Ok(Contract::Map(item));
     }
+    if let Some(item) = crate::game_packs::find(id)? {
+        return Ok(Contract::Pack(item));
+    }
+    if id == crate::hero_grids::PACKAGE_ID || id == crate::hero_grids::CATALOG_ID {
+        return Ok(Contract::HeroGrids);
+    }
+    if id == crate::custom_fonts::PACKAGE_ID || id == crate::custom_fonts::CATALOG_ID {
+        return Err("custom_font_required".to_string());
+    }
+    if let Some((sha, bytes)) = crate::custom_fonts::parse_variant(id) {
+        return Ok(Contract::CustomFont(sha, bytes));
+    }
+    if let Some(background) = crate::custom_backgrounds::parse_variant(id) {
+        return package_registry::find(crate::custom_backgrounds::PACKAGE_ID)
+            .map(|manifest| Contract::CustomBackground(manifest, background));
+    }
+    if let Some((base, mask)) = crate::user_styles::parse_variant(id) {
+        return package_registry::find(base).map(|manifest| Contract::UserStyles(manifest, mask));
+    }
     package_registry::find(id).map(Contract::Tuning)
 }
 
@@ -681,8 +760,14 @@ fn resolve(id: &str) -> Result<Contract, String> {
 /// no blacklist, style or layout edits.
 fn tuning(id: &str) -> Result<Option<&'static PackageManifest>, String> {
     match resolve(id)? {
-        Contract::Tuning(manifest) => Ok(Some(manifest)),
-        Contract::Wardrobe(..) | Contract::Map(_) => Ok(None),
+        Contract::Tuning(manifest)
+        | Contract::UserStyles(manifest, _)
+        | Contract::CustomBackground(manifest, _) => Ok(Some(manifest)),
+        Contract::Wardrobe(..)
+        | Contract::Map(_)
+        | Contract::Pack(_)
+        | Contract::HeroGrids
+        | Contract::CustomFont(..) => Ok(None),
     }
 }
 
@@ -711,6 +796,14 @@ pub(crate) struct VerifiedTreeVpk {
     wardrobe: Vec<WardrobePlanItem>,
     /// Paths a wardrobe item writes that another package writes differently.
     wardrobe_conflicts: Vec<WardrobeConflict>,
+    /// The game's own loose files the build replaces (`None`: removes),
+    /// below `game/dota`. Their list is inside the VPK, so the plan ID binds
+    /// them.
+    game_files: BTreeMap<String, Option<Vec<u8>>>,
+    /// The cursor and font packs of the build, in selection order.
+    packs: Vec<crate::game_packs::PackPlanItem>,
+    /// The build adds the pinned hero grids to the Steam accounts' own.
+    hero_grids: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -741,6 +834,8 @@ pub(crate) struct TreePilotPlan {
     /// size, class counts and every stripped or rejected path.
     wardrobe: Vec<WardrobePlanItem>,
     wardrobe_conflicts: Vec<WardrobeConflict>,
+    /// Cursor and font packs: the game's own files they replace or remove.
+    packs: Vec<crate::game_packs::PackPlanItem>,
     compatibility: &'static str,
     distribution: &'static str,
     deploy_enabled: bool,
@@ -767,6 +862,16 @@ impl VerifiedTreeVpk {
     /// the list the deployment records.
     pub(crate) fn package_ids(&self) -> &[String] {
         &self.package_ids
+    }
+
+    /// The game's own loose files the build replaces (`None`: removes).
+    pub(crate) fn game_files(&self) -> &BTreeMap<String, Option<Vec<u8>>> {
+        &self.game_files
+    }
+
+    /// Whether the build adds the pinned hero grids.
+    pub(crate) fn hero_grids(&self) -> bool {
+        self.hero_grids
     }
 
     pub(crate) fn has_pak(&self) -> bool {
@@ -848,6 +953,9 @@ pub(crate) fn verified_test_vpk() -> VerifiedTreeVpk {
         plan_id: bundle.plan().plan_id.clone(),
         wardrobe: Vec::new(),
         wardrobe_conflicts: Vec::new(),
+        game_files: BTreeMap::new(),
+        packs: Vec::new(),
+        hero_grids: false,
     }
 }
 
@@ -896,7 +1004,16 @@ fn acquire_verified_resources_with_progress(
     let mut index = 0usize;
     for (package_id, contract) in package_ids.iter().zip(contracts) {
         let manifest = match contract {
-            Contract::Tuning(manifest) => manifest,
+            Contract::Tuning(manifest) | Contract::UserStyles(manifest, _) => manifest,
+            // The pinned style and layouts download like any tuning package;
+            // the player's video is already stored.
+            Contract::CustomBackground(manifest, background) => {
+                if let crate::custom_backgrounds::Background::Video { sha256, bytes } = &background
+                {
+                    crate::custom_backgrounds::load_video(app_data_root, sha256, *bytes)?;
+                }
+                manifest
+            }
             // One pinned archive: fetched, verified and stored as a unit.
             Contract::Wardrobe(item, _) => {
                 if cancelled.load(Ordering::Relaxed) {
@@ -914,6 +1031,30 @@ fn acquire_verified_resources_with_progress(
                     return Err("download_cancelled".to_string());
                 }
                 map_terrain::acquire(app_data_root, item, cancelled)?;
+                index += 1;
+                progress(index);
+                continue;
+            }
+            // The player's font is already stored; nothing to download.
+            Contract::CustomFont(sha, bytes) => {
+                crate::content_store::read_pinned_resource(app_data_root, bytes, &sha)
+                    .map_err(|_| "custom_font_missing".to_string())?;
+                index += 1;
+                progress(index);
+                continue;
+            }
+            // The grids are compiled into the app: nothing to download.
+            Contract::HeroGrids => {
+                index += 1;
+                progress(index);
+                continue;
+            }
+            // One pinned ZIP; only its checked files are stored.
+            Contract::Pack(item) => {
+                if cancelled.load(Ordering::Relaxed) {
+                    return Err("download_cancelled".to_string());
+                }
+                crate::game_packs::acquire(app_data_root, item, cancelled)?;
                 index += 1;
                 progress(index);
                 continue;
@@ -1118,12 +1259,68 @@ pub(crate) fn build_from_verified_store(
         }
     }
     let mut wardrobe_items = Vec::new();
+    let mut game_files = BTreeMap::new();
+    let mut packs = Vec::new();
+    let mut hero_grids = false;
     let packages = bundle_ids
         .iter()
         .map(|package_id| {
-            let manifest = match resolve(package_id)? {
+            let contract = resolve(package_id)?;
+            // The player's own background video goes into the VPK as the file
+            // the background layout plays.
+            let video = match &contract {
+                Contract::CustomBackground(
+                    _,
+                    crate::custom_backgrounds::Background::Video { sha256, bytes },
+                ) => Some(crate::custom_backgrounds::load_video(
+                    app_data_root,
+                    sha256,
+                    *bytes,
+                )?),
+                _ => None,
+            };
+            let manifest = match contract {
                 Contract::Map(_) => return Err("pilot_package_invalid".to_string()),
-                Contract::Tuning(manifest) => manifest,
+                Contract::Tuning(manifest)
+                | Contract::UserStyles(manifest, _)
+                | Contract::CustomBackground(manifest, _) => manifest,
+                // The pack's files go into the game folder on their own; the
+                // VPK carries the list of them, which binds the reviewed build
+                // to those exact files.
+                Contract::Pack(item) => {
+                    let loaded = crate::game_packs::load(app_data_root, item)?;
+                    for (path, bytes) in loaded.files {
+                        if game_files.insert(path, bytes).is_some() {
+                            return Err("game_pack_conflict".to_string());
+                        }
+                    }
+                    packs.push(loaded.item);
+                    let (marker, text) = crate::game_packs::marker(item);
+                    return Ok(BundlePackage {
+                        package_id: package_id.clone(),
+                        resources: BTreeMap::from([(marker, text)]),
+                    });
+                }
+                Contract::CustomFont(sha, bytes) => {
+                    for (path, font) in crate::custom_fonts::load(app_data_root, &sha, bytes)? {
+                        if game_files.insert(path, font).is_some() {
+                            return Err("game_pack_conflict".to_string());
+                        }
+                    }
+                    let (marker, text) = crate::custom_fonts::marker(&sha, bytes);
+                    return Ok(BundlePackage {
+                        package_id: package_id.clone(),
+                        resources: BTreeMap::from([(marker, text)]),
+                    });
+                }
+                Contract::HeroGrids => {
+                    hero_grids = true;
+                    let (marker, text) = crate::hero_grids::marker();
+                    return Ok(BundlePackage {
+                        package_id: package_id.clone(),
+                        resources: BTreeMap::from([(marker, text)]),
+                    });
+                }
                 // The analyzer re-checks the stored archive against its audit
                 // and returns only the files that audit allows.
                 Contract::Wardrobe(item, policy) => {
@@ -1151,6 +1348,9 @@ pub(crate) fn build_from_verified_store(
                 })
                 .collect::<Result<BTreeMap<_, _>, _>>()?;
             verify_resources(&manifest.resources, &resources)?;
+            if let Some(video) = video {
+                resources.insert(crate::custom_backgrounds::VIDEO_PATH.to_string(), video);
+            }
             // Blacklisted game resources get the placeholder of their type.
             // A file the package ships itself always wins over a blank.
             if let (Some(blacklist), Some(expansion)) = (
@@ -1190,7 +1390,11 @@ pub(crate) fn build_from_verified_store(
     let mut packages = packages;
     apply_panorama_styles(app_data_root, &bundle_ids, &mut packages)?;
     apply_panorama_layouts(app_data_root, &bundle_ids, &mut packages)?;
-    assemble(package_ids, packages, wardrobe_items, map)
+    let mut verified = assemble(package_ids, packages, wardrobe_items, map)?;
+    verified.game_files = game_files;
+    verified.packs = packs;
+    verified.hero_grids = hero_grids;
+    Ok(verified)
 }
 
 /// The identity of a build that carries a map: the merged packages' plan (if
@@ -1242,6 +1446,9 @@ fn assemble(
             plan_id: String::new(),
             wardrobe,
             wardrobe_conflicts: Vec::new(),
+            game_files: BTreeMap::new(),
+            packs: Vec::new(),
+            hero_grids: false,
         }
     } else {
         build_verified_bundle(packages, wardrobe)?
@@ -1282,6 +1489,7 @@ fn plan_for(verified: &VerifiedTreeVpk) -> TreePilotPlan {
         contributions: verified.bundle_plan().contributions.clone(),
         wardrobe: verified.wardrobe.clone(),
         wardrobe_conflicts: verified.wardrobe_conflicts.clone(),
+        packs: verified.packs.clone(),
         compatibility: "unknown",
         distribution: "internal_pilot",
         deploy_enabled: cfg!(target_os = "windows"),
@@ -1396,6 +1604,9 @@ fn build_verified_bundle(
         plan_id: bundle.plan().plan_id.clone(),
         wardrobe,
         wardrobe_conflicts,
+        game_files: BTreeMap::new(),
+        packs: Vec::new(),
+        hero_grids: false,
     })
 }
 
@@ -1676,6 +1887,134 @@ mod tests {
         let second = build_from_verified_store(&root, &ids).expect("rebuild from cache");
         assert_eq!(first.bytes(), second.bytes());
         std::fs::remove_dir_all(root).expect("clean generated test cache");
+    }
+
+    #[test]
+    fn user_styles_install_only_with_a_pick_and_keep_it_in_the_id() {
+        assert_eq!(
+            normalize_package_ids(&["minify.user-styles".to_string()])
+                .err()
+                .as_deref(),
+            Some("user_styles_selection_required")
+        );
+        assert_eq!(
+            normalize_package_ids(&["minify-user-styles".to_string()])
+                .err()
+                .as_deref(),
+            Some("user_styles_selection_required")
+        );
+        assert_eq!(
+            normalize_package_ids(&["minify.user-styles.pick-5".to_string()]).expect("pick"),
+            vec!["minify.user-styles.pick-5".to_string()]
+        );
+        // Two picks are still one package.
+        assert!(normalize_package_ids(&[
+            "minify.user-styles.pick-5".to_string(),
+            "minify.user-styles.pick-6".to_string()
+        ])
+        .is_err());
+        let manifest = contract("minify.user-styles.pick-5").expect("tuning contract");
+        assert_eq!(manifest.id, "minify.user-styles");
+    }
+
+    #[test]
+    fn custom_backgrounds_install_only_with_a_choice_kept_in_the_id() {
+        for plain in ["minify.custom-backgrounds", "minify-custom-backgrounds"] {
+            assert_eq!(
+                normalize_package_ids(&[plain.to_string()]).err().as_deref(),
+                Some("custom_background_required")
+            );
+        }
+        let screen = "minify.custom-backgrounds.ls-international_2025_ls_3".to_string();
+        assert_eq!(
+            normalize_package_ids(std::slice::from_ref(&screen)).expect("screen"),
+            vec![screen.clone()]
+        );
+        assert_eq!(
+            contract(&screen).expect("tuning").id,
+            "minify.custom-backgrounds"
+        );
+        // A screen that is not in the list is not a package.
+        assert!(normalize_package_ids(&[
+            "minify.custom-backgrounds.ls-unlisted_screen".to_string()
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn a_custom_font_builds_as_every_renamed_weight() {
+        use base64::Engine;
+        let root = wardrobe_root("custom-font");
+        assert_eq!(
+            normalize_package_ids(&["minify-custom-fonts".to_string()])
+                .err()
+                .as_deref(),
+            Some("custom_font_required")
+        );
+        let font = crate::font_names::test_font();
+        let info = crate::custom_fonts::store(
+            &root,
+            &base64::engine::general_purpose::STANDARD.encode(&font),
+        )
+        .expect("stores");
+        assert_eq!(info.family, "Original");
+        let verified = build_from_verified_store(&root, std::slice::from_ref(&info.package_id))
+            .expect("builds");
+        assert_eq!(verified.game_files().len(), 29);
+        let bold = verified
+            .game_files()
+            .get("panorama/fonts/radiance-bold.otf")
+            .and_then(Option::as_ref)
+            .expect("bold");
+        assert_eq!(
+            crate::font_names::family_name(bold).expect("family"),
+            "Radiance"
+        );
+        // A font pack and a custom font both write the game's fonts.
+        assert!(verified.has_pak());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_cursor_pack_builds_with_its_game_files_bound_to_the_vpk() {
+        let root = wardrobe_root("cursor-pack");
+        let (manifest, zip) = crate::game_packs::fixtures::cursor_pack("build-pack", b"x");
+        let item = crate::game_packs::register_for_test(manifest);
+        let files = crate::game_packs::extract_pinned_files(&zip, item).expect("extracts");
+        for (file, bytes) in item.files.iter().zip(files) {
+            crate::content_store::store_pinned_resource(&root, file.bytes, &file.sha256, &bytes)
+                .expect("stores");
+        }
+        let verified = build_from_verified_store(&root, std::slice::from_ref(&item.catalog_id))
+            .expect("builds");
+        assert!(verified.has_pak(), "the file list goes into the VPK");
+        assert_eq!(verified.game_files().len(), 3);
+        assert!(verified
+            .game_files()
+            .get("resource/cursor/cursor.res")
+            .is_some_and(Option::is_some));
+        let plan = plan_for(&verified);
+        assert_eq!(plan.packs.len(), 1);
+        assert_eq!(plan.packs[0].files, 3);
+        // The same pack with other bytes is another build.
+        let (other, other_zip) = crate::game_packs::fixtures::cursor_pack("build-pack-2", b"y");
+        let other = crate::game_packs::register_for_test(other);
+        let files = crate::game_packs::extract_pinned_files(&other_zip, other).expect("extracts");
+        for (file, bytes) in other.files.iter().zip(files) {
+            crate::content_store::store_pinned_resource(&root, file.bytes, &file.sha256, &bytes)
+                .expect("stores");
+        }
+        let second = build_from_verified_store(&root, std::slice::from_ref(&other.catalog_id))
+            .expect("builds");
+        assert_ne!(second.plan_id(), verified.plan_id());
+        // Two cursor packs cannot go into one build.
+        assert_eq!(
+            normalize_package_ids(&[item.id.clone(), other.id.clone()])
+                .err()
+                .as_deref(),
+            Some("game_pack_conflict")
+        );
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 
     fn wardrobe_root(name: &str) -> std::path::PathBuf {
@@ -2068,8 +2407,8 @@ mod tests {
                     ("particles/basic_ambient/basic_ambient.vpcf_c", b"b"),
                 ],
                 |value| {
-                    value["archive"]["innerBytes"] = 61_000_000.into();
-                    value["audited"]["installBytes"] = 60_000_000.into();
+                    value["archive"]["innerBytes"] = 121_000_000.into();
+                    value["audited"]["installBytes"] = 120_000_000.into();
                     value["audited"]["stripBytes"] = 1_000.into();
                 },
             );
@@ -2079,7 +2418,7 @@ mod tests {
             .map(|index| big(&format!("budget-skin-{index}")))
             .collect::<Vec<_>>();
         let ids = items.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
-        // 5 x 60 MB is more than the 256 MiB the merged VPK can hold.
+        // 5 x 120 MB is more than the 512 MiB the merged VPK can hold.
         assert_eq!(
             begin_download(root.clone(), ids.clone(), None)
                 .err()
@@ -2089,7 +2428,7 @@ mod tests {
         // Four fit under the limit, which the check only reads from the pins.
         assert_eq!(
             wardrobe::install_footprint(&ids[..4]).1,
-            240_000_000,
+            480_000_000,
             "four skins stay under the limit"
         );
         // The opt-in mode counts the smaller pinned size.

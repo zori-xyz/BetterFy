@@ -66,6 +66,10 @@ trait DownloadTransport: Send + Sync + 'static {
 /// `raw.githubusercontent.com`, answered a `HEAD` request for an archive with
 /// 200 directly on 2026-10-17 (no redirect), so it needs no entry here.
 const WARDROBE_REDIRECT_SUFFIXES: &[&str] = &[".cdn.hf.co"];
+/// GitHub answers a release asset with a redirect to
+/// `release-assets.githubusercontent.com` (observed 2026-10-19). The bytes
+/// are pinned by size and SHA-256 either way.
+const GITHUB_RELEASE_REDIRECT_SUFFIXES: &[&str] = &[".githubusercontent.com"];
 
 /// HTTPS download with every address resolved, checked and pinned. By default
 /// a redirect must stay on the first URL's origin. A transport made for a
@@ -85,6 +89,10 @@ impl PinnedHttpsTransport {
     const WARDROBE: Self = Self {
         redirect_suffixes: WARDROBE_REDIRECT_SUFFIXES,
         timeout: Duration::from_secs(600),
+    };
+    const GITHUB_RELEASE: Self = Self {
+        redirect_suffixes: GITHUB_RELEASE_REDIRECT_SUFFIXES,
+        timeout: Duration::from_secs(120),
     };
 
     fn follows(&self, url: &Url) -> bool {
@@ -338,6 +346,25 @@ pub(crate) fn fetch_pinned_map_archive(
         manifest.archive.zip_bytes,
         &manifest.archive.zip_sha256,
         "map-archive.zip",
+        cancelled,
+    )
+}
+
+pub(crate) fn fetch_pinned_game_pack(
+    manifest: &crate::game_packs::PackManifest,
+    cancelled: &AtomicBool,
+) -> Result<Vec<u8>, String> {
+    let transport = match manifest.category {
+        crate::game_packs::PackCategory::ItemBuilds => &PinnedHttpsTransport::GITHUB_RELEASE,
+        _ => &PinnedHttpsTransport::WARDROBE,
+    };
+    fetch_mirrors_with(
+        transport,
+        &manifest.id,
+        &manifest.source.urls,
+        manifest.archive.zip_bytes,
+        &manifest.archive.zip_sha256,
+        "game-pack.zip",
         cancelled,
     )
 }

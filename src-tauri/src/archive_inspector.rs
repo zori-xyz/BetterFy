@@ -6,8 +6,8 @@ use zip::read::ZipArchive;
 use zip::CompressionMethod;
 
 const MAX_ENTRIES: usize = 2_048;
-const MAX_EXPANDED_BYTES: u64 = 256 * 1024 * 1024;
-const MAX_ENTRY_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_EXPANDED_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_ENTRY_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_NAME_BYTES: usize = 240;
 const MAX_COMPRESSION_RATIO: u64 = 200;
 
@@ -42,7 +42,7 @@ fn windows_reserved(component: &str) -> bool {
             && stem.as_bytes()[3] != b'0')
 }
 
-fn normalized_name(name: &str) -> Result<(String, bool), String> {
+fn normalized_name(name: &str, tolerated: &[String]) -> Result<(String, bool), String> {
     if name.is_empty()
         || name.len() > MAX_NAME_BYTES
         || !name.is_ascii()
@@ -67,13 +67,24 @@ fn normalized_name(name: &str) -> Result<(String, bool), String> {
             return Err("archive_path_unsafe".to_string());
         }
     }
-    if !is_directory && unsafe_extension(trimmed) {
+    if !is_directory && unsafe_extension(trimmed) && !tolerated.iter().any(|entry| entry == name) {
         return Err("archive_content_unsafe".to_string());
     }
     Ok((trimmed.to_ascii_lowercase(), is_directory))
 }
 
 pub fn inspect_zip_bytes(bytes: &[u8]) -> Result<ArchiveReport, String> {
+    inspect_zip_bytes_tolerating(bytes, &[])
+}
+
+/// The same inspection, except that the entries named in `tolerated` (exact
+/// names) may be scripts or programs: a pack's own `Install.bat`, pinned by
+/// the archive's hash, that BetterFy never extracts. Any other such entry is
+/// still refused.
+pub fn inspect_zip_bytes_tolerating(
+    bytes: &[u8],
+    tolerated: &[String],
+) -> Result<ArchiveReport, String> {
     if bytes.is_empty() || bytes.len() as u64 > crate::content_store::MAX_ARTIFACT_BYTES {
         return Err("archive_size_invalid".to_string());
     }
@@ -106,7 +117,7 @@ pub fn inspect_zip_bytes(bytes: &[u8]) -> Result<ArchiveReport, String> {
         {
             return Err("archive_path_unsafe".to_string());
         }
-        let (normalized, is_directory) = normalized_name(entry.name())?;
+        let (normalized, is_directory) = normalized_name(entry.name(), tolerated)?;
         if !names.insert(normalized.clone()) {
             return Err("archive_path_collision".to_string());
         }

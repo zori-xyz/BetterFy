@@ -266,8 +266,8 @@ export function Preferences({
               </div>
               <div className="s-about-note">
                 {isRu
-                  ? "Собирай и сохраняй наборы модов и обликов. На Windows BetterFy уже ставит проверенные моды настройки игры одним файлом, с резервной копией и откатом в один клик. Облики пока только для просмотра."
-                  : "Build and save sets of mods and looks. On Windows, BetterFy installs audited game-tuning mods as one file, with a backup and one-click restore. Looks are preview-only for now."}
+                  ? "Собирай свою Dota из модов и обликов. BetterFy ставит всё одной сборкой, с резервной копией и откатом в один клик. Это ранний доступ: если что-то пойдёт не так, напиши нам — поправим быстро."
+                  : "Build your Dota from mods and looks. BetterFy installs everything as one build, with a backup and one-click restore. This is early access: if something goes wrong, tell us and we will fix it fast."}
               </div>
               <a
                 className="s-settings-link"

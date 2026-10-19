@@ -297,7 +297,8 @@ export type SkinRejectReason =
   | "panorama_scripted"
   | "panorama_unproven"
   | "outside_category"
-  | "decor_refused";
+  | "decor_refused"
+  | "name_not_ascii";
 
 /** What the skin-archive analyzer found (src-tauri/src/skin_archive.rs). */
 export type SkinReport = {
@@ -441,6 +442,8 @@ export type TreePilotPlan = {
   /** One entry per selected wardrobe item; empty for tuning-only builds. */
   wardrobe: WardrobePlanItem[];
   wardrobeConflicts: WardrobeConflict[];
+  /** Cursor and font packs: the game's own files they replace or remove. */
+  packs: GamePackPlanItem[];
   compatibility: "unknown";
   distribution: "internal_pilot";
   deployEnabled: boolean;
@@ -473,6 +476,37 @@ export type CatalogStatus = {
   error: string | null;
 };
 
+/** The font picked for Minify's Custom Fonts (src-tauri/src/custom_fonts.rs). */
+export type CustomFontInfo = {
+  packageId: string;
+  family: string;
+  bytes: number;
+};
+
+/** The video picked for Minify's Custom Backgrounds. */
+export type CustomVideoInfo = {
+  packageId: string;
+  bytes: number;
+};
+
+/** A cursor or font pack of a build (src-tauri/src/game_packs.rs). */
+export type GamePackPlanItem = {
+  packageId: string;
+  catalogId: string;
+  category: "cursors" | "fonts" | "item_builds";
+  files: number;
+  bytes: number;
+  removes: number;
+};
+
+/** The game's own loose files a build replaced, as they are now. */
+export type GameFilesState = {
+  operationId: string;
+  files: number;
+  intact: number;
+  replaced: number;
+};
+
 export type TreePilotCurrentState = GameDeploymentReceipt & {
   packageVerified: boolean;
   steamOperationId: string | null;
@@ -482,6 +516,8 @@ export type TreePilotCurrentState = GameDeploymentReceipt & {
   profile: InstalledProfile | null;
   /** Dota's Steam build differs from the one recorded at install time. */
   dotaPatched: boolean;
+  gameFiles?: GameFilesState | null;
+  gameFilesRecoveryRequired?: boolean;
 };
 
 export type InstalledProfile = {
@@ -616,6 +652,10 @@ export interface EngineBridge {
   ): Promise<GameDeploymentReceipt>;
   currentTreePilot(gamePath: string): Promise<TreePilotCurrentState | null>;
   refreshCatalog(): Promise<CatalogStatus | null>;
+  /** Keeps the font file picked for Minify's Custom Fonts (base64). */
+  storeCustomFont(fontBase64: string): Promise<CustomFontInfo>;
+  /** Keeps the WebM picked for Minify's Custom Backgrounds (base64). */
+  storeCustomVideo(videoBase64: string): Promise<CustomVideoInfo>;
   applyTreeSteamLaunchOptions(request: TreeSteamActivationRequest): Promise<SteamConfigReceipt>;
   applyTreeSteamLaunchOptionsStress(
     request: TreeSteamActivationRequest,
@@ -898,6 +938,22 @@ export const mockEngine: EngineBridge = {
   async refreshCatalog() {
     return null;
   },
+  async storeCustomVideo(videoBase64: string) {
+    const bytes = Math.floor((videoBase64.length * 3) / 4);
+    return {
+      packageId: `minify.custom-backgrounds.video-${"e".repeat(64)}-${Math.max(bytes, 1)}`,
+      bytes,
+    };
+  },
+  async storeCustomFont(fontBase64: string) {
+    // The browser preview cannot keep files; it shows what the app would.
+    const bytes = Math.floor((fontBase64.length * 3) / 4);
+    return {
+      packageId: `minify.custom-fonts.font-${"d".repeat(64)}-${Math.max(bytes, 1)}`,
+      family: "Preview font",
+      bytes,
+    };
+  },
   async applyTreeSteamLaunchOptions() {
     throw new EngineFault("desktop_runtime_required", "apply_tree_steam_launch_options");
   },
@@ -1084,7 +1140,7 @@ export const engineBridge: EngineBridge = {
     onProgress({
       phase: "verifying",
       progress: 90,
-      message: language === "ru" ? "Контрольные суммы совпали" : "Checksums verified",
+      message: language === "ru" ? "Файлы проверены" : "Files checked",
     });
     await wait(420);
     onProgress({
@@ -1297,6 +1353,24 @@ export const engineBridge: EngineBridge = {
     if (!isTauriRuntime()) return mockEngine.refreshCatalog();
     const { invoke } = await import("@tauri-apps/api/core");
     return guardedEngineCall("refresh_catalog", invoke<CatalogStatus>("refresh_catalog"), 30_000);
+  },
+  async storeCustomVideo(videoBase64: string) {
+    if (!isTauriRuntime()) return mockEngine.storeCustomVideo(videoBase64);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "store_custom_video",
+      invoke<CustomVideoInfo>("store_custom_video", { videoBase64 }),
+      120_000,
+    );
+  },
+  async storeCustomFont(fontBase64: string) {
+    if (!isTauriRuntime()) return mockEngine.storeCustomFont(fontBase64);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "store_custom_font",
+      invoke<CustomFontInfo>("store_custom_font", { fontBase64 }),
+      60_000,
+    );
   },
   async applyTreeSteamLaunchOptions(request) {
     if (!isTauriRuntime()) return mockEngine.applyTreeSteamLaunchOptions(request);

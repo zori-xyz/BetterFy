@@ -8,7 +8,7 @@ type Phrase = [ru: string, en: string];
 const phrases: Record<"download" | "install" | "steam" | "restore", Phrase[]> = {
   download: [
     ["Курьер уже несёт файлы модов", "The courier is bringing the mod files"],
-    ["Сверяем каждый файл по SHA-256", "Checking every file against its SHA-256"],
+    ["Проверяем каждый файл", "Checking every file"],
     ["Непроверенный файл в сборку не попадёт", "No unchecked file gets into the build"],
     ["Сверяемся с файлами твоей Dota", "Matching against your Dota files"],
   ],

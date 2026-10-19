@@ -172,32 +172,32 @@ export const explainError = (code: string, isRu: boolean) => {
       "Some files are changed by more than one item in the build. Review the list, confirm it, and retry.",
     ],
     bundle_limit_exceeded: [
-      "Сборка не помещается в один файл: образ может занимать не больше 256 МБ. Ничего не скачано. Убери один из крупных обликов или пакетов (музыка, деревья, курьеры с моделями) или, для облика героя, включи «Не трогать общие файлы игры» (так сборка меньше), затем подготовь заново.",
-      "The build does not fit in one file: the merged VPK can hold at most 256 MB. Nothing was downloaded. Remove one of the large skins or packs (music, trees, courier models) or, for a hero skin, turn on \"Keep the game's shared files untouched\" (it makes the build smaller), then prepare again.",
+      "Сборка слишком большая: в одну сборку помещается до 512 МБ. Ничего не скачано. Убери один из крупных обликов или пакетов (музыка, деревья, курьеры с моделями) или, для облика героя, включи «Менять только этого героя» (так сборка меньше), затем подготовь заново.",
+      "The build is too large: one build holds up to 512 MB. Nothing was downloaded. Remove one of the large skins or packs (music, trees, courier models) or, for a hero skin, turn on \"Change only this hero\" (it makes the build smaller), then prepare again.",
     ],
     wardrobe_audit_mismatch: [
       "Архив не совпал с проверенным описанием. BetterFy не будет его ставить.",
       "The archive does not match its audited description. BetterFy will not install it.",
     ],
     wardrobe_archive_hash_mismatch: [
-      "Скачанный архив не совпал с ожидаемой контрольной суммой. BetterFy его не сохранил.",
-      "The downloaded archive did not match the expected checksum. BetterFy did not keep it.",
+      "Архив скачался с ошибкой, BetterFy его не сохранил. Попробуй ещё раз.",
+      "The archive downloaded with an error and BetterFy did not keep it. Try again.",
     ],
     wardrobe_archive_unexpected: [
       "Внутри архива не то, что ожидалось. BetterFy не будет его ставить.",
       "The archive does not contain what was expected. BetterFy will not install it.",
     ],
     skin_archive_hostile: [
-      "В архиве есть файлы, которые BetterFy не ставит ни при каких условиях (скрипты, программы или небезопасные пути).",
-      "The archive holds files BetterFy never installs (scripts, programs or unsafe paths).",
+      "В архиве есть файлы, которые BetterFy не ставит ни при каких условиях (скрипты или программы).",
+      "The archive holds files BetterFy never installs (scripts or programs).",
     ],
     skin_shared_paths_refused: [
       "Архив меняет общие файлы игры, а для него выбрано «отказать». Установка остановлена.",
       "The archive changes shared game files and is set to refuse them. Installation stopped.",
     ],
     build_too_large: [
-      "Все выбранные файлы вместе занимают больше 256 МБ: это предел одного файла сборки (pak-файла), который читает Dota. Убери один из крупных скинов или собери его отдельно от остального.",
-      "The selected files add up to more than 256 MB, the limit for the single build file (pak file) Dota reads. Remove one of the large skins or build it separately from the rest.",
+      "Всё выбранное вместе больше 512 МБ, а это предел одной сборки. Убери один из крупных обликов или собери его отдельно от остального.",
+      "Everything selected adds up to more than 512 MB, the limit for one build. Remove one of the large skins or build it separately from the rest.",
     ],
     skin_install_too_large: [
       "Набор слишком большой для одной сборки.",
@@ -223,17 +223,97 @@ export const explainError = (code: string, isRu: boolean) => {
       "В сборке две карты, а ставится только одна: карта заменяет файл карты целиком. Оставь одну из них, остальное в сборке не изменится.",
       "The build has two maps, and only one can be installed: a map replaces the game's map file as a whole. Keep one of them; the rest of the build stays as is.",
     ],
+    hero_grids_no_profile: [
+      "Не нашли на компьютере профиль Steam, в котором уже запускалась Dota. Запусти Dota хотя бы раз, потом поставь сборку снова.",
+      "No Steam profile on this computer has run Dota yet. Launch Dota once, then install the build again.",
+    ],
+    hero_grids_recovery_required: [
+      "Прошлая запись сеток героев оборвалась. Нажми «Проверить» в подробностях, затем повтори.",
+      "An earlier write of hero grids stopped half way. Use Check under Details, then retry.",
+    ],
+    custom_background_required: [
+      "Для «Своих фонов» не выбран фон. Открой карточку мода и выбери экран загрузки или видео.",
+      "No background is picked for Custom Backgrounds. Open the mod's card and pick a loading screen or a video.",
+    ],
+    custom_video_missing: [
+      "Выбранное видео больше не найдено. Выбери его в карточке мода ещё раз.",
+      "The picked video is no longer there. Choose it in the mod's card again.",
+    ],
+    custom_video_invalid: [
+      "Это видео не подходит: нужен файл WebM (VP8, VP9 или AV1) без вложений и глав.",
+      "This video does not fit: it has to be a WebM file (VP8, VP9 or AV1) without attachments or chapters.",
+    ],
+    custom_video_too_large: [
+      "Видео слишком большое: подойдёт файл до 64 МБ.",
+      "The video is too large: a file up to 64 MB fits.",
+    ],
+    custom_font_required: [
+      "Для «Своих шрифтов» не выбран шрифт. Открой карточку мода и выбери файл .ttf или .otf.",
+      "No font is picked for Custom Fonts. Open the mod's card and choose a .ttf or .otf file.",
+    ],
+    custom_font_missing: [
+      "Файл выбранного шрифта больше не найден. Выбери шрифт в карточке мода ещё раз.",
+      "The picked font file is no longer there. Choose the font in the mod's card again.",
+    ],
+    custom_font_invalid: [
+      "Этот файл не подходит: нужен один шрифт OpenType или TrueType (.otf или .ttf), не коллекция и не веб-шрифт.",
+      "This file does not fit: it has to be one OpenType or TrueType font (.otf or .ttf), not a collection or a web font.",
+    ],
+    custom_font_too_large: [
+      "Шрифт слишком большой: подойдёт файл до 8 МБ.",
+      "The font is too large: a file up to 8 MB fits.",
+    ],
+    user_styles_selection_required: [
+      "Для «Пользовательских стилей» не выбран ни один стиль. Открой карточку мода и отметь нужные.",
+      "No style is picked for User Styles. Open the mod's card and tick the ones you want.",
+    ],
+    game_pack_conflict: [
+      "В сборке два курсора или два набора шрифтов, а ставится только один каждого вида. Оставь один, остальное в сборке не изменится.",
+      "The build has two cursors or two font packs, and only one of each can be installed. Keep one; the rest of the build stays as is.",
+    ],
+    game_pack_hash_mismatch: [
+      "Архив курсора или шрифтов скачался с ошибкой, BetterFy его не сохранил. Попробуй ещё раз.",
+      "The cursor or font archive downloaded with an error and BetterFy did not keep it. Try again.",
+    ],
+    game_pack_unexpected: [
+      "Внутри архива курсора или шрифтов не то, что ожидалось. BetterFy не будет его ставить.",
+      "The cursor or font archive does not contain what was expected. BetterFy will not install it.",
+    ],
+    game_pack_content_invalid: [
+      "Файл курсора или шрифта не похож на настоящий. BetterFy не будет его ставить.",
+      "A cursor or font file does not look like a real one. BetterFy will not install it.",
+    ],
+    game_file_folder_missing: [
+      "В Dota нет папки курсоров, шрифтов или гайдов. Проверь файлы игры в Steam и повтори. Ничего не записано.",
+      "Dota is missing its cursor, font or guide folder. Verify the game files in Steam and retry. Nothing was written.",
+    ],
+    game_file_target_unsafe: [
+      "На месте файла курсора или шрифта в Dota лежит что-то другое (папка или ссылка). BetterFy ничего не записал.",
+      "Something other than a file sits where a Dota cursor or font file belongs (a folder or a link). BetterFy wrote nothing.",
+    ],
+    game_files_recovery_required: [
+      "Прошлая запись курсоров или шрифтов оборвалась. Нажми «Проверить» в подробностях — BetterFy вернёт файлы — и повтори.",
+      "An earlier write of cursors or fonts stopped half way. Use Check under Details so BetterFy puts the files back, then retry.",
+    ],
+    game_files_not_latest: [
+      "Откатить можно только последнюю сборку. Сначала откати её.",
+      "Only the latest build can be restored. Restore that one first.",
+    ],
+    game_file_write_failed: [
+      "Не удалось записать файл курсора или шрифта. Закрой Dota и программы, которые могут его держать, и повтори. Сборка отменена.",
+      "A cursor or font file could not be written. Close Dota and anything that may hold it, and retry. The build was undone.",
+    ],
     map_audit_mismatch: [
       "Карта не совпала с проверенным описанием: внутри не то, что записано при аудите. BetterFy не будет её ставить.",
       "The map does not match its audited description: what is inside is not what the audit recorded. BetterFy will not install it.",
     ],
     map_archive_hash_mismatch: [
-      "Скачанный архив карты не совпал с ожидаемой контрольной суммой. BetterFy его не сохранил.",
-      "The downloaded map archive did not match the expected checksum. BetterFy did not keep it.",
+      "Архив карты скачался с ошибкой, BetterFy его не сохранил. Попробуй ещё раз.",
+      "The map archive downloaded with an error and BetterFy did not keep it. Try again.",
     ],
     map_hash_mismatch: [
-      "Файл карты не совпал с ожидаемой контрольной суммой. Ничего не записано.",
-      "The map file did not match the expected checksum. Nothing was written.",
+      "Файл карты повреждён, поэтому ничего не записано. Подготовь сборку заново.",
+      "The map file is damaged, so nothing was written. Prepare the build again.",
     ],
     map_archive_unexpected: [
       "Внутри архива карты не то, что ожидалось (нужны только maps/dota.vpk и Guide.txt). BetterFy не будет его ставить.",
@@ -311,6 +391,12 @@ const groups: Array<{
   {
     codes: ["map_terrain_conflict"],
     title: ["В сборке две карты", "Two maps in one build"],
+    action: null,
+    tone: "warn",
+  },
+  {
+    codes: ["game_pack_conflict"],
+    title: ["Два курсора или два набора шрифтов", "Two cursors or two font packs"],
     action: null,
     tone: "warn",
   },

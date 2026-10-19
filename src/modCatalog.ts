@@ -27,7 +27,14 @@ type RawCatalogItem = {
   styles?: RawStyle[];
 };
 
-export type ModCatalogGroup = "all" | "characters" | "interface" | "audio" | "world" | "effects" | "extras";
+export type ModCatalogGroup =
+  | "all"
+  | "characters"
+  | "interface"
+  | "audio"
+  | "world"
+  | "effects"
+  | "extras";
 
 export type CatalogMetadata = {
   name: string;
@@ -75,8 +82,7 @@ export type BetterFyCatalogMod = {
   verification: CatalogVerification;
 };
 
-const PREVIEW_ROOT =
-  "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/previews/";
+const PREVIEW_ROOT = "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/previews/";
 
 const groupCategories: Record<Exclude<ModCatalogGroup, "all">, Set<string>> = {
   characters: new Set(["heroes", "hero-items", "couriers"]),
@@ -106,7 +112,14 @@ const groupCategories: Record<Exclude<ModCatalogGroup, "all">, Set<string>> = {
     "trees",
     "wards",
   ]),
-  effects: new Set(["optimization", "shaders", "item-effects", "herofx", "ti-bp-effects", "ranged-attack"]),
+  effects: new Set([
+    "optimization",
+    "shaders",
+    "item-effects",
+    "herofx",
+    "ti-bp-effects",
+    "ranged-attack",
+  ]),
   extras: new Set(["other", "tools", "news"]),
 };
 
@@ -119,6 +132,7 @@ export const wardrobeCategoryLabels: Record<string, Record<Language, string>> = 
   "ti-bp-effects": { ru: "Эффекты TI и BP", en: "TI & BP effects" },
   backgrounds: { ru: "Фоны", en: "Backgrounds" },
   cursors: { ru: "Курсоры", en: "Cursors" },
+  packs: { ru: "Наборы", en: "Packs" },
   emblems: { ru: "Эмблемы", en: "Emblems" },
   fonts: { ru: "Шрифты", en: "Fonts" },
   huds: { ru: "HUD", en: "HUD" },
@@ -156,10 +170,17 @@ const groupForCategory = (category: string) =>
     null) as Exclude<ModCatalogGroup, "all"> | null;
 
 const clean = (value: unknown, fallback = "") =>
-  typeof value === "string" ? value.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 180) : fallback;
+  typeof value === "string"
+    ? value
+        .replace(/[\u0000-\u001f]/g, " ")
+        .trim()
+        .slice(0, 180)
+    : fallback;
 
 const authorFrom = (links: RawLink[] | undefined) => {
-  const link = links?.find((candidate) => candidate.type === "author" || candidate.type === "modded");
+  const link = links?.find(
+    (candidate) => candidate.type === "author" || candidate.type === "modded",
+  );
   if (!link?.url) return null;
   const value = clean(link.url);
   if (!value) return null;
@@ -184,46 +205,40 @@ const describe = (
   styleCount: number,
 ): Record<Language, string> => {
   const label = wardrobeCategoryLabels[category] ?? { ru: category, en: category };
-  const variants = styleCount > 1
-    ? {
-        ru: `В источнике доступно вариантов: ${styleCount}.`,
-        en: `Source variants: ${styleCount}.`,
-      }
-    : { ru: "", en: "" };
-  if (group === "characters") {
-    return {
-      ru: `Визуальная замена для категории «${label.ru}». Превью показывает результат из исходного каталога. ${variants.ru}`.trim(),
-      en: `A visual replacement for ${label.en}. The preview shows the result from the source catalog. ${variants.en}`.trim(),
-    };
-  }
-  if (group === "interface") {
-    return {
-      ru: `Меняет оформление категории «${label.ru}», не заменяя скины героев. Перед выбором оцени читаемость на исходном превью. ${variants.ru}`.trim(),
-      en: `Changes ${label.en} without replacing hero skins. Check readability in the source preview before choosing. ${variants.en}`.trim(),
-    };
-  }
-  if (group === "audio") {
-    return {
-      ru: `Заменяет звук в категории «${label.ru}». Изображение не передаёт аудио, поэтому перед выбором открой оригинальный источник. ${variants.ru}`.trim(),
-      en: `Replaces audio in ${label.en}. A still image cannot preview sound, so open the original source before choosing. ${variants.en}`.trim(),
-    };
-  }
-  if (group === "world") {
-    return {
-      ru: `Меняет визуальный слой мира Dota: ${label.ru.toLowerCase()}. Это оформление карты, а не мод производительности. ${variants.ru}`.trim(),
-      en: `Changes the Dota world layer: ${label.en.toLowerCase()}. This is map presentation, not a performance mod. ${variants.en}`.trim(),
-    };
-  }
-  if (group === "effects") {
-    return {
-      ru: `Заменяет визуальный эффект категории «${label.ru}». Моды ускорения игры находятся в разделе «Игра». ${variants.ru}`.trim(),
-      en: `Replaces a visual effect in ${label.en}. Game performance mods stay in the Game section. ${variants.en}`.trim(),
-    };
-  }
-  return {
-    ru: `Визуальное изменение категории «${label.ru}». Превью и название сохранены из исходного каталога. ${variants.ru}`.trim(),
-    en: `A visual change in ${label.en}. The preview and name are preserved from the source catalog. ${variants.en}`.trim(),
-  };
+  const variants =
+    styleCount > 1
+      ? {
+          ru: `Вариантов на выбор: ${styleCount}.`,
+          en: `${styleCount} styles to choose from.`,
+        }
+      : { ru: "", en: "" };
+  const text = (ru: string, en: string): Record<Language, string> => ({
+    ru: `${ru} ${variants.ru}`.trim(),
+    en: `${en} ${variants.en}`.trim(),
+  });
+  if (group === "characters")
+    return text(`Новый облик в категории «${label.ru}».`, `A new look in ${label.en}.`);
+  if (group === "interface")
+    return text(
+      `Новое оформление: ${label.ru.toLowerCase()}. Облики героев не меняются.`,
+      `A new style for ${label.en.toLowerCase()}. Hero looks stay as they are.`,
+    );
+  if (group === "audio")
+    return text(
+      `Новый звук: ${label.ru.toLowerCase()}. Послушать оригинал можно по ссылке на источник.`,
+      `New sound for ${label.en.toLowerCase()}. You can listen to the original through the source link.`,
+    );
+  if (group === "world")
+    return text(
+      `Меняет мир Dota: ${label.ru.toLowerCase()}.`,
+      `Changes the Dota world: ${label.en.toLowerCase()}.`,
+    );
+  if (group === "effects")
+    return text(
+      `Новый эффект: ${label.ru.toLowerCase()}.`,
+      `A new effect for ${label.en.toLowerCase()}.`,
+    );
+  return text(`Меняет категорию «${label.ru}».`, `Changes ${label.en}.`);
 };
 
 const catalogSnapshot = snapshot as unknown as {
@@ -246,7 +261,8 @@ export const wardrobeCatalogItems: BetterFyCatalogMod[] = rawItems
     const name = clean(item.name);
     const category = clean(item.category);
     const group = groupForCategory(category);
-    if (!id || !name || !group || item.type !== "mod" || nonWardrobeCategories.has(category)) return null;
+    if (!id || !name || !group || item.type !== "mod" || nonWardrobeCategories.has(category))
+      return null;
 
     const preview = clean(item.preview);
     const fileName = clean(item.file) || null;

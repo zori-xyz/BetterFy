@@ -129,3 +129,116 @@
   .s-sidebar nav button, .s-sidebar nav a { min-height: 34px; }
   .s-sidebar .s-sidebar-build { padding-top: 8px; padding-bottom: 8px; }
 }
+
+/* User Styles: one switch per snippet in the mod's detail panel. */
+.s-style-picker {
+  border: 0;
+  padding: 0;
+  margin: 22px 0 6px;
+  display: grid;
+  gap: 6px;
+}
+.s-style-picker legend {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: var(--s-text-sm);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.s-style-picker legend span {
+  color: var(--s-quiet);
+  font-weight: 500;
+}
+.s-style-picker label {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border: 1px solid var(--s-line);
+  border-radius: var(--s-radius-control);
+  font-size: var(--s-text-sm);
+  color: var(--s-muted);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.s-style-picker label:hover {
+  border-color: var(--s-line-strong, var(--s-line));
+}
+.s-style-picker label.is-on {
+  border-color: var(--s-accent);
+  background: var(--s-tint);
+  color: var(--s-text);
+}
+.s-style-picker input {
+  accent-color: var(--s-accent);
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.s-style-picker small {
+  color: var(--s-quiet);
+  font-size: var(--s-text-2xs);
+  margin-top: 6px;
+  line-height: 1.6;
+}
+
+/* Custom Fonts: the picked font and a file button. */
+.s-font-picker {
+  gap: 10px;
+}
+.s-font-picker > strong {
+  font-size: var(--s-text-sm);
+}
+.s-font-picker > p {
+  font-size: var(--s-text-sm);
+  color: var(--s-muted);
+}
+.s-font-picker > p b {
+  color: var(--s-text);
+}
+.s-font-picker > label.s-btn {
+  justify-content: center;
+  cursor: pointer;
+}
+.s-font-picker > label.s-btn input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.s-font-picker .s-font-error {
+  color: var(--s-danger, #ff7a7a);
+}
+.s-background-select {
+  width: 100%;
+}
+.s-background-select select {
+  width: 100%;
+}
+
+/* A pack's items in its detail panel. */
+.s-pack-contents ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 4px;
+  max-height: 260px;
+  overflow: auto;
+}
+.s-pack-contents li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--s-radius-control);
+  background: var(--s-input);
+  font-size: var(--s-text-sm);
+}
+.s-pack-contents li small {
+  color: var(--s-quiet);
+  font-size: var(--s-text-2xs);
+  white-space: nowrap;
+}

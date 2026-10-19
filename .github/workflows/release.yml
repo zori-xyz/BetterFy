@@ -69,10 +69,46 @@ jobs:
           New-Item -ItemType Directory -Force -Path "release-assets" | Out-Null
           Copy-Item $installer.FullName "release-assets/BetterFy-Windows-x64-setup.exe"
           $hash = (Get-FileHash "release-assets/BetterFy-Windows-x64-setup.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  BetterFy-Windows-x64-setup.exe" | Set-Content -Encoding ascii "release-assets/BetterFy-Windows-x64-setup.exe.sha256"
+          # -NoNewline plus an explicit `n keeps the checksum file LF-only, so
+          # `shasum -c` on macOS/Linux accepts it.
+          Set-Content -Path "release-assets/BetterFy-Windows-x64-setup.exe.sha256" -Value "$hash  BetterFy-Windows-x64-setup.exe`n" -Encoding ascii -NoNewline
           $version = node -p "require('./package.json').version"
           gh release upload "v$version" `
             "release-assets/BetterFy-Windows-x64-setup.exe" `
             "release-assets/BetterFy-Windows-x64-setup.exe.sha256" `
+            --repo "${{ github.repository }}" `
+            --clobber
+
+      # The website offers a stable release's BetterFy Setup before its NSIS
+      # wizard (services/auth-worker, WINDOWS_INSTALLER_NAMES), as the Early
+      # Access workflow does. The payload is the app this run just built.
+      - name: Stage the built app as the installer's payload
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "installer/src-tauri/payload" | Out-Null
+          $binary = Get-ChildItem "src-tauri/target/release/betterfy.exe" -ErrorAction Stop
+          Copy-Item $binary.FullName "installer/src-tauri/payload/betterfy.exe"
+
+      - name: Install installer dependencies
+        working-directory: installer
+        run: npm ci
+
+      - name: Build BetterFy Setup (the branded installer)
+        working-directory: installer
+        run: npx tauri build
+
+      - name: Publish BetterFy Setup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "installer/src-tauri/target/release/betterfy-installer.exe" -ErrorAction Stop
+          Copy-Item $installer.FullName "release-assets/BetterFy-Setup.exe"
+          $hash = (Get-FileHash "release-assets/BetterFy-Setup.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -Path "release-assets/BetterFy-Setup.exe.sha256" -Value "$hash  BetterFy-Setup.exe`n" -Encoding ascii -NoNewline
+          $version = node -p "require('./package.json').version"
+          gh release upload "v$version" `
+            "release-assets/BetterFy-Setup.exe" `
+            "release-assets/BetterFy-Setup.exe.sha256" `
             --repo "${{ github.repository }}" `
             --clobber

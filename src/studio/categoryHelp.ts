@@ -6,8 +6,7 @@ type Text = Record<Language, string>;
  * Honest per-category help. `installs` says what the pack changes, from the
  * folders the audited archives actually write to; `tip` is an upstream
  * troubleshooting fact and nothing more (the Dota2PornFx wiki,
- * d2pfxwiki.pages.dev/en/troubleshoot.html). Nothing here claims a pack works
- * in the game: no item has been run in Dota through BetterFy yet.
+ * d2pfxwiki.pages.dev/en/troubleshoot.html).
  */
 export type CategoryHelp = {
   installs: Text;
@@ -137,8 +136,8 @@ const categories: Record<string, CategoryHelp> = {
     "Replaces sound files (music, voices, ambience).",
   ),
   terrains: help(
-    "Заменяет материалы, модели и текстуры ландшафта. Целиком карту (maps/dota.vpk) этот пакет не меняет.",
-    "Replaces terrain materials, models and textures. It does not replace the map itself (maps/dota.vpk).",
+    "Заменяет материалы, модели и текстуры ландшафта, не меняя саму карту.",
+    "Replaces terrain materials, models and textures without changing the map itself.",
   ),
   "ti-bp-effects": help(
     "Заменяет эффекты из наборов TI и боевого пропуска.",
@@ -150,6 +149,14 @@ const categories: Record<string, CategoryHelp> = {
     "Replaces tree models, materials and textures. Packs can be large.",
   ),
   wards: help("Заменяет модели вардов.", "Replaces ward models."),
+  cursors: help(
+    "Заменяет курсор мыши в игре: файлы из папки курсоров Dota. Откат возвращает стандартный курсор.",
+    "Replaces the in-game mouse cursor: the files of Dota's cursor folder. Restore brings the standard cursor back.",
+  ),
+  fonts: help(
+    "Меняет шрифты интерфейса Dota, как велит инструкция пака: шрифты игры убираются, шрифты пака встают на их место. Кириллица есть. Откат возвращает шрифты игры.",
+    "Changes Dota's interface fonts as the pack's guide says: the game's fonts are taken out and the pack's take their place. Cyrillic is included. Restore brings the game's fonts back.",
+  ),
 };
 
 const fallback: CategoryHelp = help(
@@ -165,14 +172,6 @@ export function categoryHelp(category: string): CategoryHelp {
 export const enabledCategories: ReadonlySet<string> = new Set(Object.keys(categories));
 
 const notEnabled: Record<string, Text> = {
-  cursors: {
-    ru: "Не включено: это отдельные файлы без VPK, и проверенного места установки для них пока нет.",
-    en: "Not enabled: these are loose files with no VPK, and there is no verified install target for them yet.",
-  },
-  fonts: {
-    ru: "Не включено: это отдельные файлы без VPK, и проверенного места установки для них пока нет.",
-    en: "Not enabled: these are loose files with no VPK, and there is no verified install target for them yet.",
-  },
   pedestal: {
     ru: "Недоступно: файлов этого набора нет ни на одном из зеркал источника.",
     en: "Unavailable: the files of this item exist on neither of the source's mirrors.",

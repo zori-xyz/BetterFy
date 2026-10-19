@@ -1,5 +1,8 @@
 import { useSyncExternalStore } from "react";
 import type { Language } from "../i18n";
+import { userStylesBase } from "./userStyles";
+import { customFontBase } from "./customFont";
+import { backgroundBase } from "./customBackground";
 
 // The same manifest files the Rust engine embeds (src-tauri/packages for game
 // tuning; src-tauri/wardrobe/index.json is the interface's copy of the audited
@@ -47,6 +50,18 @@ const mapIndex = import.meta.glob<PackageManifest[]>("../../src-tauri/maps/index
   eager: true,
   import: "default",
 });
+// Cursor and font packs (src-tauri/gamefiles/index.json, derived from its
+// manifests.json the same way).
+const packIndex = import.meta.glob<PackageManifest[]>("../../src-tauri/gamefiles/index.json", {
+  eager: true,
+  import: "default",
+});
+// Minify's mods whose content is compiled into the app or picked by the
+// player: Custom Hero Grids and Custom Fonts (src-tauri/extras).
+const gridIndex = import.meta.glob<PackageManifest[]>("../../src-tauri/extras/index.json", {
+  eager: true,
+  import: "default",
+});
 const manifests: PackageManifest[] = [
   ...Object.values(
     import.meta.glob<PackageManifest>("../../src-tauri/packages/*.json", {
@@ -56,6 +71,8 @@ const manifests: PackageManifest[] = [
   ),
   ...Object.values(wardrobeIndex).flat(),
   ...Object.values(mapIndex).flat(),
+  ...Object.values(packIndex).flat(),
+  ...Object.values(gridIndex).flat(),
 ];
 
 export const installablePackages: PackageManifest[] = manifests
@@ -131,7 +148,7 @@ function hasKeepSharedMode(manifest: PackageManifest | undefined) {
 
 /** Catalog, engine or `.strip` engine ID; the suffix only exists on hero skins. */
 export function findPackage(id: string) {
-  const { base, strip } = splitMode(id);
+  const { base, strip } = splitMode(backgroundBase(customFontBase(userStylesBase(id))));
   const manifest = byAnyId.get(base);
   return strip && !hasKeepSharedMode(manifest) ? undefined : manifest;
 }
@@ -148,8 +165,8 @@ export function withSharedMode(id: string, keepShared: boolean) {
   return keepShared && hasKeepSharedMode(manifest) ? `${base}${STRIP_SUFFIX}` : base;
 }
 
-/** Upper bound on the merged VPK (mod_bundle.rs): 256 MiB of file data. */
-export const MAX_BUNDLE_BYTES = 256 * 1024 * 1024;
+/** Upper bound on the merged VPK (mod_bundle.rs): 512 MiB of file data. */
+export const MAX_BUNDLE_BYTES = 512 * 1024 * 1024;
 
 /**
  * What the selected skins add to the merged VPK, from the audited sizes. Each

@@ -28,7 +28,7 @@ import {
   type TreePilotPlan,
 } from "../engine";
 import { useLocale } from "../i18n";
-import { deliveryLabel, modById } from "./model";
+import { modById } from "./model";
 import {
   MAX_BUNDLE_BYTES,
   MAX_BUNDLE_PACKAGES,
@@ -51,7 +51,10 @@ import { DemoPanel } from "./builder/DemoPanel";
 import { buildLanguages, languageLabel as languageName } from "./builder/languages";
 import { Choice, ChoiceCards, ChoiceMenu, type ChoiceOption } from "./builder/Choice";
 import { getStorageItem, setStorageItem } from "../storage";
-import { WardrobeReview, formatBytes } from "./WardrobeReview";
+import { PackReview, WardrobeReview, formatBytes } from "./WardrobeReview";
+import { USER_STYLES_ID, userStylesRequestId, useUserStylesMask } from "./userStyles";
+import { CUSTOM_FONTS_ID, customFontRequestId, useCustomFont } from "./customFont";
+import { CUSTOM_BACKGROUNDS_ID, backgroundRequestId, useBackgroundChoice } from "./customBackground";
 import { MapReview } from "./MapReview";
 
 const LANGUAGE_KEY = "betterfy:build-language";
@@ -170,8 +173,8 @@ export default function TreePilot({
   const [installedLanguage, setInstalledLanguage] = useState<GameLanguage | null>(null);
   const [installedPackageIds, setInstalledPackageIds] = useState<string[]>([]);
   // The file BetterFy owns in the language folder (pakNN_dir.vpk); empty for a
-  // build that is a map alone.
-  const [installedVpkName, setInstalledVpkName] = useState<string | null>(null);
+  // build that is a map alone. Kept for the record; the screen shows no paths.
+  const [, setInstalledVpkName] = useState<string | null>(null);
   // The build also owns maps/dota.vpk in that folder.
   const [installedHasMap, setInstalledHasMap] = useState(false);
   // Read-only summaries of the language folder: one to explain a refusal, one
@@ -190,14 +193,30 @@ export default function TreePilot({
   const [reportError, setReportError] = useState("");
   const [error, setError] = useState("");
   const [dotaPatched, setDotaPatched] = useState(false);
+  // The game put back some of the cursor or font files the build replaced.
+  const [gameFilesReplaced, setGameFilesReplaced] = useState(false);
   // The plan whose wardrobe path conflicts the person confirmed.
   const [acknowledgedPlan, setAcknowledgedPlan] = useState<string | null>(null);
   // Skins the person asked to keep the game's shared files untouched for (the
   // opt-in mode). Engine IDs. The default, installing everything the archive
   // carries, needs no entry.
   const [keepShared, setKeepShared] = useState<ReadonlySet<string>>(() => new Set());
+  // User Styles carries the player's pick of snippets in its ID.
+  const userStylesMask = useUserStylesMask();
+  // Custom Fonts carries the picked font file in its ID.
+  const customFont = useCustomFont();
+  // Custom Backgrounds carries the chosen screen or video in its ID.
+  const backgroundChoice = useBackgroundChoice();
   const idsFor = (keep: ReadonlySet<string>) =>
-    ids.map((id) => withSharedMode(id, keep.has(engineIdFor(id))));
+    ids.map((id) =>
+      engineIdFor(id) === USER_STYLES_ID
+        ? userStylesRequestId(userStylesMask)
+        : engineIdFor(id) === CUSTOM_FONTS_ID
+          ? customFontRequestId(customFont)
+          : engineIdFor(id) === CUSTOM_BACKGROUNDS_ID
+            ? backgroundRequestId(backgroundChoice)
+            : withSharedMode(id, keep.has(engineIdFor(id))),
+    );
   // What the engine is asked for: the ID of each item in the chosen mode, so
   // the mode is part of the reviewed plan.
   const requestIds = idsFor(keepShared);
@@ -247,7 +266,6 @@ export default function TreePilot({
     (plan?.wardrobeConflicts.length ?? 0) > 0 && acknowledgedPlan !== plan?.planId;
   // Packages whose manifest records no in-game verification yet.
   const skinBytes = wardrobeBytes(requestIds);
-  const unverified = ids.filter((id) => !findPackage(id)?.verifiedLanguages?.length);
   function applyDownloadStatus(status: TreePilotDownloadStatus | null) {
     if (!status) return;
     setVerifiedResources(status.verifiedResources);
@@ -353,6 +371,7 @@ export default function TreePilot({
         if (receipt?.steamProfileToken) setSelectedProfile(receipt.steamProfileToken);
         setSteamRecoveryRequired(receipt?.steamRecoveryRequired ?? false);
         setDotaPatched(receipt?.dotaPatched ?? false);
+        setGameFilesReplaced((receipt?.gameFiles?.replaced ?? 0) > 0);
       })
       .catch((cause) => {
         if (active) setError(codeOf(cause));
@@ -563,10 +582,10 @@ export default function TreePilot({
       say(
         "step",
         plan.map && !plan.hasPak
-          ? "Записываем карту: maps/dota.vpk. Чужой файл на этом месте BetterFy не тронет."
+          ? "Записываем карту."
           : "Сохраняем исходный файл и записываем сборку.",
         plan.map && !plan.hasPak
-          ? "Writing the map: maps/dota.vpk. BetterFy leaves a file of someone else's at that place alone."
+          ? "Writing the map."
           : "Backing up the original file and writing the build.",
         plan.hasPak
           ? previewSlot?.owned?.state === "intact"
@@ -993,6 +1012,7 @@ export default function TreePilot({
       if (current?.steamProfileToken) setSelectedProfile(current.steamProfileToken);
       setSteamRecoveryRequired(current?.steamRecoveryRequired ?? false);
       setDotaPatched(current?.dotaPatched ?? false);
+      setGameFilesReplaced((current?.gameFiles?.replaced ?? 0) > 0);
       saveEvidenceReport();
     } catch (cause) {
       setError(codeOf(cause));
@@ -1210,11 +1230,6 @@ export default function TreePilot({
   const activePhrase = usePhrase(phase === "idle" ? (recovering ? "restore" : null) : phase, isRu);
   if (!ids.length && !operationId && !steamOperationId && !steamRecoveryRequired) return null;
   const notice = error ? noticeFor(error, isRu, errorSlot) : null;
-  // The file name is chosen at install time (the first free pakNN number), so
-  // before that the review shows the name BetterFy would take now.
-  const plannedFile =
-    (previewSlot?.owned?.state === "intact" ? previewSlot.owned.name : previewSlot?.nextName) ??
-    "pakNN_dir.vpk";
   const planNote = slotNote(previewSlot, isRu);
   // Relation fixes act on catalog IDs; a package the catalog does not list
   // (a superseded one) gets the message without a button.
@@ -1292,8 +1307,8 @@ export default function TreePilot({
                   : `${packageLabel(relation.packageId)} needs ${packageLabel(relation.otherId)}${canFixRelation ? ": the recipe does not build without it." : ". Add it to the build."}`
               : blockerKind === "pilot"
                 ? isRu
-                  ? "Ставятся только моды с отметкой «Windows-пилот». Убери остальные игровые моды из сборки."
-                  : "Only mods marked Windows pilot install. Remove other game mods from the build."
+                  ? "В сборке есть моды, которых сейчас нет в каталоге. Убери их, и сборка поставится."
+                  : "The build has mods that are not in the catalog right now. Remove them and it installs."
                 : "";
   const steps = [
     {
@@ -1320,7 +1335,9 @@ export default function TreePilot({
       label: isRu ? "Записать с бэкапом" : "Write with a backup",
       hint:
         operationId && installedLanguage
-          ? `dota_${installedLanguage}${installedVpkName ? `/${installedVpkName}` : ""}${installedHasMap ? `${installedVpkName ? " + " : "/"}maps/dota.vpk` : ""}`
+          ? isRu
+            ? "Записано, бэкап сохранён"
+            : "Written, backup kept"
           : isRu
             ? "Исходный файл можно вернуть"
             : "The original can be restored",
@@ -1334,10 +1351,10 @@ export default function TreePilot({
           ? "Язык задан в профиле"
           : "Language set in the profile"
         : (installedLanguage ?? selectedLanguage)
-          ? `-language ${installedLanguage ?? selectedLanguage}`
+          ? `${isRu ? "Язык" : "Language"}: ${languageLabel((installedLanguage ?? selectedLanguage) as GameLanguage)}`
           : isRu
-            ? "Параметр -language"
-            : "The -language option",
+            ? "Язык игры"
+            : "Game language",
     },
     {
       done: false,
@@ -1485,16 +1502,8 @@ export default function TreePilot({
           ? isRu
             ? "проверен в игре"
             : "checked in game"
-          : isRu
-            ? "не проверен"
-            : "not checked",
-      hintIcon: experimental ? (
-        <FlaskConical />
-      ) : option?.verified ? (
-        <ShieldCheck />
-      ) : (
-        <CircleDashed />
-      ),
+          : undefined,
+      hintIcon: experimental ? <FlaskConical /> : option?.verified ? <ShieldCheck /> : undefined,
       tone: experimental ? "warn" : option?.verified ? "ready" : "quiet",
     };
   };
@@ -1596,7 +1605,7 @@ export default function TreePilot({
       <header className="b-pilot-head">
         <small>
           {demo && <b className="b-demo-chip">{isRu ? "ДЕМО" : "DEMO"}</b>}
-          {isRu ? "УСТАНОВКА В DOTA 2" : "INSTALL TO DOTA 2"} · {deliveryLabel("pilot", language)}
+          {isRu ? "УСТАНОВКА В DOTA 2" : "INSTALL TO DOTA 2"}
           {stressEnabled && (
             <b className="b-dev-chip" title={isRu ? "Аккаунт разработчика" : "Developer account"}>
               DEV
@@ -1697,19 +1706,20 @@ export default function TreePilot({
           </div>
         </div>
       )}
+      {operationId && gameFilesReplaced && (
+        <p className="b-pilot-blocker is-warning" role="alert">
+          <TriangleAlert />
+          {isRu
+            ? "Dota вернула свои курсоры или шрифты (обновление или проверка файлов в Steam). Поставь сборку снова, чтобы вернуть свои."
+            : "Dota put its own cursors or fonts back (an update or a Steam file check). Install the build again to bring yours back."}
+        </p>
+      )}
       {operationId && dotaPatched && (
         <p className="b-pilot-blocker is-warning" role="alert">
           <TriangleAlert />
           {isRu
             ? "Dota 2 обновилась после установки. Если интерфейс сломан, откати сборку — BetterFy вернёт исходные файлы."
             : "Dota 2 updated after this install. If the interface looks broken, restore the build and BetterFy puts the original files back."}
-        </p>
-      )}
-      {unverified.length > 0 && !operationId && !blocker && (
-        <p className="b-pilot-hint">
-          {isRu
-            ? `Ещё не проверено в игре: ${unverified.map(packageLabel).join(", ")}. Если что-то не так — откат в один клик.`
-            : `Not checked in game yet: ${unverified.map(packageLabel).join(", ")}. If something is off, restore in one click.`}
         </p>
       )}
       {!plan && !operationId && skinBytes > MAX_BUNDLE_BYTES / 2 && (
@@ -1733,6 +1743,7 @@ export default function TreePilot({
           onToggleKeepShared={toggleKeepShared}
         />
       )}
+      {plan && !operationId && <PackReview plan={plan} packageLabel={packageLabel} />}
       {plan && !operationId && plan.map && (
         <MapReview
           plan={plan}
@@ -1745,11 +1756,6 @@ export default function TreePilot({
           <div className="b-field" ref={languageFieldRef}>
             <div className="b-field-head">
               <span id="tree-pilot-language">{isRu ? "Язык Dota" : "Dota language"}</span>
-              {selectedLanguage && (
-                <code title={`game/dota_${selectedLanguage}/${plannedFile}`}>
-                  -language {selectedLanguage}
-                </code>
-              )}
             </div>
             <ChoiceCards
               label={isRu ? "Язык Dota" : "Dota language"}
@@ -1773,9 +1779,6 @@ export default function TreePilot({
                 isRu
                   ? `остальные языки Dota из Steam · ${otherLanguages.length}`
                   : `the rest of Dota's Steam languages · ${otherLanguages.length}`
-              }
-              caption={
-                isRu ? "Ещё не проверены в игре на Windows" : "Not checked in game on Windows yet"
               }
               searchPlaceholder={
                 isRu ? "Найти: français, Deutsch, 日本語…" : "Find: français, Deutsch, 日本語…"
@@ -1821,12 +1824,12 @@ export default function TreePilot({
           <p className="b-pilot-hint">
             {!verifiedInstall
               ? isRu
-                ? "Найдена сохранённая операция, но файл ещё не подтверждён. Проверь установку или откати."
-                : "A saved operation was found, but the file is not verified yet. Check or restore it."
+                ? "Прошлая установка не завершилась. Проверь её или откати."
+                : "An earlier install did not finish. Check it or restore it."
               : !packageVerified
                 ? isRu
-                  ? "Файл совпадает с журналом BetterFy, но исходные ресурсы недоступны для повторной проверки. Откат доступен."
-                  : "The file matches BetterFy's journal, but source resources cannot be re-checked. Restore is available."
+                  ? "Сборка стоит в игре, но BetterFy сейчас не может её перепроверить. Откат доступен."
+                  : "The build is in the game, but BetterFy cannot re-check it right now. Restore is available."
                 : steamStarted
                   ? isRu
                     ? "Steam открыт и знает нужный язык. Запускай Dota 2 и проверь каждый мод."
@@ -1842,8 +1845,8 @@ export default function TreePilot({
           {installedHasMap && (
             <p className="b-pilot-hint">
               {isRu
-                ? "В игре стоит карта (maps/dota.vpk). Она видна только в матчах, не в «Демо». Отключи террейн Dota+ в настройках игры. Как карта работает в Dota после установки через BetterFy, ещё не проверено."
-                : "A map (maps/dota.vpk) is in the game. It shows only in matches, not in Demo. Turn off the Dota+ terrain in the game settings. How the map works in Dota after a BetterFy install has not been checked yet."}
+                ? "В игре стоит карта. Она видна только в матчах, не в «Демо». Отключи террейн Dota+ в настройках игры."
+                : "A map is in the game. It shows only in matches, not in Demo. Turn off the Dota+ terrain in the game settings."}
             </p>
           )}
           {installedLanguage === "betterfy" && (
@@ -1999,30 +2002,6 @@ export default function TreePilot({
               </ol>
             </div>
             <dl className="b-facts">
-              {plan.hasPak && (
-                <div>
-                  <dt>{isRu ? "Файл" : "File"}</dt>
-                  <dd>
-                    <code>
-                      {selectedLanguage
-                        ? `game/dota_${selectedLanguage}/${plannedFile}`
-                        : plannedFile}
-                    </code>
-                  </dd>
-                </div>
-              )}
-              {plan.map && (
-                <div>
-                  <dt>{isRu ? "Файл карты" : "Map file"}</dt>
-                  <dd>
-                    <code>
-                      {selectedLanguage
-                        ? `game/dota_${selectedLanguage}/${plan.map.file}`
-                        : plan.map.file}
-                    </code>
-                  </dd>
-                </div>
-              )}
               {planNote && plan.hasPak && (
                 <div className="b-facts-note">
                   <dt>{isRu ? "Рядом" : "Beside"}</dt>
@@ -2049,12 +2028,6 @@ export default function TreePilot({
                     <dt>{isRu ? "Размер" : "Size"}</dt>
                     <dd>{formatBytes(plan.vpkBytes, isRu)}</dd>
                   </div>
-                  <div>
-                    <dt>SHA-256</dt>
-                    <dd>
-                      <code>{plan.vpkSha256.slice(0, 16)}…</code>
-                    </dd>
-                  </div>
                 </>
               )}
               {plan.map && (
@@ -2063,38 +2036,9 @@ export default function TreePilot({
                     <dt>{isRu ? "Размер карты" : "Map size"}</dt>
                     <dd>{formatBytes(plan.map.bytes, isRu)}</dd>
                   </div>
-                  <div>
-                    <dt>{isRu ? "SHA-256 карты" : "Map SHA-256"}</dt>
-                    <dd>
-                      <code>{plan.map.sha256.slice(0, 16)}…</code>
-                    </dd>
-                  </div>
                 </>
               )}
             </dl>
-            {(plan.duplicates.length > 0 || plan.overrides.length > 0) && (
-              <div className="b-more-block b-overlaps">
-                {plan.overrides.map((item) => (
-                  <p key={`override-${item.path}`}>
-                    <code>{item.path}</code>
-                    <span>
-                      {packageLabel(item.winnerPackageId)} →{" "}
-                      {isRu ? "оставлен; ниже пропущены" : "kept; lower skipped"}:{" "}
-                      {item.shadowedPackageIds.map(packageLabel).join(", ")}
-                    </span>
-                  </p>
-                ))}
-                {plan.duplicates.map((item) => (
-                  <p key={`duplicate-${item.path}`}>
-                    <code>{item.path}</code>
-                    <span>
-                      {isRu ? "Одинаковый файл сохранён один раз" : "Identical file stored once"}:{" "}
-                      {packageLabel(item.keptPackageId)}
-                    </span>
-                  </p>
-                ))}
-              </div>
-            )}
           </>
         )}
         {operationId && installedPackageIds.length > 0 && (
@@ -2129,7 +2073,7 @@ export default function TreePilot({
             </button>
           </div>
         )}
-        {canManage && (
+        {canManage && stressEnabled && (
           <div className="b-more-block b-more-row">
             <div>
               <strong>
@@ -2233,8 +2177,8 @@ export default function TreePilot({
         )}
         <small className="b-source">
           {isRu
-            ? "Источник: Egezenn/dota2-minify. Tree Mod, Show NetWorth, Unit Query HUD и Remove River проверены в игре на одном Windows-компьютере с нидерландским и русским языком; другие языки и компьютеры не проверены. Параметр -language меняет язык текста и может повлиять на озвучку."
-            : "Source: Egezenn/dota2-minify. Tree Mod, Show NetWorth, Unit Query HUD and Remove River were verified in game on one Windows computer with Dutch and Russian; other languages and computers are untested. The -language option changes text language and may affect audio."}
+            ? "Моды — проекты dota2-minify и Dota2PornFx, спасибо их авторам. Язык сборки меняет язык текста Dota и может повлиять на озвучку."
+            : "Mods come from the dota2-minify and Dota2PornFx projects, with thanks to their authors. The build's language changes Dota's text language and may affect audio."}
         </small>
       </details>
     </section>

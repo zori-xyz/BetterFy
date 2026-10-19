@@ -2,41 +2,64 @@ import { MAX_BUNDLE_PACKAGES, pilotCatalogIds } from "./packages";
 import { wardrobeCatalogItems, wardrobeCategoryLabels } from "../modCatalog";
 import { minifyMods, minifyCategoryLabels, minifyPreviewUrl, minifySource } from "../minifyCatalog";
 import rawCatalog from "../webCatalog.json";
+import catalogPacks from "../catalogPacks.json";
 import type { Language } from "../i18n";
 
 export type Domain = "wardrobe" | "game";
-export const pilotModIds = pilotCatalogIds;
+export const installableIds = pilotCatalogIds;
 
-export function isPilotMod(id: string) {
-  return pilotModIds.has(id);
+/**
+ * Whether BetterFy can install the catalog item: the engine has a package
+ * for it. The catalog shows only these; anything else is not offered at all.
+ */
+export function isInstallable(id: string) {
+  if (installableIds.has(id)) return true;
+  // A pack is offered when any of its items installs.
+  return packMembers(id).some((member) => installableIds.has(member));
 }
 
-export function deliveryLabel(status: "pilot" | "preview", language: Language) {
-  if (status === "pilot") return language === "ru" ? "WINDOWS-ПИЛОТ" : "WINDOWS PILOT";
-  return language === "ru" ? "ТОЛЬКО ПРЕВЬЮ" : "PREVIEW ONLY";
+/**
+ * The catalog's packs: ready-made sets of other items (src/catalogPacks.json,
+ * from the source catalog's own pack lists). A pack is never an item of a
+ * build; adding it adds its items.
+ */
+const packsById = new Map(
+  (catalogPacks as Array<{ id: string; name: string; members: string[] }>).map((pack) => [
+    pack.id,
+    pack,
+  ]),
+);
+
+export function packMembers(id: string): string[] {
+  return packsById.get(id)?.members ?? [];
 }
 
-export function isPilotSelection(ids: string[]) {
+/** The items of a pack that BetterFy installs. */
+export function installablePackMembers(id: string) {
+  return packMembers(id).filter((member) => installableIds.has(member));
+}
+
+/** Keeps only the ids the catalog can still install (a saved set may be older). */
+export function installableOnly(ids: string[]) {
+  return ids.filter(isInstallable);
+}
+
+export function isInstallableSelection(ids: string[]) {
   return (
     ids.length > 0 &&
-    ids.length <= Math.min(pilotModIds.size, MAX_BUNDLE_PACKAGES) &&
+    ids.length <= Math.min(installableIds.size, MAX_BUNDLE_PACKAGES) &&
     new Set(ids).size === ids.length &&
-    ids.every(isPilotMod)
+    ids.every(isInstallable)
   );
 }
 
 export function getSelectionDelivery(ids: string[]) {
-  const known = ids.flatMap((id) => (modById.has(id) ? [modById.get(id)!] : []));
   // Game mods and the audited wardrobe items install through the same engine;
-  // pilotModIds holds exactly the ones the engine knows.
-  const gameIds = known
-    .filter((mod) => mod.domain === "game" || isPilotMod(mod.id))
-    .map((mod) => mod.id);
-  const previewCount = known.filter((mod) => !isPilotMod(mod.id)).length;
+  // installableIds holds exactly the ones the engine knows.
+  const gameIds = ids.filter((id) => modById.has(id) && isInstallable(id));
   return {
     gameIds,
-    pilotReady: isPilotSelection(gameIds),
-    previewCount,
+    pilotReady: isInstallableSelection(gameIds),
   };
 }
 
@@ -55,6 +78,8 @@ export type StudioMod = {
   tags: string[];
   variants: { name: string; image: string | null; color: string }[];
   slot: string | null;
+  /** A pack: the catalog items it adds. */
+  members?: string[];
 };
 type RawItem = {
   id?: string;
@@ -130,6 +155,30 @@ export const mods: StudioMod[] = [
     }),
   ),
 ];
+// The catalog's packs, as cards of their own.
+for (const pack of packsById.values()) {
+  const raw = rawById.get(pack.id) as (RawItem & { preview?: string }) | undefined;
+  mods.push({
+    id: pack.id,
+    domain: "wardrobe",
+    name: { ru: pack.name, en: pack.name },
+    category: "packs",
+    categoryName: { ru: "Наборы", en: "Packs" },
+    group: "packs",
+    description: {
+      ru: `Готовый набор от авторов каталога: ${pack.members.length} предметов в одном стиле. Добавит в сборку всё из набора, что ставится; любой предмет потом можно убрать.`,
+      en: `A ready-made set from the catalog's authors: ${pack.members.length} items in one style. Adds everything in the set that installs; you can drop any item later.`,
+    },
+    image: raw?.preview ? `${previewRoot}packs/${encodeURIComponent(raw.preview)}` : null,
+    author: "BetterFy Web",
+    source: "https://github.com/h6rd/Dota2PornFxWeb",
+    date: 0,
+    tags: [],
+    variants: [],
+    slot: null,
+    members: pack.members,
+  });
+}
 export const modById = new Map(mods.map((mod) => [mod.id, mod]));
 export const wardrobeGroups = [
   { id: "all", ru: "Всё", en: "All" },

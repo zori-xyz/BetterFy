@@ -284,6 +284,10 @@ pub(crate) enum RejectReason {
     /// from (a sound pack's `vtex_c`, a rank icon pack's `vmat_c` under
     /// `materials/`). Really dropped.
     OutsideCategory,
+    /// A plain path whose name has letters outside ASCII, such as a Windows
+    /// copy named `... — копия`. The VPK writer takes ASCII names only, so
+    /// the file is dropped; the rest of the archive installs.
+    NameNotAscii,
 }
 
 impl RejectReason {
@@ -558,6 +562,14 @@ enum Kind {
 
 /// Classifies a lower-case path by its type. Scripts and executables come
 /// first, so no rule below can turn one of them into an ignored file.
+/// `scripts/vscripts/addon_game_mode.lua` exactly as the Dota Workshop Tools
+/// generate it for a new addon ("Generated from template", 1,127 bytes).
+const ADDON_TEMPLATE_PATH: &str = "scripts/vscripts/addon_game_mode.lua";
+const ADDON_TEMPLATE_SHA256: [u8; 32] = [
+    0x72, 0x4f, 0x31, 0x84, 0x44, 0xba, 0x51, 0xce, 0xff, 0x13, 0x55, 0x62, 0xd9, 0xcd, 0x1c, 0x78,
+    0xe5, 0xe5, 0x43, 0x68, 0x03, 0xc6, 0x4b, 0x66, 0x06, 0x7d, 0xb2, 0x72, 0xe6, 0x7f, 0x61, 0x6a,
+];
+
 fn classify_type(path: &str, types: TypePolicy) -> Result<Kind, RejectReason> {
     let extension = extension(path);
     let name = path.rsplit('/').next().unwrap_or(path);
@@ -823,6 +835,9 @@ pub(crate) fn analyze<'a>(
                 // installed anyway (a note, a source), the odd name alone is
                 // not a reason to refuse the archive. Traversal, absolute and
                 // control-character paths stay hostile whatever the type.
+                if path_is_plain(&lower) && !lower.is_ascii() {
+                    return Err(RejectReason::NameNotAscii);
+                }
                 if path_is_plain(&lower) {
                     if let Err(
                         reason @ (RejectReason::UncompiledSource | RejectReason::NotGameFile),
@@ -847,6 +862,12 @@ pub(crate) fn analyze<'a>(
                     return Err(RejectReason::Oversized);
                 }
                 return Ok((scope_of(&lower, &spec.heroes, &shared_set), false));
+            }
+            // The Dota Workshop Tools addon template (a game-mode script for
+            // custom games, never run by the main game) is a leftover of the
+            // author's tools, not part of the skin.
+            if lower == ADDON_TEMPLATE_PATH && digest == ADDON_TEMPLATE_SHA256 {
+                return Err(RejectReason::NotGameFile);
             }
             let kind = classify_type(&lower, spec.types)?;
             let folders = spec.types.folders();
@@ -1579,15 +1600,53 @@ mod tests {
         assert_eq!(reasons["darkness/tool.exe"], RejectReason::Executable);
         assert_eq!(reasons["darkness//double.vpcf_c"], RejectReason::PathUnsafe);
         assert_eq!(reasons[" darkness/lead.vpcf_c"], RejectReason::PathUnsafe);
+        // A name outside ASCII drops only that file; the others block.
         assert_eq!(
             reasons["darkness/caf\u{e9}.vpcf_c"],
-            RejectReason::PathUnsafe
+            RejectReason::NameNotAscii
         );
+        assert!(!RejectReason::NameNotAscii.is_hostile());
         assert_eq!(analysis.report.hero_scoped.files, 1);
         assert_eq!(
             analysis.into_selection().err().as_deref(),
             Some("skin_archive_hostile")
         );
+    }
+
+    #[test]
+    fn the_workshop_addon_template_is_a_leftover_and_any_other_script_blocks() {
+        let template = include_bytes!("../tests/fixtures/workshop_addon_game_mode.lua");
+        let skin = analyze(
+            &build_unchecked(
+                2,
+                &[
+                    ("models/heroes/keeper_of_the_light/ok.vmdl_c", b"ok"),
+                    ("scripts/vscripts/addon_game_mode.lua", template),
+                ],
+            ),
+            &spec(SharedPolicy::Strip),
+            &Limits::default(),
+        )
+        .expect("analyzed")
+        .report;
+        assert!(!skin.hostile);
+        assert_eq!(skin.ignored.files, 1);
+        let mut edited = template.to_vec();
+        edited.extend_from_slice(b"\nprint('x')");
+        let other = analyze(
+            &build_unchecked(
+                2,
+                &[
+                    ("models/heroes/keeper_of_the_light/ok.vmdl_c", b"ok"),
+                    ("scripts/vscripts/addon_game_mode.lua", &edited),
+                ],
+            ),
+            &spec(SharedPolicy::Strip),
+            &Limits::default(),
+        )
+        .expect("analyzed")
+        .report;
+        assert!(other.hostile);
     }
 
     #[test]
@@ -2566,10 +2625,29 @@ mod tests {
         assert!(!report.hostile);
         assert!(report.install.blocked.is_none());
 
-        // The same odd characters in a file the game would load stay unsafe,
+        // Brackets from Windows copies and exported textures install, since
+        // the material that points at the file needs its exact name.
+        let brackets = analyze(
+            &build_unchecked(
+                2,
+                &[
+                    ("models/courier/odd (2).vmdl_c", b"x"),
+                    ("sounds/courier/move {5bf2a8f0}.vsnd_c", b"y"),
+                    ("materials/courier/glass_(14)_png_ffd3d520.vtex_c", b"z"),
+                ],
+            ),
+            &none_spec(TypePolicy::Resources, &[]),
+            &Limits::default(),
+        )
+        .expect("analyzed")
+        .report;
+        assert!(!brackets.hostile);
+        assert_eq!(brackets.install.files, 3);
+
+        // Other odd characters in a file the game would load stay unsafe,
         // as do traversal and a script or program with a plain name.
         for path in [
-            "models/courier/odd (name).vmdl_c",
+            "models/courier/odd = name.vmdl_c",
             "models/../escape.txt",
             "models/courier/ok.vmdl_c/../../x.txt",
             "scripts/odd = name.lua",

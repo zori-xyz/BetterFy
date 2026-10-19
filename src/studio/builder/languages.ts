@@ -16,8 +16,8 @@ export type BuildLanguageOption = {
 
 type Details = Omit<BuildLanguageOption, "value">;
 
-const untestedRu = "Ещё не проверен в игре на Windows. Текст Dota сменится на этот язык.";
-const untestedEn = "Not checked in game on Windows yet. Dota text switches to this language.";
+const untestedRu = "Текст Dota сменится на этот язык.";
+const untestedEn = "Dota text switches to this language.";
 
 const untested = (ru: string, en: string, native: string): Details => ({
   ru,
@@ -69,8 +69,8 @@ const details: Record<GameLanguage, Details> = {
   japanese: untested("Японский", "Japanese", "日本語"),
   koreana: {
     ...untested("Корейский", "Korean", "한국어"),
-    noteRu: "Ещё не проверен в игре на Windows. По данным Steam, у Dota полная корейская озвучка.",
-    noteEn: "Not checked in game on Windows yet. Steam lists full Korean voice-over for Dota.",
+    noteRu: "Текст Dota сменится на корейский. По данным Steam, у Dota полная корейская озвучка.",
+    noteEn: "Dota text switches to Korean. Steam lists full Korean voice-over for Dota.",
   },
   latam: untested(
     "Испанский (Латинская Америка)",
@@ -84,9 +84,9 @@ const details: Record<GameLanguage, Details> = {
   schinese: {
     ...untested("Китайский (упрощённый)", "Chinese (Simplified)", "简体中文"),
     noteRu:
-      "Ещё не проверен в игре на Windows. По данным Steam, у Dota полная озвучка на упрощённом китайском.",
+      "Текст Dota сменится на китайский. По данным Steam, у Dota полная озвучка на упрощённом китайском.",
     noteEn:
-      "Not checked in game on Windows yet. Steam lists full Simplified Chinese voice-over for Dota.",
+      "Dota text switches to Chinese. Steam lists full Simplified Chinese voice-over for Dota.",
   },
   spanish: untested("Испанский (Испания)", "Spanish (Spain)", "Español-España"),
   swedish: untested("Шведский", "Swedish", "Svenska"),

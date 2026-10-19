@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "minify.user-styles",
+  "catalogId": "minify-user-styles",
+  "name": {
+    "ru": "Пользовательские стили",
+    "en": "User Styles"
+  },
+  "author": "Egezenn",
+  "source": {
+    "repository": "Egezenn/dota2-minify",
+    "commit": "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
+    "directory": "Minify/mods/User Styles",
+    "license": "GPL-3.0"
+  },
+  "distribution": "internal_pilot",
+  "verifiedLanguages": [],
+  "panoramaStyles": {
+    "from": "Minify/mods/User Styles/_styling.css",
+    "bytes": 5775,
+    "sha256": "daa5c5648ca018f494f1e874f0b63243252925a41db4dfc57fbd90f030af7349"
+  }
+}

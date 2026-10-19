@@ -1196,6 +1196,57 @@ the embedded files are canonical and valid.
   the game mounts `dota_<language>/maps/dota.vpk` from BetterFy's install, shows
   the map in a match, and what a later Dota patch does to it.
 
+### The game's own loose files: `game_files`
+
+Dota keeps its cursors (`game/dota/resource/cursor`), Panorama fonts
+(`game/dota/panorama/fonts`) and item build guides (`game/dota/itembuilds`) as
+plain files, not in a VPK, and the catalog's cursor and font packs and Minify's
+guide and font mods install by writing over them. `src-tauri/src/game_files.rs`
+does that as a transaction of its own, linked to the deployment operation of
+the build:
+
+- Only files directly inside those three folders, with plain lower-case names,
+  are touched; the folders are never created, and a link at a folder or file is
+  refused.
+- Before anything is written, the bytes at every touched path are kept in the
+  content store and named in a journal (`engine-v1/game-files/journals`). The
+  game's original file (or its absence) is remembered per path across builds
+  (`ownership.json`), so a later build without that file puts the original
+  back, and restoring the last build puts back exactly what was there before.
+- A desired file may also be "no file": a font pack removes the game's fonts it
+  does not replace, as its guide says; restore puts them back.
+- An interrupted write is undone by recovery ("Check" under Details). A file
+  the game replaced since (a Dota update, Steam's file check) is left to the
+  game on restore and reported as replaced.
+- Install: pak and map first, then the game files; if they cannot be written,
+  the whole build is undone. Restore: the game files first, then the pak.
+
+A pack's list of files (path, size, SHA-256) is written into the build's VPK as
+`betterfy/<catalog id>.txt`, which the game never reads; that binds the
+reviewed plan ID to the exact files. A build of packs only still has a pak.
+
+Cursor and font packs come from their own allowlist (`src-tauri/gamefiles`,
+written by the local-only `game_packs_audit` test from an archive cache; report
+in [GAME_PACKS_AUDIT.md](GAME_PACKS_AUDIT.md)): the ZIP and every file taken
+from it pinned by size and SHA-256, every file checked by content (animated
+cursors `RIFF/ACON`, bitmaps, `cursor.res` text, OpenType/TrueType), the pack's
+`Install.bat` pinned by name and never extracted. OpenDotaGuides is a third
+kind of pack: one dated release of `Egezenn/OpenDotaGuides`, every
+`default_<hero>.txt` checked as an item build text.
+
+### Minify mods that take the player's input
+
+The choice is part of the package ID, so a build stays deterministic, its plan
+binds the choice, and restore works like for any package. A bare ID without a
+choice does not build.
+
+| Mod | Package ID | What installs |
+| --- | --- | --- |
+| User Styles | `minify.user-styles.pick-<hex>` | the picked snippets of Minify's pinned `_styling.css` (one bit per snippet in file order), through the Panorama style pipeline |
+| Custom Fonts | `minify.custom-fonts.font-<sha256>-<bytes>` | the player's font (kept in the content store when picked), renamed for each of the game's 29 Radiance/RadianceM/Reaver files (`font_names.rs`: the `name` table rewritten, tables laid out again, checksums recomputed), through `game_files` |
+| Custom Backgrounds | `minify.custom-backgrounds.ls-<name>` or `.video-<sha256>-<bytes>` | Minify's pinned layout edits and style with its placeholder filled: one of 28 event loading screens of the game, or the player's WebM (checked by the Panorama video proof) as `panorama/videos/background.webm` |
+| Custom Hero Grids | `minify.custom-hero-grids` | three grids of `Egezenn/dota2-precompiled-grids` (2026-10-19, compiled into the app), named `... #BetterFy`, added to `570/remote/cfg/hero_grid_config.json` of every Steam account that has run Dota (`hero_grids.rs`: journaled, the player's own grids never touched, restore byte for byte or, after the player's own edits, removing only BetterFy's grids) |
+
 ### Installed profile
 
 After a committed pilot install, Rust writes one derived record to

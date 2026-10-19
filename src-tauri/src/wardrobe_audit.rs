@@ -265,7 +265,9 @@ fn audit_item(inputs: &Inputs, item: &CatalogItem) -> Outcome {
     let Some(file) = item.file.as_deref() else {
         return skip("the catalog item has no file", "");
     };
-    if file.starts_with("http") {
+    // The project's second dataset is a trusted mirror for the files the
+    // catalog links there; any other link is not a mirrored file.
+    if file.starts_with("http") && !file.starts_with(wardrobe::FLAT_ARCHIVE_PREFIX) {
         return skip(
             "the catalog's file is an external link, not a mirrored file",
             file,
@@ -301,7 +303,7 @@ fn audit_item(inputs: &Inputs, item: &CatalogItem) -> Outcome {
     );
     if downloaded.len() as u64 > content_store::MAX_ARTIFACT_BYTES {
         return skip(
-            "archive over the 256 MiB limit",
+            "archive over the 512 MiB limit",
             format!("the file is {} bytes", downloaded.len()),
         );
     }
@@ -312,7 +314,7 @@ fn audit_item(inputs: &Inputs, item: &CatalogItem) -> Outcome {
                 // The inspector's size bound is on the unpacked VPK.
                 if code == "archive_size_invalid" {
                     return skip(
-                        "archive over the 256 MiB limit",
+                        "archive over the 512 MiB limit",
                         "the VPK inside the ZIP is over the unpacked-size bound of the archive inspector",
                     );
                 }
@@ -349,7 +351,7 @@ fn audit_item(inputs: &Inputs, item: &CatalogItem) -> Outcome {
             }
             if entry.size() > content_store::MAX_ARTIFACT_BYTES {
                 return skip(
-                    "archive over the 256 MiB limit",
+                    "archive over the 512 MiB limit",
                     format!("inner VPK is {} bytes", entry.size()),
                 );
             }

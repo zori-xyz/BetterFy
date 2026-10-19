@@ -377,6 +377,26 @@ function demoPlan(ids: string[]): TreePilotPlan {
             },
           ]
         : [],
+    // Cursor and font packs replace the game's own loose files.
+    packs: packageIds.flatMap((id) => {
+      const pack = findPackage(id);
+      if (pack?.kind !== "gamefiles") return [];
+      return [
+        {
+          packageId: pack.id,
+          catalogId: pack.catalogId,
+          category:
+            pack.category === "fonts"
+              ? ("fonts" as const)
+              : pack.category === "item_builds"
+                ? ("item_builds" as const)
+                : ("cursors" as const),
+          files: pack.installFiles ?? 0,
+          bytes: pack.installBytes ?? 0,
+          removes: pack.category === "fonts" ? 36 : 0,
+        },
+      ];
+    }),
     compatibility: "unknown",
     distribution: "internal_pilot",
     deployEnabled: true,

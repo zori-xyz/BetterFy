@@ -25,7 +25,7 @@ const PREFERRED_SLOT_NUMBERS: [u8; 16] = [
 /// Minify writes its output as `pak66_dir.vpk` plus `pak66_000.vpk`, ...
 const MINIFY_SLOT_NUMBER: u8 = 66;
 const MAX_SLOT_FILES: usize = 64;
-const MAX_PACKAGE_BYTES: usize = 256 * 1024 * 1024;
+const MAX_PACKAGE_BYTES: usize = 512 * 1024 * 1024;
 /// Where a map package goes, below the language folder: `maps/dota.vpk`.
 const MAPS_FOLDER: &str = "maps";
 const MAP_FILE: &str = "dota.vpk";
@@ -367,7 +367,7 @@ fn new_operation_id() -> Result<String, String> {
     ))
 }
 
-fn validate_operation_id(value: &str) -> Result<(), String> {
+pub(crate) fn validate_operation_id(value: &str) -> Result<(), String> {
     if value.len() < 10
         || value.len() > 96
         || !value.starts_with("deploy-op-")
@@ -396,7 +396,7 @@ fn reject_symlink(path: &Path) -> Result<(), String> {
 /// Stricter than [`reject_symlink`]: also refuses a Windows reparse point (a
 /// junction or any other redirect). Used for the `maps` folder and the map
 /// file, where a redirect would send a whole-file write somewhere else.
-fn reject_link(path: &Path) -> Result<(), String> {
+pub(crate) fn reject_link(path: &Path) -> Result<(), String> {
     if let Ok(metadata) = fs::symlink_metadata(path) {
         if metadata.file_type().is_symlink() {
             return Err("deployment_path_unsafe".to_string());
@@ -492,7 +492,9 @@ fn allocate_vpk_name(locale: &Path) -> Result<String, String> {
         .ok_or_else(|| "slot_full".to_string())
 }
 
-fn locale_for(dota_root: &Path, language: GameLanguage) -> Result<PathBuf, String> {
+/// The canonical `dota 2 beta` folder of a real installation: the main
+/// `pak01_dir.vpk` and the game executable are there.
+fn verified_root(dota_root: &Path) -> Result<PathBuf, String> {
     reject_symlink(dota_root)?;
     let canonical = dota_root
         .canonicalize()
@@ -515,7 +517,21 @@ fn locale_for(dota_root: &Path, language: GameLanguage) -> Result<PathBuf, Strin
     {
         return Err("invalid_game_path".to_string());
     }
-    let game = canonical.join("game");
+    Ok(canonical)
+}
+
+/// `game/dota` of a verified installation, the folder that holds the game's
+/// own loose files (cursors, Panorama fonts, item builds).
+pub(crate) fn game_dota_folder(dota_root: &Path) -> Result<PathBuf, String> {
+    let game = verified_root(dota_root)?.join("game");
+    reject_link(&game)?;
+    let dota = game.join("dota");
+    reject_link(&dota)?;
+    Ok(dota)
+}
+
+fn locale_for(dota_root: &Path, language: GameLanguage) -> Result<PathBuf, String> {
+    let game = verified_root(dota_root)?.join("game");
     reject_symlink(&game)?;
     let locale = game.join(format!("dota_{}", language.suffix()));
     reject_symlink(&locale)?;
@@ -539,7 +555,7 @@ fn map_paths(dota_root: &Path, language: GameLanguage) -> Result<(PathBuf, PathB
     Ok((folder, file))
 }
 
-fn target_identity(dota_root: &Path) -> Result<String, String> {
+pub(crate) fn target_identity(dota_root: &Path) -> Result<String, String> {
     let canonical = dota_root
         .canonicalize()
         .map_err(|_| "invalid_game_path".to_string())?;
@@ -641,7 +657,11 @@ fn transaction_lock(_root: &Path) -> Result<TransactionLock, String> {
 }
 
 #[cfg(target_os = "windows")]
-fn publish(target: &Path, replacement: &Path, target_exists: bool) -> Result<(), String> {
+pub(crate) fn publish(
+    target: &Path,
+    replacement: &Path,
+    target_exists: bool,
+) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{
         MoveFileExW, ReplaceFileW, MOVEFILE_WRITE_THROUGH, REPLACEFILE_WRITE_THROUGH,
@@ -681,7 +701,11 @@ fn publish(target: &Path, replacement: &Path, target_exists: bool) -> Result<(),
 }
 
 #[cfg(not(target_os = "windows"))]
-fn publish(target: &Path, replacement: &Path, _target_exists: bool) -> Result<(), String> {
+pub(crate) fn publish(
+    target: &Path,
+    replacement: &Path,
+    _target_exists: bool,
+) -> Result<(), String> {
     fs::rename(replacement, target).map_err(|_| "deployment_commit_failed".to_string())?;
     if let Some(parent) = target.parent() {
         File::open(parent)

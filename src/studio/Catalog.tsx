@@ -18,18 +18,34 @@ import {
 import { modCount, useLocale } from "../i18n";
 import {
   categoryLabel,
-  deliveryLabel,
   gameGroups,
-  isPilotMod,
+  installablePackMembers,
+  isInstallable,
+  modById,
   mods,
   wardrobeGroups,
   type Domain,
   type StudioMod,
 } from "./model";
-import { categoryHelp, notEnabledReason } from "./categoryHelp";
-import { findPackage } from "./packages";
+import { categoryHelp } from "./categoryHelp";
+import { findPackage, usePackagesRevision } from "./packages";
 import { formatBytes } from "./WardrobeReview";
 import { Empty, Media, Modal, ModCard, PageHead } from "./ui";
+import { CUSTOM_FONTS_CATALOG_ID, setCustomFont, useCustomFont } from "./customFont";
+import {
+  CUSTOM_BACKGROUNDS_CATALOG_ID,
+  loadingScreens,
+  setBackgroundChoice,
+  useBackgroundChoice,
+} from "./customBackground";
+import { engineBridge } from "../engine";
+import { noticeFor } from "./builder/notices";
+import {
+  USER_STYLES_CATALOG_ID,
+  setUserStylesMask,
+  userStyleSnippets,
+  useUserStylesMask,
+} from "./userStyles";
 import { isMapPackage } from "./packages";
 
 export type CatalogFilters = {
@@ -72,9 +88,13 @@ export default function Catalog({
   const { language, isRu } = useLocale();
   const update = (patch: Partial<CatalogFilters>) =>
     setFilters((previous) => ({ ...previous, ...patch, limit: patch.limit ?? 24 }));
+  // Only what BetterFy can install is offered. A signed catalog can add
+  // packages at runtime, so the list follows the package revision.
+  const revision = usePackagesRevision();
+  const offered = useMemo(() => mods.filter((mod) => isInstallable(mod.id)), [revision]);
   const source = useMemo(
-    () => mods.filter((mod) => mod.domain === filters.domain),
-    [filters.domain],
+    () => offered.filter((mod) => mod.domain === filters.domain),
+    [offered, filters.domain],
   );
   const groups = filters.domain === "wardrobe" ? wardrobeGroups : gameGroups;
   const categories = useMemo(
@@ -109,8 +129,7 @@ export default function Catalog({
           ? a.name[language].localeCompare(b.name[language])
           : filters.sort === "new"
             ? b.date - a.date
-            : Number(isPilotMod(b.id)) - Number(isPilotMod(a.id)) ||
-              Number(b.image !== null) - Number(a.image !== null),
+            : Number(b.image !== null) - Number(a.image !== null),
       );
   }, [source, filters, selected, favorites, language]);
   const countInDomain = source.filter((mod) => selected.includes(mod.id)).length;
@@ -144,7 +163,7 @@ export default function Catalog({
             onClick={() => update({ domain: "wardrobe", group: "all", category: "all" })}
           >
             {isRu ? "Облики и эффекты" : "Looks & effects"}
-            <span>{mods.filter((m) => m.domain === "wardrobe").length}</span>
+            <span>{offered.filter((m) => m.domain === "wardrobe").length}</span>
           </button>
           <button
             role="tab"
@@ -152,7 +171,7 @@ export default function Catalog({
             onClick={() => update({ domain: "game", group: "all", category: "all" })}
           >
             {isRu ? "Настройка игры" : "Game tuning"}
-            <span>{mods.filter((m) => m.domain === "game").length}</span>
+            <span>{offered.filter((m) => m.domain === "game").length}</span>
           </button>
         </div>
         <div className="s-search-row">
@@ -229,20 +248,6 @@ export default function Catalog({
           )}
         </div>
       </div>
-      <div className="s-delivery-note" role="note">
-        <span className={filters.domain === "game" ? "is-pilot" : "is-preview"}>
-          {deliveryLabel(filters.domain === "game" ? "pilot" : "preview", language)}
-        </span>
-        <p>
-          {filters.domain === "game"
-            ? isRu
-              ? "Моды с этой отметкой ставятся в Dota 2 с проверкой и откатом. Остальные карточки сохраняются в набор, но пока не записываются в Dota 2."
-              : "Mods with this mark install into Dota 2 with verification and rollback. Other cards can be saved to a build but are not written to Dota 2 yet."
-            : isRu
-              ? "Облики и эффекты можно изучать и сохранять в наборы. Ставятся в Dota 2 только карточки с отметкой «Windows-пилот»: их архив проверен и закреплён по контрольной сумме. В игре они пока не проверены."
-              : "Looks and effects can be explored and saved to builds. Only cards marked Windows pilot install into Dota 2: their archive is audited and pinned by checksum. None has been checked in game yet."}
-        </p>
-      </div>
       <div className="s-results-head">
         <span>
           {modCount(results.length, language)}
@@ -277,7 +282,11 @@ export default function Catalog({
               <ModCard
                 key={mod.id}
                 mod={mod}
-                selected={selected.includes(mod.id)}
+                selected={
+                  mod.members
+                    ? installablePackMembers(mod.id).every((id) => selected.includes(id))
+                    : selected.includes(mod.id)
+                }
                 onOpen={() => onOpen(mod)}
                 onToggle={() => onToggle(mod)}
               />
@@ -337,11 +346,8 @@ export function ModDetails({
   const { language, isRu } = useLocale();
   const [infoOpen, setInfoOpen] = useState(false);
   const preview = mod.variants[variant]?.image ?? mod.image;
-  const pilot = isPilotMod(mod.id);
-  const audited = mod.domain === "wardrobe" && pilot ? findPackage(mod.id) : undefined;
+  const audited = mod.domain === "wardrobe" ? findPackage(mod.id) : undefined;
   const help = mod.domain === "wardrobe" ? categoryHelp(mod.category) : null;
-  const unavailable =
-    mod.domain === "wardrobe" && !pilot ? notEnabledReason(mod.category) : null;
   return (
     <Modal
       className="s-detail-dialog"
@@ -368,6 +374,10 @@ export function ModDetails({
           </button>
         </div>
         <p className="s-detail-description">{mod.description[language].split("\n\n")[0]}</p>
+        {mod.id === USER_STYLES_CATALOG_ID && <UserStylesPicker />}
+        {mod.id === CUSTOM_FONTS_CATALOG_ID && <CustomFontPicker />}
+        {mod.id === CUSTOM_BACKGROUNDS_CATALOG_ID && <BackgroundPicker />}
+        {mod.members && <PackContents mod={mod} />}
         {mod.variants.length > 1 && (
           <fieldset className="s-variants">
             <legend>{isRu ? "Вариант" : "Style"}</legend>
@@ -403,18 +413,7 @@ export function ModDetails({
             <div>
               <p>{help.installs[language]}</p>
               {help.tip && <p>{help.tip[language]}</p>}
-              <p>
-                {isRu
-                  ? "Архив проверен и закреплён по контрольной сумме. В Dota через BetterFy этот пакет ещё не запускали."
-                  : "The archive is audited and pinned by checksum. This item has not been run in Dota through BetterFy yet."}
-              </p>
             </div>
-          </div>
-        )}
-        {unavailable && (
-          <div className="s-inline-note">
-            <Info />
-            <p>{unavailable[language]}</p>
           </div>
         )}
         {isMapPackage(mod.id) && (
@@ -422,8 +421,8 @@ export function ModDetails({
             <TriangleAlert />
             <p>
               {isRu
-                ? "Это целая карта Dota, а не облик: BetterFy ставит один файл, maps/dota.vpk, и откатывает его. В Dota установка через BetterFy ещё не запускалась. По инструкции источника карта видна только в матчах (не в «Демо»), а террейн Dota+ нужно отключить в настройках игры. После патча Dota такой файл может перестать подходить игре; это непроверенный риск."
-                : "This is a whole Dota map, not a skin: BetterFy installs one file, maps/dota.vpk, and can restore it. A BetterFy install has not been run in Dota yet. By the source's guide the map shows only in matches (not in Demo), and the Dota+ terrain must be turned off in the game settings. After a Dota patch such a file may stop fitting the game; that is an unverified risk."}
+                ? "Это целая карта Dota, а не облик. Видна только в матчах (не в «Демо»), а террейн Dota+ нужно отключить в настройках игры. После крупного обновления Dota карту может понадобиться переустановить."
+                : "This is a whole Dota map, not a skin. It shows only in matches (not in Demo), and the Dota+ terrain has to be turned off in the game settings. After a major Dota update the map may need to be installed again."}
             </p>
           </div>
         )}
@@ -441,12 +440,6 @@ export function ModDetails({
             </strong>
           </div>
           <div>
-            <span>{isRu ? "Статус" : "Status"}</span>
-            <strong className={pilot ? "s-status-pilot" : "s-status-preview"}>
-              {deliveryLabel(pilot ? "pilot" : "preview", language)}
-            </strong>
-          </div>
-          <div>
             <span>{isRu ? "Автор / источник" : "Creator / source"}</span>
             <strong>{mod.author}</strong>
           </div>
@@ -454,7 +447,8 @@ export function ModDetails({
             <div>
               <span>{isRu ? "Загрузка / в сборке" : "Download / in the build"}</span>
               <strong>
-                {formatBytes(audited.downloadBytes, isRu)} / {formatBytes(audited.installBytes, isRu)}
+                {formatBytes(audited.downloadBytes, isRu)} /{" "}
+                {formatBytes(audited.installBytes, isRu)}
               </strong>
             </div>
           )}
@@ -464,15 +458,15 @@ export function ModDetails({
           aria-expanded={infoOpen}
           onClick={() => setInfoOpen(!infoOpen)}
         >
-          {isRu ? "Источник и совместимость" : "Source & compatibility"}
+          {isRu ? "Источник" : "Source"}
           <ChevronDown className={infoOpen ? "rotated" : ""} />
         </button>
         {infoOpen && (
           <div className="s-disclosed">
             <p>
               {isRu
-                ? "Совместимость с текущей версией Dota ещё не проверена. Превью и сведения взяты из исходного каталога."
-                : "Compatibility with the current Dota version has not been verified. Preview and metadata come from the source catalog."}
+                ? "Автор и превью — из исходного каталога. Спасибо создателям за их работу."
+                : "Creator and preview come from the source catalog. Credit goes to the people who made it."}
             </p>
             <a href={mod.source} target="_blank" rel="noreferrer">
               {isRu ? "Открыть источник" : "Open source"}
@@ -497,15 +491,214 @@ export function ModDetails({
         </button>
         <small>
           <Layers3 />
-          {pilot
-            ? isRu
-              ? "Установка доступна в «Моей сборке» на Windows"
-              : "Installation is available in My build on Windows"
-            : isRu
-              ? "Сохранится в наборе; установка пока недоступна"
-              : "Saved to your build; installation is not available yet"}
+          {isRu ? "Поставить в Dota — в «Моей сборке»" : "Install it into Dota from My build"}
         </small>
       </footer>
     </Modal>
+  );
+}
+
+/** The snippets of Minify's User Styles, each with its own switch. */
+function UserStylesPicker() {
+  const { language, isRu } = useLocale();
+  const mask = useUserStylesMask();
+  const count = userStyleSnippets.filter((_, index) => mask & (1 << index)).length;
+  return (
+    <fieldset className="s-style-picker">
+      <legend>
+        {isRu ? "Что включить" : "What to turn on"}
+        <span>
+          {count} / {userStyleSnippets.length}
+        </span>
+      </legend>
+      {userStyleSnippets.map((label, index) => {
+        const on = Boolean(mask & (1 << index));
+        return (
+          <label key={label.en} className={on ? "is-on" : ""}>
+            <input
+              type="checkbox"
+              checked={on}
+              onChange={() => setUserStylesMask(on ? mask & ~(1 << index) : mask | (1 << index))}
+            />
+            <span>{label[language]}</span>
+          </label>
+        );
+      })}
+      <small>
+        {isRu
+          ? "Выбор сохраняется и попадает в сборку. Поменял — подготовь сборку заново."
+          : "Your pick is saved and goes into the build. After a change, prepare the build again."}
+      </small>
+    </fieldset>
+  );
+}
+
+/** Minify's Custom Fonts: the player's own font file, checked by the engine. */
+function CustomFontPicker() {
+  const { isRu } = useLocale();
+  const font = useCustomFont();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ""));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      setCustomFont(await engineBridge.storeCustomFont(base64));
+    } catch (cause) {
+      const code =
+        typeof cause === "object" && cause && "code" in cause
+          ? String((cause as { code: unknown }).code)
+          : String(cause);
+      setError(noticeFor(code, isRu)?.body ?? code);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="s-style-picker s-font-picker">
+      <strong>{isRu ? "Шрифт" : "Font"}</strong>
+      {font ? (
+        <p>
+          <b>{font.family}</b> · {formatBytes(font.bytes, isRu)}
+        </p>
+      ) : (
+        <p>{isRu ? "Шрифт ещё не выбран." : "No font picked yet."}</p>
+      )}
+      <label className="s-btn">
+        <input
+          type="file"
+          accept=".ttf,.otf,font/ttf,font/otf"
+          disabled={busy}
+          onChange={(event) => void pick(event.target.files?.[0])}
+        />
+        {busy
+          ? isRu
+            ? "Проверяем…"
+            : "Checking…"
+          : font
+            ? isRu
+              ? "Выбрать другой файл"
+              : "Choose another file"
+            : isRu
+              ? "Выбрать файл .ttf или .otf"
+              : "Choose a .ttf or .otf file"}
+      </label>
+      {error && <p className="s-font-error">{error}</p>}
+      <small>
+        {isRu
+          ? "Шрифт заменит Radiance и Reaver во всём интерфейсе Dota. Нужны русские буквы — выбирай шрифт с кириллицей. Шрифты Windows лежат в C:\\Windows\\Fonts."
+          : "The font replaces Radiance and Reaver across Dota's interface. Pick a font with the letters your language needs. Windows keeps its fonts in C:\\Windows\\Fonts."}
+      </small>
+    </div>
+  );
+}
+
+/** Minify's Custom Backgrounds: a loading screen of the game or a WebM. */
+function BackgroundPicker() {
+  const { isRu } = useLocale();
+  const choice = useBackgroundChoice();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function pickVideo(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ""));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      const video = await engineBridge.storeCustomVideo(base64);
+      setBackgroundChoice({ kind: "video", packageId: video.packageId, bytes: video.bytes });
+    } catch (cause) {
+      const code =
+        typeof cause === "object" && cause && "code" in cause
+          ? String((cause as { code: unknown }).code)
+          : String(cause);
+      setError(noticeFor(code, isRu)?.body ?? code);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="s-style-picker s-font-picker">
+      <strong>{isRu ? "Фон меню" : "Menu background"}</strong>
+      <label className="s-select s-background-select">
+        <select
+          aria-label={isRu ? "Экран загрузки" : "Loading screen"}
+          value={choice.kind === "screen" ? choice.id : "video"}
+          onChange={(event) => {
+            if (event.target.value !== "video")
+              setBackgroundChoice({ kind: "screen", id: event.target.value });
+          }}
+        >
+          {loadingScreens.map((screen) => (
+            <option key={screen.id} value={screen.id}>
+              {screen.label}
+            </option>
+          ))}
+          {choice.kind === "video" && (
+            <option value="video">
+              {isRu ? "Своё видео" : "Your video"} · {formatBytes(choice.bytes, isRu)}
+            </option>
+          )}
+        </select>
+        <ChevronDown />
+      </label>
+      <label className="s-btn">
+        <input
+          type="file"
+          accept=".webm,video/webm"
+          disabled={busy}
+          onChange={(event) => void pickVideo(event.target.files?.[0])}
+        />
+        {busy
+          ? isRu
+            ? "Проверяем видео…"
+            : "Checking the video…"
+          : isRu
+            ? "Своё видео (.webm)"
+            : "Your own video (.webm)"}
+      </label>
+      {error && <p className="s-font-error">{error}</p>}
+      <small>
+        {isRu
+          ? "Экран загрузки берётся из самой Dota. Видео — файл WebM до 64 МБ; другие форматы можно перевести в WebM любым конвертером."
+          : "The loading screen comes from Dota itself. A video has to be a WebM file up to 64 MB; other formats convert to WebM with any converter."}
+      </small>
+    </div>
+  );
+}
+
+/** What a pack adds: its items that install, with the ones already in the build. */
+function PackContents({ mod }: { mod: StudioMod }) {
+  const { language, isRu } = useLocale();
+  const members = installablePackMembers(mod.id);
+  return (
+    <div className="s-style-picker s-pack-contents">
+      <strong>
+        {isRu ? "Что внутри" : "Inside"} · {members.length}
+      </strong>
+      <ul>
+        {members.map((id) => {
+          const item = modById.get(id);
+          return item ? (
+            <li key={id}>
+              <span>{item.name[language]}</span>
+              <small>{item.categoryName[language]}</small>
+            </li>
+          ) : null;
+        })}
+      </ul>
+    </div>
   );
 }

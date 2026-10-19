@@ -6,9 +6,17 @@ mod blacklist;
 mod build_engine;
 mod catalog_index;
 mod content_store;
+mod custom_backgrounds;
+mod custom_fonts;
 mod evidence_reports;
+mod font_names;
 mod game_deployment;
+mod game_files;
 mod game_language;
+mod game_packs;
+#[cfg(test)]
+mod game_packs_audit;
+mod hero_grids;
 mod installed_profile;
 mod kv3;
 #[cfg(test)]
@@ -28,6 +36,7 @@ mod steam_accounts;
 pub mod steam_config;
 mod system_diagnostics;
 mod tree_pilot;
+mod user_styles;
 mod vpk;
 mod wardrobe;
 #[cfg(test)]
@@ -117,6 +126,10 @@ struct TreeCurrentState {
     profile: Option<installed_profile::InstalledProfile>,
     /// Steam's Dota build differs from the one recorded at install time.
     dota_patched: bool,
+    /// The game's loose files the build replaced, as they are now.
+    game_files: Option<game_files::GameFilesState>,
+    /// A write of those files stopped half way and needs recovery.
+    game_files_recovery_required: bool,
 }
 
 #[derive(Serialize)]
@@ -287,6 +300,40 @@ async fn refresh_catalog(app: AppHandle) -> Result<catalog_index::CatalogStatus,
     tauri::async_runtime::spawn_blocking(move || catalog_index::refresh(&app_data))
         .await
         .map_err(|_| "runtime_worker_failed".to_string())
+}
+
+/// Keeps the font file the player picked for Minify's Custom Fonts and
+/// returns the package ID that installs it.
+#[tauri::command]
+async fn store_custom_font(
+    app: AppHandle,
+    font_base64: String,
+) -> Result<custom_fonts::CustomFontInfo, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "custom_font_invalid".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || custom_fonts::store(&app_data, &font_base64))
+        .await
+        .map_err(|_| "runtime_worker_failed".to_string())?
+}
+
+/// Keeps the WebM the player picked for Minify's Custom Backgrounds and
+/// returns the package ID that installs it.
+#[tauri::command]
+async fn store_custom_video(
+    app: AppHandle,
+    video_base64: String,
+) -> Result<custom_backgrounds::CustomVideoInfo, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "custom_video_invalid".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        custom_backgrounds::store_video(&app_data, &video_base64)
+    })
+    .await
+    .map_err(|_| "runtime_worker_failed".to_string())?
 }
 
 /// Packages that can be installed now: the embedded manifests, merged with a
@@ -796,16 +843,47 @@ async fn install_tree_pilot(
     let app_version = app.package_info().version.to_string();
     tauri::async_runtime::spawn_blocking(move || {
         let verified = build_verified_tree_pilot(&app_data, &request)?;
+        let game_root = Path::new(&request.game_path);
         let result = game_deployment::deploy_verified_payload_for_language(
             &app_data,
-            Path::new(&request.game_path),
+            game_root,
             verified.payload(),
             request.language,
             game_deployment::DeploymentBundleIdentity {
                 plan_id: Some(verified.plan_id().to_string()),
                 package_ids: verified.package_ids().to_vec(),
             },
-        );
+        )
+        .and_then(|receipt| {
+            // The game's own loose files (cursors, fonts, item builds) follow
+            // the build, and go back to the game's when it has none. If they
+            // cannot be written, the whole build is undone.
+            match game_files::apply(
+                &app_data,
+                game_root,
+                &receipt.operation_id,
+                verified.game_files(),
+            )
+            .and_then(|_| {
+                // Hero grids go to the Steam accounts' own grid files; a
+                // build without the mod takes BetterFy's grids out again.
+                hero_grids::apply(
+                    &app_data,
+                    &receipt.operation_id,
+                    verified.hero_grids(),
+                    &steam_accounts::platform_dota_cfg_folders(),
+                )
+                .inspect_err(|_| {
+                    let _ = game_files::rollback(&app_data, game_root, &receipt.operation_id);
+                })
+            }) {
+                Ok(_) => Ok(receipt),
+                Err(code) => {
+                    let _ = game_deployment::rollback(&app_data, game_root, &receipt.operation_id);
+                    Err(code)
+                }
+            }
+        });
         installed_profile::record_install(
             &app_data,
             result,
@@ -993,7 +1071,12 @@ async fn current_tree_pilot(
         {
             return Err("steam_journal_invalid".to_string());
         }
+        let game_files_state = game_files::state(&app_data, Path::new(&game_path)).unwrap_or(None);
+        let game_files_recovery_required =
+            game_files::recovery_required(&app_data, Path::new(&game_path)).unwrap_or(false);
         Ok(Some(TreeCurrentState {
+            game_files: game_files_state,
+            game_files_recovery_required,
             receipt,
             package_verified,
             steam_operation_id: linked
@@ -1223,6 +1306,14 @@ async fn rollback_game_deployment(
         .map_err(|_| "rollback_failed".to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
         require_patch_ready_runtime()?;
+        // The grids and the game's files first: if they cannot be put back,
+        // nothing else changes and the restore can be tried again.
+        hero_grids::rollback(&app_data, &request.operation_id)?;
+        game_files::rollback(
+            &app_data,
+            Path::new(&request.game_path),
+            &request.operation_id,
+        )?;
         let result = game_deployment::rollback(
             &app_data,
             Path::new(&request.game_path),
@@ -1250,6 +1341,22 @@ async fn release_stale_deployment(
         require_patch_ready_runtime()?;
         let released =
             game_deployment::release_stale_deployment(&app_data, Path::new(&request.game_path))?;
+        // The game gets its own cursors and fonts back where they are still
+        // BetterFy's; a file the game replaced is left as it is.
+        let operation = format!(
+            "deploy-op-release-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|value| value.as_millis())
+                .unwrap_or_default()
+        );
+        game_files::apply(
+            &app_data,
+            Path::new(&request.game_path),
+            &operation,
+            &std::collections::BTreeMap::new(),
+        )?;
+        hero_grids::apply(&app_data, &operation, false, &[])?;
         let _ = installed_profile::clear(&app_data);
         Ok(released)
     })
@@ -1278,7 +1385,13 @@ async fn recover_game_deployments(
         .map_err(|_| "rollback_failed".to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
         require_patch_ready_runtime()?;
-        game_deployment::recover_pending(&app_data, Path::new(&request.game_path))
+        let files = game_files::recover_pending(&app_data, Path::new(&request.game_path))?
+            + hero_grids::recover_pending(&app_data)?;
+        let mut receipt =
+            game_deployment::recover_pending(&app_data, Path::new(&request.game_path))?;
+        receipt.inspected += files;
+        receipt.rolled_back += files;
+        Ok(receipt)
     })
     .await
     .map_err(|_| "runtime_worker_failed".to_string())?
@@ -1327,6 +1440,8 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             discover_game,
+            store_custom_font,
+            store_custom_video,
             list_installable_packages,
             refresh_catalog,
             validate_game_path,
