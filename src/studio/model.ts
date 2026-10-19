@@ -86,7 +86,8 @@ type RawItem = {
   styles?: { label?: string; preview?: string; color?: string }[];
 };
 const rawById = new Map((rawCatalog.items as RawItem[]).map((item) => [item.id, item]));
-const previewRoot = "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/previews/";
+// The same fixed commit as PREVIEW_ROOT in modCatalog.ts.
+const previewRoot = "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/511426c/assets/previews/";
 const singleSlots = new Set([
   "terrains",
   "river",
@@ -114,9 +115,8 @@ export const mods: StudioMod[] = [
       group: item.metadata.group,
       description: item.presentation.description,
       image: item.presentation.previewUrl,
-      // Cards without a named author show the catalog's public name; the
-      // upstream project stays in provenance and behind "Open source".
-      author: item.provenance.author ?? "BetterFy Web",
+      // Cards without a named author credit the source catalog, never BetterFy.
+      author: item.provenance.author ?? "Dota2PornFxWeb",
       source: item.provenance.sourceUrl,
       date: item.verification.updatedAt ?? 0,
       tags: item.metadata.tags,

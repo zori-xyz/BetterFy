@@ -443,6 +443,20 @@ export function ModDetails({
             <span>{isRu ? "Автор / источник" : "Creator / source"}</span>
             <strong>{mod.author}</strong>
           </div>
+          {mod.domain === "wardrobe" && (
+            <div>
+              <span>{isRu ? "Автор ресурса" : "Resource author"}</span>
+              <a
+                className="s-detail-credit"
+                href="https://h6rd.github.io/Dota2PornFxWeb/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Dota2PornFxWeb
+                <ExternalLink />
+              </a>
+            </div>
+          )}
           {audited?.downloadBytes !== undefined && audited.installBytes !== undefined && (
             <div>
               <span>{isRu ? "Загрузка / в сборке" : "Download / in the build"}</span>

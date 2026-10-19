@@ -242,3 +242,8 @@
   font-size: var(--s-text-2xs);
   white-space: nowrap;
 }
+
+/* The source catalog's author, credited in every look's details. */
+.s-detail-credit { display: inline-flex; align-items: center; gap: 5px; margin-top: 7px; font-size: var(--s-text-sm); font-weight: 600; color: var(--s-accent); }
+.s-detail-credit:hover { color: var(--s-accent-hover); text-decoration: underline; text-underline-offset: 3px; }
+.s-detail-credit svg { width: 12px; height: 12px; }
