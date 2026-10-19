@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { Language } from "../i18n";
+import { userStylesBase } from "./userStyles";
 
 // The same manifest files the Rust engine embeds (src-tauri/packages for game
 // tuning; src-tauri/wardrobe/index.json is the interface's copy of the audited
@@ -138,7 +139,7 @@ function hasKeepSharedMode(manifest: PackageManifest | undefined) {
 
 /** Catalog, engine or `.strip` engine ID; the suffix only exists on hero skins. */
 export function findPackage(id: string) {
-  const { base, strip } = splitMode(id);
+  const { base, strip } = splitMode(userStylesBase(id));
   const manifest = byAnyId.get(base);
   return strip && !hasKeepSharedMode(manifest) ? undefined : manifest;
 }

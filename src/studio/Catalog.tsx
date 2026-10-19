@@ -29,6 +29,12 @@ import { categoryHelp } from "./categoryHelp";
 import { findPackage, usePackagesRevision } from "./packages";
 import { formatBytes } from "./WardrobeReview";
 import { Empty, Media, Modal, ModCard, PageHead } from "./ui";
+import {
+  USER_STYLES_CATALOG_ID,
+  setUserStylesMask,
+  userStyleSnippets,
+  useUserStylesMask,
+} from "./userStyles";
 import { isMapPackage } from "./packages";
 
 export type CatalogFilters = {
@@ -353,6 +359,7 @@ export function ModDetails({
           </button>
         </div>
         <p className="s-detail-description">{mod.description[language].split("\n\n")[0]}</p>
+        {mod.id === USER_STYLES_CATALOG_ID && <UserStylesPicker />}
         {mod.variants.length > 1 && (
           <fieldset className="s-variants">
             <legend>{isRu ? "Вариант" : "Style"}</legend>
@@ -470,5 +477,40 @@ export function ModDetails({
         </small>
       </footer>
     </Modal>
+  );
+}
+
+/** The snippets of Minify's User Styles, each with its own switch. */
+function UserStylesPicker() {
+  const { language, isRu } = useLocale();
+  const mask = useUserStylesMask();
+  const count = userStyleSnippets.filter((_, index) => mask & (1 << index)).length;
+  return (
+    <fieldset className="s-style-picker">
+      <legend>
+        {isRu ? "Что включить" : "What to turn on"}
+        <span>
+          {count} / {userStyleSnippets.length}
+        </span>
+      </legend>
+      {userStyleSnippets.map((label, index) => {
+        const on = Boolean(mask & (1 << index));
+        return (
+          <label key={label.en} className={on ? "is-on" : ""}>
+            <input
+              type="checkbox"
+              checked={on}
+              onChange={() => setUserStylesMask(on ? mask & ~(1 << index) : mask | (1 << index))}
+            />
+            <span>{label[language]}</span>
+          </label>
+        );
+      })}
+      <small>
+        {isRu
+          ? "Выбор сохраняется и попадает в сборку. Поменял — подготовь сборку заново."
+          : "Your pick is saved and goes into the build. After a change, prepare the build again."}
+      </small>
+    </fieldset>
   );
 }

@@ -52,6 +52,7 @@ import { buildLanguages, languageLabel as languageName } from "./builder/languag
 import { Choice, ChoiceCards, ChoiceMenu, type ChoiceOption } from "./builder/Choice";
 import { getStorageItem, setStorageItem } from "../storage";
 import { PackReview, WardrobeReview, formatBytes } from "./WardrobeReview";
+import { USER_STYLES_ID, userStylesRequestId, useUserStylesMask } from "./userStyles";
 import { MapReview } from "./MapReview";
 
 const LANGUAGE_KEY = "betterfy:build-language";
@@ -198,8 +199,14 @@ export default function TreePilot({
   // opt-in mode). Engine IDs. The default, installing everything the archive
   // carries, needs no entry.
   const [keepShared, setKeepShared] = useState<ReadonlySet<string>>(() => new Set());
+  // User Styles carries the player's pick of snippets in its ID.
+  const userStylesMask = useUserStylesMask();
   const idsFor = (keep: ReadonlySet<string>) =>
-    ids.map((id) => withSharedMode(id, keep.has(engineIdFor(id))));
+    ids.map((id) =>
+      engineIdFor(id) === USER_STYLES_ID
+        ? userStylesRequestId(userStylesMask)
+        : withSharedMode(id, keep.has(engineIdFor(id))),
+    );
   // What the engine is asked for: the ID of each item in the chosen mode, so
   // the mode is part of the reviewed plan.
   const requestIds = idsFor(keepShared);

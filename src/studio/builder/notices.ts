@@ -223,6 +223,10 @@ export const explainError = (code: string, isRu: boolean) => {
       "В сборке две карты, а ставится только одна: карта заменяет файл карты целиком. Оставь одну из них, остальное в сборке не изменится.",
       "The build has two maps, and only one can be installed: a map replaces the game's map file as a whole. Keep one of them; the rest of the build stays as is.",
     ],
+    user_styles_selection_required: [
+      "Для «Пользовательских стилей» не выбран ни один стиль. Открой карточку мода и отметь нужные.",
+      "No style is picked for User Styles. Open the mod's card and tick the ones you want.",
+    ],
     game_pack_conflict: [
       "В сборке два курсора или два набора шрифтов, а ставится только один каждого вида. Оставь один, остальное в сборке не изменится.",
       "The build has two cursors or two font packs, and only one of each can be installed. Keep one; the rest of the build stays as is.",

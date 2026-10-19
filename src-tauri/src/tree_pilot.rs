@@ -190,6 +190,7 @@ fn write_json_atomically(target: &Path, value: &impl Serialize) -> Result<(), St
 fn read_styling(
     app_data_root: &Path,
     manifest: &PackageManifest,
+    package_id: &str,
 ) -> Result<Option<BTreeMap<String, String>>, String> {
     let Some(styles) = &manifest.panorama_styles else {
         return Ok(None);
@@ -197,6 +198,14 @@ fn read_styling(
     let bytes =
         crate::content_store::read_pinned_resource(app_data_root, styles.bytes, &styles.sha256)?;
     let text = String::from_utf8(bytes).map_err(|_| "panorama_styling_invalid".to_string())?;
+    // User Styles installs only the snippets its ID names.
+    let text = if manifest.id == crate::user_styles::PACKAGE_ID {
+        let (_, mask) = crate::user_styles::parse_variant(package_id)
+            .ok_or_else(|| "user_styles_selection_required".to_string())?;
+        crate::user_styles::select(&text, mask)?
+    } else {
+        text
+    };
     crate::panorama::split_styling(&text).map(Some)
 }
 
@@ -210,7 +219,7 @@ fn resolve_styles(
         let Some(manifest) = tuning(package_id)? else {
             continue;
         };
-        let Some(sections) = read_styling(app_data_root, manifest)? else {
+        let Some(sections) = read_styling(app_data_root, manifest, package_id)? else {
             continue;
         };
         let game_path = game_path.ok_or_else(|| "game_path_required".to_string())?;
@@ -285,7 +294,7 @@ fn apply_panorama_styles(
         let Some(manifest) = tuning(package_id)? else {
             continue;
         };
-        let Some(sections) = read_styling(app_data_root, manifest)? else {
+        let Some(sections) = read_styling(app_data_root, manifest, package_id)? else {
             continue;
         };
         let styles = manifest
@@ -620,6 +629,13 @@ fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
     if maps > 1 {
         return Err("map_terrain_conflict".to_string());
     }
+    // User Styles installs only the snippets the player picked; without a
+    // pick it has nothing to install.
+    for id in &ids {
+        if id == crate::user_styles::PACKAGE_ID {
+            return Err("user_styles_selection_required".to_string());
+        }
+    }
     // A cursor or font pack replaces the whole set of the game's cursors or
     // fonts: one of each per build.
     let mut pack_categories = BTreeSet::new();
@@ -657,6 +673,8 @@ enum Contract {
     Map(&'static MapManifest),
     /// A cursor or font pack: the game's own loose files (`game_files`).
     Pack(&'static crate::game_packs::PackManifest),
+    /// Minify's User Styles with the snippets the player picked (a bit mask).
+    UserStyles(&'static PackageManifest, u32),
 }
 
 impl Contract {
@@ -666,6 +684,7 @@ impl Contract {
             Self::Wardrobe(item, policy) => wardrobe::variant_id(item, *policy),
             Self::Map(item) => item.id.clone(),
             Self::Pack(item) => item.id.clone(),
+            Self::UserStyles(_, mask) => crate::user_styles::variant_id(*mask),
         }
     }
 
@@ -677,6 +696,7 @@ impl Contract {
             Self::Wardrobe(item, _) => &item.id,
             Self::Map(item) => &item.id,
             Self::Pack(item) => &item.id,
+            Self::UserStyles(manifest, _) => &manifest.id,
         }
     }
 }
@@ -691,6 +711,9 @@ fn resolve(id: &str) -> Result<Contract, String> {
     if let Some(item) = crate::game_packs::find(id)? {
         return Ok(Contract::Pack(item));
     }
+    if let Some((base, mask)) = crate::user_styles::parse_variant(id) {
+        return package_registry::find(base).map(|manifest| Contract::UserStyles(manifest, mask));
+    }
     package_registry::find(id).map(Contract::Tuning)
 }
 
@@ -698,7 +721,7 @@ fn resolve(id: &str) -> Result<Contract, String> {
 /// no blacklist, style or layout edits.
 fn tuning(id: &str) -> Result<Option<&'static PackageManifest>, String> {
     match resolve(id)? {
-        Contract::Tuning(manifest) => Ok(Some(manifest)),
+        Contract::Tuning(manifest) | Contract::UserStyles(manifest, _) => Ok(Some(manifest)),
         Contract::Wardrobe(..) | Contract::Map(_) | Contract::Pack(_) => Ok(None),
     }
 }
@@ -928,7 +951,7 @@ fn acquire_verified_resources_with_progress(
     let mut index = 0usize;
     for (package_id, contract) in package_ids.iter().zip(contracts) {
         let manifest = match contract {
-            Contract::Tuning(manifest) => manifest,
+            Contract::Tuning(manifest) | Contract::UserStyles(manifest, _) => manifest,
             // One pinned archive: fetched, verified and stored as a unit.
             Contract::Wardrobe(item, _) => {
                 if cancelled.load(Ordering::Relaxed) {
@@ -1167,7 +1190,7 @@ pub(crate) fn build_from_verified_store(
         .map(|package_id| {
             let manifest = match resolve(package_id)? {
                 Contract::Map(_) => return Err("pilot_package_invalid".to_string()),
-                Contract::Tuning(manifest) => manifest,
+                Contract::Tuning(manifest) | Contract::UserStyles(manifest, _) => manifest,
                 // The pack's files go into the game folder on their own; the
                 // VPK carries the list of them, which binds the reviewed build
                 // to those exact files.
@@ -1745,6 +1768,34 @@ mod tests {
         let second = build_from_verified_store(&root, &ids).expect("rebuild from cache");
         assert_eq!(first.bytes(), second.bytes());
         std::fs::remove_dir_all(root).expect("clean generated test cache");
+    }
+
+    #[test]
+    fn user_styles_install_only_with_a_pick_and_keep_it_in_the_id() {
+        assert_eq!(
+            normalize_package_ids(&["minify.user-styles".to_string()])
+                .err()
+                .as_deref(),
+            Some("user_styles_selection_required")
+        );
+        assert_eq!(
+            normalize_package_ids(&["minify-user-styles".to_string()])
+                .err()
+                .as_deref(),
+            Some("user_styles_selection_required")
+        );
+        assert_eq!(
+            normalize_package_ids(&["minify.user-styles.pick-5".to_string()]).expect("pick"),
+            vec!["minify.user-styles.pick-5".to_string()]
+        );
+        // Two picks are still one package.
+        assert!(normalize_package_ids(&[
+            "minify.user-styles.pick-5".to_string(),
+            "minify.user-styles.pick-6".to_string()
+        ])
+        .is_err());
+        let manifest = contract("minify.user-styles.pick-5").expect("tuning contract");
+        assert_eq!(manifest.id, "minify.user-styles");
     }
 
     #[test]

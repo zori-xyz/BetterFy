@@ -32,6 +32,7 @@ mod steam_accounts;
 pub mod steam_config;
 mod system_diagnostics;
 mod tree_pilot;
+mod user_styles;
 mod vpk;
 mod wardrobe;
 #[cfg(test)]

@@ -33,7 +33,29 @@ export const minifySource = {
   snapshotDate: data.snapshotDate,
 };
 
-export const minifyMods = data.items;
+/**
+ * Minify's own descriptions talk about Minify's settings, its config folder
+ * and the Workshop Tools. Where BetterFy installs a mod differently, the card
+ * says how it works here.
+ */
+const descriptions: Record<string, Record<Language, string>> = {
+  "minify-auto-accept-match": {
+    ru: "Автоматически принимает найденный матч через заданную задержку. Задержка от 0 до 40 секунд настраивается ползунком в настройках Dota, в разделе Minify. 40 выключает автопринятие.",
+    en: "Accepts a found match automatically after a delay. The delay, from 0 to 40 seconds, is set with a slider in Dota's settings, in the Minify section. 40 turns it off.",
+  },
+  "minify-user-styles": {
+    ru: "Набор небольших правок интерфейса от автора Minify: убрать портрет героя, баннеры, анимации и затемнения. Отметь нужные ниже — в сборку попадут только они.",
+    en: "A set of small interface tweaks from Minify's author: hide the hero portrait, banners, animations and dims. Tick the ones you want below; only those go into the build.",
+  },
+  "minify-opendotaguides-guides": {
+    ru: "Ставит гайды предметов OpenDotaGuides вместо стандартных: для каждого героя — сборка из свежих матчей. Откат возвращает стандартные гайды.",
+    en: "Installs OpenDotaGuides item build guides in place of the default ones: a build from recent matches for every hero. Restore brings the default guides back.",
+  },
+};
+
+export const minifyMods = data.items.map((item) =>
+  descriptions[item.id] ? { ...item, description: descriptions[item.id] } : item,
+);
 
 export const minifyCategoryLabels: Record<MinifyCategory, Record<Language, string>> = {
   all: { ru: "Все", en: "All" },

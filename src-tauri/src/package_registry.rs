@@ -38,6 +38,7 @@ const MANIFESTS: &[&str] = &[
     include_str!("../packages/minify-revamp-hero-grid-layout.json"),
     include_str!("../packages/minify-auto-accept-match.json"),
     include_str!("../packages/minify-stat-site-buttons.json"),
+    include_str!("../packages/minify-user-styles.json"),
 ];
 
 /// Only this repository is trusted as a source, and only through
@@ -519,7 +520,11 @@ fn validate(manifest: &PackageManifest) -> Result<(), String> {
     }
     if let Some(styles) = &manifest.panorama_styles {
         if !valid_repository_path(&styles.from)
-            || !styles.from.ends_with("/styling.css")
+            || !(styles.from.ends_with("/styling.css")
+                // Minify ships its optional snippets as `_styling.css`; the
+                // player picks from them (`user_styles.rs`).
+                || (manifest.id == crate::user_styles::PACKAGE_ID
+                    && styles.from == crate::user_styles::STYLES_PATH))
             || styles.bytes == 0
             || styles.bytes > MAX_BLACKLIST_BYTES
             || !valid_sha256(&styles.sha256)
