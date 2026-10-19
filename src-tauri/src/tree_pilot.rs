@@ -1651,6 +1651,107 @@ mod tests {
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
+    /// Registers a synthetic pack with no hero (a raw VPK) and stores it.
+    fn stored_pack(
+        root: &Path,
+        category: &str,
+        id: &str,
+        files: &[(&str, &[u8])],
+    ) -> &'static crate::wardrobe::WardrobeManifest {
+        let (manifest, archive) =
+            crate::wardrobe::synthetic_pack(category, id, crate::wardrobe::SourceKind::Vpk, files);
+        crate::content_store::store_pinned_resource(
+            root,
+            manifest.archive.inner_bytes,
+            &manifest.archive.inner_sha256,
+            &archive,
+        )
+        .expect("store archive");
+        crate::wardrobe::register_for_test(manifest)
+    }
+
+    #[test]
+    fn a_pack_with_no_hero_mixes_with_a_skin_and_shares_the_conflict_review() {
+        let root = wardrobe_root("mixed");
+        let skin = stored_item(&root, "build-mixed-skin", b"skin-hood");
+        let courier = stored_pack(
+            &root,
+            "couriers",
+            "mixed",
+            &[
+                ("models/courier/mixed/body.vmdl_c", b"body"),
+                // the same path as the skin's hood, other bytes
+                (
+                    "models/heroes/keeper_of_the_light/kotl_hood.vmdl_c",
+                    b"courier-hood",
+                ),
+            ],
+        );
+        let sounds = stored_pack(
+            &root,
+            "mega-kill",
+            "mixed-a",
+            &[("sounds/vo/announcer/kill.vsnd_c", b"one")],
+        );
+        let more_sounds = stored_pack(
+            &root,
+            "mega-kill",
+            "mixed-b",
+            &[("sounds/vo/announcer/kill.vsnd_c", b"two")],
+        );
+        let ids = vec![
+            skin.id.clone(),
+            courier.catalog_id.clone(),
+            sounds.id.clone(),
+            more_sounds.id.clone(),
+        ];
+        // A pack has no `.strip` mode: asking for one is not an item.
+        assert!(normalize_package_ids(&[format!("{}.strip", courier.id)]).is_err());
+        let verified = build_from_verified_store(&root, &ids).expect("builds");
+        assert_eq!(verified.wardrobe.len(), 4);
+        // two conflicts: the hood (skin over courier), the announcer line
+        // (the first pack over the second)
+        let mut conflicts = verified
+            .wardrobe_conflicts
+            .iter()
+            .map(|c| (c.path.clone(), c.winner_package_id.clone()))
+            .collect::<Vec<_>>();
+        conflicts.sort();
+        assert_eq!(
+            conflicts,
+            vec![
+                (
+                    "models/heroes/keeper_of_the_light/kotl_hood.vmdl_c".to_string(),
+                    skin.id.clone()
+                ),
+                (
+                    "sounds/vo/announcer/kill.vsnd_c".to_string(),
+                    sounds.id.clone()
+                ),
+            ]
+        );
+        assert_eq!(
+            verified
+                .require_acknowledged_conflicts(false)
+                .err()
+                .as_deref(),
+            Some("wardrobe_conflict_unacknowledged")
+        );
+        let reopened = vpk::extract_embedded(verified.bytes()).expect("reopen");
+        assert_eq!(reopened["sounds/vo/announcer/kill.vsnd_c"], b"one");
+        let plan = serde_json::to_value(plan_for(&verified)).expect("plan json");
+        assert_eq!(plan["wardrobe"][0]["scope"], "hero");
+        assert_eq!(plan["wardrobe"][1]["scope"], "none");
+        assert_eq!(plan["wardrobe"][1]["category"], "couriers");
+        assert_eq!(plan["wardrobe"][2]["category"], "mega-kill");
+        assert_eq!(plan["wardrobe"][1]["heroes"], serde_json::json!([]));
+        // the same build twice is the same bytes
+        let again = build_from_verified_store(&root, &ids).expect("builds again");
+        assert_eq!(verified.bytes(), again.bytes());
+        assert_eq!(verified.plan_id(), again.plan_id());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
     #[test]
     fn a_wardrobe_path_shared_with_a_tuning_package_is_a_conflict_too() {
         let bundle = |tuning: &[u8], skin: &[u8]| {
@@ -1662,6 +1763,8 @@ mod tests {
             let report = crate::skin_archive::analyze(
                 &analysis_archive,
                 &crate::skin_archive::ScopeSpec {
+                    kind: crate::skin_archive::ScopeKind::Hero,
+                    types: crate::skin_archive::TypePolicy::Resources,
                     heroes: vec!["keeper_of_the_light".to_string()],
                     shared_paths: Vec::new(),
                     shared_policy: crate::skin_archive::SharedPolicy::Strip,
@@ -1673,6 +1776,8 @@ mod tests {
             let item = WardrobePlanItem {
                 package_id: "wardrobe.test-mix".to_string(),
                 catalog_id: "heroes-test-mix".to_string(),
+                category: "heroes".to_string(),
+                scope: crate::skin_archive::ScopeKind::Hero,
                 heroes: vec!["keeper_of_the_light".to_string()],
                 source_urls: Vec::new(),
                 archive_sha256: "0".repeat(64),

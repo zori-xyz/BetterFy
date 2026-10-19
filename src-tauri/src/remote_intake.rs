@@ -287,7 +287,7 @@ pub(crate) fn fetch_pinned_pilot_resource(
     fetch_verified_binary_with(&PinnedHttpsTransport::SAME_ORIGIN, &spec, cancelled)
 }
 
-/// Downloads a wardrobe item's pinned ZIP. The URL and the expected size and
+/// Downloads a wardrobe item's pinned file (a ZIP, or a raw VPK). The URL and the expected size and
 /// SHA-256 come from the embedded allowlist entry only.
 pub(crate) fn fetch_pinned_wardrobe_archive(
     manifest: &crate::wardrobe::WardrobeManifest,
@@ -310,15 +310,23 @@ fn fetch_wardrobe_archive_with<T: DownloadTransport>(
 ) -> Result<Vec<u8>, String> {
     let mut last_error = "download_url_invalid".to_string();
     for url in &manifest.source.urls {
+        // A ZIP is inspected after the download; a raw VPK is pinned by its
+        // own size and SHA-256 and checked by the analyzer on every build.
+        let (format, file_name, media_type) = match manifest.archive.kind {
+            crate::wardrobe::SourceKind::Zip => ("zip", "wardrobe-archive.zip", "application/zip"),
+            crate::wardrobe::SourceKind::Vpk => {
+                ("raw", "wardrobe-archive.vpk", "application/octet-stream")
+            }
+        };
         let spec = RemotePackageSpec {
             package_id: manifest.id.clone(),
             version: "pinned-archive".to_string(),
-            format: "zip".to_string(),
-            file_name: "wardrobe-archive.zip".to_string(),
+            format: format.to_string(),
+            file_name: file_name.to_string(),
             download_url: url.clone(),
-            media_type: "application/zip".to_string(),
-            size: manifest.archive.zip_bytes,
-            sha256: manifest.archive.zip_sha256.clone(),
+            media_type: media_type.to_string(),
+            size: manifest.archive.download_bytes(),
+            sha256: manifest.archive.download_sha256().to_string(),
         };
         match fetch_verified_binary_with(transport, &spec, cancelled) {
             Ok(bytes) => return Ok(bytes),
@@ -883,6 +891,33 @@ mod tests {
         assert_eq!(asked, vec![first.clone(), second.clone()]);
         let (result, _) = run(None, Some(Ok(b"wrong".to_vec())));
         assert_eq!(result.err().as_deref(), Some("download_hash_mismatch"));
+    }
+
+    /// A raw VPK item has no ZIP: the VPK is the download, pinned by its own
+    /// size and SHA-256, and a mirror serving anything else is skipped.
+    #[test]
+    fn a_raw_vpk_is_fetched_by_its_own_pin_with_the_same_mirror_walk() {
+        let (manifest, archive) = crate::wardrobe::synthetic_pack(
+            "mega-kill",
+            "raw-fetch",
+            crate::wardrobe::SourceKind::Vpk,
+            &[("sounds/vo/announcer/kill.vsnd_c", b"sound")],
+        );
+        assert_eq!(manifest.archive.download_bytes(), archive.len() as u64);
+        let first = manifest.source.urls[0].clone();
+        let second = manifest.source.urls[1].clone();
+        assert!(first.ends_with(".vpk") && second.ends_with(".vpk"));
+        let transport = MirrorTransport {
+            answers: BTreeMap::from([
+                (first.clone(), Ok(b"not the pinned vpk".to_vec())),
+                (second.clone(), Ok(archive.clone())),
+            ]),
+            asked: Mutex::new(Vec::new()),
+        };
+        let bytes = fetch_wardrobe_archive_with(&transport, &manifest, &AtomicBool::new(false))
+            .expect("the second mirror has the pinned VPK");
+        assert_eq!(bytes, archive);
+        assert_eq!(*transport.asked.lock().expect("asked"), vec![first, second]);
     }
 
     #[test]
