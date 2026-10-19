@@ -1680,11 +1680,11 @@ export default function TreePilot({
         <p className={`b-pilot-hint${skinBytes > MAX_BUNDLE_BYTES ? " b-pilot-blocker is-warning" : ""}`}>
           {skinBytes > MAX_BUNDLE_BYTES
             ? isRu
-              ? `Облики в сборке весят ${formatBytes(skinBytes, true)}, а в один файл помещается не больше ${formatBytes(MAX_BUNDLE_BYTES, true)}. Убери один из обликов, иначе подготовка сборки остановится.`
-              : `The skins in this build add ${formatBytes(skinBytes, false)}, and one file can hold at most ${formatBytes(MAX_BUNDLE_BYTES, false)}. Remove a skin, or the build will not prepare.`
+              ? `Облики и пакеты в сборке весят ${formatBytes(skinBytes, true)}, а в один файл помещается не больше ${formatBytes(MAX_BUNDLE_BYTES, true)}. Убери один из них, иначе подготовка сборки остановится.`
+              : `The skins and packs in this build add ${formatBytes(skinBytes, false)}, and one file can hold at most ${formatBytes(MAX_BUNDLE_BYTES, false)}. Remove one, or the build will not prepare.`
             : isRu
-              ? `Облики в сборке весят ${formatBytes(skinBytes, true)} из ${formatBytes(MAX_BUNDLE_BYTES, true)}, которые помещаются в один файл.`
-              : `The skins in this build add ${formatBytes(skinBytes, false)} of the ${formatBytes(MAX_BUNDLE_BYTES, false)} one file can hold.`}
+              ? `Облики и пакеты в сборке весят ${formatBytes(skinBytes, true)} из ${formatBytes(MAX_BUNDLE_BYTES, true)}, которые помещаются в один файл.`
+              : `The skins and packs in this build add ${formatBytes(skinBytes, false)} of the ${formatBytes(MAX_BUNDLE_BYTES, false)} one file can hold.`}
         </p>
       )}
       {plan && !operationId && (

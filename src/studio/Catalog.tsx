@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ExternalLink,
   Heart,
+  Info,
   Layers3,
   Plus,
   Search,
@@ -24,6 +25,9 @@ import {
   type Domain,
   type StudioMod,
 } from "./model";
+import { categoryHelp, notEnabledReason } from "./categoryHelp";
+import { findPackage } from "./packages";
+import { formatBytes } from "./WardrobeReview";
 import { Empty, Media, Modal, ModCard, PageHead } from "./ui";
 
 export type CatalogFilters = {
@@ -332,6 +336,10 @@ export function ModDetails({
   const [infoOpen, setInfoOpen] = useState(false);
   const preview = mod.variants[variant]?.image ?? mod.image;
   const pilot = isPilotMod(mod.id);
+  const audited = mod.domain === "wardrobe" && pilot ? findPackage(mod.id) : undefined;
+  const help = mod.domain === "wardrobe" ? categoryHelp(mod.category) : null;
+  const unavailable =
+    mod.domain === "wardrobe" && !pilot ? notEnabledReason(mod.category, mod.fileKind ?? "") : null;
   return (
     <Modal
       className="s-detail-dialog"
@@ -387,6 +395,26 @@ export function ModDetails({
             </a>
           </div>
         )}
+        {audited && help && (
+          <div className="s-inline-note">
+            <Info />
+            <div>
+              <p>{help.installs[language]}</p>
+              {help.tip && <p>{help.tip[language]}</p>}
+              <p>
+                {isRu
+                  ? "Архив проверен и закреплён по контрольной сумме. В Dota через BetterFy этот пакет ещё не запускали."
+                  : "The archive is audited and pinned by checksum. This item has not been run in Dota through BetterFy yet."}
+              </p>
+            </div>
+          </div>
+        )}
+        {unavailable && (
+          <div className="s-inline-note">
+            <Info />
+            <p>{unavailable[language]}</p>
+          </div>
+        )}
         <div className="s-detail-facts">
           <div>
             <span>{isRu ? "Раздел" : "Section"}</span>
@@ -410,6 +438,14 @@ export function ModDetails({
             <span>{isRu ? "Автор / источник" : "Creator / source"}</span>
             <strong>{mod.author}</strong>
           </div>
+          {audited?.downloadBytes !== undefined && audited.installBytes !== undefined && (
+            <div>
+              <span>{isRu ? "Загрузка / в сборке" : "Download / in the build"}</span>
+              <strong>
+                {formatBytes(audited.downloadBytes, isRu)} / {formatBytes(audited.installBytes, isRu)}
+              </strong>
+            </div>
+          )}
         </div>
         <button
           className="s-disclosure"

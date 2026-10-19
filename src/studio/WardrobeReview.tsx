@@ -1,6 +1,8 @@
 import { TriangleAlert } from "lucide-react";
 import type { SkinRejectReason, TreePilotPlan, WardrobePlanItem } from "../engine";
 import { useLocale } from "../i18n";
+import { categoryHelp } from "./categoryHelp";
+import { categoryLabel } from "./model";
 
 /** KB under a megabyte, MB above: builds with a skin are tens of megabytes. */
 export function formatBytes(bytes: number, isRu: boolean) {
@@ -22,6 +24,10 @@ const reasons: Record<SkinRejectReason, [string, string]> = {
     "interface file carries a script, event handler or include",
   ],
   panorama_unproven: ["файл интерфейса не подтверждён", "interface file not proven"],
+  outside_category: [
+    "вне папок, из которых ставится эта категория",
+    "outside the folders this category installs from",
+  ],
 };
 
 /** Reasons for files that are not game files: leaving them out changes nothing in game. */
@@ -51,10 +57,13 @@ function Item({
   disabled: boolean;
   onToggleKeepShared?: (packageId: string, keep: boolean) => void;
 }) {
-  const { isRu } = useLocale();
+  const { isRu, language } = useLocale();
   const { report } = item;
+  // Only hero skins have the opt-in mode; every other category installs whole.
+  const isHero = item.scope === "hero";
+  const help = categoryHelp(item.category);
   // `strip` is the opt-in: the shared game files stay out of the build.
-  const keepShared = item.sharedPolicy === "strip";
+  const keepShared = isHero && item.sharedPolicy === "strip";
   const sharedCount = report.shared.files;
   const dropped = report.rejectedPaths.filter((entry) => !IGNORED_REASONS.has(entry.reason));
   const ignored = report.rejectedPaths.filter((entry) => IGNORED_REASONS.has(entry.reason));
@@ -62,7 +71,7 @@ function Item({
     <article className="b-wardrobe-item">
       <header>
         <strong>{label}</strong>
-        <code>{item.heroes.join(" · ")}</code>
+        <code>{isHero ? item.heroes.join(" · ") : categoryLabel(item.category, language)}</code>
         {keepShared && (
           <small>
             {isRu
@@ -79,10 +88,12 @@ function Item({
             {formatBytes(report.install.bytes, isRu)}
           </dd>
         </div>
-        <div>
-          <dt>{isRu ? "Файлы героя" : "Hero files"}</dt>
-          <dd>{report.heroScoped.files}</dd>
-        </div>
+        {isHero && (
+          <div>
+            <dt>{isRu ? "Файлы героя" : "Hero files"}</dt>
+            <dd>{report.heroScoped.files}</dd>
+          </div>
+        )}
         <div>
           <dt>{isRu ? "Новые файлы (в игре таких нет)" : "New files (not in the game)"}</dt>
           <dd>{report.authorOwned.files}</dd>
@@ -93,9 +104,13 @@ function Item({
               ? isRu
                 ? "Общие файлы игры"
                 : "Shared game files"
-              : isRu
-                ? "Заодно заменяет общие файлы игры"
-                : "Also replaces shared game files"}
+              : !isHero
+                ? isRu
+                  ? "Заменяет файлы игры"
+                  : "Replaces game files"
+                : isRu
+                  ? "Заодно заменяет общие файлы игры"
+                  : "Also replaces shared game files"}
           </dt>
           <dd>
             {sharedCount === 0
@@ -132,17 +147,23 @@ function Item({
           </dd>
         </div>
       </dl>
+      <p className="b-pilot-hint">{help.installs[language]}</p>
+      {help.tip && <p className="b-pilot-hint">{help.tip[language]}</p>}
       <p className="b-pilot-hint">
         {keepShared
           ? isRu
             ? "Общие файлы игры (эффекты и текстуры других героев и интерфейса) не попадают в сборку и перечислены ниже. Это может изменить внешний вид облика: часть текстур и материалов не загрузится или будет игровой. Как он выглядит так, и работает ли в игре, не проверено."
             : "Shared game files (other heroes' and interface effects and textures) are kept out of the build and listed below. This can change how the skin looks: some textures and materials may be missing or fall back to the game's own. How it looks this way, and whether it works in the game at all, has not been checked."
-          : isRu
-            ? "В сборку идёт всё, что есть в архиве, как при ручном копировании VPK в папку игры: свои файлы облика и общие файлы игры, которые он заменяет (они перечислены ниже). Основатель сообщает, что скины, скопированные так на Windows, выглядели правильно; установку этого облика через BetterFy в Dota ещё не запускали."
-            : "Everything the archive carries goes into the build, as when its VPK is copied into the game folder by hand: the skin's own files and the shared game files it replaces (listed below). The founder reports that skins copied this way looked right on Windows; BetterFy's install of this skin has not been run in Dota yet."}
+          : !isHero
+            ? isRu
+              ? "В сборку идёт всё, что есть в архиве, как при ручном копировании VPK в папку игры; файлы, которые заменяют файлы игры, перечислены ниже. Основатель сообщает, что оригинальные VPK, скопированные так вручную, работали. В Dota этот пакет через BetterFy ещё не запускали: имя файла BetterFy выбирает сам."
+              : "Everything the archive carries goes into the build, as when its VPK is copied into the game folder by hand; the files that replace game files are listed below. The founder reports that original VPKs copied that way by hand worked. This pack has not been run in Dota through BetterFy yet: BetterFy picks the file name itself."
+            : isRu
+              ? "В сборку идёт всё, что есть в архиве, как при ручном копировании VPK в папку игры: свои файлы облика и общие файлы игры, которые он заменяет (они перечислены ниже). Основатель сообщает, что скины, скопированные так на Windows, выглядели правильно; установку этого облика через BetterFy в Dota ещё не запускали."
+              : "Everything the archive carries goes into the build, as when its VPK is copied into the game folder by hand: the skin's own files and the shared game files it replaces (listed below). The founder reports that skins copied this way looked right on Windows; BetterFy's install of this skin has not been run in Dota yet."}
       </p>
       <p className="b-pilot-hint">{permissionNote(item.permission, isRu)}</p>
-      {onToggleKeepShared && (sharedCount > 0 || keepShared) && (
+      {isHero && onToggleKeepShared && (sharedCount > 0 || keepShared) && (
         <label className="b-check">
           <input
             type="checkbox"
@@ -169,9 +190,13 @@ function Item({
               ? isRu
                 ? `Общие файлы игры, не вошедшие в сборку (${report.sharedPaths.length})`
                 : `Shared game files left out (${report.sharedPaths.length})`
-              : isRu
-                ? `Общие файлы игры, которые он заменяет (${report.sharedPaths.length})`
-                : `Shared game files it replaces (${report.sharedPaths.length})`}
+              : !isHero
+                ? isRu
+                  ? `Файлы игры, которые он заменяет (${report.sharedPaths.length})`
+                  : `Game files it replaces (${report.sharedPaths.length})`
+                : isRu
+                  ? `Общие файлы игры, которые он заменяет (${report.sharedPaths.length})`
+                  : `Shared game files it replaces (${report.sharedPaths.length})`}
           </summary>
           <ul>
             {report.sharedPaths.map((entry) => (
@@ -279,9 +304,9 @@ export function WardrobeReview({
   return (
     <section
       className="b-wardrobe"
-      aria-label={isRu ? "Что добавляет облик" : "What the skin adds"}
+      aria-label={isRu ? "Что добавляют облики и пакеты" : "What the skins and packs add"}
     >
-      <h3>{isRu ? "Облик в сборке" : "Skin in the build"}</h3>
+      <h3>{isRu ? "Облики и пакеты в сборке" : "Skins and packs in the build"}</h3>
       {plan.wardrobe.map((item) => (
         <Item
           item={item}

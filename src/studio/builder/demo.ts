@@ -133,7 +133,67 @@ const DEMO_SKIN = {
   strip: { files: 969, bytes: 53708285 },
 };
 
+// A pack with no hero (a courier, a sound pack): installs whole, no opt-in mode.
+const DEMO_PACK = {
+  shared: { files: 3, bytes: 61440 },
+  install: { files: 24, bytes: 1887436 },
+};
+
+function demoPackItem(packageId: string, category: string): WardrobePlanItem {
+  const sharedPaths = demoShared
+    .slice(0, DEMO_PACK.shared.files)
+    .map((path) => ({ path, bytes: 4096 }));
+  return {
+    packageId,
+    catalogId: findPackage(packageId)?.catalogId ?? packageId,
+    category,
+    scope: "none",
+    heroes: [],
+    sourceUrls: [
+      "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/files/",
+      "https://huggingface.co/datasets/hrdq/Dota2PornFx/",
+    ],
+    archiveSha256: "3f2b6a1c9d8e7f405162738495a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e",
+    catalogSnapshot: "demo",
+    permission: "founder_reported_author_consent",
+    verifiedLanguages: [],
+    compatibilityNote: null,
+    sharedPolicy: "install",
+    gameChecked: true,
+    report: {
+      heroes: [],
+      sharedPolicy: "install",
+      entries: 25,
+      totalBytes: 1900000,
+      archiveIdentity: "a1".repeat(32),
+      heroScoped: { files: 0, bytes: 0 },
+      authorOwned: {
+        files: DEMO_PACK.install.files - DEMO_PACK.shared.files,
+        bytes: DEMO_PACK.install.bytes - DEMO_PACK.shared.bytes,
+      },
+      shared: DEMO_PACK.shared,
+      rejected: { files: 0, bytes: 0 },
+      ignored: { files: 1, bytes: 120 },
+      renamed: 0,
+      imageWrappers: 0,
+      rejectedPaths: [{ path: "models/courier/readme.txt", reason: "not_game_file", bytes: 120 }],
+      sharedPaths,
+      newInGame: [],
+      hostile: false,
+      install: {
+        files: DEMO_PACK.install.files,
+        bytes: DEMO_PACK.install.bytes,
+        identity: "b2".repeat(32),
+        strippedShared: 0,
+        blocked: null,
+      },
+    },
+  };
+}
+
 function demoWardrobeItem(packageId: string): WardrobePlanItem {
+  const manifest = findPackage(packageId);
+  if (manifest?.scope === "none") return demoPackItem(packageId, manifest.category ?? "couriers");
   const keepShared = isSharedKept(packageId);
   const sharedPaths = demoShared
     .slice(0, DEMO_SKIN.shared.files)
@@ -142,6 +202,8 @@ function demoWardrobeItem(packageId: string): WardrobePlanItem {
   return {
     packageId,
     catalogId: findPackage(packageId)?.catalogId ?? packageId,
+    category: "heroes",
+    scope: "hero",
     heroes: ["keeper_of_the_light"],
     sourceUrls: [
       "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/files/heroes/",
@@ -192,12 +254,10 @@ function demoWardrobeItem(packageId: string): WardrobePlanItem {
 }
 
 function demoSkinBytes(packageIds: string[]) {
-  return packageIds
-    .filter(isWardrobePackage)
-    .reduce(
-      (total, id) => total + (isSharedKept(id) ? DEMO_SKIN.strip.bytes : DEMO_SKIN.install.bytes),
-      0,
-    );
+  return packageIds.filter(isWardrobePackage).reduce((total, id) => {
+    if (findPackage(id)?.scope === "none") return total + DEMO_PACK.install.bytes;
+    return total + (isSharedKept(id) ? DEMO_SKIN.strip.bytes : DEMO_SKIN.install.bytes);
+  }, 0);
 }
 
 function demoPlan(ids: string[]): TreePilotPlan {
@@ -205,9 +265,11 @@ function demoPlan(ids: string[]): TreePilotPlan {
   const wardrobe = packageIds.filter(isWardrobePackage).map(demoWardrobeItem);
   const contributions = packageIds.map((packageId, index) => {
     const input = isWardrobePackage(packageId)
-      ? isSharedKept(packageId)
-        ? DEMO_SKIN.strip.files
-        : DEMO_SKIN.install.files
+      ? findPackage(packageId)?.scope === "none"
+        ? DEMO_PACK.install.files
+        : isSharedKept(packageId)
+          ? DEMO_SKIN.strip.files
+          : DEMO_SKIN.install.files
       : resourcesFor(packageId);
     const shadowed = index > 0 && packageIds.length > 2 ? Math.min(3, input - 1) : 0;
     return {

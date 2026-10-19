@@ -55,6 +55,8 @@ export type StudioMod = {
   tags: string[];
   variants: { name: string; image: string | null; color: string }[];
   slot: string | null;
+  /** The catalog file's kind (wardrobe cards); decides some "not enabled" reasons. */
+  fileKind: "VPK" | "ZIP" | "Archive" | null;
 };
 type RawItem = {
   id?: string;
@@ -109,6 +111,7 @@ export const mods: StudioMod[] = [
         : raw?.group
           ? `${item.metadata.category}:${raw.group}`
           : null,
+      fileKind: item.artifact.fileKind,
     };
   }),
   ...minifyMods.map(
@@ -127,6 +130,7 @@ export const mods: StudioMod[] = [
       tags: [],
       variants: [],
       slot: null,
+      fileKind: null,
     }),
   ),
 ];

@@ -270,11 +270,12 @@ export type SkinRejectReason =
   | "executable"
   | "type_not_allowed"
   | "panorama_scripted"
-  | "panorama_unproven";
+  | "panorama_unproven"
+  | "outside_category";
 
 /** What the skin-archive analyzer found (src-tauri/src/skin_archive.rs). */
 export type SkinReport = {
-  /** Internal names of the heroes the skin is for. */
+  /** Internal names of the heroes the skin is for (none for content with no hero). */
   heroes: string[];
   /**
    * `install` (the default) puts every accepted file into the build; `strip`
@@ -325,6 +326,10 @@ export type WardrobePlanItem = {
   /** The engine ID of this selection: `wardrobe.<name>`, plus `.strip` in the opt-in mode. */
   packageId: string;
   catalogId: string;
+  /** The catalog category (`heroes`, `couriers`, `mega-kill`, ...). */
+  category: string;
+  /** `hero` for a hero skin; `none` for every other category (installs whole, no opt-in mode). */
+  scope: "hero" | "none";
   heroes: string[];
   /** The mirrors the archive may come from, in the order they are tried. */
   sourceUrls: string[];
