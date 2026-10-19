@@ -302,8 +302,10 @@ pub(crate) fn family_name(bytes: &[u8]) -> Result<String, String> {
             .and_then(|record| {
                 let units = record
                     .4
-                    .chunks_exact(2)
-                    .map(|pair| u16::from_be_bytes([pair[0], pair[1]]))
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|pair| u16::from_be_bytes(*pair))
                     .collect::<Vec<_>>();
                 String::from_utf16(&units).ok()
             })
