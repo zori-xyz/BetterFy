@@ -10,10 +10,16 @@ export type SlotExplanation = {
   /** File facts for the "Details" fold, one short line each. */
   details: string[];
   /** The one recommended next step. */
-  action: "release" | "report" | null;
+  action: "release" | "report" | "retry" | null;
 };
 
 const pick = (isRu: boolean, ru: string, en: string) => (isRu ? ru : en);
+
+/** The refusals that say a file BetterFy recorded no longer matches. */
+const isFileCode = (code: string) =>
+  code === "deployment_conflict" ||
+  code === "rollback_conflict" ||
+  code === "deployment_target_foreign";
 
 export const folderOf = (language: GameLanguage) => `dota_${language}`;
 
@@ -70,6 +76,26 @@ export function slotDetails(report: LanguageSlotReport, isRu: boolean): string[]
     );
   }
   if (report.filesTruncated) lines.push("…");
+  if (report.ownedMap || report.map) {
+    const state =
+      report.ownedMap === "intact"
+        ? pick(isRu, "запись BetterFy, на месте", "BetterFy record, intact")
+        : report.ownedMap === "missing"
+          ? pick(isRu, "запись BetterFy, файла нет", "BetterFy record, file not there")
+          : report.ownedMap === "replaced"
+            ? pick(isRu, "запись BetterFy, содержимое изменилось", "BetterFy record, contents changed")
+            : pick(isRu, "записи BetterFy нет", "no BetterFy record");
+    lines.push(
+      [
+        "maps/dota.vpk",
+        report.map ? formatSize(report.map.bytes, isRu) : null,
+        formatTime(report.map?.modifiedMs ?? null, isRu),
+        state,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    );
+  }
   if (report.nextName)
     lines.push(`${pick(isRu, "Следующий файл BetterFy", "BetterFy's next file")}: ${report.nextName}`);
   return lines;
@@ -113,6 +139,15 @@ export function installedLine(
     : [`BetterFy использует ${vpkName} в ${folder}.`, `Using ${vpkName} in ${folder}.`];
 }
 
+/** The one journal line after an install that wrote a map: which file, where. */
+export function installedMapLine(language: GameLanguage): [ru: string, en: string] {
+  const folder = folderOf(language);
+  return [
+    `BetterFy записал карту maps/dota.vpk в ${folder}.`,
+    `Wrote the map maps/dota.vpk into ${folder}.`,
+  ];
+}
+
 /**
  * The refusal codes that come from the language folder not matching BetterFy's
  * record, explained from the folder's actual state. Without a report the
@@ -126,6 +161,75 @@ export function explainSlot(
   const folder = report ? folderOf(report.language) : null;
   const details = report ? slotDetails(report, isRu) : [];
   const owned = report?.owned ?? null;
+  const ownedMap = report?.ownedMap ?? null;
+  const where = folder ?? pick(isRu, "папке языка", "the language folder");
+
+  if (code === "map_target_foreign") {
+    const size = report?.map ? ` (${formatSize(report.map.bytes, isRu)})` : "";
+    return {
+      title: pick(isRu, "В папке уже лежит чужая карта", "A map from someone else is already there"),
+      body: pick(
+        isRu,
+        `В ${where}/maps уже есть файл dota.vpk${size}, и записал его не BetterFy: это может быть карта из другого мода или файл, который положили вручную. BetterFy его не тронул и ничего не записал, потому что не может доказать, что заменённый чужой файл потом вернётся как был. Что делать: убери карту из сборки и поставь остальное, либо сам перенеси этот файл в другое место (он может тебе понадобиться) и нажми «Повторить».`,
+        `${where}/maps already has a dota.vpk${size} that BetterFy did not write: it may be a map from another mod or a file put there by hand. BetterFy left it alone and wrote nothing, because it cannot prove that replacing someone else's file could be undone to the exact original. What to do: remove the map from the build and install the rest, or move that file somewhere else yourself (you may want it) and press Retry.`,
+      ),
+      details,
+      action: "retry",
+    };
+  }
+
+  if (code === "map_folder_invalid") {
+    return {
+      title: pick(isRu, "Папка maps занята", "The maps folder is in the way"),
+      body: pick(
+        isRu,
+        `В ${where} есть что-то под именем maps, но это не обычная папка (например, файл). BetterFy ничего не записал и ничего не тронул. Переименуй или убери это сам, затем нажми «Повторить».`,
+        `${where} has something named maps that is not a plain folder (a file, for example). BetterFy wrote nothing and touched nothing. Rename or remove it yourself, then press Retry.`,
+      ),
+      details,
+      action: "retry",
+    };
+  }
+
+  if (code === "deployment_path_unsafe") {
+    return {
+      title: pick(isRu, "Путь в папке игры — это ссылка", "A path in the game folder is a link"),
+      body: pick(
+        isRu,
+        "Одна из папок или один из файлов на пути записи оказались ссылкой (symlink или junction). BetterFy не пишет через ссылки, потому что запись ушла бы в другое место. Ничего не записано и не тронуто. Замени ссылку обычной папкой или файлом и повтори.",
+        "A folder or a file on the write path turned out to be a link (a symlink or a junction). BetterFy does not write through links, because the write would land somewhere else. Nothing was written or touched. Replace the link with a plain folder or file and retry.",
+      ),
+      details,
+      action: "report",
+    };
+  }
+
+  // BetterFy's own map no longer matches its record. Either the install or the
+  // restore found it, with or without the pak file also changed.
+  const mapOnlyChanged =
+    ownedMap !== null && ownedMap !== "intact" && (!owned || owned.state === "intact");
+  if (code === "map_conflict" || (mapOnlyChanged && isFileCode(code))) {
+    const restoring = code === "rollback_conflict";
+    const gone = ownedMap === "missing";
+    return {
+      title: gone
+        ? pick(isRu, "Карты BetterFy в игре больше нет", "BetterFy's map is gone from the game")
+        : pick(isRu, "Карта BetterFy в игре изменилась", "BetterFy's map in the game changed"),
+      body: gone
+        ? pick(
+            isRu,
+            `Файл карты maps/dota.vpk пропал из ${where}, чаще всего после обновления Dota или проверки файлов в Steam. Восстанавливать нечего, ничего не повреждено. Нажми «Отпустить старую установку»: BetterFy забудет всю прежнюю установку, файлы в игре он не тронет. Потом поставь сборку заново.`,
+            `The map file maps/dota.vpk is gone from ${where}, most often after a Dota update or a Steam file check. There is nothing to restore and nothing is damaged. Let go of the old install: BetterFy forgets the whole earlier installation and touches no game files. Then install the build again.`,
+          )
+        : pick(
+            isRu,
+            `Карту BetterFy maps/dota.vpk в ${where} изменили после установки, чаще всего это обновление Dota или проверка файлов в Steam. BetterFy не ${restoring ? "откатывает" : "затирает"} её старой копией, чтобы не отменить обновление игры. Нажми «Отпустить старую установку»: BetterFy забудет всю прежнюю установку, файлы в игре он не тронет, в том числе pak-файл, если он был.`,
+            `BetterFy's map maps/dota.vpk in ${where} was changed after installation, most often by a Dota update or a Steam file check. BetterFy does not ${restoring ? "restore" : "overwrite"} it with an old copy, so a game update is not undone. Let go of the old install: BetterFy forgets the whole earlier installation and touches no game files, the pak file included if there was one.`,
+          ),
+      details,
+      action: "release",
+    };
+  }
 
   if (code === "slot_full") {
     return {

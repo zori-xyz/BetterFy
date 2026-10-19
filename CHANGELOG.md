@@ -26,6 +26,24 @@ First Windows observation of skins: three catalog skins installed together by EA
   CI only; not installed on Windows or run in Dota yet. Details:
   [docs/SKIN_ARCHIVE_AUDIT.md](docs/SKIN_ARCHIVE_AUDIT.md).
 
+### Map terrains
+- The 12 standard terrains of the catalog (ZIPs holding a whole-map
+  `maps/dota.vpk`, 34 to 53 MB) are installable. The map is a second file owned by
+  the same reviewed, journaled, recoverable transaction as the `pakNN_dir.vpk`: it
+  goes to `game/dota_<language>/maps/dota.vpk`, can be installed alone or beside a
+  hero skin, is backed up and restored exactly, is never written over a file
+  BetterFy did not write (`map_target_foreign`, checked before Steam and Dota are
+  closed), and creates and removes the `maps` folder only when it made it and it
+  is empty. Records of a build without a map are unchanged on disk. One map per
+  build. A pinned allowlist (`src-tauri/maps/`) and a whole-map analyzer back it;
+  the build review says what a map does and the upstream caveats (shows only in
+  matches, not in Demo; turn off the Dota+ terrain; a whole-file replacement may
+  go stale after a Dota patch, an unverified risk). Built and tested in CI and on a
+  Mac against the real archives; not installed on Windows or run in Dota yet.
+  Details: [docs/ENGINE_ARCHITECTURE.md](docs/ENGINE_ARCHITECTURE.md),
+  [docs/MAP_AUDIT_REPORT.md](docs/MAP_AUDIT_REPORT.md),
+  [docs/MAP_WINDOWS_TEST_PLAN.md](docs/MAP_WINDOWS_TEST_PLAN.md).
+
 ### Panorama decor (proofs only)
 - New proofs for main-menu backgrounds, HUD skins and versus screens: a static
   layout proof, a style sheet proof and a WebM container check, built to refuse
