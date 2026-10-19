@@ -34,7 +34,13 @@ import { useEngineActive } from "./engineActivity";
 import { applyInstallablePackages, usePackagesRevision } from "./packages";
 import Library from "./Library";
 import { Preferences, Profile } from "./Preferences";
-import { getSelectionDelivery, modById, type Domain, type StudioMod } from "./model";
+import {
+  getSelectionDelivery,
+  installablePackMembers,
+  modById,
+  type Domain,
+  type StudioMod,
+} from "./model";
 import { Media, Modal } from "./ui";
 import Shortcuts from "./Shortcuts";
 import { currentBuildName } from "./builder/buildName";
@@ -302,6 +308,44 @@ export default function Workspace({
   const toggle = (mod: StudioMod) => {
     if (busy) {
       waitForEngine();
+      return;
+    }
+    // A pack adds its items; with all of them in the build it takes them out.
+    if (mod.members) {
+      const members = installablePackMembers(mod.id);
+      if (members.length && members.every((id) => selected.includes(id))) {
+        saveSelection(selected.filter((id) => !members.includes(id)));
+        notify(isRu ? `Набор «${mod.name.ru}» убран из сборки` : `${mod.name.en} removed from build`);
+        return;
+      }
+      // The pack's items take their slots: an item of the build in the same
+      // slot makes room.
+      const slots = new Set(
+        members.flatMap((id) => (modById.get(id)?.slot ? [modById.get(id)!.slot] : [])),
+      );
+      const kept = selected.filter((id) => {
+        const slot = modById.get(id)?.slot;
+        return members.includes(id) || !slot || !slots.has(slot);
+      });
+      const added = members.filter((id) => !kept.includes(id));
+      saveSelection([...kept, ...added]);
+      flyToBuild(mod.image);
+      const count = added.length;
+      const tens = count % 100;
+      const ones = count % 10;
+      const word =
+        tens >= 11 && tens <= 14
+          ? "предметов"
+          : ones === 1
+            ? "предмет"
+            : ones >= 2 && ones <= 4
+              ? "предмета"
+              : "предметов";
+      notify(
+        isRu
+          ? `Набор добавлен: ${count} ${word}`
+          : `Set added: ${count} ${count === 1 ? "item" : "items"}`,
+      );
       return;
     }
     if (selected.includes(mod.id)) {
@@ -660,7 +704,11 @@ export default function Workspace({
         <ModDetails
           key={details.id}
           mod={details}
-          selected={selected.includes(details.id)}
+          selected={
+            details.members
+              ? installablePackMembers(details.id).every((id) => selected.includes(id))
+              : selected.includes(details.id)
+          }
           favorite={favorites.includes(details.id)}
           variant={variants[details.id] ?? 0}
           onVariant={(value) => saveVariant(details, value)}

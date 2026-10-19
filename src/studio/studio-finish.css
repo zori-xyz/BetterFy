@@ -217,3 +217,28 @@
 .s-background-select select {
   width: 100%;
 }
+
+/* A pack's items in its detail panel. */
+.s-pack-contents ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 4px;
+  max-height: 260px;
+  overflow: auto;
+}
+.s-pack-contents li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--s-radius-control);
+  background: var(--s-input);
+  font-size: var(--s-text-sm);
+}
+.s-pack-contents li small {
+  color: var(--s-quiet);
+  font-size: var(--s-text-2xs);
+  white-space: nowrap;
+}

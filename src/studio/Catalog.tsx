@@ -19,7 +19,9 @@ import { modCount, useLocale } from "../i18n";
 import {
   categoryLabel,
   gameGroups,
+  installablePackMembers,
   isInstallable,
+  modById,
   mods,
   wardrobeGroups,
   type Domain,
@@ -280,7 +282,11 @@ export default function Catalog({
               <ModCard
                 key={mod.id}
                 mod={mod}
-                selected={selected.includes(mod.id)}
+                selected={
+                  mod.members
+                    ? installablePackMembers(mod.id).every((id) => selected.includes(id))
+                    : selected.includes(mod.id)
+                }
                 onOpen={() => onOpen(mod)}
                 onToggle={() => onToggle(mod)}
               />
@@ -371,6 +377,7 @@ export function ModDetails({
         {mod.id === USER_STYLES_CATALOG_ID && <UserStylesPicker />}
         {mod.id === CUSTOM_FONTS_CATALOG_ID && <CustomFontPicker />}
         {mod.id === CUSTOM_BACKGROUNDS_CATALOG_ID && <BackgroundPicker />}
+        {mod.members && <PackContents mod={mod} />}
         {mod.variants.length > 1 && (
           <fieldset className="s-variants">
             <legend>{isRu ? "Вариант" : "Style"}</legend>
@@ -668,6 +675,30 @@ function BackgroundPicker() {
           ? "Экран загрузки берётся из самой Dota. Видео — файл WebM до 64 МБ; другие форматы можно перевести в WebM любым конвертером."
           : "The loading screen comes from Dota itself. A video has to be a WebM file up to 64 MB; other formats convert to WebM with any converter."}
       </small>
+    </div>
+  );
+}
+
+/** What a pack adds: its items that install, with the ones already in the build. */
+function PackContents({ mod }: { mod: StudioMod }) {
+  const { language, isRu } = useLocale();
+  const members = installablePackMembers(mod.id);
+  return (
+    <div className="s-style-picker s-pack-contents">
+      <strong>
+        {isRu ? "Что внутри" : "Inside"} · {members.length}
+      </strong>
+      <ul>
+        {members.map((id) => {
+          const item = modById.get(id);
+          return item ? (
+            <li key={id}>
+              <span>{item.name[language]}</span>
+              <small>{item.categoryName[language]}</small>
+            </li>
+          ) : null;
+        })}
+      </ul>
     </div>
   );
 }

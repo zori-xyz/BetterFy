@@ -2,6 +2,7 @@ import { MAX_BUNDLE_PACKAGES, pilotCatalogIds } from "./packages";
 import { wardrobeCatalogItems, wardrobeCategoryLabels } from "../modCatalog";
 import { minifyMods, minifyCategoryLabels, minifyPreviewUrl, minifySource } from "../minifyCatalog";
 import rawCatalog from "../webCatalog.json";
+import catalogPacks from "../catalogPacks.json";
 import type { Language } from "../i18n";
 
 export type Domain = "wardrobe" | "game";
@@ -12,7 +13,30 @@ export const installableIds = pilotCatalogIds;
  * for it. The catalog shows only these; anything else is not offered at all.
  */
 export function isInstallable(id: string) {
-  return installableIds.has(id);
+  if (installableIds.has(id)) return true;
+  // A pack is offered when any of its items installs.
+  return packMembers(id).some((member) => installableIds.has(member));
+}
+
+/**
+ * The catalog's packs: ready-made sets of other items (src/catalogPacks.json,
+ * from the source catalog's own pack lists). A pack is never an item of a
+ * build; adding it adds its items.
+ */
+const packsById = new Map(
+  (catalogPacks as Array<{ id: string; name: string; members: string[] }>).map((pack) => [
+    pack.id,
+    pack,
+  ]),
+);
+
+export function packMembers(id: string): string[] {
+  return packsById.get(id)?.members ?? [];
+}
+
+/** The items of a pack that BetterFy installs. */
+export function installablePackMembers(id: string) {
+  return packMembers(id).filter((member) => installableIds.has(member));
 }
 
 /** Keeps only the ids the catalog can still install (a saved set may be older). */
@@ -54,6 +78,8 @@ export type StudioMod = {
   tags: string[];
   variants: { name: string; image: string | null; color: string }[];
   slot: string | null;
+  /** A pack: the catalog items it adds. */
+  members?: string[];
 };
 type RawItem = {
   id?: string;
@@ -129,6 +155,30 @@ export const mods: StudioMod[] = [
     }),
   ),
 ];
+// The catalog's packs, as cards of their own.
+for (const pack of packsById.values()) {
+  const raw = rawById.get(pack.id) as (RawItem & { preview?: string }) | undefined;
+  mods.push({
+    id: pack.id,
+    domain: "wardrobe",
+    name: { ru: pack.name, en: pack.name },
+    category: "packs",
+    categoryName: { ru: "Наборы", en: "Packs" },
+    group: "packs",
+    description: {
+      ru: `Готовый набор от авторов каталога: ${pack.members.length} предметов в одном стиле. Добавит в сборку всё из набора, что ставится; любой предмет потом можно убрать.`,
+      en: `A ready-made set from the catalog's authors: ${pack.members.length} items in one style. Adds everything in the set that installs; you can drop any item later.`,
+    },
+    image: raw?.preview ? `${previewRoot}packs/${encodeURIComponent(raw.preview)}` : null,
+    author: "BetterFy Web",
+    source: "https://github.com/h6rd/Dota2PornFxWeb",
+    date: 0,
+    tags: [],
+    variants: [],
+    slot: null,
+    members: pack.members,
+  });
+}
 export const modById = new Map(mods.map((mod) => [mod.id, mod]));
 export const wardrobeGroups = [
   { id: "all", ru: "Всё", en: "All" },

@@ -1,0 +1,114 @@
+[
+  {
+    "id": "packs-winter-pack",
+    "name": "Winter Pack",
+    "members": [
+      "shaders-aghanim-labyrinth",
+      "ti-bp-effects-winter-2016-battle-pass",
+      "terrains-dota-winter",
+      "creeps-nemestice-radiant-creeps",
+      "creeps-nemestice-dire-creeps",
+      "creep-deny-deny-fall-2021",
+      "backgrounds-snowfall-in-forest",
+      "wards-floes-tower",
+      "couriers-baby-roshan-2018",
+      "item-effects-snow-dagon",
+      "item-effects-christmas-iron-branch",
+      "item-effects-winter-hex",
+      "versus-screens-winter-versus-screen",
+      "roshan-santa-hat-roshan",
+      "ancient-frostivus-ancient",
+      "towers-holiday-radiant-tower",
+      "pedestal-snow-pedestal"
+    ]
+  },
+  {
+    "id": "packs-autumn-pack",
+    "name": "Autumn Pack",
+    "members": [
+      "shaders-wave-lite-peach",
+      "ti-bp-effects-quarteros-curios",
+      "terrains-dota-autumn",
+      "creeps-woodland-radiant-creeps",
+      "creeps-woodland-dire-creeps",
+      "creeps-woodland-radiant-siege",
+      "creeps-woodland-dire-siege",
+      "creep-deny-deny-fall-2022",
+      "backgrounds-station",
+      "couriers-golden-huntling",
+      "versus-screens-ti-2024-versus-screen",
+      "roshan-gardens-roshan",
+      "tormentor-10th-anniversary-tormentor"
+    ]
+  },
+  {
+    "id": "packs-umbrella-pack",
+    "name": "Umbrella Pack",
+    "members": [
+      "shaders-cartoon-shader",
+      "terrains-lowpoly-trees",
+      "ranks-umbrella-medals",
+      "other-techies-mine-radius",
+      "other-tower-re-aggro-radius",
+      "mega-kill-umbrella-mega-kill",
+      "herofx-huskar-white-screen-effect"
+    ]
+  },
+  {
+    "id": "packs-purple-pack",
+    "name": "Purple Pack",
+    "members": [
+      "shaders-wave-lite-purple",
+      "ti-bp-effects-ti-2019-battle-pass",
+      "terrains-darkpoly",
+      "trees-lowpoly-barrel-trees",
+      "creeps-nemestice-radiant-creeps",
+      "creeps-nemestice-dire-creeps",
+      "creep-deny-fuck-deny",
+      "emblems-overgrown-emblem",
+      "backgrounds-yuno-gasai",
+      "couriers-dark-moon-baby-roshan",
+      "item-icons-purple-icons",
+      "river-purple-river",
+      "item-effects-purple-dagon",
+      "item-effects-purple-hex",
+      "versus-screens-muerta-versus-screen",
+      "roshan-cosmic-roshan",
+      "high-five-high-five-crownfall"
+    ]
+  },
+  {
+    "id": "packs-black-white-pack",
+    "name": "Black & White Pack",
+    "members": [
+      "shaders-wave-lite-white",
+      "ti-bp-effects-darkness-pack",
+      "terrains-dark-terrain-minify",
+      "trees-pumpkin-trees",
+      "creeps-crownfall-radiant-creeps",
+      "creeps-crownfall-dire-creeps",
+      "creep-deny-soul-deny",
+      "emblems-emblem-darkness",
+      "backgrounds-forgotten-sword",
+      "couriers-aghanim-baby-roshan-dire",
+      "river-black-river",
+      "huds-black-hud",
+      "versus-screens-diretide-versus-screen",
+      "item-icons-dark-items",
+      "ranks-void-medals"
+    ]
+  },
+  {
+    "id": "packs-lite-optimization-pack",
+    "name": "Lite Optimization Pack",
+    "members": [
+      "shaders-simple-minify-shader",
+      "ti-bp-effects-remove-seasonal-effects",
+      "terrains-simple-dark-terrain-minify",
+      "trees-lowpoly-shrub-trees",
+      "backgrounds-stars",
+      "optimization-default-wards",
+      "optimization-tinker-lite-machines"
+    ]
+  }
+]
