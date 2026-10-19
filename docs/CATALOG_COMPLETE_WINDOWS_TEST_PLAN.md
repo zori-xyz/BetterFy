@@ -18,13 +18,16 @@ installed on Windows or seen in Dota.
 
 ## Artifact under test
 
-Fill in before starting.
+The first build of this branch published for testing:
 
 - Branch: `feature/catalog-complete`
-- Source commit: `<record>`
-- Workflow: Windows build, run `<record>`
-- Artifact: `BetterFy-Windows-x64-nsis`, installer file name and SHA-256
-  `<record>`
+- Source commit: `0c0cc11` (version 0.6.0)
+- Workflow: Early Access Windows installer, run `39297436418`
+- Release: `v0.6.0-ea.47` (prerelease, unsigned)
+- Artifact: `BetterFy-Setup.exe`, SHA-256
+  `8bc3894679c17e265e0a02459be68abc494895dff599a759e84405a063f8c249`
+
+A later build replaces these lines; record the one actually installed.
 
 ## Ground rules
 

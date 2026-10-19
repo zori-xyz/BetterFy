@@ -39,8 +39,9 @@ Version bump for the complete catalog below.
   Hero Grids (three pinned grids added beside the player's own in every Steam
   account, restored without touching the player's edits) and OpenDotaGuides.
 - The catalog's six packs are ready-made sets: adding one adds its items.
-- Package catalog re-signed as sequence 8 (not deployed). Older apps reject it
-  (User Styles reads Minify's `_styling.css`), so it ships with the app release.
+- Package catalog re-signed as sequence 8 and deployed on 2026-10-19 together
+  with EA.47. Older apps reject it (User Styles reads Minify's `_styling.css`)
+  and silently keep the catalog they have.
 
 Windows observation of the catalog categories (EA.45): the founder reported sounds, the map, river, trees, creeps, couriers, item icons and rank icons all working in game; see [docs/EA45_CATALOG_WINDOWS_OBSERVATION.md](docs/EA45_CATALOG_WINDOWS_OBSERVATION.md) for what was and was not recorded.
 
