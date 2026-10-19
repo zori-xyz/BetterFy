@@ -1,5 +1,5 @@
 use keyring::v1::{Entry, Error as KeyringError};
-use reqwest::blocking::{Client, Response};
+use reqwest::blocking::{Client, RequestBuilder, Response};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
@@ -28,6 +28,9 @@ pub struct AuthProfile {
     /// Set by the auth service for logins listed in its developer setting.
     #[serde(default)]
     pub developer: bool,
+    /// Set by the auth service for logins listed in its tester setting.
+    #[serde(default)]
+    pub tester: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -273,12 +276,25 @@ fn authenticated_request(
     method: reqwest::Method,
     path: &str,
 ) -> Result<Response, String> {
+    authenticated_request_with(state, method, path, |request| request)
+}
+
+/// An authenticated request whose body is built by `prepare`, called again
+/// for the retry after a refresh (a multipart body cannot be reused).
+pub(crate) fn authenticated_request_with(
+    state: &AuthState,
+    method: reqwest::Method,
+    path: &str,
+    prepare: impl Fn(RequestBuilder) -> RequestBuilder,
+) -> Result<Response, String> {
     let send = |token: &str| {
-        client()?
-            .request(method.clone(), format!("{AUTH_ORIGIN}{path}"))
-            .header(AUTHORIZATION, format!("Bearer {token}"))
-            .send()
-            .map_err(|_| "auth_service_unavailable".to_string())
+        prepare(
+            client()?
+                .request(method.clone(), format!("{AUTH_ORIGIN}{path}"))
+                .header(AUTHORIZATION, format!("Bearer {token}")),
+        )
+        .send()
+        .map_err(|_| "auth_service_unavailable".to_string())
     };
     let first_token = access_token(state)?;
     let first = send(&first_token)?;
@@ -700,7 +716,7 @@ fn auth_restore_session_blocking(state: &AuthState) -> Result<Option<AuthProfile
 
 /// Re-reads the profile (entitlement, expiry) so a purchase made in the bot
 /// shows up without restarting the app.
-fn auth_profile_blocking(state: &AuthState) -> Result<AuthProfile, String> {
+pub(crate) fn auth_profile_blocking(state: &AuthState) -> Result<AuthProfile, String> {
     let response = authenticated_request(state, reqwest::Method::GET, "/v1/session/profile")?;
     if !response.status().is_success() {
         return Err("auth_service_unavailable".to_string());
@@ -816,7 +832,7 @@ fn auth_logout_blocking(state: &AuthState) -> Result<(), String> {
 // Every auth command performs network and credential-vault I/O. Tauri runs
 // synchronous commands on the main thread, which would freeze the window for
 // up to the client timeout, so each one runs on a blocking worker instead.
-async fn run_blocking<T, F>(app: AppHandle, task: F) -> Result<T, String>
+pub(crate) async fn run_blocking<T, F>(app: AppHandle, task: F) -> Result<T, String>
 where
     T: Send + 'static,
     F: FnOnce(&AuthState) -> Result<T, String> + Send + 'static,
@@ -1001,6 +1017,7 @@ mod tests {
             avatar_available: None,
             telegram_linked: None,
             developer: false,
+            tester: false,
         };
         *state.session.lock().expect("session lock") = Some(ActiveSession {
             profile: profile.clone(),
@@ -1028,6 +1045,7 @@ mod tests {
             avatar_available: Some(true),
             telegram_linked: Some(true),
             developer: false,
+            tester: false,
         };
         let serialized = serde_json::to_string(&profile).expect("profile json");
         assert!(!serialized.contains("token"));
