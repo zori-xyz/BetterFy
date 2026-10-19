@@ -778,6 +778,81 @@ the files must be canonical, and the interface copy must be derived from them.
   in Dota. Nothing here claims a skin loads or looks right in the game when BetterFy
   installs it.
 
+### Panorama decor proofs (menu backgrounds, HUD skins, versus screens)
+
+`src-tauri/src/panorama_decor.rs` proves, from parsed structure and never from a file
+name, that the layouts, style sheets and videos of these catalog categories cannot run
+code or reach outside the game. It is **not wired into the wardrobe pipeline yet**: no
+category is installable because of it. The evidence, the numbers and the decisions are in
+[`PANORAMA_DECOR_AUDIT.md`](PANORAMA_DECOR_AUDIT.md); this section states exactly what each
+proof accepts and why.
+
+Every proof returns a typed `Proof` (kind, tier, the files of the archive it points at,
+counts) or a `Refusal` with a stable `code()` and the offending name. Nothing is accepted
+because it is not recognised as bad.
+
+**`prove_static_layout`.** Reads the current compiler's container only (`RED2`, `DATA`
+holding no text, `LaCo`; any other block, the older XML-in-`DATA` container and a reference
+list are refused). The tree must be `root > styles? scripts? panel`, at most 48 deep and 4,000
+elements. A panel type must be one of 41 Valve types and an attribute one of 31, each with
+a fixed value shape (identifier, boolean, number or duration, scene name, short display
+text), so there is no URL, `layout`, `href`, style or hotkey attribute and no HTML or
+browser panel. `src` exists only on `Image` (a texture) and `MoviePanel` (a video). A
+reference names a file of the same archive (a dependency the archive step resolves) or one
+of Valve's own, using the pinned file list; `file://` references and anything missing are
+refused. An event attribute (`on*`) holds code in Panorama, so it passes only as an
+**exact pinned binding**: element type, `id`, attribute and code equal to one of the 79 in
+`panorama_decor/pins.rs`, read in real archives and reviewed by hand, and the code must
+also pass a shape check (calls only; no `$`, member access, operators, URLs or words such
+as browser, console, command). A `SCRIPTS` include passes only for a script Valve ships
+that the archive does not replace. No layout may have a script body, snippet or `<include>`
+of a layout. A layout with neither handlers nor scripts is `Tier::PureDecor`; the rest is
+`Tier::ReviewedValveBindings`, and `Context::allow_reviewed_valve_bindings` turns that tier
+off.
+
+**`prove_style_sheet`.** Container `RED2`, `DATA` (empty image table), `SrMa`. The text is
+ASCII with no comment, read by a small grammar: rules, `@keyframes` (names plain or in
+single quotes), `@define`, and `@import url("s2r://....vcss")` of a style in the archive or
+Valve's. Declarations only of 97 properties (visual ones, plus `sound`, which names a sound
+event); values only from a fixed character set, only 20 functions, and `url()` only as a
+quoted `s2r://` texture that exists in the archive or Valve's list. Everything else
+(`@font-face`, `@media`, `behavior`, `calc`, `!important`, escapes, `http:`, `data:`) is
+refused. Size, selector, value and declaration counts are bounded.
+
+**`check_webm`.** A container check: EBML header, doctype `webm`, one segment as long as
+the rest of the file, only SeekHead, Void, Info, Tracks, Cluster, Cues, Tags and CRC-32 at
+the top level (attachments and chapters are refused), sizes that chain exactly, one Info and
+Tracks, VP8/VP9/AV1 video and at most Vorbis or Opus audio, at most 64 MiB. It decodes
+nothing, so it does not show that the stream is well formed inside a cluster or that the
+game's decoder handles it safely.
+
+**`prove_archive(category, entries, valve, allow)`.** Runs the three and resolves in-archive
+references: a file with a refused dependency is refused, a cycle is refused, and a video that
+no accepted layout plays is refused (a video path is `folder/name.webm`, lower-case, and not a
+Valve file). `Category` limits what each category may replace: backgrounds the dashboard
+layouts and `dashboard*` styles, HUD skins `panorama/styles/hud/**`, `dota_hud_*` and
+`ui_stat_branch`, versus screens `panorama/layout/hud/versus/**`.
+
+Run over the 73 real archives of the three categories (a Mac run of an ignored test), every
+layout, style and video is accepted; 183 layouts are pure decor and 137 carry pinned
+bindings (the 14 versus layouts also include Valve scripts). Because the bindings were read from those archives the
+acceptance of the handler-bearing layouts is by construction; with the bindings tier off,
+123 background layouts and the 14 versus layouts are refused. The earlier image-wrapper rule
+accepted 5 of the same 325 layouts and none of the 215 styles and 61 videos.
+
+Tests: synthetic hostile layouts (HTML and other unlisted panels, `url`, `layout` and
+`href` attributes, `$.DispatchEvent` and other handlers on every `on*` spelling, a pinned
+handler on the wrong id or element, script bodies, snippets, passthrough and missing
+references, a script of the archive's, two roots, deep and wide trees, huge or malformed
+values, extra blocks and a text copy of the layout), styles (about 40 hostile snippets and
+a mutation test that inserts forbidden words), videos (wrong doctype, attachments,
+chapters, unknown elements, foreign codecs, segment size lies, live streams, truncation at
+every length, byte mutations, the size bound), and archives (dependency loops, refused
+dependencies, unreferenced and nested videos, category scopes).
+
+The mutation tests also found and fixed a defect in `kv3.rs`: a corrupt count or size could
+size an allocation or overflow an offset (a panic reachable from a hostile layout).
+
 ### Letting go of a stale installation
 
 A Dota update or a Steam file check can replace or delete the file BetterFy

@@ -151,6 +151,18 @@ impl Node {
         }
     }
 
+    pub(crate) fn kind(&self) -> &str {
+        &self.kind
+    }
+
+    pub(crate) fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    pub(crate) fn children(&self) -> &[Node] {
+        &self.children
+    }
+
     fn element_children(&self) -> impl Iterator<Item = (usize, &Node)> {
         self.children
             .iter()
@@ -233,6 +245,39 @@ fn layout_from_resource(resource: panorama::Resource) -> Result<Layout, String> 
         resource,
         layout_block,
         root,
+    })
+}
+
+/// A compiled layout read for inspection: the resource, the tree and which of
+/// the two containers it came from.
+pub(crate) struct Decoded {
+    pub resource: panorama::Resource,
+    pub root: Node,
+    /// True for the current compiler's `LaCo` tree; false for the older
+    /// container that keeps the layout's XML text in `DATA`.
+    pub tree_container: bool,
+}
+
+/// Decodes a compiled layout from either container. The tree decoded is the
+/// only thing a caller may reason about: for the `LaCo` container the `DATA`
+/// block must hold no text of its own (a second copy of the layout that
+/// another reader might prefer), and the check is made here.
+pub(crate) fn decode(bytes: &[u8]) -> Result<Decoded, String> {
+    let resource = panorama::parse(bytes)?;
+    let text = panorama::data_text(&resource)?;
+    let tree_container = resource.blocks.iter().any(|block| &block.tag == b"LaCo");
+    let root = if tree_container {
+        if !text.is_empty() {
+            return Err("panorama_layout_unsupported".to_string());
+        }
+        layout_from_resource(resource.clone())?.root
+    } else {
+        text_tree(&text)?
+    };
+    Ok(Decoded {
+        resource,
+        root,
+        tree_container,
     })
 }
 
@@ -1215,6 +1260,81 @@ fn test_layout_resource(
     let layout = Layout {
         resource: panorama::Resource { version: 3, blocks },
         layout_block: if references.is_some() { 2 } else { 1 },
+        format: [7; 16],
+        root,
+    };
+    write(&layout).expect("builds")
+}
+
+/// Test helper: a bare node of any kind, so tests can build layouts the real
+/// compiler never writes.
+#[cfg(test)]
+pub(crate) fn test_node(kind: &str, name: Option<&str>, children: Vec<Node>) -> Node {
+    let mut node = Node::new(kind, name);
+    node.children = children;
+    node
+}
+
+/// Test helper: a `PANEL` element with plain-text attributes.
+#[cfg(test)]
+pub(crate) fn test_element(tag: &str, attributes: &[(&str, &str)], children: Vec<Node>) -> Node {
+    let mut node = Node::new("PANEL", Some(tag));
+    for (key, value) in attributes {
+        node.children.push(attribute_node(key, value));
+    }
+    node.children.extend(children);
+    node
+}
+
+/// Test helper: a reference attribute (`src="s2r://..."`) or, with a
+/// `file://` prefix, a passthrough one.
+#[cfg(test)]
+pub(crate) fn test_reference_attribute(key: &str, target: &str) -> Node {
+    attribute_node(key, target)
+}
+
+/// Test helper: a `STYLES` or `SCRIPTS` group of `INCLUDE` nodes.
+#[cfg(test)]
+pub(crate) fn test_includes(kind: &str, sources: &[&str]) -> Node {
+    let mut group = Node::new(kind, None);
+    for source in sources {
+        let mut include = Node::new("INCLUDE", None);
+        include.children.push(value_node(source));
+        group.children.push(include);
+    }
+    group
+}
+
+/// Test helper: a compiled layout around `root` as the current compiler
+/// writes it (`RED2`, `DATA` with an empty image table, `LaCo`), plus any
+/// extra blocks and optional text after the image table.
+#[cfg(test)]
+pub(crate) fn test_layout_bytes(
+    root: Node,
+    extra_blocks: Vec<panorama::Block>,
+    data_text: Option<&str>,
+) -> Vec<u8> {
+    let mut data = vec![0xea, 0x33, 0x30, 0xda, 0, 0];
+    if let Some(text) = data_text {
+        data.extend_from_slice(text.as_bytes());
+    }
+    let mut blocks = vec![panorama::Block {
+        tag: *b"RED2",
+        bytes: vec![7; 32],
+    }];
+    blocks.extend(extra_blocks);
+    blocks.push(panorama::Block {
+        tag: *b"DATA",
+        bytes: data,
+    });
+    blocks.push(panorama::Block {
+        tag: *b"LaCo",
+        bytes: Vec::new(),
+    });
+    let layout_block = blocks.len() - 1;
+    let layout = Layout {
+        resource: panorama::Resource { version: 3, blocks },
+        layout_block,
         format: [7; 16],
         root,
     };
