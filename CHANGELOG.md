@@ -26,6 +26,37 @@ First Windows observation of skins: three catalog skins installed together by EA
   CI only; not installed on Windows or run in Dota yet. Details:
   [docs/SKIN_ARCHIVE_AUDIT.md](docs/SKIN_ARCHIVE_AUDIT.md).
 
+### Map terrains
+- The 12 standard terrains of the catalog (ZIPs holding a whole-map
+  `maps/dota.vpk`, 34 to 53 MB) are installable. The map is a second file owned by
+  the same reviewed, journaled, recoverable transaction as the `pakNN_dir.vpk`: it
+  goes to `game/dota_<language>/maps/dota.vpk`, can be installed alone or beside a
+  hero skin, is backed up and restored exactly, is never written over a file
+  BetterFy did not write (`map_target_foreign`, checked before Steam and Dota are
+  closed), and creates and removes the `maps` folder only when it made it and it
+  is empty. Records of a build without a map are unchanged on disk. One map per
+  build. A pinned allowlist (`src-tauri/maps/`) and a whole-map analyzer back it;
+  the build review says what a map does and the upstream caveats (shows only in
+  matches, not in Demo; turn off the Dota+ terrain; a whole-file replacement may
+  go stale after a Dota patch, an unverified risk). Built and tested in CI and on a
+  Mac against the real archives; not installed on Windows or run in Dota yet.
+  Details: [docs/ENGINE_ARCHITECTURE.md](docs/ENGINE_ARCHITECTURE.md),
+  [docs/MAP_AUDIT_REPORT.md](docs/MAP_AUDIT_REPORT.md),
+  [docs/MAP_WINDOWS_TEST_PLAN.md](docs/MAP_WINDOWS_TEST_PLAN.md).
+
+### Catalog categories (wardrobe)
+- Every plain resource category of the catalog is now audited and installable through the
+  same verified pipeline as hero skins: 439 more archives in 26 categories (couriers, creeps,
+  item and TI effects, mega-kill, music and other sounds, shaders, river, trees, wards, ranks
+  and item icons, emblems, and the rest), 939 in all. Content with no hero installs whole, with no
+  opt-in mode; sounds, panorama textures and materials have their own type policies; raw
+  `pakNN_dir.vpk` items are pinned by their own hash. Cards show the Windows-pilot mark and
+  "not run in Dota yet"; the build review shows files, size and class counts per item with the
+  category's help (and the upstream tips for emblems and shaders). Panorama layouts, loose
+  cursors and fonts, tools and the two categories whose files do not exist upstream stay
+  not enabled, with the reason in [docs/CATALOG_CATEGORIES.md](docs/CATALOG_CATEGORIES.md).
+  Built and tested on a Mac only: not installed on Windows and not run in Dota.
+
 ## 0.1.4 EA.18 to EA.38 (30 September to 17 October 2026)
 
 ### Engine and mods

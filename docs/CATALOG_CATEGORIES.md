@@ -120,15 +120,17 @@ and the card, and nothing beyond it:
 
 ## Not enabled, and why
 
-These stay preview-only in the app: no half support, no install button. Each
-reason is a fact about the files or about work that is not done.
+These stay preview-only in the app: no half support, no install button (the one
+exception in the table, the terrain ZIPs, is installable through the map
+allowlist, not this one). Each reason is a fact about the files or about work
+that is not done.
 
 | Category | Items | Files | Why not |
 | --- | ---: | --- | --- |
 | `backgrounds` | 62 | raw VPKs of `vxml_c`, `vcss_c`, `webm`, `txt` | Panorama layouts, styles and video. The layout proof accepts plain image wrappers only; a separate Panorama proof is being built elsewhere (see `panorama_layout.rs`) |
 | `huds` | 4 | raw VPKs of `vcss_c` and `vtex_c` | Panorama styles; the same proof |
 | `versus-screens` | 7 | raw VPKs of `vxml_c` | Panorama layouts; the same proof |
-| `terrains` (ZIP items) | 12 | a ZIP of `maps/dota.vpk` and `Guide.txt` | A replacement of the map file itself (a map deployment); being built separately. Of the 8 raw-VPK terrains, 4 are enabled and 4 are blocked (below) |
+| `terrains` (ZIP items) | 12 | a ZIP of `maps/dota.vpk` and `Guide.txt` | Not in this allowlist: each replaces the map file itself and is installed as a map through its own allowlist (`src-tauri/maps`, see [MAP_AUDIT_REPORT.md](MAP_AUDIT_REPORT.md) and "Map terrains" in ENGINE_ARCHITECTURE). Of the 8 raw-VPK terrains, 4 are enabled here and 4 are blocked (below) |
 | `cursors` | 34 | a ZIP of a folder of loose cursor files | No VPK and no verified install target |
 | `fonts` | 10 | a ZIP of a folder of loose font files | No VPK and no verified install target |
 | `tools` | 11 | programs and scripts | Not game content; BetterFy installs no program or script |
@@ -142,7 +144,7 @@ reason is a fact about the files or about work that is not done.
 
 32 of 971 audited items (generated list in the audit report):
 
-- 12 terrain ZIPs (above).
+- 12 terrain ZIPs: not in this allowlist, installed as maps (above).
 - 11 blocked by the analyzer: 6 hero items and skins (unsafe paths and, for one,
   a script, as before) and 5 terrain and tree packs (`terrains-darkpoly`,
   `terrains-darkpoly-trees`, `terrains-lowpoly`, `terrains-lowpoly-trees`,

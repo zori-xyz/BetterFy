@@ -762,7 +762,7 @@ fn render_report(
         .count();
     writeln!(
         out,
-        "| `terrains` (ZIP items) | {terrain_zips} | each ZIP holds `maps/dota.vpk` and a second file, not a `pakNN_dir.vpk`: a map deployment, built separately |"
+        "| `terrains` (ZIP items) | {terrain_zips} | each ZIP holds `maps/dota.vpk` and a guide, not a `pakNN_dir.vpk`: a whole-map replacement, installed through the separate map allowlist (`src-tauri/maps`), not this one |"
     )
     .unwrap();
     for category in all_categories.keys() {

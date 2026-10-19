@@ -383,6 +383,8 @@ mod tests {
                 "minify.show-networth".to_string(),
             ],
             vpk_name: "pak65_dir.vpk".to_string(),
+            has_pak: true,
+            map: None,
         }
     }
 

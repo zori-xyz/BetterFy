@@ -179,18 +179,12 @@ const notEnabled: Record<string, Text> = {
   },
 };
 
-const MAP_TERRAIN: Text = {
-  ru: "Не включено: это замена файла карты (maps/dota.vpk), развёртывание карты ещё готовится.",
-  en: "Not enabled: this replaces the map file (maps/dota.vpk), and map deployment is still being built.",
-};
-
 /**
  * Why a catalog card cannot be installed, or null when its category is
  * enabled. The authority is the audited allowlist (`pilotCatalogIds`); this
  * only words the reason, so a card the allowlist lacks for another reason
  * (blocked or too large to audit) falls through to null.
  */
-export function notEnabledReason(category: string, fileKind: string): Text | null {
-  if (category === "terrains" && fileKind === "ZIP") return MAP_TERRAIN;
+export function notEnabledReason(category: string): Text | null {
   return notEnabled[category] ?? null;
 }

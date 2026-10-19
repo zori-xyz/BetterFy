@@ -617,10 +617,12 @@ out is an explicit per-skin opt-in (see "Install modes").
 
 **Allowlist.** A wardrobe item is installable only if it has an entry compiled into the
 app, like the audited scripts: a signed catalog cannot add one, and the package registry
-reserves the `wardrobe.` namespace and the catalog IDs of the entries. All entries are one
-generated JSON array, `src-tauri/wardrobe/manifests.json` (compact, sorted by ID, about
-0.87 MB for the 500 entries), and `index.json` is the interface's copy (names, authors,
-heroes, sizes; about 0.14 MB). A test requires both files to be exactly what the
+reserves the `wardrobe.` namespace and the catalog IDs of the entries. The entries are
+generated JSON arrays, compact and sorted by ID, in four files by kind of content
+(`manifests.json` for hero skins and hero items, `manifests-effects.json`,
+`manifests-world.json`, `manifests-audio-ui.json`; 2.15 MB in all for the 939 entries,
+see "Catalog categories"), and `index.json` is the interface's copy (names, authors,
+categories, heroes, sizes; about 0.33 MB). A test requires both files to be exactly what the
 generator would write for the embedded manifests, so the interface cannot list an item the
 engine does not know. An entry pins
 
@@ -778,6 +780,91 @@ the files must be canonical, and the interface copy must be derived from them.
   in Dota. Nothing here claims a skin loads or looks right in the game when BetterFy
   installs it.
 
+### Catalog categories (every audited category, not only hero skins)
+
+The wardrobe pipeline above was built for hero skins. The same pipeline now
+installs the other categories of the Dota2PornFx catalog that are plain resource
+VPKs (couriers, creeps, effects, sounds, music, shaders, rivers, trees, ranks and
+item icons, ...). The per-category table, the upstream help text and what is not
+enabled are in [`CATALOG_CATEGORIES.md`](CATALOG_CATEGORIES.md); the item-by-item audit is
+[`WARDROBE_AUDIT_REPORT.md`](WARDROBE_AUDIT_REPORT.md). Archives install as authored
+(everything the game would load), minus what the safety rules reject.
+
+**Category, scope kind, type policy.** A manifest names its `category`, and
+`skin_archive::CATEGORIES` (a table in the binary) says what that category is: its
+*scope kind* and its *type policy*. A manifest cannot claim a different scope than its
+category's, and a category that is not in the table is not enabled whatever a manifest
+says; its catalog ID must start with the category.
+
+- *Scope kind `hero`* (`heroes`, `hero-items`) is the model described above: hero-scoped,
+  shared and author-owned files, the pinned shared list, and the opt-in `.strip` mode.
+- *Scope kind `none`* (every other enabled category) has no hero. Every accepted file
+  installs. The audit still computes, against Valve's list, which files override a Valve
+  file (`shared`) and which are new (`author-owned`) and pins the list, but that split is
+  information for the review and the plan, not a policy: replacing game files is what a
+  courier or a sound pack is for. There is no `.strip` variant of such an item (its ID
+  does not resolve, the manifest has no strip result, the analyzer refuses the policy),
+  and no hero names.
+- *Type policy* narrows the compiled types a category may carry: `resources` (all of
+  `ALLOWED_TYPES` plus the proven image wrappers), `sounds` (`vsnd_c`, `vsndevts_c`
+  under `sounds/` and `soundevents/`), `textures` (`vtex_c` under `panorama/images/`;
+  ranks, item icons) and `materials` (`vmat_c`, `vtex_c`; shaders). A file of an
+  accepted type outside the policy's folders is dropped as `outside_category`
+  (none occurs in the current catalog). A policy never admits a `vxml_c`, `vcss_c` or
+  `webm` it could not before, and scripts, executables, traversal and unproven layouts
+  are rejected under every policy.
+
+**Source kind.** The manifest's `archive.kind` is `zip` (a ZIP holding one
+`pakNN_dir.vpk`, pinned twice: the ZIP and the VPK inside it) or `vpk` (280 of the allowlisted
+items are a raw `pakNN_dir.vpk` served as the item itself, no ZIP). For `vpk` the one pin
+(size, SHA-256 of the VPK) is also the download: the mirrors' URLs must end in `.vpk`,
+the transport fetches it as a raw file under the same size and hash check, and the content
+store keeps it under the same key; every build re-reads, re-hashes and re-analyzes it.
+`zip` fields on a `vpk` manifest are refused. The two mirrors and the redirect rules are
+unchanged. `ArchivePin::download_bytes` and `download_sha256` name the pin of whichever file is
+downloaded.
+
+**Leftovers.** A `.txt` inside `models/`, `materials/`, `particles/` or `sounds/` (other
+than `portraits.txt`, which Valve ships under `models/`) is a note someone left, and Valve's
+list holds no such file: it is counted as "not a game file, ignored" instead of dropped (ten
+couriers carry one). A leftover of that kind whose *name* has characters the VPK writer
+does not take no longer blocks the archive; the same name on a file the game would load
+(a compiled texture with brackets, 5 items) still does. Hero audits are unchanged by this
+except one text note in `heroes-shadow-fiend-sundered-souls` moving from dropped to
+ignored.
+
+**Allowlist layout.** The generated entries are split into four files by kind of content
+(`wardrobe::SHARDS`), so no file is much over 0.9 MB and a regeneration reads as a diff.
+A test requires every manifest to sit in the shard of its category and every enabled
+category to have exactly one shard, and that each file is the canonical form of what it
+parses to. The engine reads them as one registry (IDs unique across all).
+
+**Plan and build.** `WardrobePlanItem` carries `category` and `scope`; the build review shows
+the category's help text, the files, size and class counts per item, and no hero line or
+opt-in switch for scope `none`. Two items that write the same path with different bytes are
+a conflict under the existing review and acknowledgement, whatever their categories; a path
+with identical bytes is a duplicate. The merged VPK's 256 MiB and 65,536-entry limits are
+checked from the audited sizes before anything is downloaded (`bundle_limit_exceeded`), for
+every category (music packs are up to 92 MiB each; 14 of them together are 879 MiB).
+
+**The generator** (`wardrobe_audit::generate_wardrobe_allowlist`, local only) audits every
+item of every enabled category from the cache (`<id>.zip` or `<id>.vpk`), writes the four
+manifest files, `index.json` and a per-category section in the report, and refuses to run if a
+catalog category is neither enabled nor listed as not enabled with its reason. The local fetch
+script that fills the cache is not in the repository (like the earlier one): it downloads each
+catalog file from the GitHub mirror when the file exists there, else from Hugging Face,
+and HEAD-checks both mirrors for the same size.
+
+**What has and has not been run.** Compiles and passes unit tests on a Mac (synthetic raw
+and ZIP sources, scope kinds, every type policy, the leftover rules, the category table,
+malformed manifests, the raw-VPK fetch with fake mirrors, a mixed hero skin and packs build
+with conflicts and determinism). Run locally on a Mac and not committed: the audit of 971
+items; real plans for the smallest and the largest item of every category, a nine-item
+mix, two conflicting sound packs and selections over the bound, each built twice with
+identical bytes (the numbers are in the pull request). Not run: Windows CI for this change
+(see the PR), a download through BetterFy's own transport of the new archives, an install on
+Windows, and anything in Dota.
+
 ### Letting go of a stale installation
 
 A Dota update or a Steam file check can replace or delete the file BetterFy
@@ -861,6 +948,158 @@ beside it; and the notice wording in the browser preview against the demo bridge
 run: Windows CI for this change (see the PR), an install next to a real Minify output on
 Windows, and whether Dota loads BetterFy's `pak65` beside Minify's `pak66` or resolves
 conflicts in the order the guide describes.
+
+### Map terrains: `maps/dota.vpk` as a second owned target
+
+A "standard" terrain of the Dota2PornFx catalog is not a skin. It is a complete
+Valve map package, `maps/dota.vpk` (34-53 MB), that the game reads in place of
+its own. The project's guide
+(https://d2pfxwiki.pages.dev/en/troubleshoot.html, "Issues with terrains") says
+what to do by hand: move the `maps` folder holding `dota.vpk` into the language
+folder, do not move or rename `dota.vpk`, standard terrains show only in matches
+and not in Demo mode, and the Dota+ terrain must be switched off in the game
+settings or it conflicts with the mod. The ZIP's own `Guide.txt` says the same
+about the folder (`game/dota_<language>/maps`). BetterFy installs that one file
+as a second owned target of the same reviewed, journaled, crash-recoverable
+transaction that owns `pakNN_dir.vpk`. The eight raw `pakNN_dir.vpk` terrains of
+the catalog are ordinary VPKs and take the generic path, not this one.
+
+**Where it goes and what is never done.** The target is
+`game/dota_<language>/maps/dota.vpk`, below the same language folder as the pak
+file. The map is never merged into the pak file and is never renamed. BetterFy
+writes it only when nothing is at that path, or when the file there is exactly
+the one BetterFy wrote (same hash as its ownership record). Any other
+`maps/dota.vpk` (Valve's, another tool's, the player's, even byte-identical to the
+new map: BetterFy cannot prove it wrote it) stops the install with
+`map_target_foreign` before anything is written, and the builder checks this
+before Steam and Dota are shut down (`preview_tree_language` takes `withMap`).
+BetterFy backs up and replaces only files it owns; there is no "back up a foreign
+map" path, because the semantics of overwriting a Valve-shipped or user file could
+not be shown to be reversible to the exact original. A `maps` that is a file or
+another non-folder is `map_folder_invalid`; a link (symlink, and on Windows any
+reparse point or junction) at the `maps` folder or the map file is
+`deployment_path_unsafe`. The `maps` folder is created only when needed.
+
+**Records.** One journal and one ownership record still describe an operation;
+nothing else was added. The changes are additive and defaulted, and a build
+without a map writes records that are byte-identical to before (a test pins it):
+
+| Record | New field | Meaning |
+| --- | --- | --- |
+| journal | `map` (absent without a map) | `installedSha256` (absent value: the operation removed BetterFy's map), `beforeSha256`, `backupRelativePath` (`before-map.vpk`), `mapsDirectoryCreated` |
+| journal | `noPak` (absent when false) | the build has no `pakNN_dir.vpk`; `installedSha256` is empty |
+| ownership | `map` (absent without a map) | `installedSha256` of the owned map |
+| ownership | `noPak` (absent when false) | BetterFy owns only a map; `vpkName` and `installedSha256` are empty |
+
+For a map-only build the receipt's `installedSha256` is the map's hash and
+`vpkName` is empty (`hasPak` false). With a pak the pak's hash identifies the
+build, as before, and the map is reported in `map` (`file`, `installedSha256`,
+`beforeSha256`, `backupVerified`). Each record is validated for contradictions
+(`deployment_journal_invalid`): a name for a pak the operation never touched, a
+backup without a hash, an operation that leaves nothing installed. An older
+record that predates the fields means "a pak, no map".
+
+**Transaction.** Each operation changes up to two parts. A part has a hash before
+(what BetterFy owned) and a hash after (what the build leaves): absent to present
+is an install, present to present an update, present to absent a removal (a build
+that drops its map, or a map-only build replacing a pak build, removes the file
+BetterFy owned, with a backup like any change). The steps are the old ones for
+every part: check, create the folders the build needs and record whether this
+operation created them, back up each owned file and read the backup back, write
+the journal (`backed_up`), write and verify a temporary copy beside each target,
+journal `prepared`, publish the pak and then the map (Windows write-through
+replace or move), read both back, write the ownership record, journal
+`committed`. Rollback checks every part first and changes nothing if one is not
+as the operation left it (`rollback_conflict`), puts the map back before the pak,
+restores the previous ownership (the chain is validated before the first file
+moves, which the single-file code did after), removes only empty folders the
+operation created (the `maps` folder, then the language folder) and verifies
+every part equals its "before". A part that an earlier restore attempt already
+put back is accepted, so a restore that stopped between the two files is finished
+by the next one; a file that is neither state is still a conflict.
+Recovery of an operation that never committed works per part: a part found as it
+was is left alone, one found as the operation leaves it is rolled back, anything
+else is `deployment_recovery_conflict`; leftover temporary copies are removed. A
+stale install (`release_stale_deployment`) is one where any file BetterFy owns,
+pak or map, is missing or changed; letting go forgets the whole record and touches
+no game file. Failures were injected before publish, between the two publishes and
+after both (`FailurePoint::BetweenPublishes` exists only in tests); the stress
+stop points the app offers to a developer account are unchanged.
+
+**Plan identity.** A build without a map keeps its bundle plan's identity. A build
+with a map has `planId = sha256` over a length-prefixed tag, the bundle plan's
+identity (empty for a map alone), the full ordered package list, the map's engine
+ID, its pinned SHA-256 and the analyzer's contents identity. So the same pak with
+a different map, or without one, is a different reviewed plan, and the merged VPK
+and its hash are unchanged by adding a map. The plan carries `hasPak`, `map` (one
+`MapPlanItem`) and the full `packageIds`; the deployment records those ids in the
+journal and ownership, and installed-state checks rebuild the build from them and
+compare through `VerifiedTreeVpk::matches_receipt`. Staging copies both files
+(`pak66_dir.vpk`, `maps/dota.vpk`) and reopens them, and the install compares the
+reopened bytes with the reviewed ones.
+
+**One map at a time.** Two maps in one selection are refused with
+`map_terrain_conflict` before anything is downloaded. The catalog already puts all
+terrains in one slot, so the interface offers the choice first.
+
+**The allowlist.** `src-tauri/maps/manifests.json` (generated, compact, sorted by
+ID) and `src-tauri/maps/index.json` (the interface's copy) are kept apart from the
+wardrobe files on purpose; `map_terrain.rs` loads and validates them, and the
+package registry reserves the `map.` namespace and these catalog IDs. An entry
+pins the ZIP (size, SHA-256, the mirrors that served exactly those bytes), the
+`maps/dota.vpk` inside it and the `Guide.txt` beside it (size and SHA-256), and
+what the analyzer found. The download uses the same transport and trusted hosts as
+a skin; the ZIP must hold exactly the two pinned entries; only the verified VPK is
+stored. Every build re-reads it from the content store (size and SHA-256), re-runs
+`map_package::analyze` and requires the result to equal the pinned audit
+(`map_audit_mismatch` otherwise).
+
+`map_package.rs` is not the skin analyzer, and its shared-path logic does not
+apply. It reads the VPK (version 1 or 2, every entry embedded, section sizes that
+account for every byte of the file, a CRC check of every entry), refuses
+signature or archive-checksum sections and side archives, and requires lower-case
+ASCII paths without empty or dot segments, all under `maps/`, no duplicates,
+`maps/dota.vmap_c` present, and only the 12 compiled-map file types seen in the
+audited archives. Scripts and programs by extension are refused as
+`map_entry_script`. That is a check on names and types: an entity lump
+(`vents_c`) could still name scripts the game itself ships, and nothing in the
+report says a map is harmless in game. The report records the entry count, the
+types, the folders under `maps/`, a contents identity and how many of the map's
+paths Valve's own `pak01_dir.vpk` file list also has (0 of 1,214 to 2,308 in every
+audited map: the package is a separate namespace; what it replaces is the game's
+map package as a whole, a whole-file replacement that a Dota patch could make
+stale, which is an unverified risk and not a measured one).
+
+**The generator.** The ignored tests `map_audit::generate_map_allowlist` and
+`spot_check_embedded_maps` (local only; the environment variables are listed in
+the file header and `scripts/map-terrains/fetch_maps.py` produces the fetch
+report) write the two JSON files and [`MAP_AUDIT_REPORT.md`](MAP_AUDIT_REPORT.md)
+from archives downloaded on a Mac, and check the app's own extraction and load path
+against them. Output carries no timestamp. Ordinary tests check on every run that
+the embedded files are canonical and valid.
+
+**What has and has not been run.**
+
+- Compiles, passes clippy and the unit tests on macOS (also with the
+  `internal-stress-test` feature): installs of a map alone, of a pak and a map, and
+  of each transition between the two (added, changed, dropped, the pak dropped for a
+  map alone) with exact-byte restore step by step; refusal of a foreign file, a
+  non-folder and (on Unix) links in the map path with nothing written; cleanup of
+  empty folders and refusal to remove non-empty or pre-existing ones; stale and
+  missing maps; failures before publish, between the two publishes and after both,
+  each recovered; a restore that stopped halfway; records of a build without a map
+  unchanged on disk; plan identity and staging with synthetic maps; the analyzer
+  against hostile synthetic packages.
+- Run locally on a Mac and not committed: the 12 real ZIPs (fetched with `curl`,
+  GitHub and Hugging Face both byte-identical by SHA-256 for all 12) through the
+  generator, extraction, the content store and plans, and a plan of one real map
+  beside a real hero skin (numbers in the test plan). The archives did not go
+  through BetterFy's transport.
+- Not run: Windows CI for this change (see the PR), an install of a map on Windows
+  (so no Windows rule above is observed: write-through replace of a 50 MB file, the
+  reparse-point check, removal of the `maps` folder), and anything in Dota: whether
+  the game mounts `dota_<language>/maps/dota.vpk` from BetterFy's install, shows
+  the map in a match, and what a later Dota patch does to it.
 
 ### Installed profile
 

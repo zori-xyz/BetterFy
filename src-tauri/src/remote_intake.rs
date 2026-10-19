@@ -308,25 +308,65 @@ fn fetch_wardrobe_archive_with<T: DownloadTransport>(
     manifest: &crate::wardrobe::WardrobeManifest,
     cancelled: &AtomicBool,
 ) -> Result<Vec<u8>, String> {
+    // A ZIP is inspected after the download; a raw VPK is pinned by its own
+    // size and SHA-256 and checked by the analyzer on every build.
+    let file_name = match manifest.archive.kind {
+        crate::wardrobe::SourceKind::Zip => "wardrobe-archive.zip",
+        crate::wardrobe::SourceKind::Vpk => "wardrobe-archive.vpk",
+    };
+    fetch_mirrors_with(
+        transport,
+        &manifest.id,
+        &manifest.source.urls,
+        manifest.archive.download_bytes(),
+        manifest.archive.download_sha256(),
+        file_name,
+        cancelled,
+    )
+}
+
+/// Downloads a map terrain's pinned ZIP from the mirrors of its allowlist
+/// entry, with the same rules as a wardrobe archive.
+pub(crate) fn fetch_pinned_map_archive(
+    manifest: &crate::map_terrain::MapManifest,
+    cancelled: &AtomicBool,
+) -> Result<Vec<u8>, String> {
+    fetch_mirrors_with(
+        &PinnedHttpsTransport::WARDROBE,
+        &manifest.id,
+        &manifest.source.urls,
+        manifest.archive.zip_bytes,
+        &manifest.archive.zip_sha256,
+        "map-archive.zip",
+        cancelled,
+    )
+}
+
+fn fetch_mirrors_with<T: DownloadTransport>(
+    transport: &T,
+    package_id: &str,
+    urls: &[String],
+    zip_bytes: u64,
+    zip_sha256: &str,
+    file_name: &str,
+    cancelled: &AtomicBool,
+) -> Result<Vec<u8>, String> {
     let mut last_error = "download_url_invalid".to_string();
-    for url in &manifest.source.urls {
-        // A ZIP is inspected after the download; a raw VPK is pinned by its
-        // own size and SHA-256 and checked by the analyzer on every build.
-        let (format, file_name, media_type) = match manifest.archive.kind {
-            crate::wardrobe::SourceKind::Zip => ("zip", "wardrobe-archive.zip", "application/zip"),
-            crate::wardrobe::SourceKind::Vpk => {
-                ("raw", "wardrobe-archive.vpk", "application/octet-stream")
-            }
-        };
+    let (format, media_type) = if file_name.ends_with(".vpk") {
+        ("raw", "application/octet-stream")
+    } else {
+        ("zip", "application/zip")
+    };
+    for url in urls {
         let spec = RemotePackageSpec {
-            package_id: manifest.id.clone(),
+            package_id: package_id.to_string(),
             version: "pinned-archive".to_string(),
             format: format.to_string(),
             file_name: file_name.to_string(),
             download_url: url.clone(),
             media_type: media_type.to_string(),
-            size: manifest.archive.download_bytes(),
-            sha256: manifest.archive.download_sha256().to_string(),
+            size: zip_bytes,
+            sha256: zip_sha256.to_string(),
         };
         match fetch_verified_binary_with(transport, &spec, cancelled) {
             Ok(bytes) => return Ok(bytes),

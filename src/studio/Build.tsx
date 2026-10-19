@@ -31,7 +31,7 @@ import { useBuildName } from "./builder/buildName";
 import { BuildJournal } from "./builder/BuildJournal";
 import { journal } from "./builder/journal";
 import { demoActive } from "./builder/demo";
-import { findPackage, packageName } from "./packages";
+import { findPackage, isMapPackage, packageName } from "./packages";
 import "./builder/builder.css";
 
 const emptyLines: Array<[string, string, string, string]> = [
@@ -182,6 +182,7 @@ export default function Build({
         .filter((item) => silencing(item.packageId))
         .reduce((sum, item) => sum + item.effectiveResources, 0)
     : 0;
+  const installedHasMapFile = (pilot?.installedPackageIds ?? []).some(isMapPackage);
   const installedMods = (pilot?.installedPackageIds ?? []).flatMap((packageId) => {
     const catalogId = findPackage(packageId)?.catalogId;
     return catalogId && modById.has(catalogId) ? [modById.get(catalogId)!] : [];
@@ -275,6 +276,8 @@ export default function Build({
                 <span>
                   {mod.categoryName[language]}
                   {mod.variants.length > 1 && ` · ${mod.variants[variants[mod.id] ?? 0]?.name}`}
+                  {isMapPackage(mod.id) &&
+                    ` · ${isRu ? "карта, отдельный файл" : "map, its own file"} maps/dota.vpk`}
                 </span>
               </button>
               <span className={`b-row-flag ${isPilotMod(mod.id) ? "is-pilot" : "is-preview"}`}>
@@ -403,8 +406,8 @@ export default function Build({
                 <h2>{isRu ? "Готово. Запускай Dota" : "Done. Go play Dota"}</h2>
                 <p>
                   {isRu
-                    ? `${modCount(installedMods.length || pilotIds.length, language)} в одном файле${pilot?.installedLanguage ? ` · -language ${pilot.installedLanguage}` : ""}`
-                    : `${modCount(installedMods.length || pilotIds.length, language)} in one file${pilot?.installedLanguage ? ` · -language ${pilot.installedLanguage}` : ""}`}
+                    ? `${modCount(installedMods.length || pilotIds.length, language)} ${installedHasMapFile ? "(карта лежит отдельным файлом)" : "в одном файле"}${pilot?.installedLanguage ? ` · -language ${pilot.installedLanguage}` : ""}`
+                    : `${modCount(installedMods.length || pilotIds.length, language)} ${installedHasMapFile ? "(the map is its own file)" : "in one file"}${pilot?.installedLanguage ? ` · -language ${pilot.installedLanguage}` : ""}`}
                 </p>
               </div>
               <button className="s-btn s-btn-primary b-play" disabled={busy} onClick={launchDota}>

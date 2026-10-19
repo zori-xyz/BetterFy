@@ -218,8 +218,29 @@ export type GameDeploymentReceipt = {
   rolledBack: boolean;
   bundlePlanId: string | null;
   packageIds: string[];
-  /** The file BetterFy owns in the language folder, e.g. `pak65_dir.vpk`. */
+  /**
+   * The `pakNN_dir.vpk` BetterFy owns in the language folder, e.g.
+   * `pak65_dir.vpk`. Empty for a map-only build.
+   */
   vpkName: string;
+  /** Whether the build writes a `pakNN_dir.vpk` at all (a map alone does not). */
+  hasPak: boolean;
+  /**
+   * The map package of the operation, written as `maps/dota.vpk` in the same
+   * language folder; null for a build without a map. For a map-only build
+   * `installedSha256` is the map's hash.
+   */
+  map: MapDeployment | null;
+};
+
+/** What an operation did to `maps/dota.vpk` (src-tauri/src/game_deployment.rs). */
+export type MapDeployment = {
+  /** Always `maps/dota.vpk`, below the language folder. */
+  file: string;
+  /** The map after the operation; null when the operation removed BetterFy's map. */
+  installedSha256: string | null;
+  beforeSha256: string | null;
+  backupVerified: boolean;
 };
 
 /** Whose a `pak*` file in a language folder looks like (names only, never contents). */
@@ -243,6 +264,10 @@ export type LanguageSlotReport = {
   /** The name BetterFy would pick for a new install right now. */
   nextName: string | null;
   slotFull: boolean;
+  /** `maps/dota.vpk` of this language folder, when something is there (size and time only). */
+  map: { bytes: number; modifiedMs: number | null; owner: "betterfy" | "unknown" } | null;
+  /** BetterFy's recorded map; null when it owns none. */
+  ownedMap: "intact" | "missing" | "replaced" | null;
 };
 
 export type StaleDeploymentRelease = {
@@ -352,6 +377,39 @@ export type WardrobeConflict = {
   shadowedPackageIds: string[];
 };
 
+/** A map terrain in a reviewed plan (src-tauri/src/map_terrain.rs). */
+export type MapPlanItem = {
+  /** The engine ID, `map.<name>`. */
+  packageId: string;
+  catalogId: string;
+  /** Where the file goes below the language folder: `maps/dota.vpk`. */
+  file: string;
+  bytes: number;
+  sha256: string;
+  /** The mirrors the archive may come from, in the order they are tried. */
+  sourceUrls: string[];
+  archiveSha256: string;
+  catalogSnapshot: string;
+  /** How permission to use the item was established, as recorded. */
+  permission: string;
+  verifiedLanguages: string[];
+  compatibilityNote: string | null;
+  valveListEntries: number;
+  /** Map paths that Valve's own file list also has (0 for every audited map). */
+  valveOverlap: number;
+  report: {
+    vpkVersion: number;
+    totalBytes: number;
+    entries: number;
+    payloadBytes: number;
+    zeroLength: number;
+    extensions: Record<string, number>;
+    subfolders: Record<string, number>;
+    identity: string;
+    mainMap: boolean;
+  };
+};
+
 export type TreePilotPlan = {
   planId: string;
   packageId: string;
@@ -362,6 +420,10 @@ export type TreePilotPlan = {
   resourceBytes: number;
   vpkBytes: number;
   vpkSha256: string;
+  /** False for a map-only build: no `pakNN_dir.vpk` is written. */
+  hasPak: boolean;
+  /** The map terrain of the build, written as `maps/dota.vpk`; null without one. */
+  map: MapPlanItem | null;
   bundlePlanId: string;
   packageCount: number;
   duplicateResources: number;
@@ -475,6 +537,14 @@ export type DeploymentEvidenceReport = {
     updatedAtMs: number;
     errorCode: string | null;
     vpkName: string;
+    hasPak: boolean;
+    map: {
+      file: string;
+      beforeSha256: string | null;
+      installedSha256: string | null;
+      backupVerified: boolean;
+      rollbackVerified: boolean;
+    } | null;
   }>;
   steamEntries: Array<{
     sequence: number;
@@ -521,7 +591,12 @@ export interface EngineBridge {
   beginTreePilotDownload(packageIds: string[], gamePath?: string): Promise<TreePilotDownloadStatus>;
   treePilotDownloadStatus(): Promise<TreePilotDownloadStatus | null>;
   cancelTreePilotDownload(): Promise<TreePilotDownloadStatus>;
-  previewTreeLanguage(gamePath: string, language: GameLanguage): Promise<void>;
+  /**
+   * Read-only checks of the language folder, before Steam and Dota are closed.
+   * `withMap`: the build carries a map, so `maps/dota.vpk` must be free or
+   * BetterFy's own.
+   */
+  previewTreeLanguage(gamePath: string, language: GameLanguage, withMap?: boolean): Promise<void>;
   /** Read-only; with an install, that install's folder is described whatever `language` says. */
   inspectLanguageSlot(gamePath: string, language?: GameLanguage): Promise<LanguageSlotReport>;
   installTreePilot(
@@ -1166,12 +1241,12 @@ export const engineBridge: EngineBridge = {
       invoke<TreePilotDownloadStatus>("cancel_tree_pilot_download"),
     );
   },
-  async previewTreeLanguage(gamePath, language) {
-    if (!isTauriRuntime()) return mockEngine.previewTreeLanguage(gamePath, language);
+  async previewTreeLanguage(gamePath, language, withMap) {
+    if (!isTauriRuntime()) return mockEngine.previewTreeLanguage(gamePath, language, withMap);
     const { invoke } = await import("@tauri-apps/api/core");
     return guardedEngineCall(
       "preview_tree_language",
-      invoke<void>("preview_tree_language", { gamePath, language }),
+      invoke<void>("preview_tree_language", { gamePath, language, withMap: withMap ?? false }),
     );
   },
   async inspectLanguageSlot(gamePath, language) {

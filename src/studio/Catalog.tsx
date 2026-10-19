@@ -11,6 +11,7 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  TriangleAlert,
   Volume2,
   X,
 } from "lucide-react";
@@ -29,6 +30,7 @@ import { categoryHelp, notEnabledReason } from "./categoryHelp";
 import { findPackage } from "./packages";
 import { formatBytes } from "./WardrobeReview";
 import { Empty, Media, Modal, ModCard, PageHead } from "./ui";
+import { isMapPackage } from "./packages";
 
 export type CatalogFilters = {
   domain: Domain;
@@ -339,7 +341,7 @@ export function ModDetails({
   const audited = mod.domain === "wardrobe" && pilot ? findPackage(mod.id) : undefined;
   const help = mod.domain === "wardrobe" ? categoryHelp(mod.category) : null;
   const unavailable =
-    mod.domain === "wardrobe" && !pilot ? notEnabledReason(mod.category, mod.fileKind ?? "") : null;
+    mod.domain === "wardrobe" && !pilot ? notEnabledReason(mod.category) : null;
   return (
     <Modal
       className="s-detail-dialog"
@@ -413,6 +415,16 @@ export function ModDetails({
           <div className="s-inline-note">
             <Info />
             <p>{unavailable[language]}</p>
+          </div>
+        )}
+        {isMapPackage(mod.id) && (
+          <div className="s-inline-note warning">
+            <TriangleAlert />
+            <p>
+              {isRu
+                ? "Это целая карта Dota, а не облик: BetterFy ставит один файл, maps/dota.vpk, и откатывает его. В Dota установка через BetterFy ещё не запускалась. По инструкции источника карта видна только в матчах (не в «Демо»), а террейн Dota+ нужно отключить в настройках игры. После патча Dota такой файл может перестать подходить игре; это непроверенный риск."
+                : "This is a whole Dota map, not a skin: BetterFy installs one file, maps/dota.vpk, and can restore it. A BetterFy install has not been run in Dota yet. By the source's guide the map shows only in matches (not in Demo), and the Dota+ terrain must be turned off in the game settings. After a Dota patch such a file may stop fitting the game; that is an unverified risk."}
+            </p>
           </div>
         )}
         <div className="s-detail-facts">

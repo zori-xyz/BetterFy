@@ -43,7 +43,7 @@ import {
 import { setEngineActive } from "./engineActivity";
 import { journal } from "./builder/journal";
 import { noticeFor, slotCodes } from "./builder/notices";
-import { installedLine, slotNote } from "./builder/slot";
+import { installedLine, installedMapLine, slotNote } from "./builder/slot";
 import { demoActive, demoBridge, isDesktopRuntime, useDemoSettings } from "./builder/demo";
 import { usePhrase } from "./builder/phrases";
 import { NoticeCard } from "./builder/NoticeCard";
@@ -52,6 +52,7 @@ import { buildLanguages, languageLabel as languageName } from "./builder/languag
 import { Choice, ChoiceCards, ChoiceMenu, type ChoiceOption } from "./builder/Choice";
 import { getStorageItem, setStorageItem } from "../storage";
 import { WardrobeReview, formatBytes } from "./WardrobeReview";
+import { MapReview } from "./MapReview";
 
 const LANGUAGE_KEY = "betterfy:build-language";
 // "auto" follows the language Steam starts Dota in, "manual" keeps the
@@ -168,8 +169,11 @@ export default function TreePilot({
   const languageFieldRef = useRef<HTMLDivElement>(null);
   const [installedLanguage, setInstalledLanguage] = useState<GameLanguage | null>(null);
   const [installedPackageIds, setInstalledPackageIds] = useState<string[]>([]);
-  // The file BetterFy owns in the language folder (pakNN_dir.vpk).
+  // The file BetterFy owns in the language folder (pakNN_dir.vpk); empty for a
+  // build that is a map alone.
   const [installedVpkName, setInstalledVpkName] = useState<string | null>(null);
+  // The build also owns maps/dota.vpk in that folder.
+  const [installedHasMap, setInstalledHasMap] = useState(false);
   // Read-only summaries of the language folder: one to explain a refusal, one
   // to say before installing where BetterFy's file will go.
   const [errorSlot, setErrorSlot] = useState<LanguageSlotReport | null>(null);
@@ -341,6 +345,7 @@ export default function TreePilot({
         setOperationId(receipt?.operationId ?? null);
         setInstalledLanguage(receipt?.language ?? null);
         setInstalledVpkName(receipt?.vpkName ?? null);
+        setInstalledHasMap(Boolean(receipt?.map?.installedSha256));
         setInstalledPackageIds(receipt?.packageIds ?? []);
         setVerifiedInstall(Boolean(receipt));
         setPackageVerified(receipt?.packageVerified ?? false);
@@ -545,7 +550,7 @@ export default function TreePilot({
       `game/dota_${selectedLanguage}`,
     );
     try {
-      await bridge.previewTreeLanguage(installation.path, selectedLanguage);
+      await bridge.previewTreeLanguage(installation.path, selectedLanguage, Boolean(plan.map));
       if (selectedProfile) {
         const profile = profiles.find((item) => item.profileToken === selectedProfile);
         if (!profile || !["ready", "already_managed"].includes(profile.status))
@@ -557,9 +562,17 @@ export default function TreePilot({
       if (!runtime.patchReady) throw new Error("runtime_busy");
       say(
         "step",
-        "Сохраняем исходный файл и записываем сборку.",
-        "Backing up the original file and writing the build.",
-        previewSlot?.owned?.state === "intact" ? previewSlot.owned.name : previewSlot?.nextName ?? undefined,
+        plan.map && !plan.hasPak
+          ? "Записываем карту: maps/dota.vpk. Чужой файл на этом месте BetterFy не тронет."
+          : "Сохраняем исходный файл и записываем сборку.",
+        plan.map && !plan.hasPak
+          ? "Writing the map: maps/dota.vpk. BetterFy leaves a file of someone else's at that place alone."
+          : "Backing up the original file and writing the build.",
+        plan.hasPak
+          ? previewSlot?.owned?.state === "intact"
+            ? previewSlot.owned.name
+            : (previewSlot?.nextName ?? undefined)
+          : undefined,
       );
       const receipt = await bridge.installTreePilot(
         installation.path,
@@ -570,20 +583,29 @@ export default function TreePilot({
       );
       if (!receipt.committed || !receipt.backupVerified) throw new Error("deployment_unverified");
       installed = true;
-      say(
-        "ok",
-        "Сборка записана, бэкап проверен.",
-        "Build written, backup verified.",
-        `dota_${receipt.language}/${receipt.vpkName}`,
-      );
+      // The journal names every file the build wrote and where.
+      const written = [
+        ...(receipt.hasPak ? [`dota_${receipt.language}/${receipt.vpkName}`] : []),
+        ...(receipt.map?.installedSha256
+          ? [`dota_${receipt.language}/${receipt.map.file}`]
+          : []),
+      ].join(", ");
+      say("ok", "Сборка записана, бэкап проверен.", "Build written, backup verified.", written);
       // Which file BetterFy took and what it left alone, from a read-only look
       // at the folder; the install does not depend on it.
       const slotAfter = await bridge
         .inspectLanguageSlot(installation.path, receipt.language)
         .catch(() => null);
-      const [lineRu, lineEn] = installedLine(receipt.vpkName, receipt.language, slotAfter);
-      say("ok", lineRu, lineEn);
+      if (receipt.hasPak) {
+        const [lineRu, lineEn] = installedLine(receipt.vpkName, receipt.language, slotAfter);
+        say("ok", lineRu, lineEn);
+      }
+      if (receipt.map?.installedSha256) {
+        const [lineRu, lineEn] = installedMapLine(receipt.language);
+        say("ok", lineRu, lineEn, `sha256 ${receipt.map.installedSha256.slice(0, 16)}…`);
+      }
       setInstalledVpkName(receipt.vpkName);
+      setInstalledHasMap(Boolean(receipt.map?.installedSha256));
       setDotaPatched(false);
       setOperationId(receipt.operationId);
       setInstalledLanguage(receipt.language);
@@ -700,8 +722,12 @@ export default function TreePilot({
         );
       say(
         "step",
-        "Возвращаем исходный файл из бэкапа.",
-        "Restoring the original file from the backup.",
+        installedHasMap
+          ? "Возвращаем исходные файлы из бэкапа, в том числе карту."
+          : "Возвращаем исходный файл из бэкапа.",
+        installedHasMap
+          ? "Restoring the original files from the backup, the map included."
+          : "Restoring the original file from the backup.",
       );
       const receipt = await bridge.rollbackGameDeployment(installation.path, operationId);
       if (!receipt.rolledBack) throw new Error("rollback_failed");
@@ -710,6 +736,7 @@ export default function TreePilot({
       setOperationId(null);
       setInstalledLanguage(null);
       setInstalledVpkName(null);
+      setInstalledHasMap(false);
       setInstalledPackageIds([]);
       setVerifiedInstall(false);
       setPackageVerified(false);
@@ -798,6 +825,7 @@ export default function TreePilot({
       setOperationId(null);
       setInstalledLanguage(null);
       setInstalledVpkName(null);
+      setInstalledHasMap(false);
       setInstalledPackageIds([]);
       setVerifiedInstall(false);
       setPackageVerified(false);
@@ -956,6 +984,8 @@ export default function TreePilot({
       const current = await bridge.currentTreePilot(installation.path);
       setOperationId(current?.operationId ?? null);
       setInstalledLanguage(current?.language ?? null);
+      setInstalledVpkName(current?.vpkName ?? null);
+      setInstalledHasMap(Boolean(current?.map?.installedSha256));
       setInstalledPackageIds(current?.packageIds ?? []);
       setVerifiedInstall(Boolean(current));
       setPackageVerified(current?.packageVerified ?? false);
@@ -1271,9 +1301,15 @@ export default function TreePilot({
       busy: phase === "download",
       label: isRu ? "Скачать и сверить файлы" : "Download and check files",
       hint: plan
-        ? isRu
-          ? `${plan.resourceCount} файлов · ${formatBytes(plan.vpkBytes, true)}`
-          : `${plan.resourceCount} files · ${formatBytes(plan.vpkBytes, false)}`
+        ? plan.hasPak
+          ? isRu
+            ? `${plan.resourceCount} файлов · ${formatBytes(plan.vpkBytes, true)}${plan.map ? ` + карта ${formatBytes(plan.map.bytes, true)}` : ""}`
+            : `${plan.resourceCount} files · ${formatBytes(plan.vpkBytes, false)}${plan.map ? ` + map ${formatBytes(plan.map.bytes, false)}` : ""}`
+          : plan.map
+            ? isRu
+              ? `карта · ${formatBytes(plan.map.bytes, true)}`
+              : `map · ${formatBytes(plan.map.bytes, false)}`
+            : ""
         : isRu
           ? "Только проверенные файлы из каталога"
           : "Only verified catalog files",
@@ -1284,7 +1320,7 @@ export default function TreePilot({
       label: isRu ? "Записать с бэкапом" : "Write with a backup",
       hint:
         operationId && installedLanguage
-          ? `dota_${installedLanguage}${installedVpkName ? `/${installedVpkName}` : ""}`
+          ? `dota_${installedLanguage}${installedVpkName ? `/${installedVpkName}` : ""}${installedHasMap ? `${installedVpkName ? " + " : "/"}maps/dota.vpk` : ""}`
           : isRu
             ? "Исходный файл можно вернуть"
             : "The original can be restored",
@@ -1697,6 +1733,13 @@ export default function TreePilot({
           onToggleKeepShared={toggleKeepShared}
         />
       )}
+      {plan && !operationId && plan.map && (
+        <MapReview
+          plan={plan}
+          language={selectedLanguage}
+          packageLabel={packageLabel}
+        />
+      )}
       {plan && !operationId && (
         <div className="b-fields">
           <div className="b-field" ref={languageFieldRef}>
@@ -1796,6 +1839,13 @@ export default function TreePilot({
                       ? "Файл записан, но Steam не настроен до конца. Выбери профиль и повтори."
                       : "The file is written, but Steam setup did not finish. Pick a profile and retry."}
           </p>
+          {installedHasMap && (
+            <p className="b-pilot-hint">
+              {isRu
+                ? "В игре стоит карта (maps/dota.vpk). Она видна только в матчах, не в «Демо». Отключи террейн Dota+ в настройках игры. Как карта работает в Dota после установки через BetterFy, ещё не проверено."
+                : "A map (maps/dota.vpk) is in the game. It shows only in matches, not in Demo. Turn off the Dota+ terrain in the game settings. How the map works in Dota after a BetterFy install has not been checked yet."}
+            </p>
+          )}
           {installedLanguage === "betterfy" && (
             <p className="b-pilot-blocker is-warning">
               <FlaskConical />
@@ -1949,17 +1999,31 @@ export default function TreePilot({
               </ol>
             </div>
             <dl className="b-facts">
-              <div>
-                <dt>{isRu ? "Файл" : "File"}</dt>
-                <dd>
-                  <code>
-                    {selectedLanguage
-                      ? `game/dota_${selectedLanguage}/${plannedFile}`
-                      : plannedFile}
-                  </code>
-                </dd>
-              </div>
-              {planNote && (
+              {plan.hasPak && (
+                <div>
+                  <dt>{isRu ? "Файл" : "File"}</dt>
+                  <dd>
+                    <code>
+                      {selectedLanguage
+                        ? `game/dota_${selectedLanguage}/${plannedFile}`
+                        : plannedFile}
+                    </code>
+                  </dd>
+                </div>
+              )}
+              {plan.map && (
+                <div>
+                  <dt>{isRu ? "Файл карты" : "Map file"}</dt>
+                  <dd>
+                    <code>
+                      {selectedLanguage
+                        ? `game/dota_${selectedLanguage}/${plan.map.file}`
+                        : plan.map.file}
+                    </code>
+                  </dd>
+                </div>
+              )}
+              {planNote && plan.hasPak && (
                 <div className="b-facts-note">
                   <dt>{isRu ? "Рядом" : "Beside"}</dt>
                   <dd>{planNote}</dd>
@@ -1968,7 +2032,9 @@ export default function TreePilot({
               <div>
                 <dt>{isRu ? "Состав" : "Bundle"}</dt>
                 <dd>
-                  {plan.packageCount} · {plan.resourceCount} {isRu ? "файлов" : "files"}
+                  {plan.packageCount}
+                  {plan.hasPak && ` · ${plan.resourceCount} ${isRu ? "файлов" : "files"}`}
+                  {plan.map && ` · ${isRu ? "карта отдельным файлом" : "map as its own file"}`}
                 </dd>
               </div>
               <div>
@@ -1977,16 +2043,34 @@ export default function TreePilot({
                   {plan.duplicateResources + plan.overriddenResources || (isRu ? "нет" : "none")}
                 </dd>
               </div>
-              <div>
-                <dt>{isRu ? "Размер" : "Size"}</dt>
-                <dd>{formatBytes(plan.vpkBytes, isRu)}</dd>
-              </div>
-              <div>
-                <dt>SHA-256</dt>
-                <dd>
-                  <code>{plan.vpkSha256.slice(0, 16)}…</code>
-                </dd>
-              </div>
+              {plan.hasPak && (
+                <>
+                  <div>
+                    <dt>{isRu ? "Размер" : "Size"}</dt>
+                    <dd>{formatBytes(plan.vpkBytes, isRu)}</dd>
+                  </div>
+                  <div>
+                    <dt>SHA-256</dt>
+                    <dd>
+                      <code>{plan.vpkSha256.slice(0, 16)}…</code>
+                    </dd>
+                  </div>
+                </>
+              )}
+              {plan.map && (
+                <>
+                  <div>
+                    <dt>{isRu ? "Размер карты" : "Map size"}</dt>
+                    <dd>{formatBytes(plan.map.bytes, isRu)}</dd>
+                  </div>
+                  <div>
+                    <dt>{isRu ? "SHA-256 карты" : "Map SHA-256"}</dt>
+                    <dd>
+                      <code>{plan.map.sha256.slice(0, 16)}…</code>
+                    </dd>
+                  </div>
+                </>
+              )}
             </dl>
             {(plan.duplicates.length > 0 || plan.overrides.length > 0) && (
               <div className="b-more-block b-overlaps">
