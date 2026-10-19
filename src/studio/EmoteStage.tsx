@@ -176,7 +176,13 @@ export default function EmoteStage({
         if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false);
       }}
     >
-      <div className="s-emote-portrait" aria-hidden="true">
+      <button
+        type="button"
+        className="s-emote-portrait"
+        onClick={() => onChange((active + 1) % emoteMoods.length)}
+        title={emoteMoods[active].name}
+        aria-label={`${emoteMoods[active].name}: next mood`}
+      >
         {emoteMoods.map((mood, index) => (
           <img
             key={mood.name}
@@ -187,7 +193,24 @@ export default function EmoteStage({
             height="96"
           />
         ))}
-      </div>
+      </button>
+    </div>
+  );
+}
+
+// The scene behind the home hero: the current mood's emoticon blown up pixel
+// for pixel into a faint mosaic. Each mood repaints the whole scene.
+export function EmoteBackdrop({ active }: { active: number }) {
+  return (
+    <div className="s-hero-backdrop" aria-hidden="true">
+      {emoteMoods.map((mood, index) => (
+        <img
+          key={mood.name}
+          className={active === index ? "is-active" : ""}
+          src={mood.still}
+          alt=""
+        />
+      ))}
     </div>
   );
 }

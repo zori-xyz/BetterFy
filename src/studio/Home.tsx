@@ -23,7 +23,7 @@ import { useLocale, modCount, type Language } from "../i18n";
 import { isInstallable, modById, mods, type Domain, type StudioMod } from "./model";
 import { bundleRelationProblem, findPackage, packageName } from "./packages";
 import { useBuildName } from "./builder/buildName";
-import EmoteStage, { emoteStyle } from "./EmoteStage";
+import EmoteStage, { EmoteBackdrop, emoteStyle } from "./EmoteStage";
 import { useEngineActive } from "./engineActivity";
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import LookCarousel from "./LookCarousel";
@@ -90,35 +90,20 @@ export default function Home({
   return (
     <div className="s-home">
       <section className="s-hero" style={emoteStyle(mood)}>
+        <EmoteBackdrop active={mood} />
         <div className="s-hero-copy">
-          <div className="s-hero-mood">
-            <EmoteStage motion={motion} active={mood} onChange={setMood} />
-            <div>
-              <span className="s-eyebrow">
-                <Sparkles />
-                {isRu ? "ТВОЯ ИГРА · ТВОЙ ПОЧЕРК" : "YOUR GAME · YOUR SIGNATURE"}
-              </span>
-              <span className="s-hero-mood-note">
-                {isRu
-                  ? "Начни с детали. Собери целый мир."
-                  : "Start with a detail. Shape the whole world."}
-              </span>
-            </div>
-          </div>
           <span className="s-eyebrow">
-            <Gamepad2 />
-            {isRu ? "ОБЛИКИ · ЭФФЕКТЫ · НАСТРОЙКИ" : "LOOKS · EFFECTS · SETTINGS"}
+            <Sparkles />
+            {isRu ? "ТВОЯ ИГРА · ТВОЙ ПОЧЕРК" : "YOUR GAME · YOUR SIGNATURE"}
           </span>
           <h1>
-            {isRu ? (
-              <>
-                Собери свою <span>Dota</span>
-              </>
-            ) : (
-              <>
-                Make Dota <span>your own</span>
-              </>
-            )}
+            {isRu ? "Собери свою " : "Make Dota "}
+            <span className="s-hero-accent">
+              {isRu ? "Dota" : "your own"}
+              <span className="s-hero-sticker">
+                <EmoteStage motion={motion} active={mood} onChange={setMood} />
+              </span>
+            </span>
           </h1>
           <p>
             {isRu
