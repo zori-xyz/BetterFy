@@ -249,8 +249,9 @@
 .motion-disabled .s-empty-art img { animation: none; }
 @media (prefers-reduced-motion: reduce) { .s-empty-art img { animation: none; } }
 
-/* Profile cover: the account's emoticon as a pixel mosaic, like the home
-   scene, fading into the card. */
-.s-profile-cover { position: relative; height: 104px; overflow: clip; border-bottom: 1px solid var(--s-line-soft); background: radial-gradient(80% 160% at 20% 0%, rgb(var(--cover-rgb) / .3), transparent 70%), var(--s-panel); }
-.s-profile-cover img { position: absolute; left: 55%; top: 50%; width: 760px; height: 760px; image-rendering: pixelated; opacity: .2; transform: translate(-50%, -50%) rotate(-8deg); -webkit-mask-image: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent); mask-image: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent); }
-:root[data-theme=light] .s-profile-cover img { opacity: .24; }
+/* Profile cover: a soft wash of the account's emoticon colour, and the
+   emoticon itself as a crisp die-cut sticker, like the one on the home
+   headline. */
+.s-profile-cover { position: relative; height: 96px; overflow: visible; border-bottom: 1px solid var(--s-line-soft); background: radial-gradient(70% 180% at 85% 0%, rgb(var(--cover-rgb) / .34), transparent 65%), radial-gradient(50% 140% at 10% 100%, rgb(var(--cover-rgb) / .12), transparent 70%), var(--s-panel); }
+.s-profile-cover img { position: absolute; right: 34px; top: 22px; width: 76px; height: 76px; image-rendering: pixelated; transform: rotate(9deg); filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff) drop-shadow(0 10px 14px rgb(0 0 0 / .4)); transition: transform .45s var(--s-ease-spring); }
+@media (hover: hover) and (pointer: fine) { .s-profile-card:hover .s-profile-cover img { transform: rotate(0deg) scale(1.08); } }
