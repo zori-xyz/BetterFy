@@ -148,9 +148,7 @@ export default function Catalog({
             ? "От одного облика до полностью новой Dota."
             : "From one new look to a completely different Dota."
         }
-      >
-        <span className="s-catalog-total">{modCount(source.length, language)}</span>
-      </PageHead>
+      />
       <div className="s-catalog-tools">
         <div
           className="s-domain-tabs"

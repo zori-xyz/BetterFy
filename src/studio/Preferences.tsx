@@ -26,6 +26,12 @@ import {
   type DeviceSession,
 } from "../auth";
 import { PageHead } from "./ui";
+import { emoteMoods } from "./EmoteStage";
+
+const profileMood = (id: string) =>
+  emoteMoods[
+    [...id].reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) % 9973, 7) % emoteMoods.length
+  ];
 import EmailIdentity from "./EmailIdentity";
 import BetterFyWordmark from "../BetterFyWordmark";
 import { revealTheme } from "./delight";
@@ -351,7 +357,16 @@ export function Profile({
         }
       />
       <section className="s-profile-card">
-        <div className="s-profile-cover" />
+        {/* The account's own emoticon, blown up into the same pixel mosaic as
+            the home scene; the same account always gets the same one. */}
+        <div
+          className="s-profile-cover"
+          style={{
+            ["--cover-rgb" as string]: profileMood(session?.userId ?? "guest").rgb,
+          }}
+        >
+          <img src={profileMood(session?.userId ?? "guest").still} alt="" />
+        </div>
         <div className="s-profile-person">
           <span className="s-avatar">
             {avatarUrl ? <img src={avatarUrl} alt="" /> : <CircleUserRound />}

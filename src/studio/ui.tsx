@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode, type ImgHTMLAttribu
 import { ArrowLeft, Check, Plus, Sparkles, Volume2, X } from "lucide-react";
 import { useLocale } from "../i18n";
 import { type StudioMod } from "./model";
+import { emoteMoods } from "./EmoteStage";
 
 export function Media({
   src,
@@ -211,9 +212,16 @@ export function Empty({
   action?: string;
   onAction?: () => void;
 }) {
+  // One of the home page's emoticons as a die-cut sticker, the same one for the
+  // same empty screen; the icon says what is empty.
+  const mood =
+    emoteMoods[[...title].reduce((sum, char) => sum + char.charCodeAt(0), 0) % emoteMoods.length];
   return (
     <div className="s-empty">
-      <span>{icon}</span>
+      <span className="s-empty-art" aria-hidden="true">
+        <img src={mood.still} alt="" />
+        <i>{icon}</i>
+      </span>
       <h2>{title}</h2>
       <p>{text}</p>
       {action && (
