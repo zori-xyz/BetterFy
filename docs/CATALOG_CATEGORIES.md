@@ -126,6 +126,17 @@ and the card, and nothing beyond it:
   coexistence with Minify" in ENGINE_ARCHITECTURE), so there is nothing to
   rename.
 
+## Game files, packs and sets (pull request #45)
+
+- `cursors` (34) and `fonts` (10) install as the game's own loose files through
+  `game_files` (see "Game's own loose files" in ENGINE_ARCHITECTURE), from their
+  own allowlist (`src-tauri/gamefiles`, audit in
+  [GAME_PACKS_AUDIT.md](GAME_PACKS_AUDIT.md)). The table below still lists them
+  for the history of this allowlist; they are no longer "not enabled".
+- `packs` (6) are offered as sets: adding one adds its items that install.
+- `tools`, `guides`, `news`, `sites`, `other`, `pedestal` and `tormentor` are
+  not offered in the app at all.
+
 ## Not enabled, and why
 
 These stay preview-only in the app: no half support, no install button (the one

@@ -14,6 +14,34 @@ of audited skins, bot, site and installer), not a change in stability.
 
 Version bump together with the work below.
 
+### Complete catalog (pull request #45; built and tested on a Mac and in CI, not run on Windows)
+
+- Screens offer only what installs: the Windows-pilot and preview-only badges,
+  checksums, file paths, audit counts and "not checked yet" notes are gone; the
+  build review keeps size, what an item changes, the category tip, the
+  "Change only this hero" switch and how to restore. Test plan:
+  [docs/CATALOG_COMPLETE_WINDOWS_TEST_PLAN.md](docs/CATALOG_COMPLETE_WINDOWS_TEST_PLAN.md).
+- Wardrobe: 1,028 of 1,044 audited archives install (was 1,011). Brackets and
+  apostrophes in archive names, a non-ASCII name dropping only that file, the
+  Workshop addon template treated as a leftover, a stale offset on an empty VPK
+  entry, the merged build limit raised to 512 MiB, and the project's second
+  Hugging Face dataset trusted for its root files.
+- The game's own loose files: a journaled `game_files` transaction for
+  `resource/cursor`, `panorama/fonts` and `itembuilds`, linked to the build's
+  deployment, with every touched file backed up and the game's originals put
+  back on restore. Installs the 34 cursor packs and 10 font packs of the catalog
+  (font packs as their own guide says: the game's fonts out, the pack's in; all
+  carry Cyrillic) and Minify's OpenDotaGuides item builds (one pinned release).
+- All 30 game tuning mods install. New: User Styles (17 snippets, each with a
+  switch), Custom Fonts (the player's .ttf/.otf, renamed for each of the 29
+  Radiance/RadianceM/Reaver files with a proper font rebuild), Custom
+  Backgrounds (one of 28 event loading screens or the player's WebM), Custom
+  Hero Grids (three pinned grids added beside the player's own in every Steam
+  account, restored without touching the player's edits) and OpenDotaGuides.
+- The catalog's six packs are ready-made sets: adding one adds its items.
+- Package catalog re-signed as sequence 8 (not deployed). Older apps reject it
+  (User Styles reads Minify's `_styling.css`), so it ships with the app release.
+
 Windows observation of the catalog categories (EA.45): the founder reported sounds, the map, river, trees, creeps, couriers, item icons and rank icons all working in game; see [docs/EA45_CATALOG_WINDOWS_OBSERVATION.md](docs/EA45_CATALOG_WINDOWS_OBSERVATION.md) for what was and was not recorded.
 
 First Windows observation of skins: three catalog skins installed together by EA.41 and seen applied on the Dota hero pages, with BetterFy using `pak65_dir.vpk` and the "Let go of the old install" action used once; see [docs/EA41_SKIN_WINDOWS_OBSERVATION.md](docs/EA41_SKIN_WINDOWS_OBSERVATION.md). Not yet checked in a match, with restore, or for the other skins.
