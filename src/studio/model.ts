@@ -13,9 +13,7 @@ export const installableIds = pilotCatalogIds;
  * for it. The catalog shows only these; anything else is not offered at all.
  */
 export function isInstallable(id: string) {
-  if (installableIds.has(id)) return true;
-  // A pack is offered when any of its items installs.
-  return packMembers(id).some((member) => installableIds.has(member));
+  return installableIds.has(id);
 }
 
 /**
@@ -155,30 +153,6 @@ export const mods: StudioMod[] = [
     }),
   ),
 ];
-// The catalog's packs, as cards of their own.
-for (const pack of packsById.values()) {
-  const raw = rawById.get(pack.id) as (RawItem & { preview?: string }) | undefined;
-  mods.push({
-    id: pack.id,
-    domain: "wardrobe",
-    name: { ru: pack.name, en: pack.name },
-    category: "packs",
-    categoryName: { ru: "Наборы", en: "Packs" },
-    group: "packs",
-    description: {
-      ru: `Готовый набор от авторов каталога: ${pack.members.length} предметов в одном стиле. Добавит в сборку всё из набора, что ставится; любой предмет потом можно убрать.`,
-      en: `A ready-made set from the catalog's authors: ${pack.members.length} items in one style. Adds everything in the set that installs; you can drop any item later.`,
-    },
-    image: raw?.preview ? `${previewRoot}packs/${encodeURIComponent(raw.preview)}` : null,
-    author: "BetterFy Web",
-    source: "https://github.com/h6rd/Dota2PornFxWeb",
-    date: 0,
-    tags: [],
-    variants: [],
-    slot: null,
-    members: pack.members,
-  });
-}
 export const modById = new Map(mods.map((mod) => [mod.id, mod]));
 export const wardrobeGroups = [
   { id: "all", ru: "Всё", en: "All" },

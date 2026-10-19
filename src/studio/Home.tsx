@@ -20,47 +20,17 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useLocale, modCount, type Language } from "../i18n";
-import { presetTitle, workshopPresets, type BetterFyPreset } from "../presets";
 import { isInstallable, modById, mods, type Domain, type StudioMod } from "./model";
 import { bundleRelationProblem, findPackage, packageName } from "./packages";
 import { useBuildName } from "./builder/buildName";
-import { useEngineActive } from "./engineActivity";
 import EmoteStage, { emoteStyle } from "./EmoteStage";
+import { useEngineActive } from "./engineActivity";
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import LookCarousel from "./LookCarousel";
 import { CountUp } from "./delight";
 import "./home.css";
 
 type Pair = [ru: string, en: string];
-
-// What each built-in set changes in the match, in one line. The list of mods
-// under it comes from the preset itself.
-const setCopy: Record<string, { kicker: Pair; line: Pair; icon: LucideIcon }> = {
-  "betterfy.focus-performance": {
-    kicker: ["Производительность", "Performance"],
-    line: [
-      "Карта без кустов, реки и погоды, меньше эффектов на зданиях.",
-      "A map without bushes, river or weather, and fewer effects on buildings.",
-    ],
-    icon: Gauge,
-  },
-  "betterfy.clean-interface": {
-    kicker: ["Интерфейс", "Interface"],
-    line: [
-      "Прозрачный HUD, крупные карточки героев и свой Net Worth на виду.",
-      "A transparent HUD, bigger hero cards and your net worth in view.",
-    ],
-    icon: Monitor,
-  },
-  "betterfy.quiet-match": {
-    kicker: ["Звук", "Audio"],
-    line: [
-      "Без звуков окружения, насмешек и реплик героев.",
-      "No ambience, taunts or hero voice lines.",
-    ],
-    icon: VolumeX,
-  },
-};
 
 const gameIcons: Record<string, LucideIcon> = {
   core: Gauge,
@@ -76,8 +46,6 @@ const iconFor = (mod: StudioMod) =>
 // Dota's default item hotkeys, one per inventory slot.
 const hotkeys = ["Z", "X", "C", "V", "B", "N"];
 const backpackSlots = 3;
-// Bar heights for the sets that have no preview art (the audio set).
-const bars = [0.35, 0.6, 0.45, 0.8, 0.55, 0.95, 0.7, 0.5, 0.85, 0.4, 0.65, 0.3, 0.75, 0.5, 0.6];
 const shelfOrder = ["world", "interface", "core", "audio", "utility", "custom"];
 
 const known = (ids: string[]) => ids.flatMap((id) => (modById.has(id) ? [modById.get(id)!] : []));
@@ -107,7 +75,6 @@ export default function Home({
   onBuild,
   onOpen,
   onToggle,
-  onCollection,
 }: {
   selected: string[];
   motion: boolean;
@@ -117,7 +84,6 @@ export default function Home({
   onBuild: () => void;
   onOpen: (mod: StudioMod) => void;
   onToggle: (mod: StudioMod) => void;
-  onCollection: (preset: BetterFyPreset) => void;
 }) {
   const { language, isRu } = useLocale();
   const [mood, setMood] = useState(0);
@@ -156,8 +122,8 @@ export default function Home({
           </h1>
           <p>
             {isRu
-              ? "Облики любимых героев, эффекты и настройки игры. Выбирай по одному или начни с готового набора."
-              : "Hero looks, effects and game settings. Pick them individually or start with a ready-made set."}
+              ? "Облики любимых героев, эффекты и настройки игры. Всё ставится в Dota и откатывается в один клик."
+              : "Hero looks, effects and game settings. Everything installs into Dota and rolls back in one click."}
           </p>
           <div className="s-hero-actions">
             <button className="s-btn s-btn-primary" onClick={() => onCatalog("wardrobe")}>
@@ -189,7 +155,6 @@ export default function Home({
         onOpen={onOpen}
         onToggle={onToggle}
       />
-      <ReadySets selected={selected} onCollection={onCollection} />
       <PilotShelf selected={selected} onCatalog={onCatalog} onOpen={onOpen} onToggle={onToggle} />
       <section className="h-community">
         <div>
@@ -232,19 +197,8 @@ function SlotArt({ mod }: { mod: StudioMod }) {
 }
 
 type DockState = "empty" | "busy" | "blocked" | "ready" | "changed" | "installed";
-type StepState = "done" | "current" | "busy" | "todo" | "off";
-
-const laneByState: Record<DockState, StepState[]> = {
-  empty: ["current", "todo", "todo", "todo"],
-  blocked: ["done", "current", "todo", "todo"],
-  ready: ["done", "current", "todo", "todo"],
-  changed: ["done", "current", "todo", "todo"],
-  busy: ["done", "busy", "busy", "todo"],
-  installed: ["done", "done", "done", "current"],
-};
-
 // The build as a Dota inventory: six slots with their item hotkeys, then the
-// backpack. Under it, where the build is on its way into the game.
+// backpack.
 function BuildDock({
   selected,
   installedIds,
@@ -355,13 +309,6 @@ function BuildDock({
   else if (state !== "empty" || installed)
     action = { label: t("Открыть сборку", "Open build"), run: onBuild };
 
-  const steps: Pair[] = [
-    ["Выбор", "Pick"],
-    ["Сверка файлов", "File check"],
-    ["Запись с бэкапом", "Backed-up write"],
-    ["Игра", "Play"],
-  ];
-  const lane = laneByState[state];
   const visible = hotkeys.length + backpackSlots;
   const overflow = chosen.length > visible ? chosen.length - visible + 1 : 0;
 
@@ -425,8 +372,8 @@ function BuildDock({
         <p>
           {state === "empty"
             ? t(
-                "Каждый мод и облик займёт слот, как предмет в Dota. Возьми готовый набор ниже или добавь моды по одному.",
-                "Every mod and look takes a slot, like an item in Dota. Take a ready-made set below or add mods one by one.",
+                "Каждый мод и облик займёт слот, как предмет в Dota. Начни с каталога или с модов ниже.",
+                "Every mod and look takes a slot, like an item in Dota. Start in the catalog or with the mods below.",
               )
             : name.summary}
         </p>
@@ -444,170 +391,26 @@ function BuildDock({
             <span>{status.text}</span>
           </p>
         )}
-        {action && (
-          <div className="h-dock-actions">
-            <button className="s-btn s-btn-primary" onClick={action.run}>
-              <span>{action.label}</span>
-              {state === "blocked" && required ? <Plus /> : <ArrowRight />}
-            </button>
-          </div>
-        )}
       </div>
       <div className="h-inv" role="group" aria-label={t("Слоты сборки", "Build slots")}>
         <div className="h-inv-main">{hotkeys.map((key, index) => slot(index, key))}</div>
-        <span className="h-inv-label" aria-hidden="true">
-          {t("Рюкзак", "Backpack")}
-        </span>
-        <div className="h-inv-pack">
+        <div className="h-inv-pack" title={t("Рюкзак", "Backpack")}>
+          <span className="h-visually-hidden">{t("Рюкзак", "Backpack")}</span>
           {Array.from({ length: backpackSlots }, (_, index) => slot(hotkeys.length + index))}
         </div>
       </div>
-      <ol className="h-lane" aria-label={t("Путь сборки в игру", "The build's way into the game")}>
-        {steps.map((step, index) => (
-          <li
-            key={step[1]}
-            className={`is-${lane[index]}`}
-            aria-current={lane[index] === "current" ? "step" : undefined}
-          >
-            <span className="h-lane-mark" aria-hidden="true">
-              {lane[index] === "done" ? (
-                <Check />
-              ) : lane[index] === "busy" ? (
-                <LoaderCircle className="s-spin" />
-              ) : (
-                index + 1
-              )}
-            </span>
-            <span>{isRu ? step[0] : step[1]}</span>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-}
-
-function ReadySets({
-  selected,
-  onCollection,
-}: {
-  selected: string[];
-  onCollection: (preset: BetterFyPreset) => void;
-}) {
-  const { language, isRu } = useLocale();
-  const chosen = new Set(selected);
-  return (
-    <section className="h-section">
-      <header className="s-section-head">
-        <div>
-          <span className="s-eyebrow">{isRu ? "ГОТОВЫЕ НАБОРЫ BETTERFY" : "BETTERFY SETS"}</span>
-          <h2>{isRu ? "Возьми набор целиком" : "Take a whole set"}</h2>
+      {action && (
+        <div className="h-dock-actions">
+          <button className="s-btn s-btn-primary" onClick={action.run}>
+            <span>{action.label}</span>
+            {state === "blocked" && required ? <Plus /> : <ArrowRight />}
+          </button>
         </div>
-        <span>
-          {isRu ? "Любой мод из набора потом можно убрать" : "Drop any mod from a set later"}
-        </span>
-      </header>
-      <div className="h-sets">
-        {workshopPresets.map((preset) => {
-          // Only what installs: a set never offers an item the catalog hides.
-          const ids = [...preset.modIds, ...preset.wardrobeIds].filter(isInstallable);
-          const items = known(ids);
-          const have = ids.filter((id) => chosen.has(id)).length;
-          const complete = ids.length > 0 && have === ids.length;
-          const copy = setCopy[preset.id];
-          const Icon = copy?.icon ?? Layers3;
-          const art = items.flatMap((mod) => (mod.image ? [mod.image] : [])).slice(0, 3);
-          const title = presetTitle(preset, language);
-          return (
-            <article
-              className={`h-set ${complete ? "is-complete" : ""}`}
-              key={preset.id}
-              data-spotlight
-            >
-              <div className="h-set-art" aria-hidden="true">
-                {art.length ? (
-                  <div className="h-set-fan">
-                    {art.map((src, index) => {
-                      const offset = index - (art.length - 1) / 2;
-                      return (
-                        <span
-                          key={src}
-                          style={
-                            {
-                              "--o": offset,
-                              "--a": Math.abs(offset),
-                              zIndex: 3 - Math.abs(offset),
-                            } as CSSProperties
-                          }
-                        >
-                          <img src={src} alt="" loading="lazy" />
-                        </span>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="h-set-bars">
-                    {bars.map((height, index) => (
-                      <i key={index} style={{ "--h": height, "--d": index } as CSSProperties} />
-                    ))}
-                  </div>
-                )}
-                <span className="h-set-icon">
-                  <Icon />
-                </span>
-              </div>
-              <div className="h-set-body">
-                <span className="h-set-kicker">
-                  {copy ? copy.kicker[isRu ? 0 : 1] : modCount(ids.length, language)}
-                </span>
-                <h3>{title}</h3>
-                {copy && <p>{copy.line[isRu ? 0 : 1]}</p>}
-                <ul className="h-set-list" aria-label={isRu ? "Что внутри" : "Inside"}>
-                  {items.map((mod) => (
-                    <li key={mod.id} className={chosen.has(mod.id) ? "is-in" : ""}>
-                      {chosen.has(mod.id) ? <Check aria-hidden="true" /> : <i aria-hidden="true" />}
-                      <span>{mod.name[language]}</span>
-                      {chosen.has(mod.id) && (
-                        <span className="h-visually-hidden">
-                          {isRu ? ", в сборке" : ", in your build"}
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-                <footer>
-                  <span className="h-set-meta">
-                    {complete
-                      ? isRu
-                        ? "Весь набор в сборке"
-                        : "All of it is in your build"
-                      : have
-                        ? isRu
-                          ? `${have} из ${ids.length} уже в сборке`
-                          : `${have} of ${ids.length} already in your build`
-                        : modCount(ids.length, language)}
-                  </span>
-                  <button className="h-set-open" onClick={() => onCollection(preset)}>
-                    <span className="h-visually-hidden">{title}: </span>
-                    {complete
-                      ? isRu
-                        ? "Посмотреть"
-                        : "View"
-                      : isRu
-                        ? "Открыть набор"
-                        : "Open set"}
-                    <ArrowRight />
-                  </button>
-                </footer>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+      )}
     </section>
   );
 }
 
-// The game tuning mods, by category, with quick add.
 function PilotShelf({
   selected,
   onCatalog,

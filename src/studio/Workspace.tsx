@@ -503,7 +503,9 @@ export default function Workspace({
           ))}
         </nav>
         <div className="s-sidebar-bottom">
-          {selected.length > 0 && (
+          {/* Only while the engine works: otherwise "My build" in the menu
+              and the build badge on top already say the same. */}
+          {busy && selected.length > 0 && (
             <button className="s-sidebar-build" onClick={() => navigate("build")}>
               <span>
                 {busy ? <LoaderCircle className="s-spin" /> : <Layers3 />}
@@ -604,7 +606,6 @@ export default function Workspace({
                 onBuild={() => navigate("build")}
                 onOpen={setDetails}
                 onToggle={toggle}
-                onCollection={(preset) => setCollection({ preset, replace: false })}
               />
             )}
             {route === "catalog" && (
@@ -662,16 +663,6 @@ export default function Workspace({
             {route === "profile" && (
               <Profile session={session} avatarUrl={avatarUrl} onSignOut={onSignOut} />
             )}
-            <footer className="s-page-footer">
-              <span>BetterFy · Dota 2</span>
-              <span>
-                <button type="button" className="s-footer-keys" onClick={() => setShortcuts(true)}>
-                  <kbd>?</kbd> {isRu ? "горячие клавиши" : "shortcuts"}
-                </button>
-                {" · "}
-                {isRu ? "Твои моды. Твой выбор." : "Your mods. Your choice."}
-              </span>
-            </footer>
           </div>
         </div>
       </section>

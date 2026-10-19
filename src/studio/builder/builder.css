@@ -205,7 +205,7 @@
 }
 .b-row {
   display: grid;
-  grid-template-columns: auto 56px minmax(0, 1fr) auto auto auto;
+  grid-template-columns: 56px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
   min-height: 62px;
@@ -254,8 +254,10 @@
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: var(--s-text-sm);
 }
-.b-group:not(:first-of-type) .b-row {
-  grid-template-columns: 56px minmax(0, 1fr) auto auto auto;
+/* Game tuning rows lead with their priority number; looks have none. The
+   layout follows the row, not its group's place in the list. */
+.b-row.has-priority {
+  grid-template-columns: auto 56px minmax(0, 1fr) auto auto;
 }
 .b-row-thumb {
   width: 56px;
@@ -1720,7 +1722,7 @@
     align-items: stretch;
   }
   .b-row,
-  .b-group:not(:first-of-type) .b-row {
+  .b-row.has-priority {
     grid-template-columns: 56px minmax(0, 1fr) auto;
   }
   .b-row-priority,

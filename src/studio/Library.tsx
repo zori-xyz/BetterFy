@@ -47,7 +47,9 @@ export default function Library({
 }) {
   const { language, isRu } = useLocale();
   const [presets, setPresets] = useState<BetterFyPreset[]>([]);
-  const [tab, setTab] = useState<"local" | "betterfy">("local");
+  // Ready-made BetterFy collections were dropped; the library holds the
+  // player's own builds.
+  const tab = "local";
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
@@ -102,7 +104,6 @@ export default function Library({
     try {
       await presetBridge.import(serialized);
       setReload((value) => value + 1);
-      setTab("local");
       setImporting(false);
       setSerialized("");
       notify(isRu ? "Набор добавлен в библиотеку" : "Build added to your library");
@@ -157,12 +158,9 @@ export default function Library({
           role="tablist"
           aria-label={isRu ? "Источник наборов" : "Build source"}
         >
-          <button role="tab" aria-selected={tab === "local"} onClick={() => setTab("local")}>
+          <button role="tab" aria-selected="true">
             {isRu ? "Мои наборы" : "My builds"}
             <span>{presets.filter((p) => p.source === "local").length}</span>
-          </button>
-          <button role="tab" aria-selected={tab === "betterfy"} onClick={() => setTab("betterfy")}>
-            {isRu ? "Подборки BetterFy" : "BetterFy collections"}
           </button>
         </div>
         <label className="s-search">
