@@ -14,6 +14,8 @@ of audited skins, bot, site and installer), not a change in stability.
 
 Version bump together with the work below.
 
+Windows observation of the catalog categories (EA.45): the founder reported sounds, the map, river, trees, creeps, couriers, item icons and rank icons all working in game; see [docs/EA45_CATALOG_WINDOWS_OBSERVATION.md](docs/EA45_CATALOG_WINDOWS_OBSERVATION.md) for what was and was not recorded.
+
 First Windows observation of skins: three catalog skins installed together by EA.41 and seen applied on the Dota hero pages, with BetterFy using `pak65_dir.vpk` and the "Let go of the old install" action used once; see [docs/EA41_SKIN_WINDOWS_OBSERVATION.md](docs/EA41_SKIN_WINDOWS_OBSERVATION.md). Not yet checked in a match, with restore, or for the other skins.
 
 ### Skins (wardrobe)
