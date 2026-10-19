@@ -3,7 +3,7 @@
 This plan covers the native Windows passes of third-party hero skins (wardrobe
 content) through the verified install pipeline. Round one is Scarlet Keeper of
 the Light: installed alone, played, restored, and then installed together with
-tuning packages. Round two adds three skins of other shapes. It follows the
+tuning packages. Round two adds three skins of other shapes. Round three (section 6) tries one item of every other catalog category. It follows the
 evidence rules of [EA18_WINDOWS_BASELINE.md](EA18_WINDOWS_BASELINE.md): every
 result names the exact artifact, what was actually observed, and what remains
 unverified. A BetterFy success state is not proof that Dota loaded a change;
@@ -276,6 +276,70 @@ can.
    conflicting path (the upstream guide says the lower number wins, so BetterFy's
    `pak65`), is not yet observed.
 
+## 6. Round three: one item of every other kind
+
+The non-hero categories (see [CATALOG_CATEGORIES.md](CATALOG_CATEGORIES.md)) install
+whole, with no opt-in mode. Each pass below is: add the item alone, prepare, compare the
+review with the numbers here, install, check in Dota, restore. The Mac numbers are
+from real plans built from the cached archives (one VPK per item, byte-identical on a second
+build); they are not a Windows or in-game result. Compare the plan ID and the VPK SHA-256
+the app shows with the table.
+
+| Item (catalog ID) | Source | Files | Payload bytes | VPK bytes | VPK SHA-256 | Plan ID |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| `mega-kill-diretide` (sound pack) | raw VPK | 15 | 5,619,599 | 5,620,187 | `9553eb3bddde305209a6ae6163350cfc6819b3165e158bb23c88c462de34afae` | `sha256:66032dbe903446cbee082eae9ff457a0dd1b53a952cd45b94c540dce30ce5a35` |
+| `couriers-billy-bounceback` (courier) | raw VPK | 4 | 588,750 | 588,916 | `df3b8eecf2fb3317ab77a6f77f44b5e914cc3bfc59f8be5daa414c39bfddf90b` | `sha256:6ed12d11abc418c210c4e5ae5fb4c6c90059c624493c2cf1975ea6f4c8133146` |
+| `creeps-nemestice-radiant-creeps` (creep skin) | raw VPK | 34 | 19,402,196 | 19,404,725 | `ff7ae1f69a23c5b5ecb41d6f67bcaa712564e06d5e806905b9b62cbd671ea518` | `sha256:6b5d93db539e94b5b4a0b0898267ea4e5ea35eb955c0f9a91aca67e1b107cb4b` |
+| `emblems-sunken-emblem` (emblem) | raw VPK | 1 | 2,361 | 2,441 | `48b0e91d6c59a52e03cd7b4f39335dbf959f1fa136524608a8a1fc51333ba9e7` | `sha256:2ad2706daff782e0828f3b7c0d5c5663778523764b07901f7e4f2a2224288b89` |
+| `shaders-aghanim-labyrinth` (shader) | raw VPK | 1 | 2,348 | 2,424 | `960b23aa82a317eb5921bc1d66934d6a4dd67d982e65b696959ed06012f5f1f6` | `sha256:aac94c2599460c7327620eb4de0ddf1d07a75bfde59b5c0ff1a28e6f31e1ca8d` |
+| `river-frozen-river` (river) | raw VPK | 18 | 113,184 | 113,977 | `932febe0a03a4d4bda5bdb2cbd676be80e8372cc2108c4387a8712bb7b6c9728` | `sha256:482be9f19f97deff8174bc463cb8cc625bdf03181b27d1e52d47831da7018662` |
+| `trees-lowpoly-shrub-trees` (trees) | raw VPK | 34 | 236,288 | 237,657 | `1b422e5cca94bf93d283398f2e741abdd45ba23f8caa7e4eee49a868eb709684` | `sha256:9c353cb07d01e9d9e39610cb320b04a152522cd145ab2dee7560c84504325585` |
+| `item-effects-ti6-bottle` (item effect) | ZIP | 2 | 2,600 | 2,765 | `db4047058e5458c33fc8bbd96508110e9ddacbaaf2c31952bd4b73163f5a468f` | `sha256:d54a3b143003590f6ea19ab4e8412f23f949f7b6e1b676fe3b4dbf798d7d119e` |
+| `ranks-normis-rank-icons` (rank icons) | raw VPK | 20 | 618,152 | 618,770 | `0fc2ced607051ac08bf9ce09b0a72e3246f481f1e74f92bd6ce45539ada555c8` | `sha256:d13ae283728c35cb60a4390e2f05cc69ea63ebce3b315a2949d2ed8f47c73adc` |
+| `hero-sounds-sven-already-red` (hero sound) | ZIP | 1 | 70,689 | 70,768 | `878310605291820b6134140cfef450a92b8d66b579b818f4cce131151b965755` | `sha256:fe1653485e55c462bd2edf1432f5fb6fcb128d64493ee53a241ab08125564be0` |
+
+For every item:
+
+1. Add only that item. In the catalog card and the detail dialog expect the
+   "Windows pilot" mark, the category help line and the note that it has not been run in
+   Dota. For the build review expect: no hero line, no "Keep the game's shared files
+   untouched" switch, the file and size counts above, and the list of game files it replaces.
+2. Prepare. Record the download time (the first time the archive comes through BetterFy's
+   own transport) and whether the plan ID and VPK SHA-256 equal the table.
+3. Install, then start Dota with `-language <language>` and check the item:
+   - sound pack and hero sound: play or trigger the sound (a bot match; a Mega Kill needs a
+     kill streak, say so if you cannot trigger one);
+   - courier, creep skin, river, trees: look at it in a bot match or the demo;
+   - emblem: select your hero; if it does not show, run `r_draw_selected_ring 0`, then
+     `r_draw_selected_ring 1` in the console before the match and make sure Minify's Misc
+     Optimization mod is off (upstream advice), and record whether that helped;
+   - shader: look at the changed materials; if it looks checkered, turn off World Lighting
+     (upstream advice) and record whether that helped;
+   - item effect: spawn the bottle in the demo and use it;
+   - rank icons: open the profile or rank screen.
+4. Restore and confirm the folder state equals before the install.
+
+Also:
+
+- A mix: `heroes-bare-kez`, `mega-kill-diretide`, `couriers-baby-roshan-2018`,
+  `item-effects-earthshaker-gold-blink-dagger`, `emblems-sunken-emblem`,
+  `shaders-aghanim-labyrinth`, `river-frozen-river`, `trees-lowpoly-shrub-trees`,
+  `ranks-normis-rank-icons` together. Mac: 140 files, 14,399,530 payload bytes, VPK
+  14,406,026 bytes, SHA-256
+  `a30feaf958b02a1758900b20b3a5abaa2d7af2812053b97848ad7f7dc88387f2` (the full hash is in
+  the Mac log; compare the first 16 hex characters), 0 conflicts.
+- Conflicting packs: `mega-kill-nedotrax-mega-kill` with `mega-kill-deus-ex` (Mac: 23
+  conflicting paths, install disabled until confirmed) and
+  `creeps-woodland-radiant-creeps` with `creeps-diretide-radiant-creeps` (6). Record the
+  numbers the review shows and which pack's lines or models Dota uses.
+- Size refusal: `music-deadmau5-dieback`, `music-the-international-10`,
+  `terrains-simple-dark-terrain-minify`, `trees-metal-barrel-trees` and `heroes-nude-marci`
+  together (426,583,923 bytes of file data against the 256 MiB bound): preparing must stop
+  with the build-too-big notice before anything is downloaded.
+- Largest single packs: `music-deadmau5-dieback` (92 MB VPK) and
+  `trees-metal-barrel-trees` (46 MB): record the time and memory use to prepare, install and
+  restore.
+
 ## What to capture
 
 For every step above that touches a file or the game:
@@ -340,3 +404,17 @@ the evidence report file name, and hashes where relevant.
 | 4.3 Bloody Gore Spectre | NOT RUN (not run in Dota) | | |
 | 4.4 Size limit warning and refusal | NOT RUN | | |
 | 4.5 Two skins of one hero: conflicts | NOT RUN | | |
+| 6.1 Sound pack (mega-kill) | NOT RUN (not run in Dota) | | |
+| 6.2 Courier | NOT RUN (not run in Dota) | | |
+| 6.3 Creep skin | NOT RUN (not run in Dota) | | |
+| 6.4 Emblem | NOT RUN (not run in Dota) | | |
+| 6.5 Shader | NOT RUN (not run in Dota) | | |
+| 6.6 River | NOT RUN (not run in Dota) | | |
+| 6.7 Trees | NOT RUN (not run in Dota) | | |
+| 6.8 Item effect (ZIP) | NOT RUN (not run in Dota) | | |
+| 6.9 Rank icons | NOT RUN (not run in Dota) | | |
+| 6.10 Hero sound (ZIP) | NOT RUN (not run in Dota) | | |
+| 6.11 Nine-item mix | NOT RUN (not run in Dota) | | |
+| 6.12 Conflicting packs | NOT RUN | | |
+| 6.13 Size refusal | NOT RUN | | |
+| 6.14 Largest packs: time and memory | NOT RUN | | |

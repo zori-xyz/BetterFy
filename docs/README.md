@@ -42,8 +42,11 @@ disagreement as a bug and verify the behavior before changing either side.
   an opt-in to leave shared game files out), and what the analyzer found.
   Nothing has been run in Dota.
 - [Wardrobe audit report](WARDROBE_AUDIT_REPORT.md) — the generated, item by
-  item result of auditing the hero and hero-item catalog against Valve's file
-  list: what is allowlisted, what is not and why.
+  item result of auditing the audited catalog categories against Valve's file
+  list: what is allowlisted, what is not and why, per category.
+- [Catalog categories](CATALOG_CATEGORIES.md) — every category of the
+  catalog: how it is installed, the upstream help text, and what is not enabled
+  and why. Nothing but three hero skins has been run in Dota.
 - [Skin Windows test plan](SKIN_WINDOWS_TEST_PLAN.md) — the native passes of
   these skins: Scarlet Keeper alone and with tuning packages, then three skins
   of other shapes, with the evidence to capture.

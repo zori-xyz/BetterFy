@@ -67,7 +67,7 @@ Skipped 32 of 971 items.
 | `pedestal` | 4 | the files do not exist on either mirror (HTTP 404 on Hugging Face, absent from the GitHub tree) |
 | `tormentor` | 2 | the files do not exist on either mirror (HTTP 404 on Hugging Face, absent from the GitHub tree) |
 | `packs` | 6 | collections of other items, with no file of their own |
-| `terrains` (ZIP items) | 12 | each ZIP holds `maps/dota.vpk` and a second file, not a `pakNN_dir.vpk`: a map deployment, built separately |
+| `terrains` (ZIP items) | 12 | each ZIP holds `maps/dota.vpk` and a guide, not a `pakNN_dir.vpk`: a whole-map replacement, installed through the separate map allowlist (`src-tauri/maps`), not this one |
 
 ## Items that are not in the allowlist
 
