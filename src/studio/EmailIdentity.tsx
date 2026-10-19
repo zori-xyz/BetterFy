@@ -1,3 +1,4 @@
+import { CodeCells } from "../CodeCells";
 import { useEffect, useState, type FormEvent } from "react";
 import { ArrowRight, Check, Mail } from "lucide-react";
 import {
@@ -149,16 +150,7 @@ export default function EmailIdentity({ session }: { session: AuthSession }) {
             {ru ? `Код из письма на ${email}` : `Code sent to ${email}`}
           </label>
           <div>
-            <input
-              id="profile-email-code"
-              autoComplete="one-time-code"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
-              required
-              value={code}
-              onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-            />
+            <CodeCells id="profile-email-code" value={code} onChange={setCode} />
             <button type="submit" disabled={busy || code.length !== 6}>
               {ru ? "Подтвердить" : "Confirm"}
               <ArrowRight />

@@ -1,3 +1,4 @@
+import { CodeCells } from "./CodeCells";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
@@ -787,16 +788,12 @@ export default function AuthFlow({
             <label className="auth-email-field" htmlFor="betterfy-id-registration-code">
               {t.emailCodeLabel}
             </label>
-            <input
+            <CodeCells
               id="betterfy-id-registration-code"
-              className="auth-email-code-input"
               autoFocus
-              autoComplete="one-time-code"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
               value={emailCode}
-              onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              onChange={setEmailCode}
+              error={Boolean(idMessage)}
             />
             {idMessage && (
               <p className="auth-email-error" role="alert">
@@ -884,20 +881,15 @@ export default function AuthFlow({
             <label className="auth-email-field" htmlFor="betterfy-email-code">
               {t.emailCodeLabel}
             </label>
-            <input
+            <CodeCells
               id="betterfy-email-code"
-              className="auth-email-code-input"
-              autoComplete="one-time-code"
-              inputMode="numeric"
-              pattern="[0-9]*"
               autoFocus
-              maxLength={6}
               value={emailCode}
-              onChange={(event) => {
+              onChange={(code) => {
                 setEmailMessage(null);
-                setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6));
+                setEmailCode(code);
               }}
-              aria-invalid={Boolean(emailMessage)}
+              error={Boolean(emailMessage)}
             />
             {emailMessage && (
               <p className="auth-email-error" role="alert">

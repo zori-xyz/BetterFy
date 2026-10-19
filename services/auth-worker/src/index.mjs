@@ -1781,7 +1781,7 @@ async function verifyCode(request, env, origin) {
 
 async function sendEmailCode(env, email, code, language, purpose) {
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) throw new Error("email_not_configured");
-  const content = emailContent(code, language, purpose);
+  const content = emailContent(code, language, purpose, env.BOT_ASSET_BASE_URL);
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
