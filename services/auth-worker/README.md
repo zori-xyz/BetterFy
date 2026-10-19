@@ -65,6 +65,14 @@ file; it must never enter this repository or a client bundle.
      tests. Only BetterFy ID logins match, never Telegram usernames. It is a
      secret rather than a `wrangler.jsonc` var so the list stays out of the
      repository and survives `npm run deploy`.
+   - optional, the tester program: `npx wrangler secret put
+     BETTERFY_TESTER_LOGINS` (at most three BetterFy ID logins; a longer list
+     turns the program off for everyone) and `npx wrangler secret put
+     TESTER_REPORTS_CHAT_ID` (the numeric Telegram chat that receives the
+     reports; the bot must have been started there). A tester's report
+     (`POST /v1/tester/reports`) is forwarded to that chat as a summary, the
+     pictures and the recorded journal; D1 keeps only counts
+     (`tester_reports`).
 4. Review `BETTERFY_PLAN_3D_STARS`, `BETTERFY_PLAN_15D_STARS`, and
    `BETTERFY_PLAN_30D_STARS` in `wrangler.jsonc` before charging users.
 5. Run `npm run db:migrate:remote` and `npm run deploy`.
