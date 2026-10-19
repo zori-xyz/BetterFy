@@ -137,8 +137,8 @@ const categories: Record<string, CategoryHelp> = {
     "Replaces sound files (music, voices, ambience).",
   ),
   terrains: help(
-    "Заменяет материалы, модели и текстуры ландшафта. Целиком карту (maps/dota.vpk) этот пакет не меняет.",
-    "Replaces terrain materials, models and textures. It does not replace the map itself (maps/dota.vpk).",
+    "Заменяет материалы, модели и текстуры ландшафта, не меняя саму карту.",
+    "Replaces terrain materials, models and textures without changing the map itself.",
   ),
   "ti-bp-effects": help(
     "Заменяет эффекты из наборов TI и боевого пропуска.",

@@ -34,7 +34,7 @@ import { useEngineActive } from "./engineActivity";
 import { applyInstallablePackages, usePackagesRevision } from "./packages";
 import Library from "./Library";
 import { Preferences, Profile } from "./Preferences";
-import { deliveryLabel, getSelectionDelivery, modById, type Domain, type StudioMod } from "./model";
+import { getSelectionDelivery, modById, type Domain, type StudioMod } from "./model";
 import { Media, Modal } from "./ui";
 import Shortcuts from "./Shortcuts";
 import { currentBuildName } from "./builder/buildName";
@@ -531,25 +531,11 @@ export default function Workspace({
             <kbd>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘ K" : "Ctrl K"}</kbd>
           </button>
           <button
-            className={`s-prototype-badge ${delivery.pilotReady ? "is-pilot" : ""}`}
+            className={`s-prototype-badge ${delivery.gameIds.length ? "is-pilot" : ""}`}
             onClick={() => navigate("build")}
-            title={
-              delivery.pilotReady
-                ? delivery.previewCount > 0
-                  ? isRu
-                    ? "Пилотные моды можно установить на Windows; остальные выбранные карточки останутся превью."
-                    : "Pilot mods can be installed on Windows; other selected cards remain previews."
-                  : isRu
-                    ? "Выбранные моды доступны для проверяемой установки на Windows."
-                    : "Selected mods are available for verifiable installation on Windows."
-                : isRu
-                  ? "Текущий выбор доступен только для просмотра и сохранения."
-                  : "The current selection is available only to preview and save."
-            }
+            title={isRu ? "Открыть мою сборку" : "Open my build"}
           >
-            {delivery.pilotReady
-              ? `${deliveryLabel("pilot", language)}${delivery.previewCount > 0 ? ` + ${deliveryLabel("preview", language)}` : ""}`
-              : deliveryLabel("preview", language)}
+            {isRu ? "СБОРКА" : "BUILD"} · {delivery.gameIds.length}
           </button>
         </header>
         {storageError && (

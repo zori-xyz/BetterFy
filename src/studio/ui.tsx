@@ -1,25 +1,31 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type ImgHTMLAttributes } from "react";
-import { ArrowLeft, Check, ImageOff, Plus, X } from "lucide-react";
+import { ArrowLeft, Check, Plus, Sparkles, Volume2, X } from "lucide-react";
 import { useLocale } from "../i18n";
-import { deliveryLabel, isPilotMod, type StudioMod } from "./model";
+import { type StudioMod } from "./model";
 
 export function Media({
   src,
   alt = "",
   showPending = false,
   pendingLabel,
+  fallbackIcon,
   className,
   onLoad,
   ...props
-}: ImgHTMLAttributes<HTMLImageElement> & { showPending?: boolean; pendingLabel?: string }) {
+}: ImgHTMLAttributes<HTMLImageElement> & {
+  showPending?: boolean;
+  pendingLabel?: string;
+  /** Shown with the label when there is no picture (sound mods have none). */
+  fallbackIcon?: ReactNode;
+}) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const { isRu } = useLocale();
   if (!src || failedSrc === src)
     return (
       <span className="s-media-fallback">
-        <ImageOff />
-        <small>{isRu ? "Превью недоступно" : "Preview unavailable"}</small>
+        {fallbackIcon ?? <Sparkles />}
+        {pendingLabel && <small>{pendingLabel}</small>}
       </span>
     );
   const pending = showPending && loadedSrc !== src;
@@ -145,7 +151,7 @@ export function ModCard({
   onFavorite?: () => void;
 }) {
   const { language, isRu } = useLocale();
-  const pilot = isPilotMod(mod.id);
+  const sound = mod.group === "audio";
   return (
     <article
       className={`s-mod-card ${selected ? "is-selected" : ""} ${mod.domain === "game" ? "is-game" : ""}`}
@@ -161,21 +167,8 @@ export function ModCard({
           loading="lazy"
           showPending
           pendingLabel={mod.categoryName[language]}
+          fallbackIcon={sound ? <Volume2 /> : undefined}
         />
-        {/* Preview is the default and is explained once above the grid; only
-            the installable pilot mods carry a badge. */}
-        {pilot && (
-          <span
-            className="s-delivery-flag is-pilot"
-            title={
-              isRu
-                ? "Доступно для проверяемой установки в Windows-пилоте"
-                : "Available for verifiable installation in the Windows pilot"
-            }
-          >
-            {deliveryLabel("pilot", language)}
-          </span>
-        )}
         {selected && (
           <span className="s-selected-flag">
             <Check />

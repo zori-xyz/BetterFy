@@ -180,8 +180,8 @@ export const explainError = (code: string, isRu: boolean) => {
       "The archive does not match its audited description. BetterFy will not install it.",
     ],
     wardrobe_archive_hash_mismatch: [
-      "Скачанный архив не совпал с ожидаемой контрольной суммой. BetterFy его не сохранил.",
-      "The downloaded archive did not match the expected checksum. BetterFy did not keep it.",
+      "Архив скачался с ошибкой, BetterFy его не сохранил. Попробуй ещё раз.",
+      "The archive downloaded with an error and BetterFy did not keep it. Try again.",
     ],
     wardrobe_archive_unexpected: [
       "Внутри архива не то, что ожидалось. BetterFy не будет его ставить.",
@@ -228,12 +228,12 @@ export const explainError = (code: string, isRu: boolean) => {
       "The map does not match its audited description: what is inside is not what the audit recorded. BetterFy will not install it.",
     ],
     map_archive_hash_mismatch: [
-      "Скачанный архив карты не совпал с ожидаемой контрольной суммой. BetterFy его не сохранил.",
-      "The downloaded map archive did not match the expected checksum. BetterFy did not keep it.",
+      "Архив карты скачался с ошибкой, BetterFy его не сохранил. Попробуй ещё раз.",
+      "The map archive downloaded with an error and BetterFy did not keep it. Try again.",
     ],
     map_hash_mismatch: [
-      "Файл карты не совпал с ожидаемой контрольной суммой. Ничего не записано.",
-      "The map file did not match the expected checksum. Nothing was written.",
+      "Файл карты повреждён, поэтому ничего не записано. Подготовь сборку заново.",
+      "The map file is damaged, so nothing was written. Prepare the build again.",
     ],
     map_archive_unexpected: [
       "Внутри архива карты не то, что ожидалось (нужны только maps/dota.vpk и Guide.txt). BetterFy не будет его ставить.",

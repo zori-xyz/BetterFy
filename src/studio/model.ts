@@ -5,38 +5,37 @@ import rawCatalog from "../webCatalog.json";
 import type { Language } from "../i18n";
 
 export type Domain = "wardrobe" | "game";
-export const pilotModIds = pilotCatalogIds;
+export const installableIds = pilotCatalogIds;
 
-export function isPilotMod(id: string) {
-  return pilotModIds.has(id);
+/**
+ * Whether BetterFy can install the catalog item: the engine has a package
+ * for it. The catalog shows only these; anything else is not offered at all.
+ */
+export function isInstallable(id: string) {
+  return installableIds.has(id);
 }
 
-export function deliveryLabel(status: "pilot" | "preview", language: Language) {
-  if (status === "pilot") return language === "ru" ? "WINDOWS-ПИЛОТ" : "WINDOWS PILOT";
-  return language === "ru" ? "ТОЛЬКО ПРЕВЬЮ" : "PREVIEW ONLY";
+/** Keeps only the ids the catalog can still install (a saved set may be older). */
+export function installableOnly(ids: string[]) {
+  return ids.filter(isInstallable);
 }
 
-export function isPilotSelection(ids: string[]) {
+export function isInstallableSelection(ids: string[]) {
   return (
     ids.length > 0 &&
-    ids.length <= Math.min(pilotModIds.size, MAX_BUNDLE_PACKAGES) &&
+    ids.length <= Math.min(installableIds.size, MAX_BUNDLE_PACKAGES) &&
     new Set(ids).size === ids.length &&
-    ids.every(isPilotMod)
+    ids.every(isInstallable)
   );
 }
 
 export function getSelectionDelivery(ids: string[]) {
-  const known = ids.flatMap((id) => (modById.has(id) ? [modById.get(id)!] : []));
   // Game mods and the audited wardrobe items install through the same engine;
-  // pilotModIds holds exactly the ones the engine knows.
-  const gameIds = known
-    .filter((mod) => mod.domain === "game" || isPilotMod(mod.id))
-    .map((mod) => mod.id);
-  const previewCount = known.filter((mod) => !isPilotMod(mod.id)).length;
+  // installableIds holds exactly the ones the engine knows.
+  const gameIds = ids.filter((id) => modById.has(id) && isInstallable(id));
   return {
     gameIds,
-    pilotReady: isPilotSelection(gameIds),
-    previewCount,
+    pilotReady: isInstallableSelection(gameIds),
   };
 }
 

@@ -18,16 +18,15 @@ import {
 import { modCount, useLocale } from "../i18n";
 import {
   categoryLabel,
-  deliveryLabel,
   gameGroups,
-  isPilotMod,
+  isInstallable,
   mods,
   wardrobeGroups,
   type Domain,
   type StudioMod,
 } from "./model";
-import { categoryHelp, notEnabledReason } from "./categoryHelp";
-import { findPackage } from "./packages";
+import { categoryHelp } from "./categoryHelp";
+import { findPackage, usePackagesRevision } from "./packages";
 import { formatBytes } from "./WardrobeReview";
 import { Empty, Media, Modal, ModCard, PageHead } from "./ui";
 import { isMapPackage } from "./packages";
@@ -72,9 +71,13 @@ export default function Catalog({
   const { language, isRu } = useLocale();
   const update = (patch: Partial<CatalogFilters>) =>
     setFilters((previous) => ({ ...previous, ...patch, limit: patch.limit ?? 24 }));
+  // Only what BetterFy can install is offered. A signed catalog can add
+  // packages at runtime, so the list follows the package revision.
+  const revision = usePackagesRevision();
+  const offered = useMemo(() => mods.filter((mod) => isInstallable(mod.id)), [revision]);
   const source = useMemo(
-    () => mods.filter((mod) => mod.domain === filters.domain),
-    [filters.domain],
+    () => offered.filter((mod) => mod.domain === filters.domain),
+    [offered, filters.domain],
   );
   const groups = filters.domain === "wardrobe" ? wardrobeGroups : gameGroups;
   const categories = useMemo(
@@ -109,8 +112,7 @@ export default function Catalog({
           ? a.name[language].localeCompare(b.name[language])
           : filters.sort === "new"
             ? b.date - a.date
-            : Number(isPilotMod(b.id)) - Number(isPilotMod(a.id)) ||
-              Number(b.image !== null) - Number(a.image !== null),
+            : Number(b.image !== null) - Number(a.image !== null),
       );
   }, [source, filters, selected, favorites, language]);
   const countInDomain = source.filter((mod) => selected.includes(mod.id)).length;
@@ -144,7 +146,7 @@ export default function Catalog({
             onClick={() => update({ domain: "wardrobe", group: "all", category: "all" })}
           >
             {isRu ? "Облики и эффекты" : "Looks & effects"}
-            <span>{mods.filter((m) => m.domain === "wardrobe").length}</span>
+            <span>{offered.filter((m) => m.domain === "wardrobe").length}</span>
           </button>
           <button
             role="tab"
@@ -152,7 +154,7 @@ export default function Catalog({
             onClick={() => update({ domain: "game", group: "all", category: "all" })}
           >
             {isRu ? "Настройка игры" : "Game tuning"}
-            <span>{mods.filter((m) => m.domain === "game").length}</span>
+            <span>{offered.filter((m) => m.domain === "game").length}</span>
           </button>
         </div>
         <div className="s-search-row">
@@ -228,20 +230,6 @@ export default function Catalog({
             </label>
           )}
         </div>
-      </div>
-      <div className="s-delivery-note" role="note">
-        <span className={filters.domain === "game" ? "is-pilot" : "is-preview"}>
-          {deliveryLabel(filters.domain === "game" ? "pilot" : "preview", language)}
-        </span>
-        <p>
-          {filters.domain === "game"
-            ? isRu
-              ? "Моды с этой отметкой ставятся в Dota 2 с проверкой и откатом. Остальные карточки сохраняются в набор, но пока не записываются в Dota 2."
-              : "Mods with this mark install into Dota 2 with verification and rollback. Other cards can be saved to a build but are not written to Dota 2 yet."
-            : isRu
-              ? "Облики и эффекты можно изучать и сохранять в наборы. Ставятся в Dota 2 только карточки с отметкой «Windows-пилот»: их архив проверен и закреплён по контрольной сумме. В игре они пока не проверены."
-              : "Looks and effects can be explored and saved to builds. Only cards marked Windows pilot install into Dota 2: their archive is audited and pinned by checksum. None has been checked in game yet."}
-        </p>
       </div>
       <div className="s-results-head">
         <span>
@@ -337,11 +325,8 @@ export function ModDetails({
   const { language, isRu } = useLocale();
   const [infoOpen, setInfoOpen] = useState(false);
   const preview = mod.variants[variant]?.image ?? mod.image;
-  const pilot = isPilotMod(mod.id);
-  const audited = mod.domain === "wardrobe" && pilot ? findPackage(mod.id) : undefined;
+  const audited = mod.domain === "wardrobe" ? findPackage(mod.id) : undefined;
   const help = mod.domain === "wardrobe" ? categoryHelp(mod.category) : null;
-  const unavailable =
-    mod.domain === "wardrobe" && !pilot ? notEnabledReason(mod.category) : null;
   return (
     <Modal
       className="s-detail-dialog"
@@ -403,18 +388,7 @@ export function ModDetails({
             <div>
               <p>{help.installs[language]}</p>
               {help.tip && <p>{help.tip[language]}</p>}
-              <p>
-                {isRu
-                  ? "Архив проверен и закреплён по контрольной сумме. В Dota через BetterFy этот пакет ещё не запускали."
-                  : "The archive is audited and pinned by checksum. This item has not been run in Dota through BetterFy yet."}
-              </p>
             </div>
-          </div>
-        )}
-        {unavailable && (
-          <div className="s-inline-note">
-            <Info />
-            <p>{unavailable[language]}</p>
           </div>
         )}
         {isMapPackage(mod.id) && (
@@ -422,8 +396,8 @@ export function ModDetails({
             <TriangleAlert />
             <p>
               {isRu
-                ? "Это целая карта Dota, а не облик: BetterFy ставит один файл, maps/dota.vpk, и откатывает его. В Dota установка через BetterFy ещё не запускалась. По инструкции источника карта видна только в матчах (не в «Демо»), а террейн Dota+ нужно отключить в настройках игры. После патча Dota такой файл может перестать подходить игре; это непроверенный риск."
-                : "This is a whole Dota map, not a skin: BetterFy installs one file, maps/dota.vpk, and can restore it. A BetterFy install has not been run in Dota yet. By the source's guide the map shows only in matches (not in Demo), and the Dota+ terrain must be turned off in the game settings. After a Dota patch such a file may stop fitting the game; that is an unverified risk."}
+                ? "Это целая карта Dota, а не облик. Видна только в матчах (не в «Демо»), а террейн Dota+ нужно отключить в настройках игры. После крупного обновления Dota карту может понадобиться переустановить."
+                : "This is a whole Dota map, not a skin. It shows only in matches (not in Demo), and the Dota+ terrain has to be turned off in the game settings. After a major Dota update the map may need to be installed again."}
             </p>
           </div>
         )}
@@ -441,12 +415,6 @@ export function ModDetails({
             </strong>
           </div>
           <div>
-            <span>{isRu ? "Статус" : "Status"}</span>
-            <strong className={pilot ? "s-status-pilot" : "s-status-preview"}>
-              {deliveryLabel(pilot ? "pilot" : "preview", language)}
-            </strong>
-          </div>
-          <div>
             <span>{isRu ? "Автор / источник" : "Creator / source"}</span>
             <strong>{mod.author}</strong>
           </div>
@@ -454,7 +422,8 @@ export function ModDetails({
             <div>
               <span>{isRu ? "Загрузка / в сборке" : "Download / in the build"}</span>
               <strong>
-                {formatBytes(audited.downloadBytes, isRu)} / {formatBytes(audited.installBytes, isRu)}
+                {formatBytes(audited.downloadBytes, isRu)} /{" "}
+                {formatBytes(audited.installBytes, isRu)}
               </strong>
             </div>
           )}
@@ -464,15 +433,15 @@ export function ModDetails({
           aria-expanded={infoOpen}
           onClick={() => setInfoOpen(!infoOpen)}
         >
-          {isRu ? "Источник и совместимость" : "Source & compatibility"}
+          {isRu ? "Источник" : "Source"}
           <ChevronDown className={infoOpen ? "rotated" : ""} />
         </button>
         {infoOpen && (
           <div className="s-disclosed">
             <p>
               {isRu
-                ? "Совместимость с текущей версией Dota ещё не проверена. Превью и сведения взяты из исходного каталога."
-                : "Compatibility with the current Dota version has not been verified. Preview and metadata come from the source catalog."}
+                ? "Автор и превью — из исходного каталога. Спасибо создателям за их работу."
+                : "Creator and preview come from the source catalog. Credit goes to the people who made it."}
             </p>
             <a href={mod.source} target="_blank" rel="noreferrer">
               {isRu ? "Открыть источник" : "Open source"}
@@ -497,13 +466,7 @@ export function ModDetails({
         </button>
         <small>
           <Layers3 />
-          {pilot
-            ? isRu
-              ? "Установка доступна в «Моей сборке» на Windows"
-              : "Installation is available in My build on Windows"
-            : isRu
-              ? "Сохранится в наборе; установка пока недоступна"
-              : "Saved to your build; installation is not available yet"}
+          {isRu ? "Поставить в Dota — в «Моей сборке»" : "Install it into Dota from My build"}
         </small>
       </footer>
     </Modal>

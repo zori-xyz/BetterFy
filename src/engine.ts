@@ -1084,7 +1084,7 @@ export const engineBridge: EngineBridge = {
     onProgress({
       phase: "verifying",
       progress: 90,
-      message: language === "ru" ? "Контрольные суммы совпали" : "Checksums verified",
+      message: language === "ru" ? "Файлы проверены" : "Files checked",
     });
     await wait(420);
     onProgress({

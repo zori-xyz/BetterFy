@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { useLocale, modCount, type Language } from "../i18n";
 import { presetTitle, workshopPresets, type BetterFyPreset } from "../presets";
-import { deliveryLabel, isPilotMod, modById, mods, type Domain, type StudioMod } from "./model";
+import { isInstallable, modById, mods, type Domain, type StudioMod } from "./model";
 import { bundleRelationProblem, findPackage, packageName } from "./packages";
 import { useBuildName } from "./builder/buildName";
 import { useEngineActive } from "./engineActivity";
@@ -173,7 +173,10 @@ export default function Home({
         <LookCarousel motion={motion} onOpen={onOpen} />
         <div className="s-hero-inventory">
           <span>
-            <CountUp value={mods.length} locale={language === "ru" ? "ru-RU" : "en-GB"} />
+            <CountUp
+              value={mods.filter((mod) => isInstallable(mod.id)).length}
+              locale={language === "ru" ? "ru-RU" : "en-GB"}
+            />
           </span>{" "}
           {isRu ? "модов и обликов в каталоге" : "mods and looks in the catalog"}
         </div>
@@ -228,12 +231,11 @@ function SlotArt({ mod }: { mod: StudioMod }) {
   return <img src={mod.image} alt="" loading="lazy" onError={() => setFailed(true)} />;
 }
 
-type DockState = "empty" | "busy" | "blocked" | "preview" | "ready" | "changed" | "installed";
+type DockState = "empty" | "busy" | "blocked" | "ready" | "changed" | "installed";
 type StepState = "done" | "current" | "busy" | "todo" | "off";
 
 const laneByState: Record<DockState, StepState[]> = {
   empty: ["current", "todo", "todo", "todo"],
-  preview: ["done", "off", "off", "off"],
   blocked: ["done", "current", "todo", "todo"],
   ready: ["done", "current", "todo", "todo"],
   changed: ["done", "current", "todo", "todo"],
@@ -264,8 +266,7 @@ function BuildDock({
   // Slots filled before Home opened stay still; new arrivals drop in.
   const [arrived] = useState(() => new Set(selected));
   const chosen = known(selected);
-  const pilot = chosen.filter((mod) => isPilotMod(mod.id));
-  const previewCount = chosen.length - pilot.length;
+  const pilot = chosen.filter((mod) => isInstallable(mod.id));
   const relation = bundleRelationProblem(pilot.map((mod) => mod.id));
   const required = relation?.kind === "missing" ? modForPackage(relation.otherId) : undefined;
   const installed = installedIds?.length
@@ -276,17 +277,15 @@ function BuildDock({
   );
   const state: DockState = busy
     ? "busy"
-    : !chosen.length
+    : !pilot.length
       ? "empty"
       : relation
         ? "blocked"
-        : !pilot.length
-          ? "preview"
-          : inGame
-            ? "installed"
-            : installed
-              ? "changed"
-              : "ready";
+        : inGame
+          ? "installed"
+          : installed
+            ? "changed"
+            : "ready";
   const t = (ru: string, en: string) => (isRu ? ru : en);
 
   let status: { tone: "ready" | "risk" | "quiet" | "busy" | "accent"; text: string } | null = null;
@@ -311,25 +310,13 @@ function BuildDock({
               `${first} and ${other} can't be installed together. Keep one in the build.`,
             ),
     };
-  } else if (state === "preview")
-    status = {
-      tone: "quiet",
-      text: t(
-        "Пока только превью: в Dota ставятся моды с отметкой «Windows-пилот».",
-        "Preview only for now: only mods marked Windows pilot install into Dota.",
-      ),
-    };
-  else if (state === "ready")
+  } else if (state === "ready")
     status = {
       tone: "ready",
-      text:
-        t(
-          `${modCount(pilot.length, language)} можно поставить в Dota`,
-          `${modCount(pilot.length, language)} can go into Dota`,
-        ) +
-        (previewCount
-          ? t(` · ${previewCount} только превью`, ` · ${previewCount} preview only`)
-          : ""),
+      text: t(
+        `${modCount(pilot.length, language)} можно поставить в Dota`,
+        `${modCount(pilot.length, language)} can go into Dota`,
+      ),
     };
   else if (state === "changed")
     status = {
@@ -525,9 +512,6 @@ function ReadySets({
           const items = known(ids);
           const have = ids.filter((id) => chosen.has(id)).length;
           const complete = ids.length > 0 && have === ids.length;
-          const allPilot =
-            items.length === ids.length &&
-            items.every((mod) => isPilotMod(mod.id));
           const copy = setCopy[preset.id];
           const Icon = copy?.icon ?? Layers3;
           const art = items.flatMap((mod) => (mod.image ? [mod.image] : [])).slice(0, 3);
@@ -601,18 +585,6 @@ function ReadySets({
                           : `${have} of ${ids.length} already in your build`
                         : modCount(ids.length, language)}
                   </span>
-                  {allPilot && (
-                    <span
-                      className="h-pilot-tag"
-                      title={
-                        isRu
-                          ? "Все моды набора доступны для проверяемой установки в Windows-пилоте"
-                          : "Every mod in this set is available for verifiable installation in the Windows pilot"
-                      }
-                    >
-                      {deliveryLabel("pilot", language)}
-                    </span>
-                  )}
                   <button className="h-set-open" onClick={() => onCollection(preset)}>
                     <span className="h-visually-hidden">{title}: </span>
                     {complete
@@ -634,7 +606,7 @@ function ReadySets({
   );
 }
 
-// The packages the Windows pilot installs, by category, with quick add.
+// The game tuning mods, by category, with quick add.
 function PilotShelf({
   selected,
   onCatalog,
@@ -647,7 +619,7 @@ function PilotShelf({
   onToggle: (mod: StudioMod) => void;
 }) {
   const { language, isRu } = useLocale();
-  const pilots = mods.filter((mod) => mod.domain === "game" && isPilotMod(mod.id));
+  const pilots = mods.filter((mod) => mod.domain === "game" && isInstallable(mod.id));
   const groups = shelfOrder
     .map((id) => ({ id, items: pilots.filter((mod) => mod.category === id) }))
     .filter((group) => group.items.length > 0);
@@ -682,7 +654,8 @@ function PilotShelf({
       <header className="s-section-head">
         <div>
           <span className="s-eyebrow">
-            {deliveryLabel("pilot", language)} · {modCount(pilots.length, language).toUpperCase()}
+            {isRu ? "НАСТРОЙКА ИГРЫ" : "GAME TUNING"} ·{" "}
+            {modCount(pilots.length, language).toUpperCase()}
           </span>
           <h2>{isRu ? "Моды, которые можно поставить" : "Mods you can install"}</h2>
         </div>
@@ -693,8 +666,8 @@ function PilotShelf({
       </header>
       <p className="h-pilot-lead">
         {isRu
-          ? "Только эти пакеты BetterFy сверяет и записывает в Dota: одной сборкой, с бэкапом исходного файла. Облики и остальной каталог пока только в превью."
-          : "These are the only packages BetterFy checks and writes into Dota: one build, with a backup of the original file. Looks and the rest of the catalog are preview only for now."}
+          ? "Оптимизация, интерфейс, звук и полезные мелочи. Всё ставится одной сборкой и откатывается в один клик."
+          : "Performance, interface, sound and handy extras. Everything installs as one build and rolls back in one click."}
       </p>
       <div className="h-tabs" role="tablist" aria-label={isRu ? "Категории" : "Categories"}>
         {groups.map((group, index) => {

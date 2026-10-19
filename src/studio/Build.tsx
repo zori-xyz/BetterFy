@@ -15,10 +15,9 @@ import {
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useLocale, modCount } from "../i18n";
 import {
-  deliveryLabel,
   getConflicts,
-  isPilotMod,
-  isPilotSelection,
+  isInstallable,
+  isInstallableSelection,
   modById,
   type StudioMod,
 } from "./model";
@@ -110,18 +109,19 @@ export default function Build({
   onConnectDota?: () => void;
 }) {
   const { language, isRu } = useLocale();
-  const chosen = ids.flatMap((id) => (modById.has(id) ? [modById.get(id)!] : []));
-  const missing = ids.filter((id) => !modById.has(id));
+  // An id the catalog no longer installs (a saved set can be older) counts
+  // as missing: it is offered for removal and never goes into a build.
+  const chosen = ids.flatMap((id) =>
+    modById.has(id) && isInstallable(id) ? [modById.get(id)!] : [],
+  );
+  const missing = ids.filter((id) => !modById.has(id) || !isInstallable(id));
   const conflicts = getConflicts(ids);
   // Audited wardrobe items install through the same engine as game mods.
   const gameIds = chosen
-    .filter((mod) => mod.domain === "game" || isPilotMod(mod.id))
+    .filter((mod) => mod.domain === "game" || isInstallable(mod.id))
     .map((mod) => mod.id);
-  const verifiedPilotSelected = isPilotSelection(gameIds);
-  // The pilot subset is installable even when other game mods are selected;
-  // those stay preview-only and are listed in the note below.
-  const pilotIds = gameIds.filter(isPilotMod);
-  const previewItems = chosen.filter((mod) => !isPilotMod(mod.id));
+  const verifiedPilotSelected = isInstallableSelection(gameIds);
+  const pilotIds = gameIds;
   const busy = useEngineActive();
   const name = useBuildName(ids, language);
   const [pilot, setPilot] = useState<PilotState | null>(null);
@@ -207,11 +207,6 @@ export default function Build({
     {
       label: isRu ? "Ставятся в Dota" : "Go into Dota",
       value: pilotIds.length,
-      hint: previewItems.length
-        ? isRu
-          ? `ещё ${previewItems.length} только превью`
-          : `${previewItems.length} more preview-only`
-        : undefined,
     },
     {
       label: isRu ? "Файлов в сборке" : "Files in build",
@@ -252,7 +247,6 @@ export default function Build({
               className={`b-row ${fresh === mod.id ? "is-fresh" : ""}`}
               key={mod.id}
               style={{ ["--i" as string]: index }}
-              data-delivery={isPilotMod(mod.id) ? "pilot" : "preview"}
             >
               {domain === "game" && (
                 <span className="b-row-priority" title={isRu ? "Приоритет" : "Priority"}>
@@ -276,13 +270,9 @@ export default function Build({
                 <span>
                   {mod.categoryName[language]}
                   {mod.variants.length > 1 && ` · ${mod.variants[variants[mod.id] ?? 0]?.name}`}
-                  {isMapPackage(mod.id) &&
-                    ` · ${isRu ? "карта, отдельный файл" : "map, its own file"} maps/dota.vpk`}
+                  {isMapPackage(mod.id) && ` · ${isRu ? "целая карта" : "whole map"}`}
                 </span>
               </button>
-              <span className={`b-row-flag ${isPilotMod(mod.id) ? "is-pilot" : "is-preview"}`}>
-                {deliveryLabel(isPilotMod(mod.id) ? "pilot" : "preview", language)}
-              </span>
               {domain === "game" && items.length > 1 && (
                 <span className="b-row-order">
                   <button
@@ -440,20 +430,13 @@ export default function Build({
                 </button>
               </header>
               {list}
-              {previewItems.length > 0 && (
-                <p className="b-list-note">
-                  {isRu
-                    ? `${modCount(previewItems.length, language)} пока только превью: они останутся в наборе, но в Dota не запишутся.`
-                    : `${modCount(previewItems.length, language)} ${previewItems.length === 1 ? "is" : "are"} preview-only for now: kept in the build, not written to Dota.`}
-                </p>
-              )}
               {missing.length > 0 && (
                 <div className="s-inline-note warning">
                   <TriangleAlert />
                   <p>
                     {isRu
-                      ? `${modCount(missing.length, language)} из сохранённого выбора больше нет в каталоге.`
-                      : `${modCount(missing.length, language)} from your saved selection ${missing.length === 1 ? "is" : "are"} no longer in the catalog.`}
+                      ? `${modCount(missing.length, language)} из сохранённого выбора сейчас нет в каталоге.`
+                      : `${modCount(missing.length, language)} from your saved selection ${missing.length === 1 ? "is" : "are"} not in the catalog right now.`}
                   </p>
                   <button className="s-btn" disabled={busy} onClick={onRemoveMissing}>
                     <Trash2 />
@@ -489,28 +472,6 @@ export default function Build({
           )}
         </section>
         <aside className="b-side">
-          {pilotIds.length > 0 || installed ? null : (
-            <div className="b-side-note">
-              <span>
-                <Layers3 />
-              </span>
-              <h2>{isRu ? "В Dota пока нечего ставить" : "Nothing to install yet"}</h2>
-              <p>
-                {isRu
-                  ? "Сейчас BetterFy записывает в игру только моды с отметкой «Windows-пилот». Остальное сохрани в библиотеку — вернёшься, когда установка откроется."
-                  : "Right now BetterFy only writes mods marked Windows pilot. Save the rest to your library and come back when installation opens."}
-              </p>
-              <button className="s-btn s-btn-primary s-btn-full" disabled={busy} onClick={onSave}>
-                <Save />
-                {isRu ? "Сохранить в библиотеку" : "Save to library"}
-              </button>
-              {conflicts.length > 0 && (
-                <small>
-                  {isRu ? "Сначала реши конфликт слотов" : "Resolve the slot conflict first"}
-                </small>
-              )}
-            </div>
-          )}
           <TreePilot
             ids={pilotIds}
             installation={installation}
