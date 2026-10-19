@@ -132,6 +132,7 @@ export const wardrobeCategoryLabels: Record<string, Record<Language, string>> = 
   "ti-bp-effects": { ru: "Эффекты TI и BP", en: "TI & BP effects" },
   backgrounds: { ru: "Фоны", en: "Backgrounds" },
   cursors: { ru: "Курсоры", en: "Cursors" },
+  packs: { ru: "Наборы", en: "Packs" },
   emblems: { ru: "Эмблемы", en: "Emblems" },
   fonts: { ru: "Шрифты", en: "Fonts" },
   huds: { ru: "HUD", en: "HUD" },

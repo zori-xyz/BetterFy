@@ -508,7 +508,8 @@ function ReadySets({
       </header>
       <div className="h-sets">
         {workshopPresets.map((preset) => {
-          const ids = [...preset.modIds, ...preset.wardrobeIds];
+          // Only what installs: a set never offers an item the catalog hides.
+          const ids = [...preset.modIds, ...preset.wardrobeIds].filter(isInstallable);
           const items = known(ids);
           const have = ids.filter((id) => chosen.has(id)).length;
           const complete = ids.length > 0 && have === ids.length;

@@ -37,6 +37,7 @@ import { Preferences, Profile } from "./Preferences";
 import {
   getSelectionDelivery,
   installablePackMembers,
+  isInstallable,
   modById,
   type Domain,
   type StudioMod,
@@ -776,22 +777,28 @@ export default function Workspace({
                   : "Add the collection or take a look at what's inside first."}
             </p>
             <div className="s-collection-detail">
-              {[...collection.preset.modIds, ...collection.preset.wardrobeIds].map((id) => {
-                const mod = modById.get(id);
-                return (
-                  <div key={id}>
-                    <span>{mod ? <Media src={mod.image ?? undefined} /> : <TriangleAlert />}</span>
-                    <strong>{mod?.name[language] ?? id}</strong>
-                    {selected.includes(id) && <Check />}
-                  </div>
-                );
-              })}
+              {[...collection.preset.modIds, ...collection.preset.wardrobeIds]
+                .filter(isInstallable)
+                .map((id) => {
+                  const mod = modById.get(id);
+                  return (
+                    <div key={id}>
+                      <span>
+                        {mod ? <Media src={mod.image ?? undefined} /> : <TriangleAlert />}
+                      </span>
+                      <strong>{mod?.name[language] ?? id}</strong>
+                      {selected.includes(id) && <Check />}
+                    </div>
+                  );
+                })}
             </div>
             <button
               className="s-btn s-btn-primary s-btn-full"
               disabled={busy}
               onClick={() => {
-                const ids = [...collection.preset.modIds, ...collection.preset.wardrobeIds];
+                const ids = [...collection.preset.modIds, ...collection.preset.wardrobeIds].filter(
+                  isInstallable,
+                );
                 saveSelection(collection.replace ? ids : [...new Set([...selected, ...ids])]);
                 setCollection(null);
                 navigate("build");

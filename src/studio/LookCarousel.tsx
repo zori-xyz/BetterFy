@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { useLocale } from "../i18n";
-import { featuredMods, mods, type StudioMod } from "./model";
+import { featuredMods, isInstallable, mods, type StudioMod } from "./model";
 import { Media } from "./ui";
 import { useMotion } from "./useMotion";
 import "./studio-shelf.css";
@@ -23,7 +23,9 @@ const displayIds = [
   "river-blue-river",
   "wards-curious-snaptrap",
 ];
-const looks = displayIds.flatMap((id) => mods.find((mod) => mod.id === id && mod.image) ?? []);
+const looks = displayIds.flatMap(
+  (id) => mods.find((mod) => mod.id === id && mod.image && isInstallable(mod.id)) ?? [],
+);
 
 // Average colour of an image, sampled small. Previews come from
 // raw.githubusercontent.com, which sends CORS headers, so the sample is loaded
