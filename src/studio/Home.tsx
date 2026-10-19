@@ -25,8 +25,9 @@ import { bundleRelationProblem, findPackage, packageName } from "./packages";
 import { useBuildName } from "./builder/buildName";
 import EmoteStage, { EmoteBackdrop, emoteStyle } from "./EmoteStage";
 import { useEngineActive } from "./engineActivity";
-import { useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { useState } from "react";
 import LookCarousel from "./LookCarousel";
+import { ModCard } from "./ui";
 import { CountUp } from "./delight";
 import "./home.css";
 
@@ -52,20 +53,6 @@ const known = (ids: string[]) => ids.flatMap((id) => (modById.has(id) ? [modById
 const modForPackage = (id: string) => modById.get(findPackage(id)?.catalogId ?? id);
 const packageLabel = (id: string, language: Language) =>
   modForPackage(id)?.name[language] ?? packageName(id, language);
-
-/** Requirements and exclusions from the package manifest, as catalog mods. */
-function relationsOf(mod: StudioMod) {
-  const manifest = findPackage(mod.id);
-  const resolve = (ids: string[] | undefined) =>
-    (ids ?? []).flatMap((id) => {
-      const other = findPackage(id);
-      // A superseded package, or the mod's own earlier version, is no choice.
-      if (!other || other.supersededBy || other.catalogId === mod.id) return [];
-      const target = modById.get(other.catalogId);
-      return target ? [target] : [];
-    });
-  return { needs: resolve(manifest?.requires), clashes: resolve(manifest?.conflicts) };
-}
 
 export default function Home({
   selected,
@@ -141,35 +128,24 @@ export default function Home({
         onToggle={onToggle}
       />
       <PilotShelf selected={selected} onCatalog={onCatalog} onOpen={onOpen} onToggle={onToggle} />
-      <section className="h-community">
-        <div>
-          <span className="s-eyebrow">{isRu ? "СООБЩЕСТВО BETTERFY" : "BETTERFY COMMUNITY"}</span>
-          <h2>{isRu ? "Не хватает мода? Расскажи нам" : "Missing a mod? Tell us"}</h2>
-          <p>
-            {isRu
-              ? "Идеи и вопросы — в Telegram. История BetterFy и материалы о продукте — на сайте."
-              : "Ideas and questions go to Telegram. BetterFy's story and product notes live on the website."}
-          </p>
-        </div>
-        <div className="h-community-links">
-          <a className="s-btn" href="https://t.me/BeterHelp" target="_blank" rel="noreferrer">
+      <footer className="h-community">
+        <p>
+          <strong>{isRu ? "Не хватает мода?" : "Missing a mod?"}</strong>{" "}
+          {isRu ? "Расскажи нам, добавим." : "Tell us and we'll look into it."}
+        </p>
+        <nav>
+          <a href="https://t.me/BeterHelp" target="_blank" rel="noreferrer">
             <Send />
             Telegram
-            <code>@BeterHelp</code>
             <ArrowUpRight />
           </a>
-          <a
-            className="s-btn"
-            href="https://zori-xyz.github.io/BetterFy/"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href="https://zori-xyz.github.io/BetterFy/" target="_blank" rel="noreferrer">
             <Globe2 />
             {isRu ? "Сайт BetterFy" : "BetterFy website"}
             <ArrowUpRight />
           </a>
-        </div>
-      </section>
+        </nav>
+      </footer>
     </div>
   );
 }
@@ -413,138 +389,48 @@ function PilotShelf({
     .map((id) => ({ id, items: pilots.filter((mod) => mod.category === id) }))
     .filter((group) => group.items.length > 0);
   const [tab, setTab] = useState(groups[0]?.id ?? "");
-  const tabs = useRef<Record<string, HTMLButtonElement | null>>({});
   const active = groups.find((group) => group.id === tab) ?? groups[0];
   if (!active) return null;
   const picked = new Set(selected);
-  const move = (event: KeyboardEvent, index: number) => {
-    const last = groups.length - 1;
-    const next =
-      event.key === "ArrowRight"
-        ? index === last
-          ? 0
-          : index + 1
-        : event.key === "ArrowLeft"
-          ? index === 0
-            ? last
-            : index - 1
-          : event.key === "Home"
-            ? 0
-            : event.key === "End"
-              ? last
-              : -1;
-    if (next < 0) return;
-    event.preventDefault();
-    setTab(groups[next].id);
-    tabs.current[groups[next].id]?.focus();
-  };
+  // The same cards and tabs as the catalog, so Home reads as the same app.
   return (
     <section className="h-section h-pilot">
       <header className="s-section-head">
         <div>
-          <span className="s-eyebrow">
-            {isRu ? "НАСТРОЙКА ИГРЫ" : "GAME TUNING"} ·{" "}
-            {modCount(pilots.length, language).toUpperCase()}
-          </span>
-          <h2>{isRu ? "Моды, которые можно поставить" : "Mods you can install"}</h2>
+          <span className="s-eyebrow">{isRu ? "НАСТРОЙКА ИГРЫ" : "GAME TUNING"}</span>
+          <h2>{isRu ? "Настрой саму Dota" : "Tune Dota itself"}</h2>
         </div>
         <button className="s-text-button" onClick={() => onCatalog("game")}>
-          {isRu ? "Все моды для игры" : "All game mods"}
+          {isRu ? "Все настройки" : "All tuning mods"}
           <ArrowRight />
         </button>
       </header>
-      <p className="h-pilot-lead">
-        {isRu
-          ? "Оптимизация, интерфейс, звук и полезные мелочи. Всё ставится одной сборкой и откатывается в один клик."
-          : "Performance, interface, sound and handy extras. Everything installs as one build and rolls back in one click."}
-      </p>
-      <div className="h-tabs" role="tablist" aria-label={isRu ? "Категории" : "Categories"}>
-        {groups.map((group, index) => {
-          const Icon = gameIcons[group.id] ?? Gamepad2;
-          const count = group.items.filter((mod) => picked.has(mod.id)).length;
-          const current = group.id === active.id;
-          return (
-            <button
-              key={group.id}
-              ref={(element) => {
-                tabs.current[group.id] = element;
-              }}
-              role="tab"
-              id={`h-tab-${group.id}`}
-              aria-selected={current}
-              aria-controls="h-pilot-panel"
-              tabIndex={current ? 0 : -1}
-              onClick={() => setTab(group.id)}
-              onKeyDown={(event) => move(event, index)}
-            >
-              <Icon />
-              <span>{group.items[0].categoryName[language]}</span>
-              <small
-                className={count ? "is-some" : ""}
-                aria-label={
-                  count
-                    ? isRu
-                      ? `${count} из ${group.items.length} в сборке`
-                      : `${count} of ${group.items.length} in your build`
-                    : modCount(group.items.length, language)
-                }
-              >
-                {count ? `${count}/${group.items.length}` : group.items.length}
-              </small>
-            </button>
-          );
-        })}
-      </div>
       <div
-        className="h-items"
-        role="tabpanel"
-        id="h-pilot-panel"
-        aria-labelledby={`h-tab-${active.id}`}
-        key={active.id}
+        className="s-domain-tabs h-pilot-tabs"
+        role="tablist"
+        aria-label={isRu ? "Категории" : "Categories"}
       >
-        {active.items.map((mod) => {
-          const inBuild = picked.has(mod.id);
-          const { needs, clashes } = relationsOf(mod);
-          const missing = needs.filter((other) => !picked.has(other.id));
-          const clashing = clashes.filter((other) => picked.has(other.id));
-          return (
-            <article className={`h-item ${inBuild ? "is-in" : ""}`} key={mod.id}>
-              <button className="h-item-main" onClick={() => onOpen(mod)}>
-                <span className="h-item-thumb">
-                  <SlotArt mod={mod} />
-                </span>
-                <span className="h-item-text">
-                  <strong>{mod.name[language]}</strong>
-                  <small>{mod.description[language].split("\n")[0]}</small>
-                  {needs.map((other) => (
-                    <em
-                      key={other.id}
-                      className={inBuild && missing.includes(other) ? "is-risk" : ""}
-                    >
-                      {isRu ? `нужен «${other.name.ru}»` : `needs ${other.name.en}`}
-                    </em>
-                  ))}
-                  {clashes.map((other) => (
-                    <em
-                      key={other.id}
-                      className={inBuild && clashing.includes(other) ? "is-risk" : ""}
-                    >
-                      {isRu ? `не вместе с «${other.name.ru}»` : `not with ${other.name.en}`}
-                    </em>
-                  ))}
-                </span>
-              </button>
-              <button
-                className={`s-add ${inBuild ? "is-selected" : ""}`}
-                onClick={() => onToggle(mod)}
-                aria-label={`${inBuild ? (isRu ? "Убрать" : "Remove") : isRu ? "Добавить" : "Add"}: ${mod.name[language]}`}
-                aria-pressed={inBuild}
-              >
-                {inBuild ? <Check /> : <Plus />}
-              </button>
-            </article>
-          );
-        })}
+        {groups.map((group) => (
+          <button
+            key={group.id}
+            role="tab"
+            aria-selected={group.id === active.id}
+            onClick={() => setTab(group.id)}
+          >
+            {group.items[0].categoryName[language]}
+          </button>
+        ))}
+      </div>
+      <div className="s-mod-grid h-pilot-grid" role="tabpanel" key={active.id}>
+        {active.items.slice(0, 4).map((mod) => (
+          <ModCard
+            key={mod.id}
+            mod={mod}
+            selected={picked.has(mod.id)}
+            onOpen={() => onOpen(mod)}
+            onToggle={() => onToggle(mod)}
+          />
+        ))}
       </div>
     </section>
   );

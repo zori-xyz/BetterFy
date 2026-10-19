@@ -29,19 +29,16 @@
   align-items: center;
   gap: 18px 28px;
   margin-top: 20px;
-  padding: 20px 22px;
-  border: 1px solid var(--s-line);
-  border-radius: var(--s-radius-panel);
-  background:
-    radial-gradient(90% 130% at 100% 0%, var(--s-tint), transparent 62%),
-    var(--s-panel);
-  overflow: hidden;
+  padding: 22px 0;
+  border-top: 1px solid var(--s-line-soft);
+  border-bottom: 1px solid var(--s-line-soft);
+  background: radial-gradient(60% 140% at 50% 50%, var(--s-tint), transparent 70%);
 }
 .h-dock.is-blocked {
-  border-color: color-mix(in srgb, var(--s-danger) 38%, var(--s-line));
+  background: radial-gradient(60% 140% at 50% 50%, color-mix(in srgb, var(--s-danger) 12%, transparent), transparent 70%);
 }
 .h-dock.is-installed {
-  border-color: color-mix(in srgb, var(--s-ready) 40%, var(--s-line));
+  background: radial-gradient(60% 140% at 50% 50%, color-mix(in srgb, var(--s-ready) 12%, transparent), transparent 70%);
 }
 .h-dock-copy {
   display: flex;
@@ -225,204 +222,76 @@
   color: var(--s-text);
 }
 
-/* Windows-pilot shelf */
-
-.h-pilot-lead {
-  max-width: 660px;
-  margin: -6px 0 16px;
-  font-size: var(--s-text-md);
-  line-height: 1.65;
-  color: var(--s-muted);
+/* Game tuning shelf: catalog cards and catalog tabs. */
+.h-pilot-tabs {
+  margin-bottom: 18px;
 }
-.h-tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 12px;
-  padding: 2px;
-  overflow-x: auto;
-  scrollbar-width: none;
+/* One row of four, lower than in the catalog: Home is a taste, not a list. */
+.h-pilot-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  animation: h-items-in 0.24s var(--s-ease-out) both;
 }
-.h-tabs::-webkit-scrollbar {
-  display: none;
+.h-pilot-grid .s-mod-image {
+  height: auto;
+  aspect-ratio: 16 / 9;
 }
-.h-tabs [role="tab"] {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  flex: none;
-  min-height: 34px;
-  padding: 6px 11px;
-  border: 1px solid var(--s-line);
-  border-radius: var(--s-radius-control);
-  color: var(--s-muted);
-  font-size: var(--s-text-md);
-  font-weight: 600;
-  white-space: nowrap;
-  transition:
-    background-color 0.2s ease,
-    border-color 0.2s ease,
-    color 0.2s ease;
+@media (max-width: 1080px) {
+  .h-pilot-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
-.h-tabs [role="tab"] > svg {
-  width: 14px;
-  height: 14px;
-}
-.h-tabs [role="tab"] small {
-  padding: 3px 5px;
-  border-radius: var(--s-radius-tag);
-  background: var(--s-panel-high);
-  color: var(--s-quiet);
-  font: 500 var(--s-text-2xs) / 1 "JetBrains Mono", monospace;
-}
-.h-tabs [role="tab"] small.is-some {
-  color: var(--s-ready);
-}
-.h-tabs [role="tab"][aria-selected="true"] {
-  border-color: color-mix(in srgb, var(--s-accent) 60%, var(--s-line));
-  background: var(--s-tint);
-  color: var(--s-text);
-}
-.h-tabs [role="tab"][aria-selected="true"] > svg {
-  color: var(--s-accent);
-}
-.h-items {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-.h-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 8px 10px 8px 8px;
-  border: 1px solid var(--s-line);
-  border-radius: var(--s-radius-card);
-  background: var(--s-panel);
-  transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease;
-}
-.h-item.is-in {
-  border-color: color-mix(in srgb, var(--s-ready) 42%, var(--s-line));
-  background: linear-gradient(
-    100deg,
-    color-mix(in srgb, var(--s-ready) 8%, var(--s-panel)),
-    var(--s-panel) 62%
-  );
-}
-.h-item-main {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 11px;
-  min-width: 0;
-  padding: 0;
-  color: inherit;
-  text-align: left;
-  border-radius: var(--s-radius-control);
-}
-.h-item-thumb {
-  position: relative;
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 60px;
-  height: 46px;
-  overflow: hidden;
-  border-radius: var(--s-radius-inner);
-  background: linear-gradient(160deg, var(--s-panel-high), var(--s-input));
-  color: var(--s-accent);
-}
-.h-item-thumb > img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.35s var(--s-ease-out);
-}
-.h-item-thumb > svg {
-  width: 18px;
-  height: 18px;
-}
-.h-item-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.h-item-text strong {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: var(--s-text-md);
-  font-weight: 700;
-  line-height: 1.35;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.h-item-text small {
-  overflow: hidden;
-  font-size: var(--s-text-xs);
-  line-height: 1.45;
-  color: var(--s-muted);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.h-item-text em {
-  font: 500 var(--s-text-2xs) / 1.4 "JetBrains Mono", monospace;
-  font-style: normal;
-  color: var(--s-quiet);
-}
-.h-item-text em.is-risk {
-  color: var(--s-danger);
+@media (max-width: 560px) {
+  .h-pilot-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
-/* Community note */
-
+/* Community: one quiet line at the end of the page. */
 .h-community {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 18px 28px;
-  margin-top: 38px;
-  padding: 20px 22px;
-  border: 1px solid var(--s-line-soft);
-  border-radius: var(--s-radius-card);
-  background: linear-gradient(110deg, var(--s-tint), transparent 58%);
-}
-.h-community > div:first-child {
-  min-width: 0;
-  max-width: 560px;
-}
-.h-community .s-eyebrow {
-  font-size: var(--s-text-2xs);
-  color: var(--s-quiet);
-}
-.h-community h2 {
-  margin-top: 7px;
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-.h-community p {
-  margin-top: 6px;
-  font-size: var(--s-text-sm);
-  line-height: 1.6;
+  gap: 12px 24px;
+  flex-wrap: wrap;
+  margin-top: 42px;
+  padding: 20px 0 28px;
+  border-top: 1px solid var(--s-line-soft);
+  font-size: var(--s-text-md);
   color: var(--s-muted);
 }
-.h-community-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.h-community strong {
+  color: var(--s-text);
+  font-weight: 700;
 }
-.h-community-links .s-btn svg:first-child {
+.h-community nav {
+  display: flex;
+  gap: 18px;
+}
+.h-community a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--s-text);
+  font-weight: 600;
+}
+.h-community a > svg {
   width: 14px;
   height: 14px;
+}
+.h-community a > svg:first-child {
   color: var(--s-accent);
 }
-.h-community-links code {
-  font: 500 var(--s-text-xs) / 1 "JetBrains Mono", monospace;
-  color: var(--s-muted);
+.h-community a > svg:last-child {
+  width: 12px;
+  height: 12px;
+  color: var(--s-quiet);
+  transition: transform var(--s-motion-fast) var(--s-ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .h-community a:hover > svg:last-child {
+    transform: translate(2px, -2px);
+    color: var(--s-accent);
+  }
 }
 
 /* Motion */
@@ -432,15 +301,11 @@
   :root:not(.motion-disabled) .h-slot.is-next:hover {
     transform: translateY(-2px);
   }
-  :root:not(.motion-disabled) .h-slot.is-filled:hover > img,
-  :root:not(.motion-disabled) .h-item-main:hover .h-item-thumb > img {
+  :root:not(.motion-disabled) .h-slot.is-filled:hover > img {
     transform: scale(1.07);
   }
   :root:not(.motion-disabled) .h-slot.is-new {
     animation: h-slot-in 0.5s var(--s-ease-spring) both;
-  }
-  :root:not(.motion-disabled) .h-items {
-    animation: h-items-in 0.24s var(--s-ease-out) both;
   }
 }
 @media (hover: hover) and (pointer: fine) {
@@ -450,13 +315,6 @@
   }
   .h-inv-pack .h-slot.is-filled:hover > :is(img, svg) {
     filter: none;
-  }
-  .h-tabs [role="tab"]:hover {
-    border-color: var(--s-muted);
-    color: var(--s-text);
-  }
-  .h-item:hover {
-    border-color: var(--s-muted);
   }
 }
 @keyframes h-slot-in {
@@ -479,22 +337,6 @@
 
 /* Layout */
 
-@media (max-width: 1080px) {
-  .h-items {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 760px) {
-  .h-items {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .h-community-links {
-    width: 100%;
-  }
-  .h-community-links .s-btn {
-    flex: 1;
-  }
-}
 
 @media (max-width: 1240px) {
   .h-dock {
