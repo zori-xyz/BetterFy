@@ -249,9 +249,21 @@
 .motion-disabled .s-empty-art img { animation: none; }
 @media (prefers-reduced-motion: reduce) { .s-empty-art img { animation: none; } }
 
-/* Profile cover: a soft wash of the account's emoticon colour, and the
-   emoticon itself as a crisp die-cut sticker, like the one on the home
-   headline. */
-.s-profile-cover { position: relative; height: 96px; overflow: visible; border-bottom: 1px solid var(--s-line-soft); background: radial-gradient(70% 180% at 85% 0%, rgb(var(--cover-rgb) / .34), transparent 65%), radial-gradient(50% 140% at 10% 100%, rgb(var(--cover-rgb) / .12), transparent 70%), var(--s-panel); }
-.s-profile-cover img { position: absolute; right: 34px; top: 22px; width: 76px; height: 76px; image-rendering: pixelated; transform: rotate(9deg); filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff) drop-shadow(0 10px 14px rgb(0 0 0 / .4)); transition: transform .45s var(--s-ease-spring); }
-@media (hover: hover) and (pointer: fine) { .s-profile-card:hover .s-profile-cover img { transform: rotate(0deg) scale(1.08); } }
+/* Profile: a player card, no cover band. The avatar sits in a slowly
+   turning ring of the account's emoticon colour with that emoticon pinned to
+   its corner; a faint glow of the same colour sits behind it. */
+.s-profile-person { position: relative; isolation: isolate; gap: 22px; margin-top: 0; padding: 30px 30px 28px; }
+.s-profile-person::before { content: ""; position: absolute; left: -40px; top: -60px; z-index: -1; width: 340px; height: 260px; background: radial-gradient(closest-side, rgb(var(--card-rgb) / .22), transparent); pointer-events: none; }
+.s-profile-person > div { padding-top: 0; }
+.s-profile-person h2 { font: 400 clamp(22px, 2.2vw, 30px) / 1.15 "Days One BetterFy", Manrope, system-ui, sans-serif; letter-spacing: -.035em; }
+.s-profile-person > .s-chip { margin-top: 0; align-self: center; }
+.s-profile-avatar { position: relative; flex: none; display: grid; place-items: center; width: 96px; height: 96px; }
+.s-profile-avatar::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from var(--ring-turn, 0deg), rgb(var(--card-rgb)), rgb(var(--card-rgb) / .15), rgb(var(--card-rgb)) 55%, rgb(var(--card-rgb) / .15), rgb(var(--card-rgb))); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px)); mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px)); animation: s-ring-turn 9s linear infinite; }
+.s-profile-avatar .s-avatar { width: 84px; height: 84px; border: 0; }
+.s-profile-badge { position: absolute; right: -8px; bottom: -6px; width: 40px; height: 40px; image-rendering: pixelated; transform: rotate(10deg); filter: drop-shadow(1.5px 0 0 #fff) drop-shadow(-1.5px 0 0 #fff) drop-shadow(0 1.5px 0 #fff) drop-shadow(0 -1.5px 0 #fff) drop-shadow(0 6px 8px rgb(0 0 0 / .4)); transition: transform .45s var(--s-ease-spring); }
+@property --ring-turn { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@keyframes s-ring-turn { to { --ring-turn: 360deg; } }
+@media (hover: hover) and (pointer: fine) { .s-profile-avatar:hover .s-profile-badge { transform: rotate(-6deg) scale(1.15); } }
+.motion-disabled .s-profile-avatar::before { animation: none; }
+@media (prefers-reduced-motion: reduce) { .s-profile-avatar::before { animation: none; } }
+@media (max-width: 760px) { .s-profile-person { padding: 24px 20px; gap: 16px; } .s-profile-avatar { width: 76px; height: 76px; } .s-profile-avatar .s-avatar { width: 66px; height: 66px; } }

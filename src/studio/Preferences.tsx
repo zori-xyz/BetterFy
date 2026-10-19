@@ -357,19 +357,22 @@ export function Profile({
         }
       />
       <section className="s-profile-card">
-        {/* The account's own emoticon, blown up into the same pixel mosaic as
-            the home scene; the same account always gets the same one. */}
+        {/* A player card: the avatar in a ring of the account's own emoticon
+            colour, with that emoticon pinned to it like a badge. The same
+            account always gets the same one. */}
         <div
-          className="s-profile-cover"
-          style={{
-            ["--cover-rgb" as string]: profileMood(session?.userId ?? "guest").rgb,
-          }}
+          className="s-profile-person"
+          style={{ ["--card-rgb" as string]: profileMood(session?.userId ?? "guest").rgb }}
         >
-          <img src={profileMood(session?.userId ?? "guest").still} alt="" />
-        </div>
-        <div className="s-profile-person">
-          <span className="s-avatar">
-            {avatarUrl ? <img src={avatarUrl} alt="" /> : <CircleUserRound />}
+          <span className="s-profile-avatar">
+            <span className="s-avatar">
+              {avatarUrl ? <img src={avatarUrl} alt="" /> : <CircleUserRound />}
+            </span>
+            <img
+              className="s-profile-badge"
+              src={profileMood(session?.userId ?? "guest").still}
+              alt=""
+            />
           </span>
           <div>
             <h2>{preview ? (isRu ? "Гость BetterFy" : "BetterFy guest") : session.displayName}</h2>
