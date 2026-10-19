@@ -617,10 +617,12 @@ out is an explicit per-skin opt-in (see "Install modes").
 
 **Allowlist.** A wardrobe item is installable only if it has an entry compiled into the
 app, like the audited scripts: a signed catalog cannot add one, and the package registry
-reserves the `wardrobe.` namespace and the catalog IDs of the entries. All entries are one
-generated JSON array, `src-tauri/wardrobe/manifests.json` (compact, sorted by ID, about
-0.87 MB for the 500 entries), and `index.json` is the interface's copy (names, authors,
-heroes, sizes; about 0.14 MB). A test requires both files to be exactly what the
+reserves the `wardrobe.` namespace and the catalog IDs of the entries. The entries are
+generated JSON arrays, compact and sorted by ID, in four files by kind of content
+(`manifests.json` for hero skins and hero items, `manifests-effects.json`,
+`manifests-world.json`, `manifests-audio-ui.json`; 2.15 MB in all for the 939 entries,
+see "Catalog categories"), and `index.json` is the interface's copy (names, authors,
+categories, heroes, sizes; about 0.33 MB). A test requires both files to be exactly what the
 generator would write for the embedded manifests, so the interface cannot list an item the
 engine does not know. An entry pins
 
@@ -778,6 +780,90 @@ the files must be canonical, and the interface copy must be derived from them.
   in Dota. Nothing here claims a skin loads or looks right in the game when BetterFy
   installs it.
 
+### Catalog categories (every audited category, not only hero skins)
+
+The wardrobe pipeline above was built for hero skins. The same pipeline now
+installs the other categories of the Dota2PornFx catalog that are plain resource
+VPKs (couriers, creeps, effects, sounds, music, shaders, rivers, trees, ranks and
+item icons, ...). The per-category table, the upstream help text and what is not
+enabled are in [`CATALOG_CATEGORIES.md`](CATALOG_CATEGORIES.md); the item-by-item audit is
+[`WARDROBE_AUDIT_REPORT.md`](WARDROBE_AUDIT_REPORT.md). Archives install as authored
+(everything the game would load), minus what the safety rules reject.
+
+**Category, scope kind, type policy.** A manifest names its `category`, and
+`skin_archive::CATEGORIES` (a table in the binary) says what that category is: its
+*scope kind* and its *type policy*. A manifest cannot claim a different scope than its
+category's, and a category that is not in the table is not enabled whatever a manifest
+says; its catalog ID must start with the category.
+
+- *Scope kind `hero`* (`heroes`, `hero-items`) is the model described above: hero-scoped,
+  shared and author-owned files, the pinned shared list, and the opt-in `.strip` mode.
+- *Scope kind `none`* (every other enabled category) has no hero. Every accepted file
+  installs. The audit still computes, against Valve's list, which files override a Valve
+  file (`shared`) and which are new (`author-owned`) and pins the list, but that split is
+  information for the review and the plan, not a policy: replacing game files is what a
+  courier or a sound pack is for. There is no `.strip` variant of such an item (its ID
+  does not resolve, the manifest has no strip result, the analyzer refuses the policy),
+  and no hero names.
+- *Type policy* narrows the compiled types a category may carry: `resources` (all of
+  `ALLOWED_TYPES` plus the proven image wrappers), `sounds` (`vsnd_c`, `vsndevts_c`
+  under `sounds/` and `soundevents/`), `textures` (`vtex_c` under `panorama/images/`;
+  ranks, item icons) and `materials` (`vmat_c`, `vtex_c`; shaders). A file of an
+  accepted type outside the policy's folders is dropped as `outside_category`
+  (none occurs in the current catalog). A policy never admits a `vxml_c`, `vcss_c` or
+  `webm` it could not before, and scripts, executables, traversal and unproven layouts
+  are rejected under every policy.
+
+**Source kind.** The manifest's `archive.kind` is `zip` (a ZIP holding one
+`pakNN_dir.vpk`, pinned twice: the ZIP and the VPK inside it) or `vpk` (280 of the allowlisted
+items are a raw `pakNN_dir.vpk` served as the item itself, no ZIP). For `vpk` the one pin
+(size, SHA-256 of the VPK) is also the download: the mirrors' URLs must end in `.vpk`,
+the transport fetches it as a raw file under the same size and hash check, and the content
+store keeps it under the same key; every build re-reads, re-hashes and re-analyzes it.
+`zip` fields on a `vpk` manifest are refused. The two mirrors and the redirect rules are
+unchanged. `ArchivePin::download_bytes` and `download_sha256` name the pin of whichever file is
+downloaded.
+
+**Leftovers.** A `.txt` inside `models/`, `materials/`, `particles/` or `sounds/` (other
+than `portraits.txt`, which Valve ships under `models/`) is a note someone left, and Valve's
+list holds no such file: it is counted as "not a game file, ignored" instead of dropped (ten
+couriers carry one). A leftover of that kind whose *name* has characters the VPK writer
+does not take no longer blocks the archive; the same name on a file the game would load
+(a compiled texture with brackets, 5 items) still does. Hero audits are unchanged by this
+except one text note in `heroes-shadow-fiend-sundered-souls` moving from dropped to
+ignored.
+
+**Allowlist layout.** The generated entries are split into four files by kind of content
+(`wardrobe::SHARDS`), so no file is much over 0.9 MB and a regeneration reads as a diff.
+A test requires every manifest to sit in the shard of its category and every enabled
+category to have exactly one shard, and that each file is the canonical form of what it
+parses to. The engine reads them as one registry (IDs unique across all).
+
+**Plan and build.** `WardrobePlanItem` carries `category` and `scope`; the build review shows
+the category's help text, the files, size and class counts per item, and no hero line or
+opt-in switch for scope `none`. Two items that write the same path with different bytes are
+a conflict under the existing review and acknowledgement, whatever their categories; a path
+with identical bytes is a duplicate. The merged VPK's 256 MiB and 65,536-entry limits are
+checked from the audited sizes before anything is downloaded (`bundle_limit_exceeded`), for
+every category (music packs are up to 92 MiB each; 14 of them together are 879 MiB).
+
+**The generator** (`wardrobe_audit::generate_wardrobe_allowlist`, local only) audits every
+item of every enabled category from the cache (`<id>.zip` or `<id>.vpk`), writes the four
+manifest files, `index.json` and a per-category section in the report, and refuses to run if a
+catalog category is neither enabled nor listed as not enabled with its reason. The local fetch
+script that fills the cache is not in the repository (like the earlier one): it downloads each
+catalog file from the GitHub mirror when the file exists there, else from Hugging Face,
+and HEAD-checks both mirrors for the same size.
+
+**What has and has not been run.** Compiles and passes unit tests on a Mac (synthetic raw
+and ZIP sources, scope kinds, every type policy, the leftover rules, the category table,
+malformed manifests, the raw-VPK fetch with fake mirrors, a mixed hero skin and packs build
+with conflicts and determinism). Run locally on a Mac and not committed: the audit of 971
+items; real plans for the smallest and the largest item of every category, a nine-item
+mix, two conflicting sound packs and selections over the bound, each built twice with
+identical bytes (the numbers are in the pull request). Not run: Windows CI for this change
+(see the PR), a download through BetterFy's own transport of the new archives, an install on
+Windows, and anything in Dota.
 ### Panorama decor proofs (menu backgrounds, HUD skins, versus screens)
 
 `src-tauri/src/panorama_decor.rs` proves, from parsed structure and never from a file

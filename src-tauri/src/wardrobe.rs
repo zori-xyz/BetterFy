@@ -28,7 +28,9 @@
 
 use crate::content_store;
 use crate::package_registry::LocalizedName;
-use crate::skin_archive::{self, Limits, ScopeSpec, SharedPolicy, SkinReport};
+use crate::skin_archive::{
+    self, Limits, ScopeKind, ScopeSpec, SharedPolicy, SkinReport, TypePolicy,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -37,7 +39,59 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::OnceLock;
 
-const MANIFESTS: &str = include_str!("../wardrobe/manifests.json");
+/// One generated file of the allowlist: the manifests of some categories,
+/// sorted by engine ID. The allowlist is split by kind of content so no single
+/// file passes about a megabyte and a regeneration shows up as a readable diff;
+/// the engine reads all of them as one registry.
+pub(crate) struct Shard {
+    pub file: &'static str,
+    pub categories: &'static [&'static str],
+    text: &'static str,
+}
+
+pub(crate) const SHARDS: &[Shard] = &[
+    Shard {
+        file: "manifests.json",
+        categories: &["heroes", "hero-items"],
+        text: include_str!("../wardrobe/manifests.json"),
+    },
+    Shard {
+        file: "manifests-effects.json",
+        categories: &[
+            "item-effects",
+            "ti-bp-effects",
+            "ranged-attack",
+            "herofx",
+            "optimization",
+            "emblems",
+            "pings",
+            "creep-deny",
+            "high-five",
+        ],
+        text: include_str!("../wardrobe/manifests-effects.json"),
+    },
+    Shard {
+        file: "manifests-world.json",
+        categories: &[
+            "couriers", "creeps", "roshan", "wards", "towers", "ancient", "river", "trees",
+            "terrains", "shaders",
+        ],
+        text: include_str!("../wardrobe/manifests-world.json"),
+    },
+    Shard {
+        file: "manifests-audio-ui.json",
+        categories: &[
+            "mega-kill",
+            "music",
+            "sounds",
+            "hero-sounds",
+            "announcers",
+            "ranks",
+            "item-icons",
+        ],
+        text: include_str!("../wardrobe/manifests-audio-ui.json"),
+    },
+];
 #[cfg(test)]
 const INDEX: &str = include_str!("../wardrobe/index.json");
 
@@ -52,7 +106,7 @@ pub(crate) const TRUSTED_ARCHIVE_PREFIXES: [&str; 2] = [
 /// Wardrobe IDs share the package ID shape (`namespace.name`) under their own
 /// namespace, which `package_registry` reserves.
 pub(crate) const NAMESPACE: &str = "wardrobe";
-const SCHEMA_VERSION: u32 = 2;
+const SCHEMA_VERSION: u32 = 3;
 const MAX_ARCHIVE_BYTES: u64 = content_store::MAX_ARTIFACT_BYTES;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -69,14 +123,67 @@ pub struct WardrobeSource {
     pub permission: String,
 }
 
+/// What the downloaded file is. `Zip` is a ZIP holding exactly one
+/// `pakNN_dir.vpk`; `Vpk` is a raw `pakNN_dir.vpk` served as the catalog item
+/// itself (no ZIP at all), pinned by its own size and SHA-256.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceKind {
+    Zip,
+    Vpk,
+}
+
+impl SourceKind {
+    /// The extension of the URL's last segment for this kind of source.
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Zip => ".zip",
+            Self::Vpk => ".vpk",
+        }
+    }
+}
+
+fn is_zero(value: &u64) -> bool {
+    *value == 0
+}
+
+fn is_zero_usize(value: &usize) -> bool {
+    *value == 0
+}
+
+/// The pinned bytes. For a ZIP: the ZIP (`zip_*`) and the one VPK inside it
+/// (`inner_*`). For a raw VPK there is no ZIP: only `inner_*` is present and it
+/// is also the download.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ArchivePin {
+    pub kind: SourceKind,
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub zip_bytes: u64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub zip_sha256: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub inner_path: String,
     pub inner_bytes: usize,
     pub inner_sha256: String,
+}
+
+impl ArchivePin {
+    /// Size of the file that is downloaded.
+    pub(crate) fn download_bytes(&self) -> u64 {
+        match self.kind {
+            SourceKind::Zip => self.zip_bytes,
+            SourceKind::Vpk => self.inner_bytes as u64,
+        }
+    }
+
+    /// SHA-256 of the file that is downloaded.
+    pub(crate) fn download_sha256(&self) -> &str {
+        match self.kind {
+            SourceKind::Zip => &self.zip_sha256,
+            SourceKind::Vpk => &self.inner_sha256,
+        }
+    }
 }
 
 /// What the analyzer found when a person audited this archive. Both ways of
@@ -99,8 +206,13 @@ pub struct AuditedResult {
     pub install_files: usize,
     pub install_bytes: u64,
     pub install_identity: String,
+    /// The opt-in `strip` result. Pinned for hero skins only: content with no
+    /// hero installs whole and has no such mode (these stay zero and empty).
+    #[serde(default, skip_serializing_if = "is_zero_usize")]
     pub strip_files: usize,
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub strip_bytes: u64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub strip_identity: String,
     /// Accepted paths whose upper-case letters were folded to lower case.
     pub renamed: usize,
@@ -117,9 +229,15 @@ pub struct WardrobeManifest {
     pub kind: String,
     pub id: String,
     pub catalog_id: String,
+    /// The catalog category (`heroes`, `couriers`, `mega-kill`, ...); it fixes
+    /// the scope kind and the type policy (`skin_archive::CATEGORIES`).
+    pub category: String,
+    /// `hero` for a hero skin, `none` for every other category.
+    pub scope: ScopeKind,
     pub name: LocalizedName,
     pub author: String,
-    /// Internal names of the heroes the skin is for.
+    /// Internal names of the heroes the skin is for (none for scope `none`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub heroes: Vec<String>,
     /// Sorted lower-case paths in the archive that Valve ships and that are
     /// not the heroes': the files the opt-in `strip` mode leaves out.
@@ -137,6 +255,9 @@ pub struct WardrobeManifest {
 impl WardrobeManifest {
     pub(crate) fn scope_spec(&self, policy: SharedPolicy) -> ScopeSpec {
         ScopeSpec {
+            kind: self.scope,
+            types: skin_archive::category_rule(&self.category)
+                .map_or(TypePolicy::Resources, |rule| rule.types),
             heroes: self.heroes.clone(),
             shared_paths: self.shared_paths.clone(),
             shared_policy: policy,
@@ -176,6 +297,8 @@ impl AuditedResult {
                 self.install_bytes,
                 &self.install_identity,
             )),
+            // Content with no hero has no strip result pinned.
+            SharedPolicy::Strip if self.strip_identity.is_empty() => None,
             SharedPolicy::Strip => Some((self.strip_files, self.strip_bytes, &self.strip_identity)),
             SharedPolicy::Refuse => None,
         }
@@ -191,13 +314,18 @@ pub struct IndexEntry {
     pub id: String,
     pub catalog_id: String,
     pub kind: String,
+    pub category: String,
+    pub scope: ScopeKind,
     pub name: LocalizedName,
     pub author: String,
     pub heroes: Vec<String>,
+    /// Size of the file that is downloaded (the ZIP, or the raw VPK).
+    pub download_bytes: u64,
     /// Everything the analyzer accepts (the default mode).
     pub install_files: usize,
     pub install_bytes: u64,
-    /// The same without the files that override a shared Valve file.
+    /// The same without the files that override a shared Valve file (hero
+    /// skins only; zero for content with no hero).
     pub strip_bytes: u64,
     /// How many accepted files override a shared Valve file.
     pub shared_files: usize,
@@ -209,9 +337,12 @@ pub(crate) fn index_entry(manifest: &WardrobeManifest) -> IndexEntry {
         id: manifest.id.clone(),
         catalog_id: manifest.catalog_id.clone(),
         kind: manifest.kind.clone(),
+        category: manifest.category.clone(),
+        scope: manifest.scope,
         name: manifest.name.clone(),
         author: manifest.author.clone(),
         heroes: manifest.heroes.clone(),
+        download_bytes: manifest.archive.download_bytes(),
         install_files: manifest.audited.install_files,
         install_bytes: manifest.audited.install_bytes,
         strip_bytes: manifest.audited.strip_bytes,
@@ -228,6 +359,10 @@ pub(crate) struct WardrobePlanItem {
     /// person asked to keep the game's shared files untouched.
     pub package_id: String,
     pub catalog_id: String,
+    /// The catalog category; the review shows its help text.
+    pub category: String,
+    /// `hero` for a skin, `none` for every other category.
+    pub scope: ScopeKind,
     pub heroes: Vec<String>,
     /// The mirror list in the order it is tried.
     pub source_urls: Vec<String>,
@@ -280,14 +415,27 @@ fn slug(value: &str) -> bool {
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
-/// `<category>/<file>.zip` of a URL under one of the trusted prefixes: exactly
-/// two percent-encoded path segments, no query, no fragment, no traversal.
-pub(crate) fn archive_tail(url: &str) -> Option<&str> {
+/// Catalog IDs are the upstream's: lower-case words joined by hyphens. One
+/// upstream ID ends in a hyphen (`shaders-diretide-outline-`), so unlike an
+/// engine name a catalog ID may.
+fn catalog_slug(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && !value.starts_with('-')
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+}
+
+/// `<category>/<file>` of a URL under one of the trusted prefixes whose file
+/// ends in `extension` (`.zip` or `.vpk`): exactly two percent-encoded path
+/// segments, no query, no fragment, no traversal.
+pub(crate) fn archive_tail<'a>(url: &'a str, extension: &str) -> Option<&'a str> {
     let rest = TRUSTED_ARCHIVE_PREFIXES
         .iter()
         .find_map(|prefix| url.strip_prefix(prefix))?;
     let segments = rest.split('/').collect::<Vec<_>>();
-    (rest.ends_with(".zip")
+    (rest.ends_with(extension)
         && rest.len() <= 160
         && segments.len() == 2
         && segments.iter().all(|segment| {
@@ -301,17 +449,18 @@ pub(crate) fn archive_tail(url: &str) -> Option<&str> {
     .then_some(rest)
 }
 
-fn valid_archive_urls(urls: &[String]) -> bool {
+fn valid_archive_urls(urls: &[String], kind: SourceKind) -> bool {
     if urls.is_empty() || urls.len() > TRUSTED_ARCHIVE_PREFIXES.len() {
         return false;
     }
-    let Some(first) = archive_tail(&urls[0]) else {
+    let extension = kind.extension();
+    let Some(first) = archive_tail(&urls[0], extension) else {
         return false;
     };
     // Every mirror names the same file, and no mirror is listed twice.
     let mut prefixes = BTreeSet::new();
     urls.iter().all(|url| {
-        archive_tail(url) == Some(first)
+        archive_tail(url, extension) == Some(first)
             && TRUSTED_ARCHIVE_PREFIXES
                 .iter()
                 .find(|prefix| url.starts_with(**prefix))
@@ -332,8 +481,22 @@ pub(crate) fn validate(manifest: &WardrobeManifest) -> Result<(), String> {
     if manifest.distribution != "internal_pilot" {
         return invalid("distribution");
     }
+    // The category fixes the scope and the type policy; a manifest cannot
+    // claim a looser one.
+    let Some(rule) = skin_archive::category_rule(&manifest.category) else {
+        return invalid("category");
+    };
+    if manifest.scope != rule.scope {
+        return invalid("scope");
+    }
     let name = manifest.id.strip_prefix("wardrobe.");
-    if !name.is_some_and(slug) || !slug(&manifest.catalog_id) || !manifest.catalog_id.contains('-')
+    if !name.is_some_and(slug)
+        || !catalog_slug(&manifest.catalog_id)
+        || !manifest.catalog_id.contains('-')
+        || !manifest
+            .catalog_id
+            .strip_prefix(manifest.category.as_str())
+            .is_some_and(|rest| rest.starts_with('-') && rest.len() > 1)
     {
         return invalid("id");
     }
@@ -352,22 +515,33 @@ pub(crate) fn validate(manifest: &WardrobeManifest) -> Result<(), String> {
     {
         return invalid("scope");
     }
-    if !valid_archive_urls(&manifest.source.urls) {
+    if !valid_archive_urls(&manifest.source.urls, manifest.archive.kind) {
         return invalid("source");
     }
     let pin = &manifest.archive;
-    if pin.zip_bytes == 0
-        || pin.zip_bytes > MAX_ARCHIVE_BYTES
+    let download_ok = match pin.kind {
+        SourceKind::Zip => {
+            pin.zip_bytes > 0
+                && pin.zip_bytes <= MAX_ARCHIVE_BYTES
+                && valid_sha256(&pin.zip_sha256)
+                && !pin.inner_path.is_empty()
+                && pin.inner_path.len() <= 64
+                && pin.inner_path.ends_with("_dir.vpk")
+                && pin.inner_path.bytes().all(|byte| {
+                    byte.is_ascii_lowercase()
+                        || byte.is_ascii_digit()
+                        || matches!(byte, b'_' | b'.')
+                })
+        }
+        // The raw VPK is the download: nothing else is pinned.
+        SourceKind::Vpk => {
+            pin.zip_bytes == 0 && pin.zip_sha256.is_empty() && pin.inner_path.is_empty()
+        }
+    };
+    if !download_ok
         || pin.inner_bytes == 0
         || pin.inner_bytes as u64 > MAX_ARCHIVE_BYTES
-        || !valid_sha256(&pin.zip_sha256)
         || !valid_sha256(&pin.inner_sha256)
-        || pin.inner_path.is_empty()
-        || pin.inner_path.len() > 64
-        || !pin.inner_path.ends_with("_dir.vpk")
-        || !pin.inner_path.bytes().all(|byte| {
-            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'.')
-        })
     {
         return invalid("archive");
     }
@@ -380,21 +554,36 @@ pub(crate) fn validate(manifest: &WardrobeManifest) -> Result<(), String> {
         || audit.install_bytes > pin.inner_bytes as u64
         || !valid_sha256(&audit.archive_identity)
         || !valid_sha256(&audit.install_identity)
-        || !valid_sha256(&audit.strip_identity)
         || !valid_sha256(&audit.valve_list_sha256)
         || audit.valve_list_entries == 0
-        // Every pinned shared path is a file the install carries and the
-        // opt-in mode leaves out: none left over, none missing, and the two
-        // pinned results differ by exactly those files.
+        // Every pinned shared path is a file the install carries: none left
+        // over, none missing.
         || audit.shared != manifest.shared_paths.len()
-        || audit.strip_files + audit.shared != audit.install_files
-        || audit.strip_bytes > audit.install_bytes
-        || (audit.shared == 0
-            && (audit.strip_bytes != audit.install_bytes
-                || audit.strip_identity != audit.install_identity))
-        || (audit.shared > 0 && audit.strip_identity == audit.install_identity)
+        || audit.shared > audit.install_files
     {
         return invalid("audit");
+    }
+    match manifest.scope {
+        // The opt-in mode leaves the shared files out: the two pinned results
+        // differ by exactly those files.
+        ScopeKind::Hero => {
+            if !valid_sha256(&audit.strip_identity)
+                || audit.strip_files + audit.shared != audit.install_files
+                || audit.strip_bytes > audit.install_bytes
+                || (audit.shared == 0
+                    && (audit.strip_bytes != audit.install_bytes
+                        || audit.strip_identity != audit.install_identity))
+                || (audit.shared > 0 && audit.strip_identity == audit.install_identity)
+            {
+                return invalid("audit");
+            }
+        }
+        ScopeKind::None => {
+            if audit.strip_files != 0 || audit.strip_bytes != 0 || !audit.strip_identity.is_empty()
+            {
+                return invalid("audit");
+            }
+        }
     }
     Ok(())
 }
@@ -421,10 +610,37 @@ struct Registry {
     by_id: BTreeMap<String, usize>,
 }
 
+/// Every shard parsed, validated and joined; a manifest must sit in the shard
+/// of its category, and IDs are unique across all of them.
+fn parse_shards() -> Result<Vec<WardrobeManifest>, String> {
+    let mut all = Vec::new();
+    for shard in SHARDS {
+        let manifests = parse_all(shard.text)?;
+        if manifests
+            .iter()
+            .any(|manifest| !shard.categories.contains(&manifest.category.as_str()))
+        {
+            return Err(format!("wardrobe_manifest_invalid:{}:shard", shard.file));
+        }
+        all.extend(manifests);
+    }
+    let mut ids = BTreeSet::new();
+    let mut catalog_ids = BTreeSet::new();
+    for manifest in &all {
+        if !ids.insert(manifest.id.as_str()) || !catalog_ids.insert(manifest.catalog_id.as_str()) {
+            return Err(format!(
+                "wardrobe_manifest_invalid:{}:duplicate",
+                manifest.id
+            ));
+        }
+    }
+    Ok(all)
+}
+
 fn embedded() -> &'static Result<Registry, String> {
     static EMBEDDED: OnceLock<Result<Registry, String>> = OnceLock::new();
     EMBEDDED.get_or_init(|| {
-        let manifests = parse_all(MANIFESTS)?;
+        let manifests = parse_shards()?;
         let mut by_id = BTreeMap::new();
         for (index, manifest) in manifests.iter().enumerate() {
             by_id.insert(manifest.id.clone(), index);
@@ -470,7 +686,9 @@ pub(crate) fn find_variant(
     id: &str,
 ) -> Result<Option<(&'static WardrobeManifest, SharedPolicy)>, String> {
     let (base, policy) = parse_variant(id);
-    Ok(find(base)?.map(|item| (item, policy)))
+    Ok(find(base)?
+        .filter(|item| policy == SharedPolicy::Install || item.scope == ScopeKind::Hero)
+        .map(|item| (item, policy)))
 }
 
 /// Test-only registry of synthetic items, so build tests can exercise the
@@ -527,6 +745,8 @@ pub(crate) fn synthetic_value(id: &str, files: &[(&str, &[u8])]) -> (serde_json:
         "kind": "wardrobe",
         "id": format!("wardrobe.{id}"),
         "catalogId": format!("heroes-{id}"),
+        "category": "heroes",
+        "scope": "hero",
         "name": { "ru": "Test Skin", "en": "Test Skin" },
         "author": "Test",
         "heroes": ["keeper_of_the_light"],
@@ -541,6 +761,7 @@ pub(crate) fn synthetic_value(id: &str, files: &[(&str, &[u8])]) -> (serde_json:
             "permission": "founder_reported_author_consent"
         },
         "archive": {
+            "kind": "zip",
             "zipBytes": 1000,
             "zipSha256": "1".repeat(64),
             "innerPath": "pak59_dir.vpk",
@@ -552,26 +773,31 @@ pub(crate) fn synthetic_value(id: &str, files: &[(&str, &[u8])]) -> (serde_json:
     (value, archive)
 }
 
-/// What an audit pins: the analyzer's result in both modes. Used by the
-/// generator and by tests; the app only ever checks a pin, never makes one.
+/// What an audit pins: the analyzer's result in both modes for a hero skin,
+/// in the one mode there is for content with no hero. Used by the generator and
+/// by tests; the app only ever checks a pin, never makes one.
 #[cfg(test)]
-pub(crate) fn audit_both_modes(
+pub(crate) fn audit_archive(
     archive: &[u8],
-    heroes: &[String],
-    shared_paths: &[String],
+    base: &ScopeSpec,
     valve_list_sha256: &str,
     valve_list_entries: usize,
 ) -> Result<AuditedResult, String> {
     let run = |policy| {
         let spec = ScopeSpec {
-            heroes: heroes.to_vec(),
-            shared_paths: shared_paths.to_vec(),
+            kind: base.kind,
+            types: base.types,
+            heroes: base.heroes.clone(),
+            shared_paths: base.shared_paths.clone(),
             shared_policy: policy,
         };
         skin_archive::analyze(archive, &spec, &Limits::default()).map(|analysis| analysis.report)
     };
     let install = run(SharedPolicy::Install)?;
-    let strip = run(SharedPolicy::Strip)?;
+    let strip = match base.kind {
+        ScopeKind::Hero => Some(run(SharedPolicy::Strip)?),
+        ScopeKind::None => None,
+    };
     Ok(AuditedResult {
         entries: install.entries,
         archive_identity: install.archive_identity.clone(),
@@ -581,13 +807,38 @@ pub(crate) fn audit_both_modes(
         install_files: install.install.files,
         install_bytes: install.install.bytes,
         install_identity: install.install.identity.clone(),
-        strip_files: strip.install.files,
-        strip_bytes: strip.install.bytes,
-        strip_identity: strip.install.identity.clone(),
+        strip_files: strip.as_ref().map_or(0, |report| report.install.files),
+        strip_bytes: strip.as_ref().map_or(0, |report| report.install.bytes),
+        strip_identity: strip
+            .as_ref()
+            .map_or_else(String::new, |report| report.install.identity.clone()),
         renamed: install.renamed,
         valve_list_sha256: valve_list_sha256.to_string(),
         valve_list_entries,
     })
+}
+
+/// Test-only: the hero-skin audit of a synthetic archive.
+#[cfg(test)]
+pub(crate) fn audit_both_modes(
+    archive: &[u8],
+    heroes: &[String],
+    shared_paths: &[String],
+    valve_list_sha256: &str,
+    valve_list_entries: usize,
+) -> Result<AuditedResult, String> {
+    audit_archive(
+        archive,
+        &ScopeSpec {
+            kind: ScopeKind::Hero,
+            types: TypePolicy::Resources,
+            heroes: heroes.to_vec(),
+            shared_paths: shared_paths.to_vec(),
+            shared_policy: SharedPolicy::Install,
+        },
+        valve_list_sha256,
+        valve_list_entries,
+    )
 }
 
 #[cfg(test)]
@@ -598,6 +849,111 @@ pub(crate) fn synthetic_item(
 ) -> (WardrobeManifest, Vec<u8>) {
     let (mut value, archive) = synthetic_value(id, files);
     edit(&mut value);
+    let manifest: WardrobeManifest = serde_json::from_value(value).expect("manifest");
+    validate(&manifest).expect("valid");
+    (manifest, archive)
+}
+
+/// Test-only: a manifest value for content with no hero (a courier, a sound
+/// pack ...) made of `files`, as a raw VPK or a ZIP, with the audit the
+/// analyzer produces. The same two paths as in [`synthetic_value`] stand in for
+/// files Valve ships.
+#[cfg(test)]
+pub(crate) fn synthetic_pack_value(
+    category: &str,
+    id: &str,
+    kind: SourceKind,
+    files: &[(&str, &[u8])],
+) -> (serde_json::Value, Vec<u8>) {
+    use crate::vpk::{build, VpkInput};
+    let archive = build(
+        files
+            .iter()
+            .map(|(path, bytes)| VpkInput { path, bytes })
+            .collect(),
+    )
+    .expect("synthetic archive");
+    let mut shared_paths = files
+        .iter()
+        .map(|(path, _)| (*path).to_string())
+        .filter(|path| {
+            [
+                "particles/basic_ambient/basic_ambient.vpcf_c",
+                "materials/default/default_color_tga_1.vtex_c",
+                "sounds/vo/announcer/kill.vsnd_c",
+            ]
+            .contains(&path.as_str())
+        })
+        .collect::<Vec<_>>();
+    shared_paths.sort();
+    let rule = skin_archive::category_rule(category).expect("category");
+    let audited = audit_archive(
+        &archive,
+        &ScopeSpec {
+            kind: rule.scope,
+            types: rule.types,
+            heroes: Vec::new(),
+            shared_paths: shared_paths.clone(),
+            shared_policy: SharedPolicy::Install,
+        },
+        &"2".repeat(64),
+        388116,
+    )
+    .expect("audit");
+    let (extension, pin) = match kind {
+        SourceKind::Zip => (
+            "zip",
+            serde_json::json!({
+                "kind": "zip",
+                "zipBytes": 1000,
+                "zipSha256": "1".repeat(64),
+                "innerPath": "pak10_dir.vpk",
+                "innerBytes": archive.len(),
+                "innerSha256": sha256_hex(&archive)
+            }),
+        ),
+        SourceKind::Vpk => (
+            "vpk",
+            serde_json::json!({
+                "kind": "vpk",
+                "innerBytes": archive.len(),
+                "innerSha256": sha256_hex(&archive)
+            }),
+        ),
+    };
+    let value = serde_json::json!({
+        "schemaVersion": SCHEMA_VERSION,
+        "kind": "wardrobe",
+        "id": format!("wardrobe.{category}-{id}"),
+        "catalogId": format!("{category}-{id}"),
+        "category": category,
+        "scope": "none",
+        "name": { "ru": "Test Pack", "en": "Test Pack" },
+        "author": "Test",
+        "sharedPaths": shared_paths,
+        "distribution": "internal_pilot",
+        "source": {
+            "urls": [
+                format!("https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/files/{category}/Test%20Pack.{extension}"),
+                format!("https://huggingface.co/datasets/hrdq/Dota2PornFx/resolve/main/assets/files/{category}/Test%20Pack.{extension}")
+            ],
+            "catalogSnapshot": "test",
+            "permission": "founder_reported_author_consent"
+        },
+        "archive": pin,
+        "audited": audited
+    });
+    (value, archive)
+}
+
+#[cfg(test)]
+pub(crate) fn synthetic_pack(
+    category: &str,
+    id: &str,
+    kind: SourceKind,
+    files: &[(&str, &[u8])],
+) -> (WardrobeManifest, Vec<u8>) {
+    let (value, archive) = synthetic_pack_value(category, id, kind, files);
     let manifest: WardrobeManifest = serde_json::from_value(value).expect("manifest");
     validate(&manifest).expect("valid");
     (manifest, archive)
@@ -653,8 +1009,8 @@ pub(crate) fn extract_pinned_entry(
 }
 
 /// Makes sure the item's VPK is in the content store, downloading and
-/// verifying the pinned ZIP when it is not. Only the verified inner VPK is
-/// stored.
+/// verifying the pinned file (a ZIP, or the raw VPK) when it is not. Only the
+/// verified VPK is stored.
 pub(crate) fn acquire(
     app_data_root: &Path,
     manifest: &WardrobeManifest,
@@ -666,8 +1022,17 @@ pub(crate) fn acquire(
     {
         return Ok(());
     }
-    let zip = crate::remote_intake::fetch_pinned_wardrobe_archive(manifest, cancelled)?;
-    let inner = extract_pinned_entry(&zip, &pin.inner_path, pin.inner_bytes, &pin.inner_sha256)?;
+    let downloaded = crate::remote_intake::fetch_pinned_wardrobe_archive(manifest, cancelled)?;
+    let inner = match pin.kind {
+        SourceKind::Zip => extract_pinned_entry(
+            &downloaded,
+            &pin.inner_path,
+            pin.inner_bytes,
+            &pin.inner_sha256,
+        )?,
+        // The download is the VPK: size and SHA-256 were checked by the fetch.
+        SourceKind::Vpk => downloaded,
+    };
     content_store::store_pinned_resource(app_data_root, pin.inner_bytes, &pin.inner_sha256, &inner)
 }
 
@@ -810,9 +1175,11 @@ pub(crate) fn load(
         item: WardrobePlanItem {
             package_id: variant_id(manifest, policy),
             catalog_id: manifest.catalog_id.clone(),
+            category: manifest.category.clone(),
+            scope: manifest.scope,
             heroes: manifest.heroes.clone(),
             source_urls: manifest.source.urls.clone(),
-            archive_sha256: pin.zip_sha256.clone(),
+            archive_sha256: pin.download_sha256().to_string(),
             catalog_snapshot: manifest.source.catalog_snapshot.clone(),
             permission: manifest.source.permission.clone(),
             verified_languages: manifest.verified_languages.clone(),
@@ -919,35 +1286,62 @@ mod tests {
 
     #[test]
     fn every_embedded_manifest_revalidates_and_the_files_are_canonical() {
-        let all = parse_all(MANIFESTS).expect("every embedded manifest is valid");
-        assert!(!all.is_empty());
-        let mut previous = "";
-        for item in &all {
-            // sorted by engine id, so the generated file is deterministic
-            assert!(previous < item.id.as_str(), "{} is out of order", item.id);
-            previous = &item.id;
-            assert!(valid_archive_urls(&item.source.urls), "{}", item.id);
-            assert_eq!(item.source.permission, "founder_reported_author_consent");
-            // mirrors are listed in the order they are tried, GitHub or HF
-            assert!(item.source.urls.len() <= TRUSTED_ARCHIVE_PREFIXES.len());
-            assert!(item.shared_paths.windows(2).all(|pair| pair[0] < pair[1]));
-            assert!(item.audited.install_files > 0);
-            assert!(item.audited.install_bytes <= item.archive.inner_bytes as u64);
+        let mut everything = Vec::new();
+        for shard in SHARDS {
+            let all = parse_all(shard.text).expect("every embedded manifest is valid");
+            let mut previous = "";
+            for item in &all {
+                // sorted by engine id, so the generated file is deterministic
+                assert!(previous < item.id.as_str(), "{} is out of order", item.id);
+                previous = &item.id;
+                assert!(
+                    shard.categories.contains(&item.category.as_str()),
+                    "{} is in the wrong shard",
+                    item.id
+                );
+                assert!(
+                    valid_archive_urls(&item.source.urls, item.archive.kind),
+                    "{}",
+                    item.id
+                );
+                assert_eq!(item.source.permission, "founder_reported_author_consent");
+                // mirrors are listed in the order they are tried, GitHub or HF
+                assert!(item.source.urls.len() <= TRUSTED_ARCHIVE_PREFIXES.len());
+                assert!(item.shared_paths.windows(2).all(|pair| pair[0] < pair[1]));
+                assert!(item.audited.install_files > 0);
+                assert!(item.audited.install_bytes <= item.archive.inner_bytes as u64);
+            }
+            // Compact and re-serializable: what is embedded is what the
+            // generator would write for these manifests.
+            assert_eq!(
+                serde_json::to_string(&all).expect("serializes"),
+                shard.text.trim_end(),
+                "{} is not the canonical compact form; regenerate it",
+                shard.file
+            );
+            everything.extend(all);
         }
-        // Compact and re-serializable: what is embedded is what the generator
-        // would write for these manifests.
-        assert_eq!(
-            serde_json::to_string(&all).expect("serializes"),
-            MANIFESTS.trim_end(),
-            "manifests.json is not the canonical compact form; regenerate it"
-        );
-        let index = all.iter().map(index_entry).collect::<Vec<_>>();
+        assert!(!everything.is_empty());
+        // Every enabled category has a shard, and no shard names another.
+        for rule in skin_archive::CATEGORIES {
+            assert_eq!(
+                SHARDS
+                    .iter()
+                    .filter(|shard| shard.categories.contains(&rule.name))
+                    .count(),
+                1,
+                "{}",
+                rule.name
+            );
+        }
+        everything.sort_by(|a, b| a.id.cmp(&b.id));
+        let index = everything.iter().map(index_entry).collect::<Vec<_>>();
         assert_eq!(
             serde_json::to_string(&index).expect("serializes"),
             INDEX.trim_end(),
-            "index.json is not derived from manifests.json; regenerate it"
+            "index.json is not derived from the manifests; regenerate it"
         );
-        // Only the two generated files live in the folder.
+        // Only the generated files live in the folder.
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("wardrobe");
         let mut names = std::fs::read_dir(dir)
             .expect("wardrobe dir")
@@ -955,7 +1349,13 @@ mod tests {
             .map(|entry| entry.file_name().to_string_lossy().to_string())
             .collect::<Vec<_>>();
         names.sort();
-        assert_eq!(names, vec!["index.json", "manifests.json"]);
+        let mut expected = SHARDS
+            .iter()
+            .map(|shard| shard.file.to_string())
+            .chain(["index.json".to_string()])
+            .collect::<Vec<_>>();
+        expected.sort();
+        assert_eq!(names, expected);
     }
 
     #[test]
@@ -973,8 +1373,8 @@ mod tests {
         };
         let cases = [
             array_with(|v| v["kind"] = "package".into()),
-            array_with(|v| v["schemaVersion"] = 1.into()),
-            array_with(|v| v["schemaVersion"] = 3.into()),
+            array_with(|v| v["schemaVersion"] = 2.into()),
+            array_with(|v| v["schemaVersion"] = 4.into()),
             array_with(|v| v["distribution"] = "public".into()),
             array_with(|v| v["id"] = "minify.scarlet".into()),
             array_with(|v| v["id"] = "wardrobe.Scarlet".into()),
@@ -1528,5 +1928,191 @@ mod tests {
             .expect("the analyzer reproduces the opt-in audit");
         assert_eq!(strip.resources.len(), item.audited.strip_files);
         std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    fn pack_files() -> Vec<(&'static str, &'static [u8])> {
+        vec![
+            ("models/courier/test_courier/body.vmdl_c", &b"body"[..]),
+            ("materials/models/courier/test_courier/body.vmat_c", b"mat"),
+            // Valve ships these two: they override game files and still install
+            ("particles/basic_ambient/basic_ambient.vpcf_c", b"shared"),
+            ("materials/default/default_color_tga_1.vtex_c", b"shared2"),
+            // a note the author left behind: not a game file
+            ("models/courier/test_courier/readme.txt", b"note"),
+        ]
+    }
+
+    fn pack_array_with(edit: impl FnOnce(&mut serde_json::Value)) -> String {
+        let (mut value, _) =
+            synthetic_pack_value("couriers", "base", SourceKind::Vpk, &pack_files());
+        edit(&mut value);
+        serde_json::Value::Array(vec![value]).to_string()
+    }
+
+    #[test]
+    fn a_raw_vpk_pack_with_no_hero_loads_whole_and_has_no_strip_mode() {
+        let (manifest, archive) =
+            synthetic_pack("couriers", "raw-pack", SourceKind::Vpk, &pack_files());
+        assert_eq!(manifest.scope, ScopeKind::None);
+        assert!(manifest.heroes.is_empty());
+        // The download is the VPK: one pin, no ZIP fields anywhere.
+        assert_eq!(manifest.archive.download_bytes(), archive.len() as u64);
+        assert_eq!(manifest.archive.download_sha256(), sha256_hex(&archive));
+        let json = serde_json::to_value(&manifest).expect("json");
+        assert_eq!(json["archive"]["kind"], "vpk");
+        for absent in ["zipBytes", "zipSha256", "innerPath"] {
+            assert!(json["archive"].get(absent).is_none(), "{absent}");
+        }
+        assert!(json.get("heroes").is_none());
+        for absent in ["stripFiles", "stripBytes", "stripIdentity"] {
+            assert!(json["audited"].get(absent).is_none(), "{absent}");
+        }
+        assert_eq!(manifest.audited.shared, 2);
+        assert_eq!(manifest.audited.ignored, 1);
+        assert_eq!(manifest.audited.install_files, 4);
+
+        let root = temp_root("raw-pack");
+        store(&root, &manifest, &archive);
+        let loaded = load(&root, &manifest, SharedPolicy::Install).expect("loads");
+        assert_eq!(loaded.resources.len(), 4);
+        assert!(loaded
+            .resources
+            .contains_key("particles/basic_ambient/basic_ambient.vpcf_c"));
+        assert_eq!(loaded.item.category, "couriers");
+        assert_eq!(loaded.item.scope, ScopeKind::None);
+        assert_eq!(loaded.item.archive_sha256, sha256_hex(&archive));
+        assert_eq!(loaded.item.report.hero_scoped.files, 0);
+        assert_eq!(loaded.item.report.author_owned.files, 2);
+        assert_eq!(loaded.item.report.shared.files, 2);
+        assert_eq!(loaded.item.report.ignored.files, 1);
+        // Nothing to strip for content with no hero: the mode does not exist.
+        assert_eq!(
+            load(&root, &manifest, SharedPolicy::Strip).err().as_deref(),
+            Some("skin_scope_invalid")
+        );
+        assert!(manifest.audited.pin(SharedPolicy::Strip).is_none());
+        let registered = register_for_test(manifest);
+        assert!(find_variant(&registered.id).expect("registry").is_some());
+        assert!(find_variant(&format!("{}.strip", registered.id))
+            .expect("registry")
+            .is_none());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_zip_pack_pins_the_zip_and_the_vpk_inside_it() {
+        let (manifest, _) = synthetic_pack(
+            "creep-deny",
+            "zipped",
+            SourceKind::Zip,
+            &[("particles/msg_fx/msg_deny.vpcf_c", b"deny")],
+        );
+        assert_eq!(manifest.archive.kind, SourceKind::Zip);
+        assert_eq!(manifest.archive.download_bytes(), 1000);
+        assert_eq!(manifest.archive.download_sha256(), "1".repeat(64));
+        assert_eq!(manifest.archive.inner_path, "pak10_dir.vpk");
+    }
+
+    #[test]
+    fn malformed_pack_manifests_are_rejected() {
+        assert!(parse_all(&pack_array_with(|_| {})).is_ok());
+        let cases = [
+            (
+                "zip fields on a raw vpk",
+                pack_array_with(|v| v["archive"]["zipBytes"] = 5.into()),
+            ),
+            (
+                "zip hash on a raw vpk",
+                pack_array_with(|v| v["archive"]["zipSha256"] = "1".repeat(64).into()),
+            ),
+            (
+                "inner path on a raw vpk",
+                pack_array_with(|v| v["archive"]["innerPath"] = "pak10_dir.vpk".into()),
+            ),
+            (
+                "a zip url for a raw vpk",
+                pack_array_with(|v| {
+                    v["source"]["urls"] = serde_json::json!([
+                        "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/files/couriers/Test%20Pack.zip"
+                    ])
+                }),
+            ),
+            (
+                "a path outside the two segments",
+                pack_array_with(|v| {
+                    v["source"]["urls"] = serde_json::json!([
+                        "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/files/couriers/a/Test.vpk"
+                    ])
+                }),
+            ),
+            (
+                "heroes on a pack",
+                pack_array_with(|v| v["heroes"] = serde_json::json!(["axe"])),
+            ),
+            (
+                "hero scope on a courier",
+                pack_array_with(|v| v["scope"] = "hero".into()),
+            ),
+            (
+                "a category that is not enabled",
+                pack_array_with(|v| v["category"] = "backgrounds".into()),
+            ),
+            (
+                "an unknown category",
+                pack_array_with(|v| v["category"] = "mystery".into()),
+            ),
+            (
+                "a catalog id of another category",
+                pack_array_with(|v| v["catalogId"] = "heroes-base".into()),
+            ),
+            (
+                "a strip result on a pack",
+                pack_array_with(|v| {
+                    v["audited"]["stripFiles"] = 1.into();
+                    v["audited"]["stripBytes"] = 1.into();
+                    v["audited"]["stripIdentity"] = "3".repeat(64).into();
+                }),
+            ),
+            (
+                "a shared path that was not found",
+                pack_array_with(|v| v["sharedPaths"] = serde_json::json!(["a/a.vtex_c"])),
+            ),
+            (
+                "the old schema",
+                pack_array_with(|v| v["schemaVersion"] = 2.into()),
+            ),
+        ];
+        for (label, case) in cases {
+            assert!(parse_all(&case).is_err(), "{label}");
+        }
+    }
+
+    #[test]
+    fn every_enabled_category_has_a_rule_and_a_catalog_prefix() {
+        let mut seen = BTreeSet::new();
+        for rule in skin_archive::CATEGORIES {
+            assert!(seen.insert(rule.name), "{} twice", rule.name);
+            assert_eq!(
+                rule.scope == ScopeKind::Hero,
+                matches!(rule.name, "heroes" | "hero-items"),
+                "{}",
+                rule.name
+            );
+        }
+        // Only audited ones are enabled; these are deliberately not.
+        for name in [
+            "backgrounds",
+            "huds",
+            "versus-screens",
+            "cursors",
+            "fonts",
+            "tools",
+            "other",
+            "pedestal",
+            "tormentor",
+            "packs",
+        ] {
+            assert!(skin_archive::category_rule(name).is_none(), "{name}");
+        }
     }
 }

@@ -192,12 +192,12 @@ fn valid_archive_urls(urls: &[String]) -> bool {
     if urls.is_empty() || urls.len() > TRUSTED_ARCHIVE_PREFIXES.len() {
         return false;
     }
-    let Some(first) = archive_tail(&urls[0]) else {
+    let Some(first) = archive_tail(&urls[0], ".zip") else {
         return false;
     };
     let mut prefixes = BTreeSet::new();
     urls.iter().all(|url| {
-        archive_tail(url) == Some(first)
+        archive_tail(url, ".zip") == Some(first)
             && TRUSTED_ARCHIVE_PREFIXES
                 .iter()
                 .find(|prefix| url.starts_with(**prefix))

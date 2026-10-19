@@ -172,8 +172,8 @@ export const explainError = (code: string, isRu: boolean) => {
       "Some files are changed by more than one item in the build. Review the list, confirm it, and retry.",
     ],
     bundle_limit_exceeded: [
-      "Сборка не помещается в один файл: образ может занимать не больше 256 МБ. Убери один из обликов или включи «Не трогать общие файлы игры» (так сборка меньше), затем подготовь заново.",
-      "The build does not fit in one file: the merged VPK can hold at most 256 MB. Remove a skin, or turn on \"Keep the game's shared files untouched\" (it makes the build smaller), then prepare again.",
+      "Сборка не помещается в один файл: образ может занимать не больше 256 МБ. Ничего не скачано. Убери один из крупных обликов или пакетов (музыка, деревья, курьеры с моделями) или, для облика героя, включи «Не трогать общие файлы игры» (так сборка меньше), затем подготовь заново.",
+      "The build does not fit in one file: the merged VPK can hold at most 256 MB. Nothing was downloaded. Remove one of the large skins or packs (music, trees, courier models) or, for a hero skin, turn on \"Keep the game's shared files untouched\" (it makes the build smaller), then prepare again.",
     ],
     wardrobe_audit_mismatch: [
       "Архив не совпал с проверенным описанием. BetterFy не будет его ставить.",

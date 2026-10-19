@@ -107,6 +107,108 @@ pub(crate) const MAX_HEROES: usize = 8;
 /// Upper bound on the audited shared list (a VPK holds at most 65,536 entries).
 pub(crate) const MAX_SHARED_PATHS: usize = 65_536;
 
+/// What a skin or pack is scoped to. `Hero` is a hero skin: its files are
+/// split into the hero's own, shared and author-owned. `None` is every other
+/// catalog category (a courier, a sound pack, a shader): there is no hero, every
+/// accepted file installs, and the split into "overrides a Valve file" and
+/// "new file" is information computed at audit time and pinned.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ScopeKind {
+    Hero,
+    None,
+}
+
+/// Which compiled file types a category may carry. All of them are subsets of
+/// [`ALLOWED_TYPES`]; scripts, executables and unsafe paths stay rejected
+/// whatever the policy.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum TypePolicy {
+    /// Models, particles, materials, textures, animations and sounds, and the
+    /// image-wrapper layouts the layout reader proves (heroes and most others).
+    Resources,
+    /// Sound files and sound events under `sounds/` and `soundevents/`.
+    Sounds,
+    /// Panorama image textures (`vtex_c`) under `panorama/images/`.
+    Textures,
+    /// Materials and their textures (shaders).
+    Materials,
+}
+
+impl TypePolicy {
+    fn allows(self, extension: &str) -> bool {
+        match self {
+            Self::Resources => ALLOWED_TYPES.contains(&extension),
+            Self::Sounds => matches!(extension, "vsnd_c" | "vsndevts_c"),
+            Self::Textures => extension == "vtex_c",
+            Self::Materials => matches!(extension, "vmat_c" | "vtex_c"),
+        }
+    }
+
+    fn allows_layouts(self) -> bool {
+        self == Self::Resources
+    }
+
+    /// Folders the category installs from; empty means anywhere.
+    fn folders(self) -> &'static [&'static str] {
+        match self {
+            Self::Sounds => &["sounds/", "soundevents/"],
+            Self::Textures => &["panorama/images/"],
+            Self::Resources | Self::Materials => &[],
+        }
+    }
+}
+
+/// One catalog category the engine can install, and the rules for it.
+pub(crate) struct CategoryRule {
+    pub name: &'static str,
+    pub scope: ScopeKind,
+    pub types: TypePolicy,
+}
+
+const fn rule(name: &'static str, scope: ScopeKind, types: TypePolicy) -> CategoryRule {
+    CategoryRule { name, scope, types }
+}
+
+/// Every category of the Dota2PornFx catalog that is installable. A category
+/// that is not here is not enabled, whatever a manifest claims (see
+/// `docs/CATALOG_CATEGORIES.md` for each category left out and why).
+pub(crate) const CATEGORIES: &[CategoryRule] = &[
+    rule("heroes", ScopeKind::Hero, TypePolicy::Resources),
+    rule("hero-items", ScopeKind::Hero, TypePolicy::Resources),
+    rule("ancient", ScopeKind::None, TypePolicy::Resources),
+    rule("announcers", ScopeKind::None, TypePolicy::Sounds),
+    rule("couriers", ScopeKind::None, TypePolicy::Resources),
+    rule("creep-deny", ScopeKind::None, TypePolicy::Resources),
+    rule("creeps", ScopeKind::None, TypePolicy::Resources),
+    rule("emblems", ScopeKind::None, TypePolicy::Resources),
+    rule("hero-sounds", ScopeKind::None, TypePolicy::Sounds),
+    rule("herofx", ScopeKind::None, TypePolicy::Resources),
+    rule("high-five", ScopeKind::None, TypePolicy::Resources),
+    rule("item-effects", ScopeKind::None, TypePolicy::Resources),
+    rule("item-icons", ScopeKind::None, TypePolicy::Textures),
+    rule("mega-kill", ScopeKind::None, TypePolicy::Sounds),
+    rule("music", ScopeKind::None, TypePolicy::Sounds),
+    rule("optimization", ScopeKind::None, TypePolicy::Resources),
+    rule("pings", ScopeKind::None, TypePolicy::Resources),
+    rule("ranged-attack", ScopeKind::None, TypePolicy::Resources),
+    rule("ranks", ScopeKind::None, TypePolicy::Textures),
+    rule("river", ScopeKind::None, TypePolicy::Resources),
+    rule("roshan", ScopeKind::None, TypePolicy::Resources),
+    rule("shaders", ScopeKind::None, TypePolicy::Materials),
+    rule("sounds", ScopeKind::None, TypePolicy::Sounds),
+    rule("terrains", ScopeKind::None, TypePolicy::Resources),
+    rule("ti-bp-effects", ScopeKind::None, TypePolicy::Resources),
+    rule("towers", ScopeKind::None, TypePolicy::Resources),
+    rule("trees", ScopeKind::None, TypePolicy::Resources),
+    rule("wards", ScopeKind::None, TypePolicy::Resources),
+];
+
+pub(crate) fn category_rule(name: &str) -> Option<&'static CategoryRule> {
+    CATEGORIES.iter().find(|rule| rule.name == name)
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum SharedPolicy {
@@ -150,6 +252,10 @@ pub(crate) enum RejectReason {
     PanoramaScripted,
     /// A `vxml_c` the layout reader could not prove to be an image wrapper.
     PanoramaUnproven,
+    /// A file of an allowed type outside the folders its category installs
+    /// from (a sound pack's `vtex_c`, a rank icon pack's `vmat_c` under
+    /// `materials/`). Really dropped.
+    OutsideCategory,
 }
 
 impl RejectReason {
@@ -169,7 +275,10 @@ impl RejectReason {
 /// The audited facts an archive is checked against.
 #[derive(Clone, Debug)]
 pub(crate) struct ScopeSpec {
-    /// Internal names of the heroes the skin is for (1 to [`MAX_HEROES`]).
+    pub kind: ScopeKind,
+    pub types: TypePolicy,
+    /// Internal names of the heroes the skin is for (1 to [`MAX_HEROES`] for
+    /// [`ScopeKind::Hero`], none for [`ScopeKind::None`]).
     pub heroes: Vec<String>,
     /// Sorted, unique, lower-case paths that exist in Valve's file list at
     /// audit time and are not hero-scoped. These are the shared files.
@@ -317,10 +426,15 @@ fn token(value: &str, min: usize, max: usize) -> bool {
 impl ScopeSpec {
     pub(crate) fn validate(&self) -> Result<(), String> {
         let invalid = || "skin_scope_invalid".to_string();
-        if self.heroes.is_empty()
-            || self.heroes.len() > MAX_HEROES
-            || self.shared_paths.len() > MAX_SHARED_PATHS
-        {
+        let heroes_ok = match self.kind {
+            ScopeKind::Hero => !self.heroes.is_empty() && self.heroes.len() <= MAX_HEROES,
+            // Content with no hero installs whole: there is nothing to strip,
+            // so no other policy exists for it.
+            ScopeKind::None => {
+                self.heroes.is_empty() && self.shared_policy == SharedPolicy::Install
+            }
+        };
+        if !heroes_ok || self.shared_paths.len() > MAX_SHARED_PATHS {
             return Err(invalid());
         }
         let mut seen = BTreeSet::new();
@@ -367,6 +481,22 @@ fn path_safe(path: &str) -> bool {
         })
 }
 
+/// A path that is merely oddly spelled: no traversal, no absolute or drive
+/// path, no backslash, no control character, no empty segment, within the
+/// length bounds. [`path_safe`] additionally limits the characters.
+fn path_is_plain(path: &str) -> bool {
+    path.len() <= MAX_PATH_BYTES
+        && !path.starts_with('/')
+        && !path.contains(['\\', ':'])
+        && !path.chars().any(char::is_control)
+        && path.split('/').all(|segment| {
+            !segment.is_empty()
+                && segment != "."
+                && segment != ".."
+                && segment.len() <= MAX_SEGMENT_BYTES
+        })
+}
+
 fn extension(path: &str) -> &str {
     path.rsplit('/')
         .next()
@@ -381,12 +511,12 @@ enum Kind {
 
 /// Classifies a lower-case path by its type. Scripts and executables come
 /// first, so no rule below can turn one of them into an ignored file.
-fn classify_type(path: &str) -> Result<Kind, RejectReason> {
+fn classify_type(path: &str, types: TypePolicy) -> Result<Kind, RejectReason> {
     let extension = extension(path);
     let name = path.rsplit('/').next().unwrap_or(path);
-    if ALLOWED_TYPES.contains(&extension) {
+    if types.allows(extension) {
         Ok(Kind::Compiled)
-    } else if extension == LAYOUT_TYPE {
+    } else if extension == LAYOUT_TYPE && types.allows_layouts() {
         Ok(Kind::Layout)
     } else if SCRIPT_TYPES.contains(&extension) {
         Err(RejectReason::Script)
@@ -403,12 +533,25 @@ fn classify_type(path: &str) -> Result<Kind, RejectReason> {
         } else {
             Err(RejectReason::UncompiledSource)
         }
-    } else if LEFTOVER_TYPES.contains(&extension) || (extension == "txt" && name.contains("readme"))
+    } else if LEFTOVER_TYPES.contains(&extension)
+        || (extension == "txt" && (name.contains("readme") || leftover_text_folder(path, name)))
     {
         Err(RejectReason::NotGameFile)
     } else {
         Err(RejectReason::TypeNotAllowed)
     }
+}
+
+/// A `.txt` inside a folder of compiled resources. Valve's list (2026-10-17,
+/// 388,116 entries) holds no text file under `particles/`, `materials/` or
+/// `sounds/`, and under `models/` only five files named `portraits.txt`, so any
+/// other text file there is a note the author left in the folder, not something
+/// the game reads.
+fn leftover_text_folder(path: &str, name: &str) -> bool {
+    ["models/", "materials/", "particles/", "sounds/"]
+        .iter()
+        .any(|folder| path.starts_with(folder))
+        && name != "portraits.txt"
 }
 
 /// `name` is `<stem>.<ext>`; true when the stem continues `prefix` with `_`
@@ -607,9 +750,27 @@ pub(crate) fn analyze<'a>(
                 return Err(RejectReason::DuplicatePath);
             }
             if !path_safe(&lower) {
+                // A name with characters the VPK writer does not take (an
+                // `=`, brackets) is unsafe, because the file could not be
+                // installed. When the file is a leftover that is never
+                // installed anyway (a note, a source), the odd name alone is
+                // not a reason to refuse the archive. Traversal, absolute and
+                // control-character paths stay hostile whatever the type.
+                if path_is_plain(&lower) {
+                    if let Err(
+                        reason @ (RejectReason::UncompiledSource | RejectReason::NotGameFile),
+                    ) = classify_type(&lower, spec.types)
+                    {
+                        return Err(reason);
+                    }
+                }
                 return Err(RejectReason::PathUnsafe);
             }
-            let kind = classify_type(&lower)?;
+            let kind = classify_type(&lower, spec.types)?;
+            let folders = spec.types.folders();
+            if !folders.is_empty() && !folders.iter().any(|folder| lower.starts_with(folder)) {
+                return Err(RejectReason::OutsideCategory);
+            }
             if payload.len() > limits.max_entry_bytes {
                 return Err(RejectReason::Oversized);
             }
@@ -823,6 +984,8 @@ mod tests {
 
     fn spec(policy: SharedPolicy) -> ScopeSpec {
         ScopeSpec {
+            kind: ScopeKind::Hero,
+            types: TypePolicy::Resources,
             heroes: vec!["keeper_of_the_light".to_string()],
             shared_paths: sorted(&[
                 "materials/default/default_color_tga_11bf3739.vtex_c",
@@ -1806,6 +1969,8 @@ mod tests {
         ));
 
         let spec = ScopeSpec {
+            kind: ScopeKind::Hero,
+            types: TypePolicy::Resources,
             heroes: names,
             shared_paths: sorted(&["models/heroes/axe/a.vmdl_c"]),
             shared_policy: SharedPolicy::Strip,
@@ -1862,22 +2027,32 @@ mod tests {
         assert!(base().validate().is_ok());
         for bad in [
             ScopeSpec {
+                kind: ScopeKind::Hero,
+                types: TypePolicy::Resources,
                 heroes: vec![],
                 ..base()
             },
             ScopeSpec {
+                kind: ScopeKind::Hero,
+                types: TypePolicy::Resources,
                 heroes: vec!["Keeper".to_string()],
                 ..base()
             },
             ScopeSpec {
+                kind: ScopeKind::Hero,
+                types: TypePolicy::Resources,
                 heroes: vec!["a".to_string()],
                 ..base()
             },
             ScopeSpec {
+                kind: ScopeKind::Hero,
+                types: TypePolicy::Resources,
                 heroes: vec!["axe".to_string(), "axe".to_string()],
                 ..base()
             },
             ScopeSpec {
+                kind: ScopeKind::Hero,
+                types: TypePolicy::Resources,
                 heroes: (0..=MAX_HEROES).map(|i| format!("hero{i}")).collect(),
                 ..base()
             },
@@ -1959,6 +2134,8 @@ mod tests {
             Some("vpk_version_unsupported")
         );
         let bad_spec = ScopeSpec {
+            kind: ScopeKind::Hero,
+            types: TypePolicy::Resources,
             heroes: vec!["Bad Hero".to_string()],
             ..spec(SharedPolicy::Strip)
         };
@@ -2045,5 +2222,275 @@ mod tests {
         assert!(selection
             .files
             .contains_key("models/heroes/keeper_of_the_light/kotl_hood.vmdl_c"));
+    }
+
+    fn none_spec(types: TypePolicy, shared: &[&str]) -> ScopeSpec {
+        ScopeSpec {
+            kind: ScopeKind::None,
+            types,
+            heroes: Vec::new(),
+            shared_paths: sorted(shared),
+            shared_policy: SharedPolicy::Install,
+        }
+    }
+
+    fn analyze_files(files: &[(&str, &[u8])], spec: &ScopeSpec) -> SkinReport {
+        analyze(&build_unchecked(2, files), spec, &Limits::default())
+            .expect("analysis")
+            .report
+    }
+
+    fn reason_of(report: &SkinReport, path: &str) -> RejectReason {
+        report
+            .rejected_paths
+            .iter()
+            .find(|entry| entry.path == path)
+            .unwrap_or_else(|| panic!("{path} was not rejected"))
+            .reason
+    }
+
+    #[test]
+    fn content_with_no_hero_installs_every_accepted_file_and_only_describes_the_overrides() {
+        let spec = none_spec(
+            TypePolicy::Resources,
+            &[
+                "models/props_gameplay/donkey.vmdl_c",
+                "particles/ui/ping.vpcf_c",
+            ],
+        );
+        let report = analyze_files(
+            &[
+                ("models/props_gameplay/donkey.vmdl_c", b"overrides"),
+                ("particles/ui/ping.vpcf_c", b"overrides"),
+                ("models/courier/new/body.vmdl_c", b"new"),
+                // even a path that looks like a hero's folder: with no hero
+                // it is just a file the archive carries
+                ("models/heroes/axe/axe.vmdl_c", b"axe"),
+                ("models/courier/new/note.txt", b"a note"),
+            ],
+            &spec,
+        );
+        assert_eq!(report.hero_scoped.files, 0);
+        assert_eq!(report.shared.files, 2);
+        assert_eq!(report.author_owned.files, 2);
+        assert_eq!(report.install.files, 4);
+        assert_eq!(report.install.stripped_shared, 0);
+        assert!(report.install.blocked.is_none());
+        assert_eq!(report.ignored.files, 1);
+        assert_eq!(
+            reason_of(&report, "models/courier/new/note.txt"),
+            RejectReason::NotGameFile
+        );
+    }
+
+    #[test]
+    fn content_with_no_hero_has_no_hero_and_no_strip_mode() {
+        assert!(none_spec(TypePolicy::Resources, &[]).validate().is_ok());
+        for bad in [
+            ScopeSpec {
+                heroes: vec!["axe".to_string()],
+                ..none_spec(TypePolicy::Resources, &[])
+            },
+            ScopeSpec {
+                shared_policy: SharedPolicy::Strip,
+                ..none_spec(TypePolicy::Resources, &[])
+            },
+            ScopeSpec {
+                shared_policy: SharedPolicy::Refuse,
+                ..none_spec(TypePolicy::Resources, &[])
+            },
+        ] {
+            assert_eq!(bad.validate().err().as_deref(), Some("skin_scope_invalid"));
+        }
+        // a hero skin still needs its hero
+        assert_eq!(
+            ScopeSpec {
+                kind: ScopeKind::Hero,
+                heroes: Vec::new(),
+                ..none_spec(TypePolicy::Resources, &[])
+            }
+            .validate()
+            .err()
+            .as_deref(),
+            Some("skin_scope_invalid")
+        );
+    }
+
+    #[test]
+    fn each_category_installs_only_its_own_kind_of_file() {
+        let files: &[(&str, &[u8])] = &[
+            ("sounds/vo/announcer/kill.vsnd_c", b"sound"),
+            (
+                "soundevents/voscripts/game_sounds_vo_a.vsndevts_c",
+                b"events",
+            ),
+            ("panorama/images/rank_tier_icons/rank1_psd.vtex_c", b"icon"),
+            ("materials/dev/shader.vmat_c", b"material"),
+            ("materials/dev/shader_color.vtex_c", b"texture"),
+            ("models/courier/a.vmdl_c", b"model"),
+            ("particles/ui/ping.vpcf_c", b"particle"),
+        ];
+        let installed = |types| {
+            let report = analyze_files(files, &none_spec(types, &[]));
+            let mut paths = report
+                .rejected_paths
+                .iter()
+                .map(|entry| entry.path.clone())
+                .collect::<Vec<_>>();
+            paths.sort();
+            (report.install.files, paths.len())
+        };
+        // resources: everything that is a compiled resource
+        assert_eq!(installed(TypePolicy::Resources), (7, 0));
+        // sounds: the two sound files under sounds/ and soundevents/
+        assert_eq!(installed(TypePolicy::Sounds), (2, 5));
+        // panorama textures: the one texture under panorama/images/
+        assert_eq!(installed(TypePolicy::Textures), (1, 6));
+        // shaders: materials and their textures, anywhere
+        assert_eq!(installed(TypePolicy::Materials), (3, 4));
+
+        let sounds = analyze_files(files, &none_spec(TypePolicy::Sounds, &[]));
+        assert_eq!(
+            reason_of(&sounds, "models/courier/a.vmdl_c"),
+            RejectReason::TypeNotAllowed
+        );
+        // a texture of an allowed type in the wrong folder is not this category's
+        let textures = analyze_files(
+            &[
+                ("panorama/images/ranks/a_png.vtex_c", b"ok"),
+                ("materials/models/a.vtex_c", b"elsewhere"),
+            ],
+            &none_spec(TypePolicy::Textures, &[]),
+        );
+        assert_eq!(textures.install.files, 1);
+        assert_eq!(
+            reason_of(&textures, "materials/models/a.vtex_c"),
+            RejectReason::OutsideCategory
+        );
+        assert!(!textures.hostile);
+    }
+
+    #[test]
+    fn a_policy_never_lets_a_script_or_a_layout_through() {
+        for types in [
+            TypePolicy::Sounds,
+            TypePolicy::Textures,
+            TypePolicy::Materials,
+            TypePolicy::Resources,
+        ] {
+            let report = analyze_files(
+                &[
+                    ("sounds/a.vsnd_c", b"ok"),
+                    ("scripts/vscripts/a.lua", b"print()"),
+                    ("panorama/scripts/a.vjs_c", b"js"),
+                    ("sounds/helper.exe", b"MZ"),
+                ],
+                &none_spec(types, &[]),
+            );
+            assert!(report.hostile, "{types:?}");
+            assert_eq!(
+                report.install.blocked.as_deref(),
+                Some("skin_archive_hostile"),
+                "{types:?}"
+            );
+        }
+        // layouts are read only for the policy that proves image wrappers
+        let layout = ("panorama/images/items/bottle.vxml_c", &b"<root/>"[..]);
+        let sounds = analyze_files(
+            &[("sounds/a.vsnd_c", b"ok"), layout],
+            &none_spec(TypePolicy::Sounds, &[]),
+        );
+        assert_eq!(
+            reason_of(&sounds, "panorama/images/items/bottle.vxml_c"),
+            RejectReason::TypeNotAllowed
+        );
+        let resources = analyze_files(
+            &[("sounds/a.vsnd_c", b"ok"), layout],
+            &none_spec(TypePolicy::Resources, &[]),
+        );
+        assert_eq!(
+            reason_of(&resources, "panorama/images/items/bottle.vxml_c"),
+            RejectReason::PanoramaUnproven
+        );
+    }
+
+    #[test]
+    fn a_note_in_a_resource_folder_is_ignored_and_an_odd_name_alone_is_not_hostile() {
+        let report = analyze_files(
+            &[
+                ("models/courier/a.vmdl_c", b"model"),
+                ("models/courier/not a game file = note.txt", b"note"),
+                ("materials/models/courier/readme-1.txt", b"note"),
+                ("particles/econ/courier/notes.txt", b"note"),
+                // Valve ships this one under models/: a real game file
+                ("models/items/pudge/portraits.txt", b"portraits"),
+            ],
+            &none_spec(TypePolicy::Resources, &[]),
+        );
+        assert_eq!(report.ignored.files, 3);
+        assert_eq!(report.rejected.files, 1);
+        assert_eq!(
+            reason_of(&report, "models/items/pudge/portraits.txt"),
+            RejectReason::TypeNotAllowed
+        );
+        assert_eq!(
+            reason_of(&report, "models/courier/not a game file = note.txt"),
+            RejectReason::NotGameFile
+        );
+        assert!(!report.hostile);
+        assert!(report.install.blocked.is_none());
+
+        // The same odd characters in a file the game would load stay unsafe,
+        // as do traversal and a script or program with a plain name.
+        for path in [
+            "models/courier/odd (name).vmdl_c",
+            "models/../escape.txt",
+            "models/courier/ok.vmdl_c/../../x.txt",
+            "scripts/odd = name.lua",
+        ] {
+            let report = analyze(
+                &build_unchecked(2, &[(path, b"x")]),
+                &none_spec(TypePolicy::Resources, &[]),
+                &Limits::default(),
+            )
+            .map(|analysis| analysis.report);
+            if let Ok(report) = report {
+                assert!(report.hostile, "{path}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_category_table_fixes_scope_and_type_policy() {
+        assert_eq!(
+            category_rule("heroes").map(|r| r.scope),
+            Some(ScopeKind::Hero)
+        );
+        assert_eq!(
+            category_rule("hero-items").map(|r| r.scope),
+            Some(ScopeKind::Hero)
+        );
+        assert_eq!(
+            category_rule("mega-kill").map(|r| r.types),
+            Some(TypePolicy::Sounds)
+        );
+        assert_eq!(
+            category_rule("ranks").map(|r| r.types),
+            Some(TypePolicy::Textures)
+        );
+        assert_eq!(
+            category_rule("shaders").map(|r| r.types),
+            Some(TypePolicy::Materials)
+        );
+        assert_eq!(
+            category_rule("trees").map(|r| r.types),
+            Some(TypePolicy::Resources)
+        );
+        assert!(category_rule("backgrounds").is_none());
+        // every policy is a subset of the compiled types, plus the layouts of
+        // the resources policy: nothing in a policy is outside the allowlist
+        for extension in ["vsnd_c", "vsndevts_c", "vtex_c", "vmat_c"] {
+            assert!(ALLOWED_TYPES.contains(&extension));
+        }
     }
 }

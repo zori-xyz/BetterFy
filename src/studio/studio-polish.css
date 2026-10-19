@@ -265,3 +265,5 @@
   border-radius: var(--s-radius-hair);
   font-family: inherit;
 }
+
+.s-inline-note>div>p+p{margin-top:7px}

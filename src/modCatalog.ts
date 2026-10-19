@@ -234,9 +234,11 @@ const catalogSnapshot = snapshot as unknown as {
 
 const rawItems = catalogSnapshot.items;
 
-// These upstream categories describe tooling, source news, or performance work.
+// These upstream categories describe tooling, source news or loose scripts.
 // They belong to the functional catalog journey, never to the visual Wardrobe.
-const nonWardrobeCategories = new Set(["optimization", "tools", "news", "other"]);
+// `optimization` is not here: its two archives are plain model and effect
+// packs that the allowlist audits like any other.
+const nonWardrobeCategories = new Set(["tools", "news", "other"]);
 
 export const wardrobeCatalogItems: BetterFyCatalogMod[] = rawItems
   .map((item) => {

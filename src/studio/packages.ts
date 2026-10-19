@@ -20,6 +20,11 @@ type PackageManifest = {
   verifiedLanguages?: string[];
   conflicts?: string[];
   requires?: string[];
+  /** Wardrobe items: the catalog category and whether the item is scoped to a hero. */
+  category?: string;
+  scope?: "hero" | "none";
+  /** Wardrobe items: size of the downloaded file in bytes. */
+  downloadBytes?: number;
   /**
    * Wardrobe items: heroes the skin is for and the audited install sizes. For a
    * map, `installBytes` is the size of maps/dota.vpk and `installFiles` the
@@ -119,11 +124,16 @@ function splitMode(id: string) {
     : { base: id, strip: false };
 }
 
-/** Catalog, engine or `.strip` engine ID; the suffix only exists on skins. */
+/** Only hero skins have the opt-in mode; every other category installs whole. */
+function hasKeepSharedMode(manifest: PackageManifest | undefined) {
+  return manifest?.kind === "wardrobe" && manifest.scope === "hero";
+}
+
+/** Catalog, engine or `.strip` engine ID; the suffix only exists on hero skins. */
 export function findPackage(id: string) {
   const { base, strip } = splitMode(id);
   const manifest = byAnyId.get(base);
-  return strip && manifest?.kind !== "wardrobe" ? undefined : manifest;
+  return strip && !hasKeepSharedMode(manifest) ? undefined : manifest;
 }
 
 /** Whether the ID selects the opt-in mode that leaves shared game files out. */
@@ -135,7 +145,7 @@ export function isSharedKept(id: string) {
 export function withSharedMode(id: string, keepShared: boolean) {
   const manifest = findPackage(id);
   const base = manifest?.id ?? splitMode(id).base;
-  return keepShared && manifest?.kind === "wardrobe" ? `${base}${STRIP_SUFFIX}` : base;
+  return keepShared && hasKeepSharedMode(manifest) ? `${base}${STRIP_SUFFIX}` : base;
 }
 
 /** Upper bound on the merged VPK (mod_bundle.rs): 256 MiB of file data. */

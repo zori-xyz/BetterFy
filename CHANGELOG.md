@@ -44,6 +44,18 @@ First Windows observation of skins: three catalog skins installed together by EA
   [docs/MAP_AUDIT_REPORT.md](docs/MAP_AUDIT_REPORT.md),
   [docs/MAP_WINDOWS_TEST_PLAN.md](docs/MAP_WINDOWS_TEST_PLAN.md).
 
+### Catalog categories (wardrobe)
+- Every plain resource category of the catalog is now audited and installable through the
+  same verified pipeline as hero skins: 439 more archives in 26 categories (couriers, creeps,
+  item and TI effects, mega-kill, music and other sounds, shaders, river, trees, wards, ranks
+  and item icons, emblems, and the rest), 939 in all. Content with no hero installs whole, with no
+  opt-in mode; sounds, panorama textures and materials have their own type policies; raw
+  `pakNN_dir.vpk` items are pinned by their own hash. Cards show the Windows-pilot mark and
+  "not run in Dota yet"; the build review shows files, size and class counts per item with the
+  category's help (and the upstream tips for emblems and shaders). Panorama layouts, loose
+  cursors and fonts, tools and the two categories whose files do not exist upstream stay
+  not enabled, with the reason in [docs/CATALOG_CATEGORIES.md](docs/CATALOG_CATEGORIES.md).
+  Built and tested on a Mac only: not installed on Windows and not run in Dota.
 ### Panorama decor (proofs only)
 - New proofs for main-menu backgrounds, HUD skins and versus screens: a static
   layout proof, a style sheet proof and a WebM container check, built to refuse

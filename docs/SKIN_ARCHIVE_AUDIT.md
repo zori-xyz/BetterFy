@@ -234,6 +234,22 @@ time, not necessarily the player's patch; the build can also compare a skin with
 the player's own `pak01_dir.vpk` and report files the game ships now that the
 audit did not know (information only, see ENGINE_ARCHITECTURE).
 
+## Other catalog categories
+
+The same analyzer and the same install-everything rule now cover the plain resource
+categories of the catalog (couriers, creeps, effects, sounds, music, shaders, river,
+trees, ranks, item icons and the rest), 439 more archives in 26 categories (939 in all).
+They have no hero: scope kind `none`, where every accepted file installs and the
+"overrides a Valve file" / "new file" split is computed against the same Valve list and
+pinned as information, with no opt-in strip mode. Each category carries a type policy
+(compiled resources, sounds, panorama textures, materials) that only narrows the types
+above; the rejection of scripts, executables, traversal and unproven layouts is the same.
+Raw `pakNN_dir.vpk` items (no ZIP) are pinned by their own size and SHA-256. Text notes
+left in resource folders are ignored as not game files, and an odd name on such a leftover
+no longer blocks the archive; one hero text note moved from dropped to ignored for that
+reason. The design is in "Catalog categories" of ENGINE_ARCHITECTURE.md, the per-category
+table, upstream help text and the categories that are not enabled in
+[CATALOG_CATEGORIES.md](CATALOG_CATEGORIES.md), and the numbers in the audit report.
 ## Panorama decor (backgrounds, HUD skins, versus screens)
 
 Hero skins keep the rule above: `vcss_c`, `webm` and any layout that is not an image
@@ -265,4 +281,6 @@ proofs exist and are tested; they are not wired into the install pipeline.
   needs. The hero names are inferred from Valve-present paths; 49 emitted items
   carry more than one name and 44 still override a file in another hero's
   folder (89 files in all), which is only information in the default mode.
+- Whether any non-hero category works in the current Dota patch when BetterFy installs it;
+  none of the new archives has been installed on Windows or run in Dota.
 - Licensing beyond the founder's report.
