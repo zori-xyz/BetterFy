@@ -1,0 +1,618 @@
+[
+  {
+    "id": "gamefiles.cursors-azur-lane-cursor",
+    "catalogId": "cursors-azur-lane-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Azur Lane Cursor",
+      "en": "Azur Lane Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 512386,
+    "installFiles": 96,
+    "installBytes": 1274438
+  },
+  {
+    "id": "gamefiles.cursors-bts3-cursor",
+    "catalogId": "cursors-bts3-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Bts3 Cursor",
+      "en": "Bts3 Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1234983,
+    "installFiles": 109,
+    "installBytes": 7835427
+  },
+  {
+    "id": "gamefiles.cursors-centaur-cursor",
+    "catalogId": "cursors-centaur-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Centaur Cursor",
+      "en": "Centaur Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1249937,
+    "installFiles": 109,
+    "installBytes": 7837105
+  },
+  {
+    "id": "gamefiles.cursors-chaos-knight-cursor",
+    "catalogId": "cursors-chaos-knight-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Chaos Knight Cursor",
+      "en": "Chaos Knight Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1220809,
+    "installFiles": 109,
+    "installBytes": 7836297
+  },
+  {
+    "id": "gamefiles.cursors-clockwerk-cursor",
+    "catalogId": "cursors-clockwerk-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Clockwerk Cursor",
+      "en": "Clockwerk Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1228288,
+    "installFiles": 106,
+    "installBytes": 7827625
+  },
+  {
+    "id": "gamefiles.cursors-crystal-maiden-cursor",
+    "catalogId": "cursors-crystal-maiden-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Crystal Maiden Cursor",
+      "en": "Crystal Maiden Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1248167,
+    "installFiles": 109,
+    "installBytes": 7836297
+  },
+  {
+    "id": "gamefiles.cursors-dcveno-cursor",
+    "catalogId": "cursors-dcveno-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Dcveno Cursor",
+      "en": "Dcveno Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1223628,
+    "installFiles": 107,
+    "installBytes": 7831235
+  },
+  {
+    "id": "gamefiles.cursors-default-cursor",
+    "catalogId": "cursors-default-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Default Cursor",
+      "en": "Default Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1194697,
+    "installFiles": 94,
+    "installBytes": 7778508
+  },
+  {
+    "id": "gamefiles.cursors-demon-cursor",
+    "catalogId": "cursors-demon-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Demon Cursor",
+      "en": "Demon Cursor"
+    },
+    "author": "yoshimura",
+    "downloadBytes": 1227033,
+    "installFiles": 100,
+    "installBytes": 7801512
+  },
+  {
+    "id": "gamefiles.cursors-diretide-cursor",
+    "catalogId": "cursors-diretide-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Diretide Cursor",
+      "en": "Diretide Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1211196,
+    "installFiles": 105,
+    "installBytes": 7820885
+  },
+  {
+    "id": "gamefiles.cursors-earthshaker-cursor",
+    "catalogId": "cursors-earthshaker-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Earthshaker Cursor",
+      "en": "Earthshaker Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1230596,
+    "installFiles": 109,
+    "installBytes": 7836331
+  },
+  {
+    "id": "gamefiles.cursors-emerald-cursor",
+    "catalogId": "cursors-emerald-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Emerald Cursor",
+      "en": "Emerald Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1222182,
+    "installFiles": 108,
+    "installBytes": 7835386
+  },
+  {
+    "id": "gamefiles.cursors-holy-flame-cursor",
+    "catalogId": "cursors-holy-flame-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Holy Flame Cursor",
+      "en": "Holy Flame Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1235663,
+    "installFiles": 108,
+    "installBytes": 7836234
+  },
+  {
+    "id": "gamefiles.cursors-human-cursor",
+    "catalogId": "cursors-human-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Human Cursor",
+      "en": "Human Cursor"
+    },
+    "author": "YMOM77",
+    "downloadBytes": 1207383,
+    "installFiles": 104,
+    "installBytes": 7821016
+  },
+  {
+    "id": "gamefiles.cursors-mirana-cursor",
+    "catalogId": "cursors-mirana-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Mirana Cursor",
+      "en": "Mirana Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1233648,
+    "installFiles": 109,
+    "installBytes": 7836297
+  },
+  {
+    "id": "gamefiles.cursors-necronub-cursor",
+    "catalogId": "cursors-necronub-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Necronub Cursor",
+      "en": "Necronub Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1230581,
+    "installFiles": 109,
+    "installBytes": 7836315
+  },
+  {
+    "id": "gamefiles.cursors-night-elf-cursor",
+    "catalogId": "cursors-night-elf-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Night Elf Cursor",
+      "en": "Night Elf Cursor"
+    },
+    "author": "YMOM77",
+    "downloadBytes": 1207494,
+    "installFiles": 104,
+    "installBytes": 7821016
+  },
+  {
+    "id": "gamefiles.cursors-old-cursor",
+    "catalogId": "cursors-old-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Old Cursor",
+      "en": "Old Cursor"
+    },
+    "author": "Timmyone",
+    "downloadBytes": 1211183,
+    "installFiles": 102,
+    "installBytes": 7812482
+  },
+  {
+    "id": "gamefiles.cursors-pepepains-cursor",
+    "catalogId": "cursors-pepepains-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Pepepains Cursor",
+      "en": "Pepepains Cursor"
+    },
+    "author": "Timmyone",
+    "downloadBytes": 1205605,
+    "installFiles": 102,
+    "installBytes": 7811816
+  },
+  {
+    "id": "gamefiles.cursors-purple-bts3-cursor",
+    "catalogId": "cursors-purple-bts3-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Purple Bts3 Cursor",
+      "en": "Purple Bts3 Cursor"
+    },
+    "author": "Timmyone",
+    "downloadBytes": 1231586,
+    "installFiles": 109,
+    "installBytes": 7835427
+  },
+  {
+    "id": "gamefiles.cursors-purple-demon-cursor",
+    "catalogId": "cursors-purple-demon-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Purple Demon Cursor",
+      "en": "Purple Demon Cursor"
+    },
+    "author": "Timmyone",
+    "downloadBytes": 1208498,
+    "installFiles": 99,
+    "installBytes": 7742850
+  },
+  {
+    "id": "gamefiles.cursors-purple-ti8-cursor",
+    "catalogId": "cursors-purple-ti8-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Purple TI8 Cursor",
+      "en": "Purple TI8 Cursor"
+    },
+    "author": "Timmyone",
+    "downloadBytes": 1213563,
+    "installFiles": 102,
+    "installBytes": 7811724
+  },
+  {
+    "id": "gamefiles.cursors-simple-cursor",
+    "catalogId": "cursors-simple-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Simple Cursor",
+      "en": "Simple Cursor"
+    },
+    "author": "Slipersone",
+    "downloadBytes": 1432882,
+    "installFiles": 102,
+    "installBytes": 8734618
+  },
+  {
+    "id": "gamefiles.cursors-skywrath-mage-cursor",
+    "catalogId": "cursors-skywrath-mage-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Skywrath Mage Cursor",
+      "en": "Skywrath Mage Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1227731,
+    "installFiles": 107,
+    "installBytes": 7831253
+  },
+  {
+    "id": "gamefiles.cursors-spearma-cursor",
+    "catalogId": "cursors-spearma-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "SpearMa Cursor",
+      "en": "SpearMa Cursor"
+    },
+    "author": "ya_lyosha",
+    "downloadBytes": 15815,
+    "installFiles": 18,
+    "installBytes": 73024
+  },
+  {
+    "id": "gamefiles.cursors-ti5-cursor",
+    "catalogId": "cursors-ti5-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "TI5 Cursor",
+      "en": "TI5 Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1223301,
+    "installFiles": 108,
+    "installBytes": 7835403
+  },
+  {
+    "id": "gamefiles.cursors-ti6-cursor",
+    "catalogId": "cursors-ti6-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "TI6 Cursor",
+      "en": "TI6 Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1224564,
+    "installFiles": 107,
+    "installBytes": 7831421
+  },
+  {
+    "id": "gamefiles.cursors-ti7-cursor",
+    "catalogId": "cursors-ti7-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "TI7 Cursor",
+      "en": "TI7 Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1222678,
+    "installFiles": 107,
+    "installBytes": 7831237
+  },
+  {
+    "id": "gamefiles.cursors-ti8-cursor",
+    "catalogId": "cursors-ti8-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "TI8 Cursor",
+      "en": "TI8 Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1222602,
+    "installFiles": 107,
+    "installBytes": 7831237
+  },
+  {
+    "id": "gamefiles.cursors-ti9-cursor",
+    "catalogId": "cursors-ti9-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "TI9 Cursor",
+      "en": "TI9 Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1223963,
+    "installFiles": 107,
+    "installBytes": 7831237
+  },
+  {
+    "id": "gamefiles.cursors-timbersaw-cursor",
+    "catalogId": "cursors-timbersaw-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Timbersaw Cursor",
+      "en": "Timbersaw Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1227891,
+    "installFiles": 109,
+    "installBytes": 7836315
+  },
+  {
+    "id": "gamefiles.cursors-undead-cursor",
+    "catalogId": "cursors-undead-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Undead Cursor",
+      "en": "Undead Cursor"
+    },
+    "author": "YMOM77",
+    "downloadBytes": 1220577,
+    "installFiles": 108,
+    "installBytes": 7833155
+  },
+  {
+    "id": "gamefiles.cursors-vengeful-spirit-cursor",
+    "catalogId": "cursors-vengeful-spirit-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "Vengeful Spirit Cursor",
+      "en": "Vengeful Spirit Cursor"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 1227962,
+    "installFiles": 107,
+    "installBytes": 7831253
+  },
+  {
+    "id": "gamefiles.cursors-white-necronub-cursor",
+    "catalogId": "cursors-white-necronub-cursor",
+    "kind": "gamefiles",
+    "category": "cursors",
+    "name": {
+      "ru": "White Necronub Cursor",
+      "en": "White Necronub Cursor"
+    },
+    "author": "NahuiToSay",
+    "downloadBytes": 1286909,
+    "installFiles": 109,
+    "installBytes": 7836301
+  },
+  {
+    "id": "gamefiles.fonts-audex",
+    "catalogId": "fonts-audex",
+    "kind": "gamefiles",
+    "category": "fonts",
+    "name": {
+      "ru": "Audex",
+      "en": "Audex"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 25948536,
+    "installFiles": 4,
+    "installBytes": 364676
+  },
+  {
+    "id": "gamefiles.fonts-correction-tape",
+    "catalogId": "fonts-correction-tape",
+    "kind": "gamefiles",
+    "category": "fonts",
+    "name": {
+      "ru": "Correction Tape",
+      "en": "Correction Tape"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 26009748,
+    "installFiles": 4,
+    "installBytes": 393056
+  },
+  {
+    "id": "gamefiles.fonts-divagon",
+    "catalogId": "fonts-divagon",
+    "kind": "gamefiles",
+    "category": "fonts",
+    "name": {
+      "ru": "Divagon",
+      "en": "Divagon"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 25953665,
+    "installFiles": 4,
+    "installBytes": 329888
+  },
+  {
+    "id": "gamefiles.fonts-dm-mono",
+    "catalogId": "fonts-dm-mono",
+    "kind": "gamefiles",
+    "category": "fonts",
+    "name": {
+      "ru": "DM Mono",
+      "en": "DM Mono"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 26156749,
+    "installFiles": 4,
+    "installBytes": 755080
+  },
+  {
+    "id": "gamefiles.fonts-hondac",
+    "catalogId": "fonts-hondac",
+    "kind": "gamefiles",
+    "category": "fonts",
+    "name": {
+      "ru": "HondaC",
+      "en": "HondaC"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 25931202,
+    "installFiles": 4,
+    "installBytes": 209088
+  },
+  {
+    "id": "gamefiles.fonts-mason",
+    "catalogId": "fonts-mason",
+    "kind": "gamefiles",
+    "category": "fonts",
+    "name": {
+      "ru": "Mason",
+      "en": "Mason"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 26002422,
+    "installFiles": 4,
+    "installBytes": 418992
+  },
+  {
+    "id": "gamefiles.fonts-monocraft",
+    "catalogId": "fonts-monocraft",
+    "kind": "gamefiles",
+    "category": "fonts",
+    "name": {
+      "ru": "Monocraft",
+      "en": "Monocraft"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 25986204,
+    "installFiles": 4,
+    "installBytes": 492652
+  },
+  {
+    "id": "gamefiles.fonts-nothing",
+    "catalogId": "fonts-nothing",
+    "kind": "gamefiles",
+    "category": "fonts",
+    "name": {
+      "ru": "Nothing",
+      "en": "Nothing"
+    },
+    "author": "BetterFy Web",
+    "downloadBytes": 30294872,
+    "installFiles": 4,
+    "installBytes": 110216112
+  },
+  {
+    "id": "gamefiles.fonts-pusia",
+    "catalogId": "fonts-pusia",
+    "kind": "gamefiles",
+    "category": "fonts",
+    "name": {
+      "ru": "Pusia",
+      "en": "Pusia"
+    },
+    "author": "Timmyone",
+    "downloadBytes": 26148031,
+    "installFiles": 4,
+    "installBytes": 796396
+  },
+  {
+    "id": "gamefiles.fonts-warcraft-iii",
+    "catalogId": "fonts-warcraft-iii",
+    "kind": "gamefiles",
+    "category": "fonts",
+    "name": {
+      "ru": "Warcraft III",
+      "en": "Warcraft III"
+    },
+    "author": "YMOM77",
+    "downloadBytes": 25968903,
+    "installFiles": 4,
+    "installBytes": 330340
+  }
+]

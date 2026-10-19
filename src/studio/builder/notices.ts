@@ -223,6 +223,42 @@ export const explainError = (code: string, isRu: boolean) => {
       "В сборке две карты, а ставится только одна: карта заменяет файл карты целиком. Оставь одну из них, остальное в сборке не изменится.",
       "The build has two maps, and only one can be installed: a map replaces the game's map file as a whole. Keep one of them; the rest of the build stays as is.",
     ],
+    game_pack_conflict: [
+      "В сборке два курсора или два набора шрифтов, а ставится только один каждого вида. Оставь один, остальное в сборке не изменится.",
+      "The build has two cursors or two font packs, and only one of each can be installed. Keep one; the rest of the build stays as is.",
+    ],
+    game_pack_hash_mismatch: [
+      "Архив курсора или шрифтов скачался с ошибкой, BetterFy его не сохранил. Попробуй ещё раз.",
+      "The cursor or font archive downloaded with an error and BetterFy did not keep it. Try again.",
+    ],
+    game_pack_unexpected: [
+      "Внутри архива курсора или шрифтов не то, что ожидалось. BetterFy не будет его ставить.",
+      "The cursor or font archive does not contain what was expected. BetterFy will not install it.",
+    ],
+    game_pack_content_invalid: [
+      "Файл курсора или шрифта не похож на настоящий. BetterFy не будет его ставить.",
+      "A cursor or font file does not look like a real one. BetterFy will not install it.",
+    ],
+    game_file_folder_missing: [
+      "В Dota нет папки курсоров, шрифтов или гайдов. Проверь файлы игры в Steam и повтори. Ничего не записано.",
+      "Dota is missing its cursor, font or guide folder. Verify the game files in Steam and retry. Nothing was written.",
+    ],
+    game_file_target_unsafe: [
+      "На месте файла курсора или шрифта в Dota лежит что-то другое (папка или ссылка). BetterFy ничего не записал.",
+      "Something other than a file sits where a Dota cursor or font file belongs (a folder or a link). BetterFy wrote nothing.",
+    ],
+    game_files_recovery_required: [
+      "Прошлая запись курсоров или шрифтов оборвалась. Нажми «Проверить» в подробностях — BetterFy вернёт файлы — и повтори.",
+      "An earlier write of cursors or fonts stopped half way. Use Check under Details so BetterFy puts the files back, then retry.",
+    ],
+    game_files_not_latest: [
+      "Откатить можно только последнюю сборку. Сначала откати её.",
+      "Only the latest build can be restored. Restore that one first.",
+    ],
+    game_file_write_failed: [
+      "Не удалось записать файл курсора или шрифта. Закрой Dota и программы, которые могут его держать, и повтори. Сборка отменена.",
+      "A cursor or font file could not be written. Close Dota and anything that may hold it, and retry. The build was undone.",
+    ],
     map_audit_mismatch: [
       "Карта не совпала с проверенным описанием: внутри не то, что записано при аудите. BetterFy не будет её ставить.",
       "The map does not match its audited description: what is inside is not what the audit recorded. BetterFy will not install it.",
@@ -311,6 +347,12 @@ const groups: Array<{
   {
     codes: ["map_terrain_conflict"],
     title: ["В сборке две карты", "Two maps in one build"],
+    action: null,
+    tone: "warn",
+  },
+  {
+    codes: ["game_pack_conflict"],
+    title: ["Два курсора или два набора шрифтов", "Two cursors or two font packs"],
     action: null,
     tone: "warn",
   },

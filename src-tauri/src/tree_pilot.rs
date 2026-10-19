@@ -620,6 +620,16 @@ fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
     if maps > 1 {
         return Err("map_terrain_conflict".to_string());
     }
+    // A cursor or font pack replaces the whole set of the game's cursors or
+    // fonts: one of each per build.
+    let mut pack_categories = BTreeSet::new();
+    for id in &ids {
+        if let Contract::Pack(item) = resolve(id)? {
+            if !pack_categories.insert(item.category) {
+                return Err("game_pack_conflict".to_string());
+            }
+        }
+    }
     // Minify's own conflicts and dependencies, checked before anything is
     // downloaded or built. A wardrobe item declares neither.
     for id in &ids {
@@ -645,6 +655,8 @@ enum Contract {
     Wardrobe(&'static WardrobeManifest, SharedPolicy),
     /// A whole-map package installed as its own file, `maps/dota.vpk`.
     Map(&'static MapManifest),
+    /// A cursor or font pack: the game's own loose files (`game_files`).
+    Pack(&'static crate::game_packs::PackManifest),
 }
 
 impl Contract {
@@ -653,6 +665,7 @@ impl Contract {
             Self::Tuning(manifest) => manifest.id.clone(),
             Self::Wardrobe(item, policy) => wardrobe::variant_id(item, *policy),
             Self::Map(item) => item.id.clone(),
+            Self::Pack(item) => item.id.clone(),
         }
     }
 
@@ -663,6 +676,7 @@ impl Contract {
             Self::Tuning(manifest) => &manifest.id,
             Self::Wardrobe(item, _) => &item.id,
             Self::Map(item) => &item.id,
+            Self::Pack(item) => &item.id,
         }
     }
 }
@@ -674,6 +688,9 @@ fn resolve(id: &str) -> Result<Contract, String> {
     if let Some(item) = map_terrain::find(id)? {
         return Ok(Contract::Map(item));
     }
+    if let Some(item) = crate::game_packs::find(id)? {
+        return Ok(Contract::Pack(item));
+    }
     package_registry::find(id).map(Contract::Tuning)
 }
 
@@ -682,7 +699,7 @@ fn resolve(id: &str) -> Result<Contract, String> {
 fn tuning(id: &str) -> Result<Option<&'static PackageManifest>, String> {
     match resolve(id)? {
         Contract::Tuning(manifest) => Ok(Some(manifest)),
-        Contract::Wardrobe(..) | Contract::Map(_) => Ok(None),
+        Contract::Wardrobe(..) | Contract::Map(_) | Contract::Pack(_) => Ok(None),
     }
 }
 
@@ -711,6 +728,12 @@ pub(crate) struct VerifiedTreeVpk {
     wardrobe: Vec<WardrobePlanItem>,
     /// Paths a wardrobe item writes that another package writes differently.
     wardrobe_conflicts: Vec<WardrobeConflict>,
+    /// The game's own loose files the build replaces (`None`: removes),
+    /// below `game/dota`. Their list is inside the VPK, so the plan ID binds
+    /// them.
+    game_files: BTreeMap<String, Option<Vec<u8>>>,
+    /// The cursor and font packs of the build, in selection order.
+    packs: Vec<crate::game_packs::PackPlanItem>,
 }
 
 #[derive(Clone, Serialize)]
@@ -741,6 +764,8 @@ pub(crate) struct TreePilotPlan {
     /// size, class counts and every stripped or rejected path.
     wardrobe: Vec<WardrobePlanItem>,
     wardrobe_conflicts: Vec<WardrobeConflict>,
+    /// Cursor and font packs: the game's own files they replace or remove.
+    packs: Vec<crate::game_packs::PackPlanItem>,
     compatibility: &'static str,
     distribution: &'static str,
     deploy_enabled: bool,
@@ -767,6 +792,11 @@ impl VerifiedTreeVpk {
     /// the list the deployment records.
     pub(crate) fn package_ids(&self) -> &[String] {
         &self.package_ids
+    }
+
+    /// The game's own loose files the build replaces (`None`: removes).
+    pub(crate) fn game_files(&self) -> &BTreeMap<String, Option<Vec<u8>>> {
+        &self.game_files
     }
 
     pub(crate) fn has_pak(&self) -> bool {
@@ -848,6 +878,8 @@ pub(crate) fn verified_test_vpk() -> VerifiedTreeVpk {
         plan_id: bundle.plan().plan_id.clone(),
         wardrobe: Vec::new(),
         wardrobe_conflicts: Vec::new(),
+        game_files: BTreeMap::new(),
+        packs: Vec::new(),
     }
 }
 
@@ -914,6 +946,16 @@ fn acquire_verified_resources_with_progress(
                     return Err("download_cancelled".to_string());
                 }
                 map_terrain::acquire(app_data_root, item, cancelled)?;
+                index += 1;
+                progress(index);
+                continue;
+            }
+            // One pinned ZIP; only its checked files are stored.
+            Contract::Pack(item) => {
+                if cancelled.load(Ordering::Relaxed) {
+                    return Err("download_cancelled".to_string());
+                }
+                crate::game_packs::acquire(app_data_root, item, cancelled)?;
                 index += 1;
                 progress(index);
                 continue;
@@ -1118,12 +1160,31 @@ pub(crate) fn build_from_verified_store(
         }
     }
     let mut wardrobe_items = Vec::new();
+    let mut game_files = BTreeMap::new();
+    let mut packs = Vec::new();
     let packages = bundle_ids
         .iter()
         .map(|package_id| {
             let manifest = match resolve(package_id)? {
                 Contract::Map(_) => return Err("pilot_package_invalid".to_string()),
                 Contract::Tuning(manifest) => manifest,
+                // The pack's files go into the game folder on their own; the
+                // VPK carries the list of them, which binds the reviewed build
+                // to those exact files.
+                Contract::Pack(item) => {
+                    let loaded = crate::game_packs::load(app_data_root, item)?;
+                    for (path, bytes) in loaded.files {
+                        if game_files.insert(path, bytes).is_some() {
+                            return Err("game_pack_conflict".to_string());
+                        }
+                    }
+                    packs.push(loaded.item);
+                    let (marker, text) = crate::game_packs::marker(item);
+                    return Ok(BundlePackage {
+                        package_id: package_id.clone(),
+                        resources: BTreeMap::from([(marker, text)]),
+                    });
+                }
                 // The analyzer re-checks the stored archive against its audit
                 // and returns only the files that audit allows.
                 Contract::Wardrobe(item, policy) => {
@@ -1190,7 +1251,10 @@ pub(crate) fn build_from_verified_store(
     let mut packages = packages;
     apply_panorama_styles(app_data_root, &bundle_ids, &mut packages)?;
     apply_panorama_layouts(app_data_root, &bundle_ids, &mut packages)?;
-    assemble(package_ids, packages, wardrobe_items, map)
+    let mut verified = assemble(package_ids, packages, wardrobe_items, map)?;
+    verified.game_files = game_files;
+    verified.packs = packs;
+    Ok(verified)
 }
 
 /// The identity of a build that carries a map: the merged packages' plan (if
@@ -1242,6 +1306,8 @@ fn assemble(
             plan_id: String::new(),
             wardrobe,
             wardrobe_conflicts: Vec::new(),
+            game_files: BTreeMap::new(),
+            packs: Vec::new(),
         }
     } else {
         build_verified_bundle(packages, wardrobe)?
@@ -1282,6 +1348,7 @@ fn plan_for(verified: &VerifiedTreeVpk) -> TreePilotPlan {
         contributions: verified.bundle_plan().contributions.clone(),
         wardrobe: verified.wardrobe.clone(),
         wardrobe_conflicts: verified.wardrobe_conflicts.clone(),
+        packs: verified.packs.clone(),
         compatibility: "unknown",
         distribution: "internal_pilot",
         deploy_enabled: cfg!(target_os = "windows"),
@@ -1396,6 +1463,8 @@ fn build_verified_bundle(
         plan_id: bundle.plan().plan_id.clone(),
         wardrobe,
         wardrobe_conflicts,
+        game_files: BTreeMap::new(),
+        packs: Vec::new(),
     })
 }
 
@@ -1676,6 +1745,48 @@ mod tests {
         let second = build_from_verified_store(&root, &ids).expect("rebuild from cache");
         assert_eq!(first.bytes(), second.bytes());
         std::fs::remove_dir_all(root).expect("clean generated test cache");
+    }
+
+    #[test]
+    fn a_cursor_pack_builds_with_its_game_files_bound_to_the_vpk() {
+        let root = wardrobe_root("cursor-pack");
+        let (manifest, zip) = crate::game_packs::fixtures::cursor_pack("build-pack", b"x");
+        let item = crate::game_packs::register_for_test(manifest);
+        let files = crate::game_packs::extract_pinned_files(&zip, item).expect("extracts");
+        for (file, bytes) in item.files.iter().zip(files) {
+            crate::content_store::store_pinned_resource(&root, file.bytes, &file.sha256, &bytes)
+                .expect("stores");
+        }
+        let verified = build_from_verified_store(&root, std::slice::from_ref(&item.catalog_id))
+            .expect("builds");
+        assert!(verified.has_pak(), "the file list goes into the VPK");
+        assert_eq!(verified.game_files().len(), 3);
+        assert!(verified
+            .game_files()
+            .get("resource/cursor/cursor.res")
+            .is_some_and(Option::is_some));
+        let plan = plan_for(&verified);
+        assert_eq!(plan.packs.len(), 1);
+        assert_eq!(plan.packs[0].files, 3);
+        // The same pack with other bytes is another build.
+        let (other, other_zip) = crate::game_packs::fixtures::cursor_pack("build-pack-2", b"y");
+        let other = crate::game_packs::register_for_test(other);
+        let files = crate::game_packs::extract_pinned_files(&other_zip, other).expect("extracts");
+        for (file, bytes) in other.files.iter().zip(files) {
+            crate::content_store::store_pinned_resource(&root, file.bytes, &file.sha256, &bytes)
+                .expect("stores");
+        }
+        let second = build_from_verified_store(&root, std::slice::from_ref(&other.catalog_id))
+            .expect("builds");
+        assert_ne!(second.plan_id(), verified.plan_id());
+        // Two cursor packs cannot go into one build.
+        assert_eq!(
+            normalize_package_ids(&[item.id.clone(), other.id.clone()])
+                .err()
+                .as_deref(),
+            Some("game_pack_conflict")
+        );
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 
     fn wardrobe_root(name: &str) -> std::path::PathBuf {

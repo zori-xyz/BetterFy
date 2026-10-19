@@ -442,6 +442,8 @@ export type TreePilotPlan = {
   /** One entry per selected wardrobe item; empty for tuning-only builds. */
   wardrobe: WardrobePlanItem[];
   wardrobeConflicts: WardrobeConflict[];
+  /** Cursor and font packs: the game's own files they replace or remove. */
+  packs: GamePackPlanItem[];
   compatibility: "unknown";
   distribution: "internal_pilot";
   deployEnabled: boolean;
@@ -474,6 +476,24 @@ export type CatalogStatus = {
   error: string | null;
 };
 
+/** A cursor or font pack of a build (src-tauri/src/game_packs.rs). */
+export type GamePackPlanItem = {
+  packageId: string;
+  catalogId: string;
+  category: "cursors" | "fonts";
+  files: number;
+  bytes: number;
+  removes: number;
+};
+
+/** The game's own loose files a build replaced, as they are now. */
+export type GameFilesState = {
+  operationId: string;
+  files: number;
+  intact: number;
+  replaced: number;
+};
+
 export type TreePilotCurrentState = GameDeploymentReceipt & {
   packageVerified: boolean;
   steamOperationId: string | null;
@@ -483,6 +503,8 @@ export type TreePilotCurrentState = GameDeploymentReceipt & {
   profile: InstalledProfile | null;
   /** Dota's Steam build differs from the one recorded at install time. */
   dotaPatched: boolean;
+  gameFiles?: GameFilesState | null;
+  gameFilesRecoveryRequired?: boolean;
 };
 
 export type InstalledProfile = {

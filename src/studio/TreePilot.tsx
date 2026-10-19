@@ -51,7 +51,7 @@ import { DemoPanel } from "./builder/DemoPanel";
 import { buildLanguages, languageLabel as languageName } from "./builder/languages";
 import { Choice, ChoiceCards, ChoiceMenu, type ChoiceOption } from "./builder/Choice";
 import { getStorageItem, setStorageItem } from "../storage";
-import { WardrobeReview, formatBytes } from "./WardrobeReview";
+import { PackReview, WardrobeReview, formatBytes } from "./WardrobeReview";
 import { MapReview } from "./MapReview";
 
 const LANGUAGE_KEY = "betterfy:build-language";
@@ -190,6 +190,8 @@ export default function TreePilot({
   const [reportError, setReportError] = useState("");
   const [error, setError] = useState("");
   const [dotaPatched, setDotaPatched] = useState(false);
+  // The game put back some of the cursor or font files the build replaced.
+  const [gameFilesReplaced, setGameFilesReplaced] = useState(false);
   // The plan whose wardrobe path conflicts the person confirmed.
   const [acknowledgedPlan, setAcknowledgedPlan] = useState<string | null>(null);
   // Skins the person asked to keep the game's shared files untouched for (the
@@ -352,6 +354,7 @@ export default function TreePilot({
         if (receipt?.steamProfileToken) setSelectedProfile(receipt.steamProfileToken);
         setSteamRecoveryRequired(receipt?.steamRecoveryRequired ?? false);
         setDotaPatched(receipt?.dotaPatched ?? false);
+        setGameFilesReplaced((receipt?.gameFiles?.replaced ?? 0) > 0);
       })
       .catch((cause) => {
         if (active) setError(codeOf(cause));
@@ -992,6 +995,7 @@ export default function TreePilot({
       if (current?.steamProfileToken) setSelectedProfile(current.steamProfileToken);
       setSteamRecoveryRequired(current?.steamRecoveryRequired ?? false);
       setDotaPatched(current?.dotaPatched ?? false);
+      setGameFilesReplaced((current?.gameFiles?.replaced ?? 0) > 0);
       saveEvidenceReport();
     } catch (cause) {
       setError(codeOf(cause));
@@ -1685,6 +1689,14 @@ export default function TreePilot({
           </div>
         </div>
       )}
+      {operationId && gameFilesReplaced && (
+        <p className="b-pilot-blocker is-warning" role="alert">
+          <TriangleAlert />
+          {isRu
+            ? "Dota вернула свои курсоры или шрифты (обновление или проверка файлов в Steam). Поставь сборку снова, чтобы вернуть свои."
+            : "Dota put its own cursors or fonts back (an update or a Steam file check). Install the build again to bring yours back."}
+        </p>
+      )}
       {operationId && dotaPatched && (
         <p className="b-pilot-blocker is-warning" role="alert">
           <TriangleAlert />
@@ -1714,6 +1726,7 @@ export default function TreePilot({
           onToggleKeepShared={toggleKeepShared}
         />
       )}
+      {plan && !operationId && <PackReview plan={plan} packageLabel={packageLabel} />}
       {plan && !operationId && plan.map && (
         <MapReview
           plan={plan}

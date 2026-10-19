@@ -158,3 +158,60 @@ export function WardrobeReview({
     </section>
   );
 }
+
+/**
+ * Cursor and font packs of the build: they replace the game's own files in
+ * its folders, so the review says that and how it is undone.
+ */
+export function PackReview({
+  plan,
+  packageLabel,
+}: {
+  plan: TreePilotPlan;
+  packageLabel: (id: string) => string;
+}) {
+  const { isRu } = useLocale();
+  const packs = plan.packs ?? [];
+  if (packs.length === 0) return null;
+  return (
+    <section className="b-wardrobe" aria-label={isRu ? "Курсоры и шрифты" : "Cursors and fonts"}>
+      <h3>{isRu ? "Курсоры и шрифты" : "Cursors and fonts"}</h3>
+      {packs.map((pack) => (
+        <article className="b-wardrobe-item" key={pack.packageId}>
+          <header>
+            <strong>{packageLabel(pack.packageId)}</strong>
+            <span>
+              {pack.category === "fonts"
+                ? isRu
+                  ? "Шрифты"
+                  : "Fonts"
+                : isRu
+                  ? "Курсор"
+                  : "Cursor"}
+            </span>
+          </header>
+          <dl className="b-facts">
+            <div>
+              <dt>{isRu ? "Размер" : "Size"}</dt>
+              <dd>{formatBytes(pack.bytes, isRu)}</dd>
+            </div>
+          </dl>
+          <p className="b-pilot-hint">
+            {pack.category === "fonts"
+              ? isRu
+                ? "Шрифты игры уходят в резервную копию, шрифты пака встают на их место."
+                : "The game's fonts go into a backup and the pack's fonts take their place."
+              : isRu
+                ? "Файлы курсора игры уходят в резервную копию, файлы пака встают на их место."
+                : "The game's cursor files go into a backup and the pack's take their place."}
+          </p>
+        </article>
+      ))}
+      <p className="b-pilot-hint">
+        {isRu
+          ? "Откат вернёт файлы игры. Если Dota после обновления вернёт их сама, просто поставь сборку снова."
+          : "Restore puts the game's files back. If a Dota update puts them back first, install the build again."}
+      </p>
+    </section>
+  );
+}

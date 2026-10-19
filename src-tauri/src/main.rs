@@ -8,7 +8,11 @@ mod catalog_index;
 mod content_store;
 mod evidence_reports;
 mod game_deployment;
+mod game_files;
 mod game_language;
+mod game_packs;
+#[cfg(test)]
+mod game_packs_audit;
 mod installed_profile;
 mod kv3;
 #[cfg(test)]
@@ -117,6 +121,10 @@ struct TreeCurrentState {
     profile: Option<installed_profile::InstalledProfile>,
     /// Steam's Dota build differs from the one recorded at install time.
     dota_patched: bool,
+    /// The game's loose files the build replaced, as they are now.
+    game_files: Option<game_files::GameFilesState>,
+    /// A write of those files stopped half way and needs recovery.
+    game_files_recovery_required: bool,
 }
 
 #[derive(Serialize)]
@@ -796,16 +804,34 @@ async fn install_tree_pilot(
     let app_version = app.package_info().version.to_string();
     tauri::async_runtime::spawn_blocking(move || {
         let verified = build_verified_tree_pilot(&app_data, &request)?;
+        let game_root = Path::new(&request.game_path);
         let result = game_deployment::deploy_verified_payload_for_language(
             &app_data,
-            Path::new(&request.game_path),
+            game_root,
             verified.payload(),
             request.language,
             game_deployment::DeploymentBundleIdentity {
                 plan_id: Some(verified.plan_id().to_string()),
                 package_ids: verified.package_ids().to_vec(),
             },
-        );
+        )
+        .and_then(|receipt| {
+            // The game's own loose files (cursors, fonts, item builds) follow
+            // the build, and go back to the game's when it has none. If they
+            // cannot be written, the whole build is undone.
+            match game_files::apply(
+                &app_data,
+                game_root,
+                &receipt.operation_id,
+                verified.game_files(),
+            ) {
+                Ok(_) => Ok(receipt),
+                Err(code) => {
+                    let _ = game_deployment::rollback(&app_data, game_root, &receipt.operation_id);
+                    Err(code)
+                }
+            }
+        });
         installed_profile::record_install(
             &app_data,
             result,
@@ -993,7 +1019,12 @@ async fn current_tree_pilot(
         {
             return Err("steam_journal_invalid".to_string());
         }
+        let game_files_state = game_files::state(&app_data, Path::new(&game_path)).unwrap_or(None);
+        let game_files_recovery_required =
+            game_files::recovery_required(&app_data, Path::new(&game_path)).unwrap_or(false);
         Ok(Some(TreeCurrentState {
+            game_files: game_files_state,
+            game_files_recovery_required,
             receipt,
             package_verified,
             steam_operation_id: linked
@@ -1223,6 +1254,13 @@ async fn rollback_game_deployment(
         .map_err(|_| "rollback_failed".to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
         require_patch_ready_runtime()?;
+        // The game's files first: if they cannot be put back, nothing else
+        // changes and the restore can be tried again.
+        game_files::rollback(
+            &app_data,
+            Path::new(&request.game_path),
+            &request.operation_id,
+        )?;
         let result = game_deployment::rollback(
             &app_data,
             Path::new(&request.game_path),
@@ -1250,6 +1288,21 @@ async fn release_stale_deployment(
         require_patch_ready_runtime()?;
         let released =
             game_deployment::release_stale_deployment(&app_data, Path::new(&request.game_path))?;
+        // The game gets its own cursors and fonts back where they are still
+        // BetterFy's; a file the game replaced is left as it is.
+        let operation = format!(
+            "deploy-op-release-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|value| value.as_millis())
+                .unwrap_or_default()
+        );
+        game_files::apply(
+            &app_data,
+            Path::new(&request.game_path),
+            &operation,
+            &std::collections::BTreeMap::new(),
+        )?;
         let _ = installed_profile::clear(&app_data);
         Ok(released)
     })
@@ -1278,7 +1331,12 @@ async fn recover_game_deployments(
         .map_err(|_| "rollback_failed".to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
         require_patch_ready_runtime()?;
-        game_deployment::recover_pending(&app_data, Path::new(&request.game_path))
+        let files = game_files::recover_pending(&app_data, Path::new(&request.game_path))?;
+        let mut receipt =
+            game_deployment::recover_pending(&app_data, Path::new(&request.game_path))?;
+        receipt.inspected += files;
+        receipt.rolled_back += files;
+        Ok(receipt)
     })
     .await
     .map_err(|_| "runtime_worker_failed".to_string())?

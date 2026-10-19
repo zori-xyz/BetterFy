@@ -475,7 +475,8 @@ fn validate(manifest: &PackageManifest) -> Result<(), String> {
     if !valid_package_id(&manifest.id) || !valid_catalog_id(&manifest.catalog_id) {
         return invalid("id");
     }
-    // Wardrobe items and map terrains come from their own embedded allowlists; a
+    // Wardrobe items, map terrains and cursor and font packs come from their
+    // own embedded allowlists; a
     // package manifest, including one from a signed catalog, may not take their
     // names.
     if manifest
@@ -486,6 +487,10 @@ fn validate(manifest: &PackageManifest) -> Result<(), String> {
             .id
             .starts_with(&format!("{}.", crate::map_terrain::NAMESPACE))
         || crate::map_terrain::catalog_id_taken(&manifest.catalog_id)
+        || manifest
+            .id
+            .starts_with(&format!("{}.", crate::game_packs::NAMESPACE))
+        || crate::game_packs::catalog_id_taken(&manifest.catalog_id)
     {
         return invalid("id");
     }

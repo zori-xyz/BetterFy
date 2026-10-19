@@ -47,6 +47,12 @@ const mapIndex = import.meta.glob<PackageManifest[]>("../../src-tauri/maps/index
   eager: true,
   import: "default",
 });
+// Cursor and font packs (src-tauri/gamefiles/index.json, derived from its
+// manifests.json the same way).
+const packIndex = import.meta.glob<PackageManifest[]>("../../src-tauri/gamefiles/index.json", {
+  eager: true,
+  import: "default",
+});
 const manifests: PackageManifest[] = [
   ...Object.values(
     import.meta.glob<PackageManifest>("../../src-tauri/packages/*.json", {
@@ -56,6 +62,7 @@ const manifests: PackageManifest[] = [
   ),
   ...Object.values(wardrobeIndex).flat(),
   ...Object.values(mapIndex).flat(),
+  ...Object.values(packIndex).flat(),
 ];
 
 export const installablePackages: PackageManifest[] = manifests

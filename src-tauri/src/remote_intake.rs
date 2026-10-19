@@ -342,6 +342,21 @@ pub(crate) fn fetch_pinned_map_archive(
     )
 }
 
+pub(crate) fn fetch_pinned_game_pack(
+    manifest: &crate::game_packs::PackManifest,
+    cancelled: &AtomicBool,
+) -> Result<Vec<u8>, String> {
+    fetch_mirrors_with(
+        &PinnedHttpsTransport::WARDROBE,
+        &manifest.id,
+        &manifest.source.urls,
+        manifest.archive.zip_bytes,
+        &manifest.archive.zip_sha256,
+        "game-pack.zip",
+        cancelled,
+    )
+}
+
 fn fetch_mirrors_with<T: DownloadTransport>(
     transport: &T,
     package_id: &str,
