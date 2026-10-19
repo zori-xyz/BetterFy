@@ -79,6 +79,11 @@ pub(crate) const SHARDS: &[Shard] = &[
         text: include_str!("../wardrobe/manifests-world.json"),
     },
     Shard {
+        file: "manifests-panorama.json",
+        categories: &["backgrounds", "huds", "versus-screens"],
+        text: include_str!("../wardrobe/manifests-panorama.json"),
+    },
+    Shard {
         file: "manifests-audio-ui.json",
         categories: &[
             "mega-kill",
@@ -242,6 +247,10 @@ pub struct WardrobeManifest {
     /// Sorted lower-case paths in the archive that Valve ships and that are
     /// not the heroes': the files the opt-in `strip` mode leaves out.
     pub shared_paths: Vec<String>,
+    /// Sorted lower-case Valve paths the accepted Panorama layouts and styles
+    /// point at (Panorama categories only; see `ScopeSpec::valve_references`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub valve_references: Vec<String>,
     pub distribution: String,
     pub source: WardrobeSource,
     pub archive: ArchivePin,
@@ -260,6 +269,7 @@ impl WardrobeManifest {
                 .map_or(TypePolicy::Resources, |rule| rule.types),
             heroes: self.heroes.clone(),
             shared_paths: self.shared_paths.clone(),
+            valve_references: self.valve_references.clone(),
             shared_policy: policy,
         }
     }
@@ -786,6 +796,7 @@ pub(crate) fn audit_archive(
     let run = |policy| {
         let spec = ScopeSpec {
             kind: base.kind,
+            valve_references: base.valve_references.clone(),
             types: base.types,
             heroes: base.heroes.clone(),
             shared_paths: base.shared_paths.clone(),
@@ -831,6 +842,7 @@ pub(crate) fn audit_both_modes(
         archive,
         &ScopeSpec {
             kind: ScopeKind::Hero,
+            valve_references: Vec::new(),
             types: TypePolicy::Resources,
             heroes: heroes.to_vec(),
             shared_paths: shared_paths.to_vec(),
@@ -891,6 +903,7 @@ pub(crate) fn synthetic_pack_value(
         &archive,
         &ScopeSpec {
             kind: rule.scope,
+            valve_references: Vec::new(),
             types: rule.types,
             heroes: Vec::new(),
             shared_paths: shared_paths.clone(),
@@ -2101,9 +2114,6 @@ mod tests {
         }
         // Only audited ones are enabled; these are deliberately not.
         for name in [
-            "backgrounds",
-            "huds",
-            "versus-screens",
             "cursors",
             "fonts",
             "tools",

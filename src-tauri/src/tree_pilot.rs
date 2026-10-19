@@ -1946,6 +1946,7 @@ mod tests {
                 &analysis_archive,
                 &crate::skin_archive::ScopeSpec {
                     kind: crate::skin_archive::ScopeKind::Hero,
+                    valve_references: Vec::new(),
                     types: crate::skin_archive::TypePolicy::Resources,
                     heroes: vec!["keeper_of_the_light".to_string()],
                     shared_paths: Vec::new(),

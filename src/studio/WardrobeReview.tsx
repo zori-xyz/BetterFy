@@ -1,7 +1,7 @@
 import { TriangleAlert } from "lucide-react";
 import type { SkinRejectReason, TreePilotPlan, WardrobePlanItem } from "../engine";
 import { useLocale } from "../i18n";
-import { categoryHelp } from "./categoryHelp";
+import { categoryHelp, panoramaReview } from "./categoryHelp";
 import { categoryLabel } from "./model";
 
 /** KB under a megabyte, MB above: builds with a skin are tens of megabytes. */
@@ -27,6 +27,10 @@ const reasons: Record<SkinRejectReason, [string, string]> = {
   outside_category: [
     "вне папок, из которых ставится эта категория",
     "outside the folders this category installs from",
+  ],
+  decor_refused: [
+    "проверка макета, стиля или видео не подтвердила файл",
+    "the layout, style or video check did not prove this file",
   ],
 };
 
@@ -62,6 +66,7 @@ function Item({
   // Only hero skins have the opt-in mode; every other category installs whole.
   const isHero = item.scope === "hero";
   const help = categoryHelp(item.category);
+  const panorama = panoramaReview(item.category);
   // `strip` is the opt-in: the shared game files stay out of the build.
   const keepShared = isHero && item.sharedPolicy === "strip";
   const sharedCount = report.shared.files;
@@ -162,6 +167,13 @@ function Item({
               ? "В сборку идёт всё, что есть в архиве, как при ручном копировании VPK в папку игры: свои файлы облика и общие файлы игры, которые он заменяет (они перечислены ниже). Основатель сообщает, что скины, скопированные так на Windows, выглядели правильно; установку этого облика через BetterFy в Dota ещё не запускали."
               : "Everything the archive carries goes into the build, as when its VPK is copied into the game folder by hand: the skin's own files and the shared game files it replaces (listed below). The founder reports that skins copied this way looked right on Windows; BetterFy's install of this skin has not been run in Dota yet."}
       </p>
+      {panorama && (
+        <>
+          <p className="b-pilot-hint">{panorama.proved[language]}</p>
+          <p className="b-pilot-hint">{panorama.notProved[language]}</p>
+          <p className="b-pilot-hint">{panorama.undo[language]}</p>
+        </>
+      )}
       <p className="b-pilot-hint">{permissionNote(item.permission, isRu)}</p>
       {isHero && onToggleKeepShared && (sharedCount > 0 || keepShared) && (
         <label className="b-check">
@@ -245,6 +257,7 @@ function Item({
               <li key={entry.path}>
                 <code>{entry.path}</code>
                 <span>{reasons[entry.reason]?.[isRu ? 0 : 1] ?? entry.reason}</span>
+                {entry.detail && <code>{entry.detail}</code>}
               </li>
             ))}
           </ul>

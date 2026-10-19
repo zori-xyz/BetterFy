@@ -49,6 +49,7 @@
 //! is not a parser of every Source 2 resource. The archive is therefore
 //! installable only when its hash is pinned (see `wardrobe.rs`).
 
+use crate::panorama_decor;
 use crate::panorama_layout::WrapperError;
 use crate::vpk;
 use serde::{Deserialize, Serialize};
@@ -134,6 +135,14 @@ pub(crate) enum TypePolicy {
     Textures,
     /// Materials and their textures (shaders).
     Materials,
+    /// Main-menu backgrounds: layouts, styles and videos, each only as far as
+    /// the Panorama proofs establish it (`panorama_decor`).
+    Backgrounds,
+    /// HUD skins: proven styles, and `vtex_c` textures under
+    /// `panorama/images/`.
+    Huds,
+    /// Versus screens: proven layouts (and styles) of the versus folder.
+    VersusScreens,
 }
 
 impl TypePolicy {
@@ -143,6 +152,8 @@ impl TypePolicy {
             Self::Sounds => matches!(extension, "vsnd_c" | "vsndevts_c"),
             Self::Textures => extension == "vtex_c",
             Self::Materials => matches!(extension, "vmat_c" | "vtex_c"),
+            Self::Huds => extension == "vtex_c",
+            Self::Backgrounds | Self::VersusScreens => false,
         }
     }
 
@@ -150,12 +161,23 @@ impl TypePolicy {
         self == Self::Resources
     }
 
+    /// The Panorama category whose proofs decide this category's layouts,
+    /// styles and videos; `None` for every other policy.
+    pub(crate) fn decor_category(self) -> Option<panorama_decor::Category> {
+        match self {
+            Self::Backgrounds => Some(panorama_decor::Category::Backgrounds),
+            Self::Huds => Some(panorama_decor::Category::Huds),
+            Self::VersusScreens => Some(panorama_decor::Category::VersusScreens),
+            _ => None,
+        }
+    }
+
     /// Folders the category installs from; empty means anywhere.
     fn folders(self) -> &'static [&'static str] {
         match self {
             Self::Sounds => &["sounds/", "soundevents/"],
-            Self::Textures => &["panorama/images/"],
-            Self::Resources | Self::Materials => &[],
+            Self::Textures | Self::Huds => &["panorama/images/"],
+            Self::Resources | Self::Materials | Self::Backgrounds | Self::VersusScreens => &[],
         }
     }
 }
@@ -178,6 +200,7 @@ pub(crate) const CATEGORIES: &[CategoryRule] = &[
     rule("heroes", ScopeKind::Hero, TypePolicy::Resources),
     rule("hero-items", ScopeKind::Hero, TypePolicy::Resources),
     rule("ancient", ScopeKind::None, TypePolicy::Resources),
+    rule("backgrounds", ScopeKind::None, TypePolicy::Backgrounds),
     rule("announcers", ScopeKind::None, TypePolicy::Sounds),
     rule("couriers", ScopeKind::None, TypePolicy::Resources),
     rule("creep-deny", ScopeKind::None, TypePolicy::Resources),
@@ -186,6 +209,7 @@ pub(crate) const CATEGORIES: &[CategoryRule] = &[
     rule("hero-sounds", ScopeKind::None, TypePolicy::Sounds),
     rule("herofx", ScopeKind::None, TypePolicy::Resources),
     rule("high-five", ScopeKind::None, TypePolicy::Resources),
+    rule("huds", ScopeKind::None, TypePolicy::Huds),
     rule("item-effects", ScopeKind::None, TypePolicy::Resources),
     rule("item-icons", ScopeKind::None, TypePolicy::Textures),
     rule("mega-kill", ScopeKind::None, TypePolicy::Sounds),
@@ -202,6 +226,7 @@ pub(crate) const CATEGORIES: &[CategoryRule] = &[
     rule("ti-bp-effects", ScopeKind::None, TypePolicy::Resources),
     rule("towers", ScopeKind::None, TypePolicy::Resources),
     rule("trees", ScopeKind::None, TypePolicy::Resources),
+    rule("versus-screens", ScopeKind::None, TypePolicy::VersusScreens),
     rule("wards", ScopeKind::None, TypePolicy::Resources),
 ];
 
@@ -252,6 +277,9 @@ pub(crate) enum RejectReason {
     PanoramaScripted,
     /// A `vxml_c` the layout reader could not prove to be an image wrapper.
     PanoramaUnproven,
+    /// A layout, style or video the Panorama proofs refused (or a category
+    /// does not take at that path). The exact reason is `RejectedPath::detail`.
+    DecorRefused,
     /// A file of an allowed type outside the folders its category installs
     /// from (a sound pack's `vtex_c`, a rank icon pack's `vmat_c` under
     /// `materials/`). Really dropped.
@@ -283,6 +311,12 @@ pub(crate) struct ScopeSpec {
     /// Sorted, unique, lower-case paths that exist in Valve's file list at
     /// audit time and are not hero-scoped. These are the shared files.
     pub shared_paths: Vec<String>,
+    /// Sorted, unique, lower-case Valve paths that the archive's accepted
+    /// Panorama layouts and styles point at (Valve's own styles, textures and
+    /// scripts). The decor proofs resolve references against these and the
+    /// shared paths, so the audit reproduces without Valve's whole file list.
+    /// Empty for every category that has no Panorama proof.
+    pub valve_references: Vec<String>,
     pub shared_policy: SharedPolicy,
 }
 
@@ -335,6 +369,9 @@ pub(crate) struct RejectedPath {
     pub path: String,
     pub reason: RejectReason,
     pub bytes: u64,
+    /// The exact refusal of a Panorama proof, with the offending name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -435,6 +472,16 @@ impl ScopeSpec {
             }
         };
         if !heroes_ok || self.shared_paths.len() > MAX_SHARED_PATHS {
+            return Err(invalid());
+        }
+        if self.valve_references.len() > MAX_SHARED_PATHS
+            || (!self.valve_references.is_empty() && self.types.decor_category().is_none())
+            || self
+                .valve_references
+                .windows(2)
+                .any(|pair| pair[0] >= pair[1])
+            || self.valve_references.iter().any(|path| !path_safe(path))
+        {
             return Err(invalid());
         }
         let mut seen = BTreeSet::new();
@@ -723,6 +770,26 @@ pub(crate) fn analyze<'a>(
             .entry(entry.path.to_ascii_lowercase())
             .or_default() += 1;
     }
+    // Panorama decor is proven over the whole archive at once (a layout's
+    // video or style is another file of it), before any entry is classified.
+    let decor = spec.types.decor_category().map(|category| {
+        let valve = spec
+            .shared_paths
+            .iter()
+            .chain(&spec.valve_references)
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let payloads = entries
+            .iter()
+            .filter(|entry| by_lowercase[&entry.path.to_ascii_lowercase()] == 1)
+            .map(|entry| (entry.path.to_ascii_lowercase(), entry.payload()))
+            .collect::<Vec<_>>();
+        let proof_input = payloads
+            .iter()
+            .map(|(path, payload)| (path.clone(), &payload[..]))
+            .collect::<Vec<_>>();
+        panorama_decor::prove_archive(category, &proof_input, &valve, true)
+    });
 
     let mut all = Vec::with_capacity(entries.len());
     let mut accepted = Vec::new();
@@ -766,6 +833,21 @@ pub(crate) fn analyze<'a>(
                 }
                 return Err(RejectReason::PathUnsafe);
             }
+            // A layout, style or video of a Panorama category stands or falls
+            // with its proof.
+            let decor_verdict = decor
+                .as_ref()
+                .filter(|_| panorama_decor::kind_of(&lower).is_some())
+                .and_then(|verdicts| verdicts.get(&lower));
+            if let Some(verdict) = decor_verdict {
+                if verdict.is_err() {
+                    return Err(RejectReason::DecorRefused);
+                }
+                if payload.len() > limits.max_entry_bytes {
+                    return Err(RejectReason::Oversized);
+                }
+                return Ok((scope_of(&lower, &spec.heroes, &shared_set), false));
+            }
             let kind = classify_type(&lower, spec.types)?;
             let folders = spec.types.folders();
             if !folders.is_empty() && !folders.iter().any(|folder| lower.starts_with(folder)) {
@@ -797,10 +879,17 @@ pub(crate) fn analyze<'a>(
                     rejected.add(payload.len());
                 }
                 if rejected_paths.len() < MAX_REPORTED_PATHS {
+                    let detail = decor
+                        .as_ref()
+                        .filter(|_| reason == RejectReason::DecorRefused)
+                        .and_then(|verdicts| verdicts.get(&lower))
+                        .and_then(|verdict| verdict.as_ref().err())
+                        .map(panorama_decor::Refusal::detail);
                     rejected_paths.push(RejectedPath {
                         path: entry.path.clone(),
                         reason,
                         bytes: payload.len() as u64,
+                        detail,
                     });
                 }
             }
@@ -966,6 +1055,40 @@ impl Analysis<'_> {
     }
 }
 
+/// Local generator only: the Valve files the accepted layouts and styles of an
+/// archive point at, proven against Valve's whole file list. The audit pins
+/// them (`ScopeSpec::valve_references`), so the app re-runs the proofs without
+/// the list.
+#[cfg(test)]
+pub(crate) fn decor_valve_references(
+    archive: &[u8],
+    category: panorama_decor::Category,
+    valve: &BTreeSet<String>,
+) -> Result<Vec<String>, String> {
+    let entries = vpk::read_embedded_directory(archive)?;
+    let mut counts = BTreeMap::<String, usize>::new();
+    for entry in &entries {
+        *counts.entry(entry.path.to_ascii_lowercase()).or_default() += 1;
+    }
+    let payloads = entries
+        .iter()
+        .filter(|entry| counts[&entry.path.to_ascii_lowercase()] == 1)
+        .map(|entry| (entry.path.to_ascii_lowercase(), entry.payload()))
+        .collect::<Vec<_>>();
+    let input = payloads
+        .iter()
+        .map(|(path, payload)| (path.clone(), &payload[..]))
+        .collect::<Vec<_>>();
+    Ok(panorama_decor::prove_archive(category, &input, valve, true)
+        .into_values()
+        .filter_map(Result::ok)
+        .flat_map(|proof| proof.facts.valve_paths)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .filter(|path| path_safe(path))
+        .collect())
+}
+
 /// An archive plus an audited scope in, the files to install (and the report)
 /// out.
 #[cfg(test)]
@@ -985,6 +1108,7 @@ mod tests {
     fn spec(policy: SharedPolicy) -> ScopeSpec {
         ScopeSpec {
             kind: ScopeKind::Hero,
+            valve_references: Vec::new(),
             types: TypePolicy::Resources,
             heroes: vec!["keeper_of_the_light".to_string()],
             shared_paths: sorted(&[
@@ -1970,6 +2094,7 @@ mod tests {
 
         let spec = ScopeSpec {
             kind: ScopeKind::Hero,
+            valve_references: Vec::new(),
             types: TypePolicy::Resources,
             heroes: names,
             shared_paths: sorted(&["models/heroes/axe/a.vmdl_c"]),
@@ -2227,6 +2352,7 @@ mod tests {
     fn none_spec(types: TypePolicy, shared: &[&str]) -> ScopeSpec {
         ScopeSpec {
             kind: ScopeKind::None,
+            valve_references: Vec::new(),
             types,
             heroes: Vec::new(),
             shared_paths: sorted(shared),
@@ -2486,11 +2612,88 @@ mod tests {
             category_rule("trees").map(|r| r.types),
             Some(TypePolicy::Resources)
         );
-        assert!(category_rule("backgrounds").is_none());
+        for (name, types) in [
+            ("backgrounds", TypePolicy::Backgrounds),
+            ("huds", TypePolicy::Huds),
+            ("versus-screens", TypePolicy::VersusScreens),
+        ] {
+            assert_eq!(category_rule(name).map(|r| r.types), Some(types));
+            assert!(types.decor_category().is_some());
+        }
+        assert!(category_rule("cursors").is_none());
         // every policy is a subset of the compiled types, plus the layouts of
         // the resources policy: nothing in a policy is outside the allowlist
         for extension in ["vsnd_c", "vsndevts_c", "vtex_c", "vmat_c"] {
             assert!(ALLOWED_TYPES.contains(&extension));
         }
+    }
+
+    #[test]
+    fn panorama_categories_stand_on_their_proofs_and_say_why_a_file_is_refused() {
+        let spec = none_spec(TypePolicy::Backgrounds, &[]);
+        let report = analyze_files(
+            &[
+                ("zxc/zxc.webm", b"not a video"),
+                ("panorama/layout/dashboard.vxml_c", b"not a layout"),
+                ("panorama/styles/dashboard.vcss_c", b"not a style"),
+                ("scripts/x.js", b"alert(1)"),
+                ("panorama/images/a.vtex_c", b"texture"),
+            ],
+            &spec,
+        );
+        assert_eq!(report.install.files, 0);
+        for path in [
+            "zxc/zxc.webm",
+            "panorama/layout/dashboard.vxml_c",
+            "panorama/styles/dashboard.vcss_c",
+        ] {
+            let entry = report
+                .rejected_paths
+                .iter()
+                .find(|entry| entry.path == path)
+                .expect("rejected");
+            assert_eq!(entry.reason, RejectReason::DecorRefused);
+            assert!(entry
+                .detail
+                .as_deref()
+                .is_some_and(|d| d.starts_with("decor_")));
+        }
+        // nothing else is let in by the policy: scripts stay hostile, a
+        // texture is not a background file
+        assert_eq!(reason_of(&report, "scripts/x.js"), RejectReason::Script);
+        assert_eq!(
+            reason_of(&report, "panorama/images/a.vtex_c"),
+            RejectReason::TypeNotAllowed
+        );
+        assert!(report.hostile);
+    }
+
+    #[test]
+    fn hud_textures_install_only_from_the_interface_image_folder() {
+        let spec = none_spec(TypePolicy::Huds, &[]);
+        let report = analyze_files(
+            &[
+                ("panorama/images/hud/a.vtex_c", b"texture"),
+                ("materials/a.vtex_c", b"texture"),
+            ],
+            &spec,
+        );
+        assert_eq!(report.install.files, 1);
+        assert_eq!(
+            reason_of(&report, "materials/a.vtex_c"),
+            RejectReason::OutsideCategory
+        );
+    }
+
+    #[test]
+    fn pinned_valve_references_belong_to_panorama_categories_only() {
+        let mut spec = none_spec(TypePolicy::Resources, &[]);
+        spec.valve_references = vec!["panorama/styles/dashboard.vcss_c".to_string()];
+        assert!(spec.validate().is_err());
+        let mut spec = none_spec(TypePolicy::Backgrounds, &[]);
+        spec.valve_references = vec!["panorama/styles/dashboard.vcss_c".to_string()];
+        assert!(spec.validate().is_ok());
+        spec.valve_references = vec!["b/x.vcss_c".to_string(), "a/x.vcss_c".to_string()];
+        assert!(spec.validate().is_err());
     }
 }

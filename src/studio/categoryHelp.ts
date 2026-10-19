@@ -79,6 +79,18 @@ const categories: Record<string, CategoryHelp> = {
     "Заменяет эффекты предметов (частицы, материалы, текстуры).",
     "Replaces item effects (particles, materials, textures).",
   ),
+  backgrounds: help(
+    "Заменяет фон главного меню: макеты, стили и видео главного экрана.",
+    "Replaces the main-menu background: the layouts, styles and video of the home screen.",
+  ),
+  huds: help(
+    "Заменяет стили игрового интерфейса (HUD) и его текстуры.",
+    "Replaces the in-game HUD styles and its textures.",
+  ),
+  "versus-screens": help(
+    "Заменяет макет экрана «Versus» (экран перед матчем).",
+    "Replaces the versus screen layout (the pre-match screen).",
+  ),
   "item-icons": help(
     "Меняет только значки предметов в интерфейсе (текстуры Panorama).",
     "Changes item icons in the interface only (Panorama textures).",
@@ -152,15 +164,7 @@ export function categoryHelp(category: string): CategoryHelp {
 /** True for categories whose archives BetterFy installs (the audited allowlist). */
 export const enabledCategories: ReadonlySet<string> = new Set(Object.keys(categories));
 
-const PANORAMA: Text = {
-  ru: "Не включено: это макеты и стили Panorama. Для них нужно отдельное подтверждение безопасности, оно ещё готовится.",
-  en: "Not enabled: these are Panorama layouts and styles. They need a separate safety proof, which is still being built.",
-};
-
 const notEnabled: Record<string, Text> = {
-  backgrounds: PANORAMA,
-  huds: PANORAMA,
-  "versus-screens": PANORAMA,
   cursors: {
     ru: "Не включено: это отдельные файлы без VPK, и проверенного места установки для них пока нет.",
     en: "Not enabled: these are loose files with no VPK, and there is no verified install target for them yet.",
@@ -187,4 +191,41 @@ const notEnabled: Record<string, Text> = {
  */
 export function notEnabledReason(category: string): Text | null {
   return notEnabled[category] ?? null;
+}
+
+/**
+ * What the Panorama proofs established for the categories that carry layouts,
+ * styles and video, and how to undo the install. Null for every other category.
+ * It states proofs about the files, not a result in the game.
+ */
+export type PanoramaReview = { proved: Text; notProved: Text; undo: Text };
+
+const PANORAMA_NOT_PROVED: Text = {
+  ru: "Чего проверка не доказывает: что макет выглядит правильно или вообще загружается в текущей версии Dota, и что события Valve, на которые он ссылается, ведут себя так, как предполагалось при проверке. В Dota это через BetterFy не запускали. Файлы, которые проверка не смогла подтвердить, отброшены и перечислены ниже с точной причиной.",
+  en: "What the check does not prove: that the layout looks right or even loads in the current Dota, or that the Valve events it names behave as assumed when it was reviewed. This has not been run in Dota through BetterFy. Files the check could not prove are dropped and listed below with the exact reason.",
+};
+
+const PANORAMA_UNDO: Text = {
+  ru: "Как отменить: нажмите «Откатить сборку». BetterFy вернёт файлы игры из резервной копии и проверит результат по хэшам.",
+  en: "How to undo: use Restore the game. BetterFy puts the game's files back from its backup and checks the result by hash.",
+};
+
+const panorama: Record<string, Text> = {
+  backgrounds: {
+    ru: "Что проверено: каждый макет разобран как дерево (только известные типы панелей Valve и атрибуты, без скриптов, внешних адресов и обращений к сети), обработчики событий совпадают с заранее просмотренными привязками Valve, каждый стиль прочитан как текст с закрытым набором свойств, видео проверено как контейнер WebM (кадры не декодировались) и устанавливается только если его проигрывает принятый макет.",
+    en: "What was proven: each layout was read as a tree (only known Valve panel types and attributes, no scripts, outside addresses or network use), its event handlers match bindings of Valve's own reviewed in advance, each style was read as text with a closed set of properties, and the video was checked as a WebM container (no frame was decoded) and installs only if an accepted layout plays it.",
+  },
+  huds: {
+    ru: "Что проверено: каждый стиль прочитан как текст с закрытым набором свойств, ссылки только на текстуры архива или Valve; текстуры ставятся как обычные скомпилированные ресурсы из panorama/images.",
+    en: "What was proven: each style was read as text with a closed set of properties, with references only to textures of the archive or of Valve; textures install as ordinary compiled resources from panorama/images.",
+  },
+  "versus-screens": {
+    ru: "Что проверено: каждый макет разобран как дерево (только известные типы панелей Valve и атрибуты, без скриптов, внешних адресов и обращений к сети); обработчики событий и подключённые скрипты совпадают с заранее просмотренными привязками и скриптами Valve.",
+    en: "What was proven: each layout was read as a tree (only known Valve panel types and attributes, no scripts, outside addresses or network use); its event handlers and included scripts match Valve's own bindings and scripts reviewed in advance.",
+  },
+};
+
+export function panoramaReview(category: string): PanoramaReview | null {
+  const proved = panorama[category];
+  return proved ? { proved, notProved: PANORAMA_NOT_PROVED, undo: PANORAMA_UNDO } : null;
 }
