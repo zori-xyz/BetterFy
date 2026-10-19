@@ -48,6 +48,20 @@ fn i32_at(bytes: &[u8], at: usize) -> Result<i32, String> {
     Ok(u32_at(bytes, at)? as i32)
 }
 
+/// A count or size field: negative values are corrupt, not huge.
+fn count_at(bytes: &[u8], at: usize) -> Result<usize, String> {
+    usize::try_from(i32_at(bytes, at)?).map_err(|_| invalid())
+}
+
+fn size_of(value: i32) -> Result<usize, String> {
+    usize::try_from(value).map_err(|_| invalid())
+}
+
+/// Never trust a count read from a file to size an allocation.
+fn capacity(count: usize) -> usize {
+    count.min(4096)
+}
+
 /// LZ4 block format (no frame).
 pub(crate) fn lz4_decompress(source: &[u8], size: usize) -> Result<Vec<u8>, String> {
     if size > MAX_DECOMPRESSED_BYTES {
@@ -249,7 +263,7 @@ impl Reader<'_> {
                 if count < 0 {
                     return Err(invalid());
                 }
-                let mut items = Vec::with_capacity(count as usize);
+                let mut items = Vec::with_capacity(capacity(count as usize));
                 for _ in 0..count {
                     let (kind, flag) = self.read_type()?;
                     items.push(self.read_value(kind, flag, depth + 1)?);
@@ -266,7 +280,7 @@ impl Reader<'_> {
                     return Err(invalid());
                 }
                 let (item_kind, item_flag) = self.read_type()?;
-                let mut items = Vec::with_capacity(count as usize);
+                let mut items = Vec::with_capacity(capacity(count as usize));
                 for _ in 0..count {
                     items.push(self.read_value(item_kind, item_flag, depth + 1)?);
                 }
@@ -276,7 +290,7 @@ impl Reader<'_> {
                 let count = self.main.u8()?;
                 let (item_kind, item_flag) = self.read_type()?;
                 std::mem::swap(&mut self.main, &mut self.aux);
-                let mut items = Vec::with_capacity(count as usize);
+                let mut items = Vec::with_capacity(capacity(count as usize));
                 let mut result = Ok(());
                 for _ in 0..count {
                     match self.read_value(item_kind, item_flag, depth + 1) {
@@ -305,7 +319,7 @@ impl Reader<'_> {
                 if count < 0 {
                     return Err(invalid());
                 }
-                let mut entries = Vec::with_capacity(count as usize);
+                let mut entries = Vec::with_capacity(capacity(count as usize));
                 for _ in 0..count {
                     let (kind, flag) = self.read_type()?;
                     let key_index = self.main.i32()?;
@@ -333,7 +347,7 @@ fn decompress(method: u32, source: &[u8], size: usize) -> Result<Vec<u8>, String
 }
 
 fn read_strings(bytes: &[u8], count: usize) -> Result<(Vec<String>, usize), String> {
-    let mut strings = Vec::with_capacity(count);
+    let mut strings = Vec::with_capacity(capacity(count));
     let mut at = 0usize;
     for _ in 0..count {
         let end = bytes
@@ -354,12 +368,12 @@ pub(crate) fn parse(raw: &[u8]) -> Result<Document, String> {
     }
     let format: [u8; 16] = raw.get(4..20).ok_or_else(invalid)?.try_into().unwrap();
     let method = u32_at(raw, 20)?;
-    let count1 = i32_at(raw, 28)? as usize;
-    let count4 = i32_at(raw, 32)? as usize;
-    let count8 = i32_at(raw, 36)? as usize;
-    let type_count = i32_at(raw, 40)? as usize;
-    let uncompressed = i32_at(raw, 48)? as usize;
-    let compressed = i32_at(raw, 52)? as usize;
+    let count1 = count_at(raw, 28)?;
+    let count4 = count_at(raw, 32)?;
+    let count8 = count_at(raw, 36)?;
+    let type_count = count_at(raw, 40)?;
+    let uncompressed = count_at(raw, 48)?;
+    let compressed = count_at(raw, 52)?;
     let blocks = i32_at(raw, 56)?;
     if blocks != 0 {
         return Err("kv3_blobs_unsupported".to_string());
@@ -367,7 +381,7 @@ pub(crate) fn parse(raw: &[u8]) -> Result<Document, String> {
     let mut position = 64usize;
     let (count2, _) = if version >= 4 {
         position += 8;
-        (i32_at(raw, 64)? as usize, i32_at(raw, 68)?)
+        (count_at(raw, 64)?, i32_at(raw, 68)?)
     } else {
         (0, 0)
     };
@@ -392,7 +406,7 @@ pub(crate) fn parse(raw: &[u8]) -> Result<Document, String> {
             offset = offset.next_multiple_of(8);
             &[]
         };
-        let string_count = i32_at(b4, 0)? as usize;
+        let string_count = count_at(b4, 0)?;
         let strings_start = offset;
         let (strings, used) =
             read_strings(buffer.get(offset..).ok_or_else(invalid)?, string_count)?;
@@ -400,7 +414,10 @@ pub(crate) fn parse(raw: &[u8]) -> Result<Document, String> {
         let types_len = type_count
             .checked_sub(offset - strings_start)
             .ok_or_else(invalid)?;
-        let types = buffer.get(offset..offset + types_len).ok_or_else(invalid)?;
+        let types = offset
+            .checked_add(types_len)
+            .and_then(|end| buffer.get(offset..end))
+            .ok_or_else(invalid)?;
         offset += types_len;
         if u32_at(&buffer, offset)? != TRAILER {
             return Err(invalid());
@@ -429,31 +446,22 @@ pub(crate) fn parse(raw: &[u8]) -> Result<Document, String> {
     let [u1, cs1, u2, cs2, m1, m2, m4, m8, _, objects, _, _] = fields[..] else {
         return Err(invalid());
     };
+    let (u1, cs1, u2, cs2) = (size_of(u1)?, size_of(cs1)?, size_of(u2)?, size_of(cs2)?);
+    let (m1, m2, m4, m8) = (size_of(m1)?, size_of(m2)?, size_of(m4)?, size_of(m8)?);
+    let take = |from: usize, length: usize| {
+        from.checked_add(length)
+            .and_then(|end| raw.get(from..end))
+            .ok_or_else(invalid)
+    };
     let (buffer1, buffer2) = if method == 0 {
-        let first = raw
-            .get(position..position + u1 as usize)
-            .ok_or_else(invalid)?
-            .to_vec();
-        position += u1 as usize;
-        let second = raw
-            .get(position..position + u2 as usize)
-            .ok_or_else(invalid)?
-            .to_vec();
+        let first = take(position, u1)?.to_vec();
+        position += u1;
+        let second = take(position, u2)?.to_vec();
         (first, second)
     } else {
-        let first = decompress(
-            method,
-            raw.get(position..position + cs1 as usize)
-                .ok_or_else(invalid)?,
-            u1 as usize,
-        )?;
-        position += cs1 as usize;
-        let second = decompress(
-            method,
-            raw.get(position..position + cs2 as usize)
-                .ok_or_else(invalid)?,
-            u2 as usize,
-        )?;
+        let first = decompress(method, take(position, cs1)?, u1)?;
+        position += cs1;
+        let second = decompress(method, take(position, cs2)?, u2)?;
         (first, second)
     };
     let mut offset = 0usize;
@@ -464,19 +472,25 @@ pub(crate) fn parse(raw: &[u8]) -> Result<Document, String> {
     if offset != buffer1.len() {
         return Err(invalid());
     }
-    let string_count = i32_at(a4, 0)? as usize;
+    let string_count = count_at(a4, 0)?;
     let (strings, used) = read_strings(a1, string_count)?;
-    let objects = objects.max(0) as usize;
+    let objects = size_of(objects.max(0))?;
+    // Each length is four bytes of the second buffer: a count beyond what the
+    // buffer can hold is corrupt, whatever the header says.
+    if objects > buffer2.len() / 4 {
+        return Err(invalid());
+    }
     let object_lengths = (0..objects)
         .map(|index| i32_at(&buffer2, 4 * index))
         .collect::<Result<Vec<_>, _>>()?;
     let mut offset = objects * 4;
-    let b1 = segment(&buffer2, &mut offset, m1 as usize, 1)?;
-    let b2 = segment(&buffer2, &mut offset, m2 as usize, 2)?;
-    let b4 = segment(&buffer2, &mut offset, m4 as usize, 4)?;
-    let b8 = segment(&buffer2, &mut offset, m8 as usize, 8)?;
-    let types = buffer2
-        .get(offset..offset + type_count)
+    let b1 = segment(&buffer2, &mut offset, m1, 1)?;
+    let b2 = segment(&buffer2, &mut offset, m2, 2)?;
+    let b4 = segment(&buffer2, &mut offset, m4, 4)?;
+    let b8 = segment(&buffer2, &mut offset, m8, 8)?;
+    let types = offset
+        .checked_add(type_count)
+        .and_then(|end| buffer2.get(offset..end))
         .ok_or_else(invalid)?;
     offset += type_count;
     if u32_at(&buffer2, offset)? != TRAILER || offset + 4 != buffer2.len() {
@@ -712,6 +726,24 @@ mod tests {
         assert_eq!(lz4_decompress(&block, 12).expect("lz4"), b"abcabcabcabc");
         assert!(lz4_decompress(&block, 11).is_err());
         assert!(lz4_decompress(&[0x10, b'a', 9, 0], 10).is_err());
+    }
+
+    /// Corrupt headers and counts are errors, never a panic or an allocation
+    /// sized by the file: every four-byte field of the header and of the
+    /// buffers is set to the values that overflow, and every prefix is read.
+    #[test]
+    fn hostile_counts_and_sizes_are_errors_not_panics() {
+        let bytes = write(&sample());
+        for at in (0..bytes.len().min(160)).step_by(4) {
+            for value in [i32::MAX, -1, i32::MIN, 0x7FFF_FF00, 1 << 28] {
+                let mut mutated = bytes.clone();
+                mutated[at..at + 4].copy_from_slice(&value.to_le_bytes());
+                let _ = parse(&mutated);
+            }
+        }
+        for length in 0..bytes.len() {
+            assert!(parse(&bytes[..length]).is_err());
+        }
     }
 
     #[test]

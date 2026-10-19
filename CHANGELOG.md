@@ -56,6 +56,16 @@ First Windows observation of skins: three catalog skins installed together by EA
   cursors and fonts, tools and the two categories whose files do not exist upstream stay
   not enabled, with the reason in [docs/CATALOG_CATEGORIES.md](docs/CATALOG_CATEGORIES.md).
   Built and tested on a Mac only: not installed on Windows and not run in Dota.
+### Panorama decor (proofs only)
+- New proofs for main-menu backgrounds, HUD skins and versus screens: a static
+  layout proof, a style sheet proof and a WebM container check, built to refuse
+  anything they do not recognise with the exact reason. Run over the 73 real
+  catalog archives of these categories they accept every layout, style and
+  video; event handlers pass only as 79 exact bindings read in those archives
+  (to be reviewed by the founder before use). **Not wired in: no category is
+  installable yet, and nothing was installed on Windows or run in Dota.** Also
+  fixes a panic in the KV3 reader on a corrupt count. Details:
+  [docs/PANORAMA_DECOR_AUDIT.md](docs/PANORAMA_DECOR_AUDIT.md).
 
 ## 0.1.4 EA.18 to EA.38 (30 September to 17 October 2026)
 
