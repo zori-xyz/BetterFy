@@ -42,10 +42,6 @@ const gameIcons: Record<string, LucideIcon> = {
 const iconFor = (mod: StudioMod) =>
   mod.domain === "game" ? (gameIcons[mod.category] ?? Gamepad2) : Shirt;
 
-// Dota's default item hotkeys, one per inventory slot.
-const hotkeys = ["Z", "X", "C", "V", "B", "N"];
-const backpackSlots = 3;
-
 const known = (ids: string[]) => ids.flatMap((id) => (modById.has(id) ? [modById.get(id)!] : []));
 const modForPackage = (id: string) => modById.get(findPackage(id)?.catalogId ?? id);
 const packageLabel = (id: string, language: Language) =>
@@ -116,15 +112,13 @@ export default function Home({
           {isRu ? "модов и обликов в каталоге" : "mods and looks in the catalog"}
         </div>
       </section>
-      <BuildDock
+      <BotStage motion={motion} />
+      <BuildNudge
         selected={selected}
         installedIds={installedIds ?? null}
         onBuild={onBuild}
-        onCatalog={onCatalog}
-        onOpen={onOpen}
         onToggle={onToggle}
       />
-      <BotStage motion={motion} />
     </div>
   );
 }
@@ -137,28 +131,20 @@ function SlotArt({ mod }: { mod: StudioMod }) {
 }
 
 type DockState = "empty" | "busy" | "blocked" | "ready" | "changed" | "installed";
-// The build as a Dota inventory: six slots with their item hotkeys, then the
-// backpack.
-function BuildDock({
+function BuildNudge({
   selected,
   installedIds,
   onBuild,
-  onCatalog,
-  onOpen,
   onToggle,
 }: {
   selected: string[];
   installedIds: string[] | null;
   onBuild: () => void;
-  onCatalog: (domain?: Domain) => void;
-  onOpen: (mod: StudioMod) => void;
   onToggle: (mod: StudioMod) => void;
 }) {
   const { language, isRu } = useLocale();
   const busy = useEngineActive();
   const name = useBuildName(selected, language);
-  // Slots filled before Home opened stay still; new arrivals drop in.
-  const [arrived] = useState(() => new Set(selected));
   const chosen = known(selected);
   const pilot = chosen.filter((mod) => isInstallable(mod.id));
   const relation = bundleRelationProblem(pilot.map((mod) => mod.id));
@@ -249,104 +235,53 @@ function BuildDock({
   else if (state !== "empty" || installed)
     action = { label: t("Открыть сборку", "Open build"), run: onBuild };
 
-  const visible = hotkeys.length + backpackSlots;
-  const overflow = chosen.length > visible ? chosen.length - visible + 1 : 0;
+  // Nothing to remind about: an empty build, or one already in Dota.
+  if (state === "empty" || state === "installed") return null;
+  const title = {
+    busy: t("Идёт установка", "Installing"),
+    blocked: t("В сборке конфликт", "The build has a conflict"),
+    changed: t("Сборка изменилась", "The build changed"),
+    ready: t("Сборка ждёт установки", "Your build is waiting"),
+  }[state];
+  const line =
+    state === "ready"
+      ? `${name.name} · ${modCount(chosen.length, language)}`
+      : (status?.text ?? name.name);
+  const run = action?.run ?? onBuild;
 
-  const slot = (index: number, hotkey?: string) => {
-    const mod = chosen[index];
-    if (overflow && index === visible - 1)
-      return (
-        <button
-          key="more"
-          className="h-slot is-more"
-          onClick={onBuild}
-          aria-label={t(`Ещё ${overflow} в сборке`, `${overflow} more in the build`)}
-        >
-          +{overflow}
-        </button>
-      );
-    if (mod)
-      return (
-        <button
-          key={mod.id}
-          className={`h-slot is-filled ${arrived.has(mod.id) ? "" : "is-new"}`}
-          onClick={() => onOpen(mod)}
-          title={mod.name[language]}
-          aria-label={`${t("Подробнее", "Details")}: ${mod.name[language]}`}
-        >
-          <SlotArt mod={mod} />
-          {hotkey && <kbd aria-hidden="true">{hotkey}</kbd>}
-        </button>
-      );
-    if (index === chosen.length)
-      return (
-        <button
-          key="next"
-          className="h-slot is-next"
-          onClick={() => onCatalog()}
-          aria-label={t("Свободный слот: выбрать мод в каталоге", "Free slot: pick a mod")}
-          title={t("Свободный слот", "Free slot")}
-        >
-          <Plus />
-          {hotkey && <kbd aria-hidden="true">{hotkey}</kbd>}
-        </button>
-      );
-    return (
-      <span key={`empty-${index}`} className="h-slot" aria-hidden="true">
-        {hotkey && <kbd>{hotkey}</kbd>}
-      </span>
-    );
-  };
-
+  // A floating reminder at the bottom of Home, only while the build is not in
+  // the game: a fan of its first looks, what is left to do, one arrow.
   return (
-    <section className={`h-dock is-${state}`} aria-labelledby="h-dock-title">
-      <div className="h-dock-copy">
-        <span className="s-eyebrow">
-          <Layers3 />
-          {isRu ? "ТВОЯ СБОРКА" : "YOUR BUILD"}
-          {chosen.length > 0 && ` · ${modCount(chosen.length, language).toUpperCase()}`}
-        </span>
-        <h2 id="h-dock-title">
-          {state === "empty" ? t("Инвентарь пуст", "Empty inventory") : name.name}
-        </h2>
-        <p>
-          {state === "empty"
-            ? t(
-                "Каждый мод и облик займёт слот, как предмет в Dota. Начни с каталога или с модов ниже.",
-                "Every mod and look takes a slot, like an item in Dota. Start in the catalog or with the mods below.",
-              )
-            : name.summary}
-        </p>
-        {status && (
-          <p className={`h-dock-status is-${status.tone}`} role="status">
-            {status.tone === "busy" ? (
-              <LoaderCircle className="s-spin" />
-            ) : status.tone === "risk" ? (
-              <TriangleAlert />
-            ) : state === "installed" ? (
-              <Check />
-            ) : (
-              <i aria-hidden="true" />
-            )}
-            <span>{status.text}</span>
-          </p>
-        )}
-      </div>
-      <div className="h-inv" role="group" aria-label={t("Слоты сборки", "Build slots")}>
-        <div className="h-inv-main">{hotkeys.map((key, index) => slot(index, key))}</div>
-        <div className="h-inv-pack" title={t("Рюкзак", "Backpack")}>
-          <span className="h-visually-hidden">{t("Рюкзак", "Backpack")}</span>
-          {Array.from({ length: backpackSlots }, (_, index) => slot(hotkeys.length + index))}
-        </div>
-      </div>
-      {action && (
-        <div className="h-dock-actions">
-          <button className="s-btn s-btn-primary" onClick={action.run}>
-            <span>{action.label}</span>
-            {state === "blocked" && required ? <Plus /> : <ArrowRight />}
-          </button>
-        </div>
-      )}
-    </section>
+    <button
+      type="button"
+      className={`h-nudge is-${state}`}
+      onClick={run}
+      aria-label={`${title}. ${line}. ${action?.label ?? ""}`}
+    >
+      <span className="h-nudge-fan" aria-hidden="true">
+        {chosen.slice(0, 3).map((mod, index) => (
+          <span key={mod.id} style={{ ["--i" as string]: index }}>
+            <SlotArt mod={mod} />
+          </span>
+        ))}
+        {chosen.length > 3 && <b>+{chosen.length - 3}</b>}
+      </span>
+      <span className="h-nudge-copy">
+        <strong>
+          {state === "busy" ? (
+            <LoaderCircle className="s-spin" />
+          ) : state === "blocked" ? (
+            <TriangleAlert />
+          ) : (
+            <i aria-hidden="true" />
+          )}
+          {title}
+        </strong>
+        <small>{line}</small>
+      </span>
+      <span className="h-nudge-go" aria-hidden="true">
+        {state === "blocked" && required ? <Plus /> : <ArrowRight />}
+      </span>
+    </button>
   );
 }
