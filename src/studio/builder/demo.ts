@@ -3,13 +3,22 @@ import {
   EngineFault,
   mockEngine,
   type EngineBridge,
+  type GameDeploymentReceipt,
   type GameLanguage,
+  type LanguageSlotReport,
+  type MapPlanItem,
   type TreePilotDownloadStatus,
   type TreePilotPlan,
   type WardrobePlanItem,
 } from "../../engine";
 import { getStorageItem, setStorageItem } from "../../storage";
-import { engineIdFor, findPackage, isSharedKept, isWardrobePackage } from "../packages";
+import {
+  engineIdFor,
+  findPackage,
+  isMapPackage,
+  isSharedKept,
+  isWardrobePackage,
+} from "../packages";
 
 // The browser preview has no Rust engine. To show the whole builder there,
 // this bridge plays the Windows flow with timers: nothing is downloaded and
@@ -26,7 +35,9 @@ export type DemoScenario =
   | "steam_fails"
   | "game_updated"
   | "minify_replaced"
-  | "minify_beside";
+  | "minify_beside"
+  | "map_foreign"
+  | "map_changed";
 
 type DemoSettings = { scenario: DemoScenario; developer: boolean };
 const key = "betterfy:builder-demo";
@@ -42,6 +53,8 @@ let settings: DemoSettings = (() => {
         "game_updated",
         "minify_replaced",
         "minify_beside",
+        "map_foreign",
+        "map_changed",
       ].includes(
         stored.scenario,
       )
@@ -83,6 +96,8 @@ function seeded(value: string, min: number, max: number) {
 // blacklist packages resolve against game files at runtime, so the demo uses
 // a stable stand-in.
 function resourcesFor(packageId: string) {
+  // A map is one archive, fetched and stored as a unit.
+  if (isMapPackage(packageId)) return 1;
   const manifest = findPackage(packageId) as { resources?: unknown[] } | undefined;
   return Array.isArray(manifest?.resources) && manifest.resources.length
     ? manifest.resources.length
@@ -200,8 +215,48 @@ function demoSkinBytes(packageIds: string[]) {
     );
 }
 
+// A map terrain as the audit saw it: the numbers are the size and entry count
+// the interface index lists; the file types are illustrative.
+function demoMapItem(packageId: string): MapPlanItem {
+  const manifest = findPackage(packageId);
+  const bytes = manifest?.installBytes ?? 36_000_000;
+  const entries = manifest?.installFiles ?? 1300;
+  return {
+    packageId,
+    catalogId: manifest?.catalogId ?? packageId,
+    file: "maps/dota.vpk",
+    bytes,
+    sha256: "d3m0".padEnd(64, "0"),
+    sourceUrls: [
+      "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/files/terrains/",
+      "https://huggingface.co/datasets/hrdq/Dota2PornFx/",
+    ],
+    archiveSha256: "a7c3".padEnd(64, "0"),
+    catalogSnapshot: "demo",
+    permission: "valve_content_mirrored_by_catalog",
+    verifiedLanguages: [],
+    compatibilityNote: null,
+    valveListEntries: 388116,
+    valveOverlap: 0,
+    report: {
+      vpkVersion: 2,
+      totalBytes: bytes,
+      entries,
+      payloadBytes: bytes - 70_000,
+      zeroLength: 0,
+      extensions: { vmdl_c: entries - 17, vents_c: 5, vtex_c: 3, vrman_c: 3, vmap_c: 1, vhcg: 1, trm: 1, gnv: 1, vvis_c: 1, vwrld_c: 1 },
+      subfolders: { dota: entries - 4, "(top)": 4 },
+      identity: "5b1e".padEnd(64, "0"),
+      mainMap: true,
+    },
+  };
+}
+
 function demoPlan(ids: string[]): TreePilotPlan {
-  const packageIds = ids.map(engineIdFor);
+  const allIds = ids.map(engineIdFor);
+  const mapId = allIds.find(isMapPackage);
+  const packageIds = allIds.filter((id) => !isMapPackage(id));
+  const hasPak = packageIds.length > 0;
   const wardrobe = packageIds.filter(isWardrobePackage).map(demoWardrobeItem);
   const contributions = packageIds.map((packageId, index) => {
     const input = isWardrobePackage(packageId)
@@ -221,17 +276,19 @@ function demoPlan(ids: string[]): TreePilotPlan {
   const resourceCount = contributions.reduce((sum, item) => sum + item.effectiveResources, 0);
   const overridden = contributions.reduce((sum, item) => sum + item.shadowedResources, 0);
   return {
-    planId: `sha256:demo${packageIds.join("").length}`,
-    packageId: packageIds[0] ?? "",
-    packageIds,
+    planId: `sha256:demo${allIds.join("").length}`,
+    packageId: allIds[0] ?? "",
+    packageIds: allIds,
     sourceCommit: "3a85572029f2c264e2a17cee1c9b54ce93e4fd93",
     targetFile: "pak66_dir.vpk",
     resourceCount,
-    resourceBytes: resourceCount * 2048 + demoSkinBytes(packageIds),
-    vpkBytes: resourceCount * 1310 + 4096 + demoSkinBytes(packageIds),
-    vpkSha256: "d3m0c0ffee5a1t" + "0".repeat(50),
-    bundlePlanId: "demo",
-    packageCount: packageIds.length,
+    resourceBytes: hasPak ? resourceCount * 2048 + demoSkinBytes(packageIds) : 0,
+    vpkBytes: hasPak ? resourceCount * 1310 + 4096 + demoSkinBytes(packageIds) : 0,
+    vpkSha256: hasPak ? "d3m0c0ffee5a1t" + "0".repeat(50) : "",
+    hasPak,
+    map: mapId ? demoMapItem(mapId) : null,
+    bundlePlanId: hasPak ? "demo" : "",
+    packageCount: allIds.length,
     duplicateResources: 0,
     overriddenResources: overridden,
     duplicates: [],
@@ -273,6 +330,33 @@ let installed: {
   packageIds: string[];
   steamOperationId: string | null;
 } | null = null;
+
+/** What the demo's install wrote, as the engine's receipt reports it. */
+function demoReceipt(
+  operationId: string,
+  language: GameLanguage,
+  packageIds: string[],
+  rolledBack = false,
+): GameDeploymentReceipt {
+  const hasMap = packageIds.some(isMapPackage);
+  const hasPak = packageIds.some((id) => !isMapPackage(id));
+  return {
+    operationId,
+    language,
+    beforeSha256: null,
+    installedSha256: "demo",
+    backupVerified: true,
+    committed: !rolledBack,
+    rolledBack,
+    bundlePlanId: hasPak ? "demo" : null,
+    vpkName: hasPak ? "pak65_dir.vpk" : "",
+    hasPak,
+    map: hasMap
+      ? { file: "maps/dota.vpk", installedSha256: "demo-map", beforeSha256: null, backupVerified: true }
+      : null,
+    packageIds,
+  };
+}
 
 function downloadStatus(): TreePilotDownloadStatus | null {
   if (!download) return null;
@@ -339,8 +423,12 @@ export const demoBridge: EngineBridge = {
     download = download ? { ...download, phase: "cancelled" } : null;
     return download!;
   },
-  async previewTreeLanguage() {
+  async previewTreeLanguage(_path, _language, withMap) {
     await wait(300);
+    if (withMap && settings.scenario === "map_foreign")
+      throw new EngineFault("map_target_foreign", "preview_tree_language");
+    if (settings.scenario === "map_changed" && installed?.packageIds.some(isMapPackage))
+      throw new EngineFault("map_conflict", "preview_tree_language");
   },
   // The founder's Steam reports Russian for Dota, so the demo does too.
   async detectDotaLanguage() {
@@ -359,13 +447,14 @@ export const demoBridge: EngineBridge = {
   },
   // The language folder as the demo scenarios see it: empty, with Minify's
   // pak66 beside BetterFy's pak65, or with BetterFy's file replaced.
-  async inspectLanguageSlot(_path, language = "russian") {
+  async inspectLanguageSlot(_path, language = "russian"): Promise<LanguageSlotReport> {
     await wait(200);
     const day = 24 * 60 * 60 * 1000;
     const minify = [
       { name: "pak66_000.vpk", bytes: 41_943_040, modifiedMs: Date.now() - day, owner: "minify_like" as const },
       { name: "pak66_dir.vpk", bytes: 18_432, modifiedMs: Date.now() - day, owner: "minify_like" as const },
     ];
+    const noMap = { map: null, ownedMap: null };
     if (settings.scenario === "minify_replaced")
       return {
         language,
@@ -375,6 +464,7 @@ export const demoBridge: EngineBridge = {
         owned: { name: "pak66_dir.vpk", state: "replaced" as const },
         nextName: "pak65_dir.vpk",
         slotFull: false,
+        ...noMap,
       };
     if (settings.scenario === "game_updated")
       return {
@@ -387,8 +477,11 @@ export const demoBridge: EngineBridge = {
         owned: { name: "pak65_dir.vpk", state: "replaced" as const },
         nextName: "pak64_dir.vpk",
         slotFull: false,
+        ...noMap,
       };
-    const ours = installed
+    const hasPak = Boolean(installed?.packageIds.some((id) => !isMapPackage(id)));
+    const hasMap = Boolean(installed?.packageIds.some(isMapPackage));
+    const ours = hasPak
       ? [
           {
             name: "pak65_dir.vpk",
@@ -399,14 +492,33 @@ export const demoBridge: EngineBridge = {
         ]
       : [];
     const beside = settings.scenario === "minify_beside" ? minify : [];
+    // The folder's maps/dota.vpk: BetterFy's own after a map install, or one it
+    // did not write in the foreign-map scenarios.
+    const map: LanguageSlotReport["map"] =
+      settings.scenario === "map_foreign"
+        ? { bytes: 51_380_224, modifiedMs: Date.now() - 2 * day, owner: "unknown" }
+        : hasMap
+          ? {
+              bytes: 36_768_159,
+              modifiedMs: Date.now(),
+              owner: settings.scenario === "map_changed" ? "unknown" : "betterfy",
+            }
+          : null;
+    const ownedMap: LanguageSlotReport["ownedMap"] = hasMap
+      ? settings.scenario === "map_changed"
+        ? "replaced"
+        : "intact"
+      : null;
     return {
       language,
-      folderExists: beside.length + ours.length > 0,
+      folderExists: beside.length + ours.length > 0 || map !== null,
       files: [...ours, ...beside].sort((a, b) => a.name.localeCompare(b.name)),
       filesTruncated: false,
-      owned: installed ? { name: "pak65_dir.vpk", state: "intact" as const } : null,
-      nextName: installed ? null : "pak65_dir.vpk",
+      owned: hasPak ? { name: "pak65_dir.vpk", state: "intact" as const } : null,
+      nextName: hasPak ? null : "pak65_dir.vpk",
       slotFull: false,
+      map,
+      ownedMap,
     };
   },
   async installTreePilot(_path, ids, _plan, language) {
@@ -414,6 +526,8 @@ export const demoBridge: EngineBridge = {
       throw new EngineFault("deployment_conflict", "install_tree_pilot");
     if (settings.scenario === "minify_replaced")
       throw new EngineFault("deployment_target_foreign", "install_tree_pilot");
+    if (settings.scenario === "map_foreign" && ids.some(isMapPackage))
+      throw new EngineFault("map_target_foreign", "install_tree_pilot");
     await wait(2400);
     installed = {
       operationId: `demo-${Date.now()}`,
@@ -421,18 +535,7 @@ export const demoBridge: EngineBridge = {
       packageIds: ids.map(engineIdFor),
       steamOperationId: null,
     };
-    return {
-      operationId: installed.operationId,
-      language,
-      beforeSha256: null,
-      installedSha256: "demo",
-      backupVerified: true,
-      committed: true,
-      rolledBack: false,
-      bundlePlanId: "demo",
-      vpkName: "pak65_dir.vpk",
-      packageIds: installed.packageIds,
-    };
+    return demoReceipt(installed.operationId, language, installed.packageIds);
   },
   async applyTreeSteamLaunchOptions(request) {
     await wait(1100);
@@ -462,16 +565,7 @@ export const demoBridge: EngineBridge = {
   async currentTreePilot() {
     if (!installed) return null;
     return {
-      operationId: installed.operationId,
-      language: installed.language,
-      beforeSha256: null,
-      installedSha256: "demo",
-      backupVerified: true,
-      committed: true,
-      rolledBack: false,
-      bundlePlanId: "demo",
-      vpkName: "pak65_dir.vpk",
-      packageIds: installed.packageIds,
+      ...demoReceipt(installed.operationId, installed.language, installed.packageIds),
       packageVerified: true,
       steamOperationId: installed.steamOperationId,
       steamProfileToken: installed.steamOperationId ? "demo-profile" : null,
@@ -482,7 +576,9 @@ export const demoBridge: EngineBridge = {
   },
   async releaseStaleDeployment() {
     await wait(900);
-    if (settings.scenario === "game_updated") setDemoSettings({ scenario: "success" });
+    if (settings.scenario === "map_changed") installed = null;
+    if (settings.scenario === "game_updated" || settings.scenario === "map_changed")
+      setDemoSettings({ scenario: "success" });
     else if (settings.scenario === "minify_replaced") setDemoSettings({ scenario: "minify_beside" });
     return { operationId: "demo-stale", language: "russian", reason: "changed" };
   },
@@ -503,20 +599,12 @@ export const demoBridge: EngineBridge = {
   async rollbackGameDeployment(_path, operationId) {
     await wait(1600);
     const language = installed?.language ?? "russian";
+    const packageIds = installed?.packageIds ?? [];
+    if (settings.scenario === "map_changed" && packageIds.some(isMapPackage))
+      throw new EngineFault("rollback_conflict", "rollback_game_deployment");
     installed = null;
     download = null;
-    return {
-      operationId,
-      language,
-      beforeSha256: null,
-      installedSha256: "demo",
-      backupVerified: true,
-      committed: true,
-      rolledBack: true,
-      bundlePlanId: "demo",
-      vpkName: "pak65_dir.vpk",
-      packageIds: [],
-    };
+    return demoReceipt(operationId, language, packageIds, true);
   },
   async recoverGameDeployments() {
     await wait(800);

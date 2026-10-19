@@ -11,6 +11,10 @@ mod game_deployment;
 mod game_language;
 mod installed_profile;
 mod kv3;
+#[cfg(test)]
+mod map_audit;
+mod map_package;
+mod map_terrain;
 mod mod_bundle;
 mod package_registry;
 mod panorama;
@@ -52,6 +56,7 @@ use presets::{delete_preset, export_preset, import_preset, list_presets, save_pr
 use remote_intake::ContentDownloadStatus;
 use runtime_control::{RuntimePrepareRequest, RuntimeState, SteamStartRequest};
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
 use sha2::Digest;
 use std::collections::HashSet;
 use std::fs;
@@ -749,12 +754,26 @@ fn build_verified_tree_pilot(
         &request.package_ids,
         true,
     )?;
-    let reopened = build_engine::verified_staged_vpk(
+    let reopened = build_engine::verified_staged_files(
         app_data,
         &staged.operation_id,
         &request.expected_plan_id,
     )?;
-    if reopened.sha256 != verified.sha256() || reopened.bytes != verified.bytes() {
+    // The staged copies must be exactly the reviewed files: the merged VPK
+    // (when the build has one) and the map package (when it has one).
+    let pak_matches = match (&reopened.pak, verified.has_pak()) {
+        (Some(pak), true) => pak.sha256 == verified.sha256() && pak.bytes == verified.bytes(),
+        (None, false) => true,
+        _ => false,
+    };
+    let map_matches = match (&reopened.map, verified.map()) {
+        (Some(staged_map), Some(map)) => {
+            staged_map.sha256 == map.sha256 && staged_map.bytes == map.bytes
+        }
+        (None, None) => true,
+        _ => false,
+    };
+    if !pak_matches || !map_matches {
         return Err("verification_failed".to_string());
     }
     require_patch_ready_runtime()?;
@@ -776,15 +795,14 @@ async fn install_tree_pilot(
     let app_version = app.package_info().version.to_string();
     tauri::async_runtime::spawn_blocking(move || {
         let verified = build_verified_tree_pilot(&app_data, &request)?;
-        let result = game_deployment::deploy_verified_bundle_for_language(
+        let result = game_deployment::deploy_verified_payload_for_language(
             &app_data,
             Path::new(&request.game_path),
-            verified.bytes(),
-            verified.sha256(),
+            verified.payload(),
             request.language,
             game_deployment::DeploymentBundleIdentity {
                 plan_id: Some(verified.plan_id().to_string()),
-                package_ids: verified.bundle_plan().package_ids.clone(),
+                package_ids: verified.package_ids().to_vec(),
             },
         );
         installed_profile::record_install(
@@ -834,15 +852,14 @@ async fn install_tree_pilot_stress(
             acknowledged_conflicts: false,
         };
         let verified = build_verified_tree_pilot(&app_data, &install)?;
-        let result = game_deployment::deploy_verified_bundle_for_language_stress(
+        let result = game_deployment::deploy_verified_payload_for_language_stress(
             &app_data,
             Path::new(&install.game_path),
-            verified.bytes(),
-            verified.sha256(),
+            verified.payload(),
             install.language,
             game_deployment::DeploymentBundleIdentity {
                 plan_id: Some(verified.plan_id().to_string()),
-                package_ids: verified.bundle_plan().package_ids.clone(),
+                package_ids: verified.package_ids().to_vec(),
             },
             request.failure_point,
         );
@@ -961,13 +978,7 @@ async fn current_tree_pilot(
             receipt.package_ids.clone()
         };
         let package_verified = tree_pilot::build_from_verified_store(&app_data, &package_ids)
-            .map(|verified| {
-                format!("{:x}", sha2::Sha256::digest(verified.bytes())) == receipt.installed_sha256
-                    && receipt
-                        .bundle_plan_id
-                        .as_deref()
-                        .is_none_or(|plan| plan == verified.plan_id())
-            })
+            .map(|verified| verified.matches_receipt(&receipt))
             .unwrap_or(false);
         let (linked, steam_recovery_required) =
             match steam_accounts::linked_platform_operation(&app_data, &receipt.operation_id) {
@@ -1035,11 +1046,7 @@ fn validate_tree_steam_request(
         receipt.package_ids.clone()
     };
     let verified = tree_pilot::build_from_verified_store(app_data, &package_ids)?;
-    if receipt.installed_sha256 != format!("{:x}", sha2::Sha256::digest(verified.bytes()))
-        || receipt
-            .bundle_plan_id
-            .as_deref()
-            .is_some_and(|plan| plan != verified.plan_id())
+    if !verified.matches_receipt(&receipt)
         || receipt.operation_id != request.deployment_operation_id
         || receipt.language != request.language
     {
@@ -1104,6 +1111,7 @@ async fn preview_tree_language(
     app: AppHandle,
     game_path: String,
     language: GameLanguage,
+    with_map: Option<bool>,
 ) -> Result<(), String> {
     let app_data = app
         .path()
@@ -1114,7 +1122,12 @@ async fn preview_tree_language(
             return Err("platform_not_supported".to_string());
         }
         validate_candidate(Path::new(&game_path), "manual")?;
-        game_deployment::preview_language_destination(&app_data, Path::new(&game_path), language)
+        game_deployment::preview_destination(
+            &app_data,
+            Path::new(&game_path),
+            language,
+            with_map.unwrap_or(false),
+        )
     })
     .await
     .map_err(|_| "runtime_worker_failed".to_string())?
@@ -1168,12 +1181,7 @@ async fn start_steam_after_tree_pilot(
             receipt.package_ids.clone()
         };
         let verified = tree_pilot::build_from_verified_store(&app_data, &package_ids)?;
-        if receipt.installed_sha256 != format!("{:x}", sha2::Sha256::digest(verified.bytes()))
-            || receipt
-                .bundle_plan_id
-                .as_deref()
-                .is_some_and(|plan| plan != verified.plan_id())
-        {
+        if !verified.matches_receipt(&receipt) {
             return Err("deployment_conflict".to_string());
         }
         if receipt.operation_id != request.operation_id {

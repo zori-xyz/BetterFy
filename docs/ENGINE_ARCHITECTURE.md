@@ -862,6 +862,158 @@ run: Windows CI for this change (see the PR), an install next to a real Minify o
 Windows, and whether Dota loads BetterFy's `pak65` beside Minify's `pak66` or resolves
 conflicts in the order the guide describes.
 
+### Map terrains: `maps/dota.vpk` as a second owned target
+
+A "standard" terrain of the Dota2PornFx catalog is not a skin. It is a complete
+Valve map package, `maps/dota.vpk` (34-53 MB), that the game reads in place of
+its own. The project's guide
+(https://d2pfxwiki.pages.dev/en/troubleshoot.html, "Issues with terrains") says
+what to do by hand: move the `maps` folder holding `dota.vpk` into the language
+folder, do not move or rename `dota.vpk`, standard terrains show only in matches
+and not in Demo mode, and the Dota+ terrain must be switched off in the game
+settings or it conflicts with the mod. The ZIP's own `Guide.txt` says the same
+about the folder (`game/dota_<language>/maps`). BetterFy installs that one file
+as a second owned target of the same reviewed, journaled, crash-recoverable
+transaction that owns `pakNN_dir.vpk`. The eight raw `pakNN_dir.vpk` terrains of
+the catalog are ordinary VPKs and take the generic path, not this one.
+
+**Where it goes and what is never done.** The target is
+`game/dota_<language>/maps/dota.vpk`, below the same language folder as the pak
+file. The map is never merged into the pak file and is never renamed. BetterFy
+writes it only when nothing is at that path, or when the file there is exactly
+the one BetterFy wrote (same hash as its ownership record). Any other
+`maps/dota.vpk` (Valve's, another tool's, the player's, even byte-identical to the
+new map: BetterFy cannot prove it wrote it) stops the install with
+`map_target_foreign` before anything is written, and the builder checks this
+before Steam and Dota are shut down (`preview_tree_language` takes `withMap`).
+BetterFy backs up and replaces only files it owns; there is no "back up a foreign
+map" path, because the semantics of overwriting a Valve-shipped or user file could
+not be shown to be reversible to the exact original. A `maps` that is a file or
+another non-folder is `map_folder_invalid`; a link (symlink, and on Windows any
+reparse point or junction) at the `maps` folder or the map file is
+`deployment_path_unsafe`. The `maps` folder is created only when needed.
+
+**Records.** One journal and one ownership record still describe an operation;
+nothing else was added. The changes are additive and defaulted, and a build
+without a map writes records that are byte-identical to before (a test pins it):
+
+| Record | New field | Meaning |
+| --- | --- | --- |
+| journal | `map` (absent without a map) | `installedSha256` (absent value: the operation removed BetterFy's map), `beforeSha256`, `backupRelativePath` (`before-map.vpk`), `mapsDirectoryCreated` |
+| journal | `noPak` (absent when false) | the build has no `pakNN_dir.vpk`; `installedSha256` is empty |
+| ownership | `map` (absent without a map) | `installedSha256` of the owned map |
+| ownership | `noPak` (absent when false) | BetterFy owns only a map; `vpkName` and `installedSha256` are empty |
+
+For a map-only build the receipt's `installedSha256` is the map's hash and
+`vpkName` is empty (`hasPak` false). With a pak the pak's hash identifies the
+build, as before, and the map is reported in `map` (`file`, `installedSha256`,
+`beforeSha256`, `backupVerified`). Each record is validated for contradictions
+(`deployment_journal_invalid`): a name for a pak the operation never touched, a
+backup without a hash, an operation that leaves nothing installed. An older
+record that predates the fields means "a pak, no map".
+
+**Transaction.** Each operation changes up to two parts. A part has a hash before
+(what BetterFy owned) and a hash after (what the build leaves): absent to present
+is an install, present to present an update, present to absent a removal (a build
+that drops its map, or a map-only build replacing a pak build, removes the file
+BetterFy owned, with a backup like any change). The steps are the old ones for
+every part: check, create the folders the build needs and record whether this
+operation created them, back up each owned file and read the backup back, write
+the journal (`backed_up`), write and verify a temporary copy beside each target,
+journal `prepared`, publish the pak and then the map (Windows write-through
+replace or move), read both back, write the ownership record, journal
+`committed`. Rollback checks every part first and changes nothing if one is not
+as the operation left it (`rollback_conflict`), puts the map back before the pak,
+restores the previous ownership (the chain is validated before the first file
+moves, which the single-file code did after), removes only empty folders the
+operation created (the `maps` folder, then the language folder) and verifies
+every part equals its "before". A part that an earlier restore attempt already
+put back is accepted, so a restore that stopped between the two files is finished
+by the next one; a file that is neither state is still a conflict.
+Recovery of an operation that never committed works per part: a part found as it
+was is left alone, one found as the operation leaves it is rolled back, anything
+else is `deployment_recovery_conflict`; leftover temporary copies are removed. A
+stale install (`release_stale_deployment`) is one where any file BetterFy owns,
+pak or map, is missing or changed; letting go forgets the whole record and touches
+no game file. Failures were injected before publish, between the two publishes and
+after both (`FailurePoint::BetweenPublishes` exists only in tests); the stress
+stop points the app offers to a developer account are unchanged.
+
+**Plan identity.** A build without a map keeps its bundle plan's identity. A build
+with a map has `planId = sha256` over a length-prefixed tag, the bundle plan's
+identity (empty for a map alone), the full ordered package list, the map's engine
+ID, its pinned SHA-256 and the analyzer's contents identity. So the same pak with
+a different map, or without one, is a different reviewed plan, and the merged VPK
+and its hash are unchanged by adding a map. The plan carries `hasPak`, `map` (one
+`MapPlanItem`) and the full `packageIds`; the deployment records those ids in the
+journal and ownership, and installed-state checks rebuild the build from them and
+compare through `VerifiedTreeVpk::matches_receipt`. Staging copies both files
+(`pak66_dir.vpk`, `maps/dota.vpk`) and reopens them, and the install compares the
+reopened bytes with the reviewed ones.
+
+**One map at a time.** Two maps in one selection are refused with
+`map_terrain_conflict` before anything is downloaded. The catalog already puts all
+terrains in one slot, so the interface offers the choice first.
+
+**The allowlist.** `src-tauri/maps/manifests.json` (generated, compact, sorted by
+ID) and `src-tauri/maps/index.json` (the interface's copy) are kept apart from the
+wardrobe files on purpose; `map_terrain.rs` loads and validates them, and the
+package registry reserves the `map.` namespace and these catalog IDs. An entry
+pins the ZIP (size, SHA-256, the mirrors that served exactly those bytes), the
+`maps/dota.vpk` inside it and the `Guide.txt` beside it (size and SHA-256), and
+what the analyzer found. The download uses the same transport and trusted hosts as
+a skin; the ZIP must hold exactly the two pinned entries; only the verified VPK is
+stored. Every build re-reads it from the content store (size and SHA-256), re-runs
+`map_package::analyze` and requires the result to equal the pinned audit
+(`map_audit_mismatch` otherwise).
+
+`map_package.rs` is not the skin analyzer, and its shared-path logic does not
+apply. It reads the VPK (version 1 or 2, every entry embedded, section sizes that
+account for every byte of the file, a CRC check of every entry), refuses
+signature or archive-checksum sections and side archives, and requires lower-case
+ASCII paths without empty or dot segments, all under `maps/`, no duplicates,
+`maps/dota.vmap_c` present, and only the 12 compiled-map file types seen in the
+audited archives. Scripts and programs by extension are refused as
+`map_entry_script`. That is a check on names and types: an entity lump
+(`vents_c`) could still name scripts the game itself ships, and nothing in the
+report says a map is harmless in game. The report records the entry count, the
+types, the folders under `maps/`, a contents identity and how many of the map's
+paths Valve's own `pak01_dir.vpk` file list also has (0 of 1,214 to 2,308 in every
+audited map: the package is a separate namespace; what it replaces is the game's
+map package as a whole, a whole-file replacement that a Dota patch could make
+stale, which is an unverified risk and not a measured one).
+
+**The generator.** The ignored tests `map_audit::generate_map_allowlist` and
+`spot_check_embedded_maps` (local only; the environment variables are listed in
+the file header and `scripts/map-terrains/fetch_maps.py` produces the fetch
+report) write the two JSON files and [`MAP_AUDIT_REPORT.md`](MAP_AUDIT_REPORT.md)
+from archives downloaded on a Mac, and check the app's own extraction and load path
+against them. Output carries no timestamp. Ordinary tests check on every run that
+the embedded files are canonical and valid.
+
+**What has and has not been run.**
+
+- Compiles, passes clippy and the unit tests on macOS (also with the
+  `internal-stress-test` feature): installs of a map alone, of a pak and a map, and
+  of each transition between the two (added, changed, dropped, the pak dropped for a
+  map alone) with exact-byte restore step by step; refusal of a foreign file, a
+  non-folder and (on Unix) links in the map path with nothing written; cleanup of
+  empty folders and refusal to remove non-empty or pre-existing ones; stale and
+  missing maps; failures before publish, between the two publishes and after both,
+  each recovered; a restore that stopped halfway; records of a build without a map
+  unchanged on disk; plan identity and staging with synthetic maps; the analyzer
+  against hostile synthetic packages.
+- Run locally on a Mac and not committed: the 12 real ZIPs (fetched with `curl`,
+  GitHub and Hugging Face both byte-identical by SHA-256 for all 12) through the
+  generator, extraction, the content store and plans, and a plan of one real map
+  beside a real hero skin (numbers in the test plan). The archives did not go
+  through BetterFy's transport.
+- Not run: Windows CI for this change (see the PR), an install of a map on Windows
+  (so no Windows rule above is observed: write-through replace of a 50 MB file, the
+  reparse-point check, removal of the `maps` folder), and anything in Dota: whether
+  the game mounts `dota_<language>/maps/dota.vpk` from BetterFy's install, shows
+  the map in a match, and what a later Dota patch does to it.
+
 ### Installed profile
 
 After a committed pilot install, Rust writes one derived record to

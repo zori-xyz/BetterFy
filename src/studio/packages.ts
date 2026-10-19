@@ -5,11 +5,13 @@ import type { Language } from "../i18n";
 // tuning; src-tauri/wardrobe/index.json is the interface's copy of the audited
 // hero skins in manifests.json, and a Rust test requires it to be derived from
 // them), so the interface and the engine can never disagree on what is
-// installable.
+// installable. src-tauri/maps/index.json is the same copy for the standard map
+// terrains (whole-map packages installed as maps/dota.vpk), derived from
+// src-tauri/maps/manifests.json.
 type PackageManifest = {
   id: string;
   catalogId: string;
-  /** Present on wardrobe items (`"wardrobe"`); tuning packages have none. */
+  /** `"wardrobe"` for a hero skin, `"map"` for a map terrain; tuning packages have none. */
   kind?: string;
   /** Replaced by a newer package; kept only so existing builds stay verifiable. */
   supersededBy?: string | null;
@@ -18,7 +20,11 @@ type PackageManifest = {
   verifiedLanguages?: string[];
   conflicts?: string[];
   requires?: string[];
-  /** Wardrobe items: heroes the skin is for and the audited install sizes. */
+  /**
+   * Wardrobe items: heroes the skin is for and the audited install sizes. For a
+   * map, `installBytes` is the size of maps/dota.vpk and `installFiles` the
+   * number of entries in it.
+   */
   heroes?: string[];
   installFiles?: number;
   installBytes?: number;
@@ -32,6 +38,10 @@ const wardrobeIndex = import.meta.glob<PackageManifest[]>("../../src-tauri/wardr
   eager: true,
   import: "default",
 });
+const mapIndex = import.meta.glob<PackageManifest[]>("../../src-tauri/maps/index.json", {
+  eager: true,
+  import: "default",
+});
 const manifests: PackageManifest[] = [
   ...Object.values(
     import.meta.glob<PackageManifest>("../../src-tauri/packages/*.json", {
@@ -40,6 +50,7 @@ const manifests: PackageManifest[] = [
     }),
   ),
   ...Object.values(wardrobeIndex).flat(),
+  ...Object.values(mapIndex).flat(),
 ];
 
 export const installablePackages: PackageManifest[] = manifests
@@ -146,6 +157,14 @@ export function wardrobeBytes(ids: string[]) {
 /** Whether the package is an audited hero skin rather than a game-tuning mod. */
 export function isWardrobePackage(id: string) {
   return findPackage(id)?.kind === "wardrobe";
+}
+
+/**
+ * Whether the package is a map terrain: a whole-map package written as its own
+ * file, `maps/dota.vpk`, not merged into the build's `pakNN_dir.vpk`.
+ */
+export function isMapPackage(id: string) {
+  return findPackage(id)?.kind === "map";
 }
 
 export function engineIdFor(catalogId: string) {
