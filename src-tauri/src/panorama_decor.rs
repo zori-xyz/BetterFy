@@ -1,5 +1,3 @@
-#![allow(dead_code)] // Wired into the archive pipeline in a follow-up; see docs.
-
 //! Proofs for Panorama decor in third-party archives: main-menu backgrounds,
 //! HUD skins and versus screens.
 //!
@@ -90,8 +88,6 @@ pub(crate) enum Refusal {
     Container,
     /// A block the audited compilers never write for this file type.
     BlockNotAllowed(String),
-    /// The `DATA` block of a tree layout carries text of its own.
-    LayoutTextCopy,
     /// The tree is not `root > styles? scripts? panel`.
     TreeShape,
     NodeKind(String),
@@ -142,7 +138,6 @@ impl Refusal {
             Self::PathNotAllowed => "decor_path_not_allowed",
             Self::Container => "decor_container",
             Self::BlockNotAllowed(_) => "decor_block_not_allowed",
-            Self::LayoutTextCopy => "decor_layout_text_copy",
             Self::TreeShape => "decor_tree_shape",
             Self::NodeKind(_) => "decor_node_kind",
             Self::Element(_) => "decor_element_not_allowed",
@@ -222,6 +217,10 @@ pub(crate) struct Facts {
     pub script_includes: usize,
     pub style_includes: usize,
     pub valve_references: usize,
+    /// The Valve files this one names (and the archive does not carry): the
+    /// audit pins them per archive so the proof can be re-run without Valve's
+    /// whole file list.
+    pub valve_paths: BTreeSet<String>,
     pub archive_references: usize,
     pub declarations: usize,
 }
@@ -498,6 +497,7 @@ impl LayoutWalk<'_> {
             self.dependencies.insert(path.clone());
         } else if self.ctx.valve.contains(&path) {
             self.facts.valve_references += 1;
+            self.facts.valve_paths.insert(path.clone());
         } else {
             return Err(Refusal::ReferenceMissing(path));
         }
@@ -538,6 +538,7 @@ impl LayoutWalk<'_> {
                 }
                 self.facts.script_includes += 1;
                 self.facts.valve_references += 1;
+                self.facts.valve_paths.insert(path);
             } else {
                 self.resolve(name, kind)?;
                 self.facts.style_includes += 1;
@@ -929,6 +930,7 @@ impl CssWalk<'_> {
             self.dependencies.insert(compiled);
         } else if self.ctx.valve.contains(&compiled) {
             self.facts.valve_references += 1;
+            self.facts.valve_paths.insert(compiled);
         } else {
             return Err(Refusal::ReferenceMissing(compiled));
         }

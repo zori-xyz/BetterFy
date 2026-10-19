@@ -58,18 +58,6 @@ const SECOND_NAME_MIN_PATHS: usize = 3;
 /// then.
 const NOT_ENABLED: &[(&str, &str)] = &[
     (
-        "backgrounds",
-        "Panorama layouts, styles and video (vxml_c, vcss_c, webm): the layout proof covers plain image wrappers only; a separate proof is in progress",
-    ),
-    (
-        "huds",
-        "Panorama layouts and styles (vcss_c with textures): not covered by the layout proof",
-    ),
-    (
-        "versus-screens",
-        "Panorama layouts (vxml_c): not covered by the layout proof",
-    ),
-    (
         "cursors",
         "loose cursor files in a ZIP (no VPK): no verified install target",
     ),
@@ -128,7 +116,7 @@ struct ItemStats {
     mirrors: usize,
     rejected_reasons: BTreeMap<String, usize>,
     /// Every file really dropped (not an ignored one): path, reason, bytes.
-    dropped: Vec<(String, RejectReason, u64)>,
+    dropped: Vec<(String, RejectReason, u64, Option<String>)>,
     stripped_dirs: BTreeMap<String, usize>,
 }
 
@@ -413,8 +401,21 @@ fn audit_item(inputs: &Inputs, item: &CatalogItem) -> Outcome {
     // Pass one lists every archive path that Valve ships and is not the
     // heroes'; the analyzer keeps the ones it actually classifies as shared
     // (right type, safe path). Pass two is the audited result.
+    // Panorama categories: the Valve files the accepted layouts and styles
+    // point at, taken once against the whole list and pinned, so the proofs
+    // reproduce from the manifest alone.
+    let valve_references = match rule.types.decor_category() {
+        Some(category) => {
+            match skin_archive::decor_valve_references(&inner, category, &inputs.valve) {
+                Ok(paths) => paths,
+                Err(code) => return skip("analyzer refused the archive", code),
+            }
+        }
+        None => Vec::new(),
+    };
     let probe = ScopeSpec {
         kind: rule.scope,
+        valve_references: valve_references.clone(),
         types: rule.types,
         heroes: heroes.clone(),
         shared_paths: paths
@@ -444,6 +445,23 @@ fn audit_item(inputs: &Inputs, item: &CatalogItem) -> Outcome {
         Ok(analysis) => analysis.report,
         Err(code) => return skip("analyzer refused the archive", code),
     };
+    // The proofs must give the same verdicts against the pinned Valve paths
+    // alone as against the whole list (a video that Valve ships is the one
+    // case where they could differ).
+    let refused = |report: &SkinReport| {
+        report
+            .rejected_paths
+            .iter()
+            .filter(|entry| entry.reason == RejectReason::DecorRefused)
+            .map(|entry| entry.path.clone())
+            .collect::<Vec<_>>()
+    };
+    if refused(&probe_report) != refused(&report) {
+        return skip(
+            "the Panorama proofs depend on Valve files beyond the pinned paths",
+            "probe and audited runs disagree",
+        );
+    }
     if let Some(code) = &report.install.blocked {
         let mut detail = report
             .rejected_paths
@@ -508,6 +526,7 @@ fn audit_item(inputs: &Inputs, item: &CatalogItem) -> Outcome {
         author: item.author.clone(),
         heroes: heroes.clone(),
         shared_paths: spec.shared_paths.clone(),
+        valve_references: spec.valve_references.clone(),
         distribution: "internal_pilot".to_string(),
         source: WardrobeSource {
             urls: urls.clone(),
@@ -592,7 +611,14 @@ fn stats_of(manifest: &WardrobeManifest, urls: &[String], report: &SkinReport) -
             .rejected_paths
             .iter()
             .filter(|entry| !entry.reason.is_ignored())
-            .map(|entry| (entry.path.clone(), entry.reason, entry.bytes))
+            .map(|entry| {
+                (
+                    entry.path.clone(),
+                    entry.reason,
+                    entry.bytes,
+                    entry.detail.clone(),
+                )
+            })
             .collect(),
         stripped_dirs,
     }
@@ -628,6 +654,11 @@ fn type_policy_name(types: skin_archive::TypePolicy) -> &'static str {
         skin_archive::TypePolicy::Sounds => "sounds",
         skin_archive::TypePolicy::Textures => "panorama textures",
         skin_archive::TypePolicy::Materials => "materials and textures",
+        skin_archive::TypePolicy::Backgrounds => {
+            "panorama backgrounds (proven layouts, styles, videos)"
+        }
+        skin_archive::TypePolicy::Huds => "panorama HUD (proven styles, textures)",
+        skin_archive::TypePolicy::VersusScreens => "panorama versus screens (proven layouts)",
     }
 }
 
@@ -902,7 +933,7 @@ fn render_report(
     // Dropped for real, by reason and file type.
     let mut by_type = BTreeMap::<(String, String), (usize, u64, BTreeSet<&str>)>::new();
     for (manifest, s) in emitted {
-        for (path, reason, bytes) in &s.dropped {
+        for (path, reason, bytes, _) in &s.dropped {
             let name = path.rsplit('/').next().unwrap_or(path);
             let extension = name.rsplit_once('.').map_or("", |(_, extension)| extension);
             let entry = by_type
@@ -935,13 +966,16 @@ fn render_report(
     )
     .unwrap();
     for (manifest, s) in emitted {
-        for (path, reason, bytes) in &s.dropped {
+        for (path, reason, bytes, detail) in &s.dropped {
             if *reason != RejectReason::TypeNotAllowed {
                 writeln!(
                     out,
-                    "- `{}`: `{path}` ({bytes} bytes): {}",
+                    "- `{}`: `{path}` ({bytes} bytes): {}{}",
                     manifest.catalog_id,
-                    reason_name(*reason)
+                    reason_name(*reason),
+                    detail
+                        .as_ref()
+                        .map_or_else(String::new, |detail| format!(" (`{detail}`)"))
                 )
                 .unwrap();
             }

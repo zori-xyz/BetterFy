@@ -7,15 +7,15 @@ Written by the local-only test `wardrobe_audit::generate_wardrobe_allowlist` (`s
 | Input | Value |
 | --- | --- |
 | Catalog | `src/webCatalog.json`, snapshot 2026-07-26 |
-| Items audited | 971 in 28 enabled categories |
+| Items audited | 1044 in 31 enabled categories |
 | Valve file list | SteamDatabase/GameTracking-Dota2 `game/dota/pak01_dir.txt`, 388116 entries, SHA-256 `6d98c763afe09ba0de5caf0fc965b6b21f26eeb2954ff1e7744996ba056db1b7` |
 | Hero inference (hero skins only) | folders of Valve-present paths: `models/heroes/<h>`, `models/items/<h>`, `particles/units/heroes/hero_<h>`, `particles/econ/items/<h>`, `materials/models/(heroes\|items)/<h>`; every name with at least 5% of the top name's paths is kept (at most 8) |
 | Other categories | no hero: every accepted file installs; "overrides a Valve file" and "new file" are computed against the same list and pinned (information, not a policy) |
 | Mirrors | candidate URLs checked by HEAD request: kept only when they answer 200 with the pinned size |
-| Embedded allowlist | 4 files, 2.16 MB in all (`manifests.json` 0.89 MB, `manifests-effects.json` 0.56 MB, `manifests-world.json` 0.46 MB, `manifests-audio-ui.json` 0.24 MB); interface copy `index.json` 0.33 MB |
+| Embedded allowlist | 5 files, 2.31 MB in all (`manifests.json` 0.89 MB, `manifests-effects.json` 0.56 MB, `manifests-world.json` 0.46 MB, `manifests-panorama.json` 0.16 MB, `manifests-audio-ui.json` 0.24 MB); interface copy `index.json` 0.35 MB |
 
-Emitted 939 of 971 items.
-Skipped 32 of 971 items.
+Emitted 1011 of 1044 items.
+Skipped 33 of 1044 items.
 
 ## Categories
 
@@ -24,6 +24,7 @@ Skipped 32 of 971 items.
 | `heroes` | hero | compiled resources | 460 | 449 | 11 | 5621.5 | 2845 | 33984 |
 | `hero-items` | hero | compiled resources | 52 | 51 | 1 | 38.7 | 42 | 30 |
 | `ancient` | none | compiled resources | 2 | 2 | 0 | 10.6 | 11 | 12 |
+| `backgrounds` | none | panorama backgrounds (proven layouts, styles, videos) | 62 | 62 | 0 | 261.4 | 428 | 122 |
 | `announcers` | none | sounds | 7 | 7 | 0 | 0.1 | 7 | 0 |
 | `couriers` | none | compiled resources | 25 | 25 | 0 | 49.5 | 184 | 0 |
 | `creep-deny` | none | compiled resources | 12 | 12 | 0 | 0.3 | 13 | 3 |
@@ -32,6 +33,7 @@ Skipped 32 of 971 items.
 | `hero-sounds` | none | sounds | 15 | 15 | 0 | 31.4 | 26 | 0 |
 | `herofx` | none | compiled resources | 5 | 5 | 0 | 0.6 | 53 | 7 |
 | `high-five` | none | compiled resources | 2 | 2 | 0 | 0.2 | 16 | 0 |
+| `huds` | none | panorama HUD (proven styles, textures) | 4 | 3 | 1 | 10.8 | 121 | 2 |
 | `item-effects` | none | compiled resources | 143 | 143 | 0 | 13.7 | 846 | 381 |
 | `item-icons` | none | panorama textures | 8 | 8 | 0 | 23.4 | 1533 | 318 |
 | `mega-kill` | none | sounds | 34 | 34 | 0 | 15.6 | 171 | 83 |
@@ -48,15 +50,13 @@ Skipped 32 of 971 items.
 | `ti-bp-effects` | none | compiled resources | 16 | 16 | 0 | 5.4 | 1273 | 309 |
 | `towers` | none | compiled resources | 1 | 1 | 0 | 0.2 | 1 | 0 |
 | `trees` | none | compiled resources | 18 | 17 | 1 | 104.7 | 1475 | 261 |
+| `versus-screens` | none | panorama versus screens (proven layouts) | 7 | 7 | 0 | 0.0 | 14 | 0 |
 | `wards` | none | compiled resources | 5 | 5 | 0 | 1.3 | 5 | 0 |
 
 ## Categories that are not enabled
 
 | Category | Items | Why |
 | --- | ---: | --- |
-| `backgrounds` | 62 | Panorama layouts, styles and video (vxml_c, vcss_c, webm): the layout proof covers plain image wrappers only; a separate proof is in progress |
-| `huds` | 4 | Panorama layouts and styles (vcss_c with textures): not covered by the layout proof |
-| `versus-screens` | 7 | Panorama layouts (vxml_c): not covered by the layout proof |
 | `cursors` | 34 | loose cursor files in a ZIP (no VPK): no verified install target |
 | `fonts` | 10 | loose font files in a ZIP (no VPK): no verified install target |
 | `tools` | 11 | programs and scripts, not game content: BetterFy installs none |
@@ -75,7 +75,7 @@ Skipped 32 of 971 items.
 | --- | ---: |
 | VPK container unreadable | 1 |
 | ZIP does not hold exactly one pakNN_dir.vpk | 12 |
-| analyzer blocked the install (skin_archive_hostile) | 11 |
+| analyzer blocked the install (skin_archive_hostile) | 12 |
 | archive over the 256 MiB limit | 2 |
 | no archive in the cache | 1 |
 | the catalog's file is an external link, not a mirrored file | 5 |
@@ -99,7 +99,7 @@ Skipped 32 of 971 items.
 - `terrains-ti8-emerald-abyss`: 2 entries: maps/dota.vpk, Guide.txt
 - `terrains-ti9-overgrown-empire`: 2 entries: maps/dota.vpk, Guide.txt
 
-### analyzer blocked the install (skin_archive_hostile) (11)
+### analyzer blocked the install (skin_archive_hostile) (12)
 
 - `hero-items-disruptor-tractor`: PathUnsafe x32
 - `heroes-ember-spirit-mai-shiranui`: PathUnsafe x4
@@ -107,6 +107,7 @@ Skipped 32 of 971 items.
 - `heroes-lina-crystal-empress`: PathUnsafe x1
 - `heroes-mirana-suigintou`: PathUnsafe x9
 - `heroes-outworld-destroyer-tatsumaki`: PathUnsafe x3
+- `huds-black-hud`: PathUnsafe x2
 - `terrains-darkpoly`: PathUnsafe x1
 - `terrains-darkpoly-trees`: PathUnsafe x1
 - `terrains-lowpoly`: PathUnsafe x1
@@ -132,15 +133,15 @@ Skipped 32 of 971 items.
 
 ## Emitted items in numbers
 
-Total install bytes of all emitted items: 7078.9 MiB (101618 files) from 4234.9 MiB of downloads; hero skins with the shared files left out (opt-in): 5339.2 MiB of 5660.3 MiB.
+Total install bytes of all emitted items: 7351.1 MiB (102305 files) from 4507.2 MiB of downloads; hero skins with the shared files left out (opt-in): 5339.2 MiB of 5660.3 MiB.
 Biggest install: `heroes-nude-marci`, 207.3 MiB.
-Install size per item (MiB): median 0.7, p90 22.5, p99 76.0.
-Items that override no Valve file: 273; that override more than 100: 26; Valve files overridden in total: 14968.
+Install size per item (MiB): median 0.8, p90 20.0, p99 74.9.
+Items that override no Valve file: 273; that override more than 100: 26; Valve files overridden in total: 15531.
 Hero-name ambiguity: 56 items carry more than one internal hero name (a second name with at least 5% of the top name's Valve-present paths).
 Paths folded to lower case: 34 files in 3 items.
-Classes over all emitted items: 49143 hero-scoped files, 37507 files the game does not ship (installed), 14968 files that override a Valve file (installed).
-Items with two verified mirrors: 938; with one: 1.
-Files left out of the installs: 350 dropped (game files or unprovable ones BetterFy does not install), 585 ignored (not game files).
+Classes over all emitted items: 49143 hero-scoped files, 37631 files the game does not ship (installed), 15531 files that override a Valve file (installed).
+Items with two verified mirrors: 1010; with one: 1.
+Files left out of the installs: 404 dropped (game files or unprovable ones BetterFy does not install), 585 ignored (not game files).
 
 Files ignored because they are not game files (uncompiled sources, readmes and tool leftovers; the game loads none of them from a VPK, so leaving them out changes nothing in game):
 
@@ -154,7 +155,7 @@ Files dropped for real (not installed, listed per item in the plan):
 | Reason | Files |
 | --- | ---: |
 | panorama_scripted | 2 |
-| type_not_allowed | 348 |
+| type_not_allowed | 402 |
 
 Files dropped for real, by reason and file type:
 
@@ -164,7 +165,7 @@ Files dropped for real, by reason and file type:
 | type_not_allowed | `dds` | 1 | 0.0 | 1 |
 | type_not_allowed | `png` | 231 | 19.5 | 21 |
 | type_not_allowed | `psf` | 15 | 0.0 | 4 |
-| type_not_allowed | `txt` | 4 | 15.6 | 4 |
+| type_not_allowed | `txt` | 58 | 15.6 | 58 |
 | type_not_allowed | `usm` | 17 | 11.6 | 17 |
 | type_not_allowed | `vcss_c` | 11 | 0.2 | 5 |
 | type_not_allowed | `vmat_` | 2 | 0.0 | 1 |
@@ -194,16 +195,16 @@ Folders where items override Valve files most often (first three path segments):
 | `models/props_structures` | 286 |
 | `materials/models/props_debris` | 280 |
 | `particles/items2_fx` | 269 |
+| `panorama/layout` | 245 |
 | `particles/items_fx` | 240 |
 | `materials/models/props_nature` | 234 |
+| `panorama/styles` | 188 |
 | `sounds/vo/announcer_killing_spree` | 146 |
 | `materials/nature` | 144 |
 | `materials/models/props_structures` | 136 |
 | `models/props_bones` | 135 |
 | `panorama/images/rank_tier_icons` | 132 |
 | `models/props_rock` | 124 |
-| `models/props_gameplay` | 120 |
-| `particles/generic_gameplay` | 111 |
 
 ## Per category
 
@@ -236,6 +237,12 @@ Folders where items override Valve files most often (first three path segments):
 - Emitted 2 of 2 (0 skipped); source: zip; downloads 9.2 MiB.
 - Install: 23 files, 10.6 MiB in all; per item median 4.0 MiB, largest `ancient-ancient-dragon-king` 6.6 MiB.
 - Overrides a Valve file: 11 files; new files (the game does not ship them): 12; dropped: 0; ignored: 0.
+
+### `backgrounds`
+
+- Emitted 62 of 62 (0 skipped); source: vpk; downloads 261.4 MiB.
+- Install: 550 files, 261.4 MiB in all; per item median 1.9 MiB, largest `backgrounds-shadow-fiend` 19.9 MiB.
+- Overrides a Valve file: 428 files; new files (the game does not ship them): 122; dropped: 54; ignored: 0.
 
 ### `announcers`
 
@@ -284,6 +291,13 @@ Folders where items override Valve files most often (first three path segments):
 - Emitted 2 of 2 (0 skipped); source: vpk; downloads 0.2 MiB.
 - Install: 16 files, 0.2 MiB in all; per item median 0.1 MiB, largest `high-five-high-five-aghanim-puppet` 0.1 MiB.
 - Overrides a Valve file: 16 files; new files (the game does not ship them): 0; dropped: 0; ignored: 0.
+
+### `huds`
+
+- Emitted 3 of 4 (1 skipped); source: vpk; downloads 10.9 MiB.
+- Install: 123 files, 10.8 MiB in all; per item median 2.1 MiB, largest `huds-green-hud` 7.0 MiB.
+- Overrides a Valve file: 121 files; new files (the game does not ship them): 2; dropped: 0; ignored: 0.
+- skipped `huds-black-hud`: analyzer blocked the install (skin_archive_hostile) (PathUnsafe x2)
 
 ### `item-effects`
 
@@ -401,6 +415,12 @@ Folders where items override Valve files most often (first three path segments):
 - Overrides a Valve file: 1475 files; new files (the game does not ship them): 261; dropped: 0; ignored: 0.
 - skipped `trees-cartoon-trees`: analyzer blocked the install (skin_archive_hostile) (PathUnsafe x1)
 
+### `versus-screens`
+
+- Emitted 7 of 7 (0 skipped); source: vpk; downloads 0.0 MiB.
+- Install: 14 files, 0.0 MiB in all; per item median 0.0 MiB, largest `versus-screens-diretide-versus-screen` 0.0 MiB.
+- Overrides a Valve file: 14 files; new files (the game does not ship them): 0; dropped: 0; ignored: 0.
+
 ### `wards`
 
 - Emitted 5 of 5 (0 skipped); source: vpk; downloads 1.3 MiB.
@@ -450,6 +470,68 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `heroes-axe-immortal-bootblack-brawler` | axe | 64 | 0.7 | 0 | 0 | 0 | 0 |
 | `heroes-axe-kratos` | axe | 134 | 14.3 | 24 | 0 | 0 | 0 |
 | `heroes-axe-unleashed` | axe | 54 | 3.3 | 0 | 0 | 0 | 0 |
+| `backgrounds-beneath-the-seventh` |  | 9 | 8.4 | 7 | 1 | 0 | 0 |
+| `backgrounds-blossom-rem` |  | 9 | 1.9 | 7 | 1 | 0 | 0 |
+| `backgrounds-brewmaster` |  | 9 | 0.1 | 7 | 1 | 0 | 0 |
+| `backgrounds-cat-under-rain` |  | 9 | 0.7 | 7 | 1 | 0 | 0 |
+| `backgrounds-cloudy-tree` |  | 9 | 2.2 | 7 | 1 | 0 | 0 |
+| `backgrounds-code-geass` |  | 9 | 11.5 | 7 | 1 | 0 | 0 |
+| `backgrounds-corgi-sleeping` |  | 9 | 7.3 | 7 | 1 | 0 | 0 |
+| `backgrounds-cyrene-song` |  | 9 | 2.2 | 7 | 1 | 0 | 0 |
+| `backgrounds-dead-eyes` |  | 9 | 1.9 | 7 | 1 | 0 | 0 |
+| `backgrounds-depressed-spongebob` |  | 9 | 0.8 | 7 | 1 | 0 | 0 |
+| `backgrounds-experiments-lain` |  | 9 | 0.0 | 7 | 1 | 0 | 0 |
+| `backgrounds-fallen-paladin` |  | 9 | 1.1 | 7 | 1 | 0 | 0 |
+| `backgrounds-field-grass` |  | 9 | 1.4 | 7 | 1 | 0 | 0 |
+| `backgrounds-floating-dog` |  | 9 | 10.5 | 7 | 1 | 0 | 0 |
+| `backgrounds-forgotten-sword` |  | 9 | 1.5 | 7 | 1 | 0 | 0 |
+| `backgrounds-froglings` |  | 9 | 0.1 | 7 | 1 | 0 | 0 |
+| `backgrounds-garden-of-quiet-days` |  | 9 | 1.9 | 7 | 1 | 0 | 0 |
+| `backgrounds-grave-of-the-fireflies` |  | 9 | 0.1 | 7 | 1 | 0 | 0 |
+| `backgrounds-guts` |  | 9 | 5.4 | 7 | 0 | 0 | 0 |
+| `backgrounds-ichigo` |  | 9 | 7.2 | 7 | 1 | 0 | 0 |
+| `backgrounds-illidan-stormrage` |  | 9 | 2.8 | 7 | 1 | 0 | 0 |
+| `backgrounds-kakehashi-subaru` |  | 9 | 1.0 | 7 | 1 | 0 | 0 |
+| `backgrounds-katana-in-forest` |  | 9 | 3.2 | 7 | 1 | 0 | 0 |
+| `backgrounds-ken-kaneki` |  | 9 | 0.6 | 7 | 1 | 0 | 0 |
+| `backgrounds-kira-and-ryuk` |  | 9 | 1.6 | 7 | 1 | 0 | 0 |
+| `backgrounds-knight-artorias` |  | 9 | 16.0 | 7 | 0 | 0 | 0 |
+| `backgrounds-kurumi-tokisaki` |  | 9 | 1.3 | 7 | 1 | 0 | 0 |
+| `backgrounds-last-match` |  | 1 | 0.0 | 1 | 0 | 0 | 0 |
+| `backgrounds-lelouch-lamperouge` |  | 9 | 10.4 | 7 | 1 | 0 | 0 |
+| `backgrounds-liberalio-nikke` |  | 9 | 1.8 | 7 | 1 | 0 | 0 |
+| `backgrounds-light-yagami` |  | 9 | 2.7 | 7 | 1 | 0 | 0 |
+| `backgrounds-lonely-quay` |  | 9 | 0.9 | 7 | 1 | 0 | 0 |
+| `backgrounds-malenia` |  | 9 | 10.5 | 7 | 1 | 0 | 0 |
+| `backgrounds-minecraft-rain` |  | 9 | 9.0 | 7 | 0 | 0 | 0 |
+| `backgrounds-moonflower-field` |  | 9 | 10.6 | 7 | 1 | 0 | 0 |
+| `backgrounds-nemestice` |  | 9 | 0.1 | 7 | 1 | 0 | 0 |
+| `backgrounds-nier-automata` |  | 9 | 0.4 | 7 | 1 | 0 | 0 |
+| `backgrounds-nikaido-hiro` |  | 9 | 2.3 | 7 | 1 | 0 | 0 |
+| `backgrounds-old-bus-stop` |  | 9 | 7.8 | 7 | 1 | 0 | 0 |
+| `backgrounds-pine-forest` |  | 9 | 8.2 | 7 | 0 | 0 | 0 |
+| `backgrounds-rainy-girl` |  | 9 | 3.3 | 7 | 1 | 0 | 0 |
+| `backgrounds-rei-ayanami` |  | 9 | 0.4 | 7 | 1 | 0 | 0 |
+| `backgrounds-river-vials` |  | 9 | 1.5 | 7 | 1 | 0 | 0 |
+| `backgrounds-sad-maomao` |  | 9 | 0.9 | 7 | 1 | 0 | 0 |
+| `backgrounds-sajin-komamura` |  | 9 | 0.3 | 7 | 1 | 0 | 0 |
+| `backgrounds-sakura` |  | 9 | 11.7 | 7 | 0 | 0 | 0 |
+| `backgrounds-sea-of-flowers` |  | 9 | 5.9 | 7 | 1 | 0 | 0 |
+| `backgrounds-shadow-fiend` |  | 9 | 19.9 | 7 | 1 | 0 | 0 |
+| `backgrounds-shadow-wreck` |  | 9 | 0.2 | 7 | 1 | 0 | 0 |
+| `backgrounds-sky-trees` |  | 9 | 1.0 | 7 | 1 | 0 | 0 |
+| `backgrounds-snowfall-in-forest` |  | 9 | 8.0 | 7 | 1 | 0 | 0 |
+| `backgrounds-sora` |  | 9 | 0.3 | 7 | 1 | 0 | 0 |
+| `backgrounds-stars` |  | 9 | 0.0 | 7 | 1 | 0 | 0 |
+| `backgrounds-station` |  | 9 | 10.7 | 7 | 0 | 0 | 0 |
+| `backgrounds-ulquiorra` |  | 9 | 2.3 | 7 | 1 | 0 | 0 |
+| `backgrounds-ulquiorra-purple` |  | 9 | 0.1 | 7 | 1 | 0 | 0 |
+| `backgrounds-watermelons` |  | 9 | 8.2 | 7 | 1 | 0 | 0 |
+| `backgrounds-windranger` |  | 9 | 6.8 | 7 | 1 | 0 | 0 |
+| `backgrounds-winter-forest` |  | 9 | 16.1 | 7 | 0 | 0 | 0 |
+| `backgrounds-winter-solitude` |  | 9 | 0.8 | 7 | 1 | 0 | 0 |
+| `backgrounds-yuno-gasai` |  | 9 | 0.1 | 7 | 1 | 0 | 0 |
+| `backgrounds-zenitsu-white` |  | 9 | 5.3 | 7 | 1 | 0 | 0 |
 | `heroes-bane-komeiji-koishi` | bane | 138 | 19.3 | 0 | 10 | 0 | 0 |
 | `heroes-bare-brewmaster` | brewmaster | 2 | 0.0 | 0 | 0 | 0 | 0 |
 | `heroes-bare-hoodwink` | hoodwink | 33 | 11.0 | 9 | 0 | 1 | 0 |
@@ -730,6 +812,9 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `heroes-homelander-invoker` | invoker | 79 | 15.8 | 6 | 0 | 0 | 0 |
 | `heroes-hoodwink-bilge-rat-buccaneer` | hoodwink | 5 | 0.4 | 0 | 0 | 0 | 0 |
 | `heroes-hoodwink-tomokan-footsoldier` | hoodwink | 4 | 0.3 | 0 | 0 | 0 | 0 |
+| `huds-blue-web-hud` |  | 29 | 1.8 | 27 | 0 | 0 | 0 |
+| `huds-green-hud` |  | 42 | 7.0 | 42 | 0 | 0 | 0 |
+| `huds-white-sora-hud` |  | 52 | 2.1 | 52 | 0 | 0 | 0 |
 | `heroes-huskar-cthugha` | huskar | 254 | 9.5 | 0 | 1 | 0 | 0 |
 | `heroes-huskar-flashpoint-proselyte` | huskar | 50 | 1.1 | 0 | 0 | 0 | 0 |
 | `heroes-ice-chaos-knight` | chaos_knight | 198 | 10.3 | 13 | 0 | 0 | 0 |
@@ -1320,6 +1405,13 @@ Heroes are the inferred internal names (hero skins only). Files are what goes in
 | `heroes-vengeful-spirit-seraph-scion` | vengeful | 25 | 0.4 | 0 | 0 | 0 | 0 |
 | `heroes-venomancer-peashooter` | venomancer | 40 | 8.3 | 0 | 0 | 0 | 0 |
 | `heroes-venomancer-poisonous-assassin` | venomancer | 5 | 0.6 | 0 | 0 | 0 | 0 |
+| `versus-screens-diretide-versus-screen` |  | 2 | 0.0 | 2 | 0 | 0 | 0 |
+| `versus-screens-muerta-versus-screen` |  | 2 | 0.0 | 2 | 0 | 0 | 0 |
+| `versus-screens-nemestice-versus-screen` |  | 2 | 0.0 | 2 | 0 | 0 | 0 |
+| `versus-screens-ti-2024-versus-screen` |  | 2 | 0.0 | 2 | 0 | 0 | 0 |
+| `versus-screens-ti9-versus-screen-i` |  | 2 | 0.0 | 2 | 0 | 0 | 0 |
+| `versus-screens-ti9-versus-screen-ii` |  | 2 | 0.0 | 2 | 0 | 0 | 0 |
+| `versus-screens-winter-versus-screen` |  | 2 | 0.0 | 2 | 0 | 0 | 0 |
 | `heroes-viper-butch-dog` | viper | 209 | 20.5 | 27 | 0 | 0 | 0 |
 | `heroes-viper-elephant-hawk-moth` | viper | 28 | 3.4 | 12 | 0 | 0 | 0 |
 | `heroes-viper-stuffed-menace` | viper | 18 | 3.5 | 0 | 0 | 0 | 0 |

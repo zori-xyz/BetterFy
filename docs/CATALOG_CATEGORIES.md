@@ -9,7 +9,7 @@ until a person records otherwise (round three of
 [SKIN_WINDOWS_TEST_PLAN.md](SKIN_WINDOWS_TEST_PLAN.md)).
 
 The catalog is the Dota2PornFx snapshot of 2026-07-26 (`src/webCatalog.json`,
-1,135 items). 939 archives of 28 categories are in the embedded allowlist; the
+1,135 items). 1,011 archives of 31 categories are in the embedded allowlist; the
 item-by-item audit is [WARDROBE_AUDIT_REPORT.md](WARDROBE_AUDIT_REPORT.md), the
 rules are in [SKIN_ARCHIVE_AUDIT.md](SKIN_ARCHIVE_AUDIT.md) and the design in
 "Catalog categories" of [ENGINE_ARCHITECTURE.md](ENGINE_ARCHITECTURE.md).
@@ -30,8 +30,10 @@ loosen):
 | Types | compiled resources and proven image wrappers | per category, below |
 
 Type policies. A policy only narrows the compiled types; scripts, executables,
-traversal and unproven layouts are rejected under every one of them, and a
-policy never admits a `vxml_c`, `vcss_c` or `webm`:
+traversal and unproven layouts are rejected under every one of them. The first
+four policies never admit a `vxml_c`, `vcss_c` or `webm`; the three Panorama
+policies admit them only as far as the proofs of `panorama_decor` establish
+(below):
 
 | Policy | Accepted | Folders | Categories |
 | --- | --- | --- | --- |
@@ -39,6 +41,9 @@ policy never admits a `vxml_c`, `vcss_c` or `webm`:
 | sounds | `vsnd_c`, `vsndevts_c` | `sounds/`, `soundevents/` | `mega-kill`, `music`, `sounds`, `hero-sounds`, `announcers` |
 | panorama textures | `vtex_c` | `panorama/images/` | `ranks`, `item-icons` |
 | materials | `vmat_c`, `vtex_c` | any | `shaders` |
+| panorama backgrounds | proven `vxml_c`, `vcss_c` and `webm` | the files the dashboard needs, a video only as `folder/name.webm` | `backgrounds` |
+| panorama HUD | proven `vcss_c`, plus `vtex_c` | styles of the HUD; textures in `panorama/images/` | `huds` |
+| panorama versus | proven `vxml_c` (and styles) | `panorama/layout/hud/versus/` | `versus-screens` |
 
 A file of an accepted type outside its category's folders is dropped as
 `outside_category` (none occurs in the current catalog). A `.txt` inside
@@ -88,6 +93,9 @@ ships (informational).
 | `towers` | 1 | 1 | 0 / 1 | 1 | 0.2 | `towers-holiday-radiant-tower` (0.2) | 1 | resources; tower model | not run in Dota |
 | `trees` | 18 | 17 | 0 / 17 | 1,736 | 104.7 | `trees-metal-barrel-trees` (44.1) | 1,475 | resources; tree models, materials, textures | not run in Dota |
 | `wards` | 5 | 5 | 0 / 5 | 5 | 1.3 | `wards-curious-snaptrap` (0.4) | 5 | resources; ward models | not run in Dota |
+| `backgrounds` | 62 | 62 | 0 / 62 | 550 | 261.4 | `backgrounds-shadow-fiend` (19.9) | 428 | panorama; proven dashboard layouts, styles and one video | not run in Dota |
+| `huds` | 4 | 3 | 0 / 3 | 123 | 10.8 | `huds-green-hud` (7.0) | 121 | panorama; proven HUD styles and their textures | not run in Dota |
+| `versus-screens` | 7 | 7 | 0 / 7 | 14 | 0.0 | `versus-screens-diretide-versus-screen` (0.0) | 14 | panorama; proven versus layouts | not run in Dota |
 
 The "what it changes" column is read from the folders the audited archives write
 to (for example `models/courier`, `particles/ui_mouseactions`,
@@ -127,9 +135,6 @@ that is not done.
 
 | Category | Items | Files | Why not |
 | --- | ---: | --- | --- |
-| `backgrounds` | 62 | raw VPKs of `vxml_c`, `vcss_c`, `webm`, `txt` | Panorama layouts, styles and video. The layout proof accepts plain image wrappers only; a separate Panorama proof is being built elsewhere (see `panorama_layout.rs`) |
-| `huds` | 4 | raw VPKs of `vcss_c` and `vtex_c` | Panorama styles; the same proof |
-| `versus-screens` | 7 | raw VPKs of `vxml_c` | Panorama layouts; the same proof |
 | `terrains` (ZIP items) | 12 | a ZIP of `maps/dota.vpk` and `Guide.txt` | Not in this allowlist: each replaces the map file itself and is installed as a map through its own allowlist (`src-tauri/maps`, see [MAP_AUDIT_REPORT.md](MAP_AUDIT_REPORT.md) and "Map terrains" in ENGINE_ARCHITECTURE). Of the 8 raw-VPK terrains, 4 are enabled here and 4 are blocked (below) |
 | `cursors` | 34 | a ZIP of a folder of loose cursor files | No VPK and no verified install target |
 | `fonts` | 10 | a ZIP of a folder of loose font files | No VPK and no verified install target |
@@ -142,10 +147,13 @@ that is not done.
 
 ## Items of enabled categories that are not installable
 
-32 of 971 audited items (generated list in the audit report):
+33 of 1,044 audited items (generated list in the audit report):
 
 - 12 terrain ZIPs: not in this allowlist, installed as maps (above).
-- 11 blocked by the analyzer: 6 hero items and skins (unsafe paths and, for one,
+- 12 blocked by the analyzer: `huds-black-hud` (two texture file names the VPK
+  writer does not take, `inventory_bg_psd (2).vtex_c` with parentheses and
+  `inventory_bg_psd — копия.vtex_c` with a dash and Cyrillic letters: unsafe
+  paths, so the archive is refused whole), 6 hero items and skins (unsafe paths and, for one,
   a script, as before) and 5 terrain and tree packs (`terrains-darkpoly`,
   `terrains-darkpoly-trees`, `terrains-lowpoly`, `terrains-lowpoly-trees`,
   `trees-cartoon-trees`): each carries one texture whose name has brackets,
@@ -157,10 +165,34 @@ that is not done.
   guide links under `optimization`, and one `sounds` item), 2 hero
   skins over the 256 MiB bound, 1 unreadable VPK and 1 skin never fetched.
 
+## Panorama categories: what the proofs decide
+
+`backgrounds`, `huds` and `versus-screens` install a layout, style or video only
+when the proofs of `src-tauri/src/panorama_decor.rs` establish it (see
+"Panorama decor proofs" in ENGINE_ARCHITECTURE and
+[PANORAMA_DECOR_AUDIT.md](PANORAMA_DECOR_AUDIT.md)). The analyzer runs them over
+the whole archive; a file the proof refuses is dropped as `decor_refused` with
+the exact code and name (for example `decor_event_handler: ...`), shown in the
+build review and in the audit report. Valve files that a layout or style points
+at are pinned per archive in the manifest (`valveReferences`), so the proofs
+re-run in the app without Valve's whole file list.
+
+Over the 73 archives: 62 backgrounds (306 layouts, 183 styles, 61 videos), 3 of 4
+HUD skins (the 4th is blocked by unsafe texture names, above) and 7 versus
+screens are in the allowlist. No layout, style or video was refused (the pinned
+event bindings were read from these same archives, so that is by construction;
+an archive added later passes only if it reuses them). The only files dropped
+are 54 `panorama/version.txt` (file type not installed; what the game does with
+that file is not known). Not proven, and not claimed: that a layout looks right or
+loads in the current game, that the Valve events and scripts it names behave as
+assumed, and that a video's frames are harmless to the game's decoder (only the
+container is checked). The review says so, and none of the three has been run in
+Dota.
+
 ## What has and has not been run
 
-- Run on a Mac: the audit of 971 items from 965 cached archives (509 fetched
-  earlier, 456 for this change); the analyzer and the manifests' validation in unit tests;
+- Run on a Mac: the audit of 1,044 items from 1,038 cached archives (73 Panorama
+  archives added for the Panorama change); the analyzer and the manifests' validation in unit tests;
   real plans from the cached archives for the smallest and the largest item of
   every category, a nine-item mix, packs that conflict, and selections over the
   256 MiB bound (numbers in the pull request and the test plan).

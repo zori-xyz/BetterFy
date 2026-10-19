@@ -339,20 +339,22 @@ Also:
 - Largest single packs: `music-deadmau5-dieback` (92 MB VPK) and
   `trees-metal-barrel-trees` (46 MB): record the time and memory use to prepare, install and
   restore.
-## 6. Menu backgrounds, HUD skins and versus screens (draft until wired)
+## 6. Menu backgrounds, HUD skins and versus screens
 
-Applies once the Panorama decor categories are installable (see
-[PANORAMA_DECOR_AUDIT.md](PANORAMA_DECOR_AUDIT.md); until then there is nothing
-to install and this section is a plan only). One item of each kind, chosen to
+The three Panorama decor categories are installable and marked Windows pilot (see
+[PANORAMA_DECOR_AUDIT.md](PANORAMA_DECOR_AUDIT.md) and
+[CATALOG_CATEGORIES.md](CATALOG_CATEGORIES.md)); none has been run on Windows or in
+Dota. Minimum run: one of each kind, installed alone, checked in game, then
+restored with Restore the game. One item of each kind, chosen to
 cover the shapes the audit found. Do each alone first, then restore. Record the
 Dota build (`steam.inf`) and whether the Windows machine has a plain (non-ultrawide)
 display; backgrounds behave differently on 21:9.
 
 **6a. A background with a video** (suggest `backgrounds-ichigo`, about 7.5 MB).
-1. Install. The review should list the layouts, styles and the one video as
-   accepted, the layout kinds (pure decor and with Valve-bound handlers), and
-   `panorama/version.txt` as dropped (file type not installed). Record exactly what
-   it shows.
+1. Install. The review should show the proof lines (what was proven, what is not
+   proven, how to undo), the files going in (layouts, styles and the one video),
+   and `panorama/version.txt` as dropped (file type not installed). Record exactly
+   what it shows.
 2. Start Dota. Expected: the main menu shows the video behind the dashboard.
    Check, and write down which of these still work, because the archive replaces
    Valve's `dashboard.vxml_c` and `dashboard_page_home.vxml_c` with its own copies:

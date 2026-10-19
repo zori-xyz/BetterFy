@@ -296,7 +296,8 @@ export type SkinRejectReason =
   | "type_not_allowed"
   | "panorama_scripted"
   | "panorama_unproven"
-  | "outside_category";
+  | "outside_category"
+  | "decor_refused";
 
 /** What the skin-archive analyzer found (src-tauri/src/skin_archive.rs). */
 export type SkinReport = {
@@ -332,7 +333,13 @@ export type SkinReport = {
   /** Accepted paths whose upper-case letters were folded to lower case. */
   renamed: number;
   imageWrappers: number;
-  rejectedPaths: Array<{ path: string; reason: SkinRejectReason; bytes: number }>;
+  rejectedPaths: Array<{
+    path: string;
+    reason: SkinRejectReason;
+    bytes: number;
+    /** The exact refusal of a Panorama proof (`decor_...: name`), when there is one. */
+    detail?: string;
+  }>;
   sharedPaths: Array<{ path: string; bytes: number }>;
   /** Files the skin adds that the player's own game ships now (informational). */
   newInGame: string[];
