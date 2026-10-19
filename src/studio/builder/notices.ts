@@ -231,6 +231,22 @@ export const explainError = (code: string, isRu: boolean) => {
       "Прошлая запись сеток героев оборвалась. Нажми «Проверить» в подробностях, затем повтори.",
       "An earlier write of hero grids stopped half way. Use Check under Details, then retry.",
     ],
+    custom_font_required: [
+      "Для «Своих шрифтов» не выбран шрифт. Открой карточку мода и выбери файл .ttf или .otf.",
+      "No font is picked for Custom Fonts. Open the mod's card and choose a .ttf or .otf file.",
+    ],
+    custom_font_missing: [
+      "Файл выбранного шрифта больше не найден. Выбери шрифт в карточке мода ещё раз.",
+      "The picked font file is no longer there. Choose the font in the mod's card again.",
+    ],
+    custom_font_invalid: [
+      "Этот файл не подходит: нужен один шрифт OpenType или TrueType (.otf или .ttf), не коллекция и не веб-шрифт.",
+      "This file does not fit: it has to be one OpenType or TrueType font (.otf or .ttf), not a collection or a web font.",
+    ],
+    custom_font_too_large: [
+      "Шрифт слишком большой: подойдёт файл до 8 МБ.",
+      "The font is too large: a file up to 8 MB fits.",
+    ],
     user_styles_selection_required: [
       "Для «Пользовательских стилей» не выбран ни один стиль. Открой карточку мода и отметь нужные.",
       "No style is picked for User Styles. Open the mod's card and tick the ones you want.",

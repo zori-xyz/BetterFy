@@ -678,6 +678,9 @@ enum Contract {
     /// Minify's Custom Hero Grids: grids compiled into the app, added to the
     /// Steam accounts' own (`hero_grids`).
     HeroGrids,
+    /// Minify's Custom Fonts: the font file the player picked (its SHA-256
+    /// and size), stored by `custom_fonts::store`.
+    CustomFont(String, usize),
 }
 
 impl Contract {
@@ -689,6 +692,7 @@ impl Contract {
             Self::Pack(item) => item.id.clone(),
             Self::UserStyles(_, mask) => crate::user_styles::variant_id(*mask),
             Self::HeroGrids => crate::hero_grids::PACKAGE_ID.to_string(),
+            Self::CustomFont(sha, bytes) => crate::custom_fonts::variant_id(sha, *bytes),
         }
     }
 
@@ -702,6 +706,7 @@ impl Contract {
             Self::Pack(item) => &item.id,
             Self::UserStyles(manifest, _) => &manifest.id,
             Self::HeroGrids => crate::hero_grids::PACKAGE_ID,
+            Self::CustomFont(..) => crate::custom_fonts::PACKAGE_ID,
         }
     }
 }
@@ -719,6 +724,12 @@ fn resolve(id: &str) -> Result<Contract, String> {
     if id == crate::hero_grids::PACKAGE_ID || id == crate::hero_grids::CATALOG_ID {
         return Ok(Contract::HeroGrids);
     }
+    if id == crate::custom_fonts::PACKAGE_ID || id == crate::custom_fonts::CATALOG_ID {
+        return Err("custom_font_required".to_string());
+    }
+    if let Some((sha, bytes)) = crate::custom_fonts::parse_variant(id) {
+        return Ok(Contract::CustomFont(sha, bytes));
+    }
     if let Some((base, mask)) = crate::user_styles::parse_variant(id) {
         return package_registry::find(base).map(|manifest| Contract::UserStyles(manifest, mask));
     }
@@ -730,9 +741,11 @@ fn resolve(id: &str) -> Result<Contract, String> {
 fn tuning(id: &str) -> Result<Option<&'static PackageManifest>, String> {
     match resolve(id)? {
         Contract::Tuning(manifest) | Contract::UserStyles(manifest, _) => Ok(Some(manifest)),
-        Contract::Wardrobe(..) | Contract::Map(_) | Contract::Pack(_) | Contract::HeroGrids => {
-            Ok(None)
-        }
+        Contract::Wardrobe(..)
+        | Contract::Map(_)
+        | Contract::Pack(_)
+        | Contract::HeroGrids
+        | Contract::CustomFont(..) => Ok(None),
     }
 }
 
@@ -991,6 +1004,14 @@ fn acquire_verified_resources_with_progress(
                 progress(index);
                 continue;
             }
+            // The player's font is already stored; nothing to download.
+            Contract::CustomFont(sha, bytes) => {
+                crate::content_store::read_pinned_resource(app_data_root, bytes, &sha)
+                    .map_err(|_| "custom_font_missing".to_string())?;
+                index += 1;
+                progress(index);
+                continue;
+            }
             // The grids are compiled into the app: nothing to download.
             Contract::HeroGrids => {
                 index += 1;
@@ -1228,6 +1249,18 @@ pub(crate) fn build_from_verified_store(
                     }
                     packs.push(loaded.item);
                     let (marker, text) = crate::game_packs::marker(item);
+                    return Ok(BundlePackage {
+                        package_id: package_id.clone(),
+                        resources: BTreeMap::from([(marker, text)]),
+                    });
+                }
+                Contract::CustomFont(sha, bytes) => {
+                    for (path, font) in crate::custom_fonts::load(app_data_root, &sha, bytes)? {
+                        if game_files.insert(path, font).is_some() {
+                            return Err("game_pack_conflict".to_string());
+                        }
+                    }
+                    let (marker, text) = crate::custom_fonts::marker(&sha, bytes);
                     return Ok(BundlePackage {
                         package_id: package_id.clone(),
                         resources: BTreeMap::from([(marker, text)]),
@@ -1832,6 +1865,40 @@ mod tests {
         .is_err());
         let manifest = contract("minify.user-styles.pick-5").expect("tuning contract");
         assert_eq!(manifest.id, "minify.user-styles");
+    }
+
+    #[test]
+    fn a_custom_font_builds_as_every_renamed_weight() {
+        use base64::Engine;
+        let root = wardrobe_root("custom-font");
+        assert_eq!(
+            normalize_package_ids(&["minify-custom-fonts".to_string()])
+                .err()
+                .as_deref(),
+            Some("custom_font_required")
+        );
+        let font = crate::font_names::test_font();
+        let info = crate::custom_fonts::store(
+            &root,
+            &base64::engine::general_purpose::STANDARD.encode(&font),
+        )
+        .expect("stores");
+        assert_eq!(info.family, "Original");
+        let verified = build_from_verified_store(&root, std::slice::from_ref(&info.package_id))
+            .expect("builds");
+        assert_eq!(verified.game_files().len(), 29);
+        let bold = verified
+            .game_files()
+            .get("panorama/fonts/radiance-bold.otf")
+            .and_then(Option::as_ref)
+            .expect("bold");
+        assert_eq!(
+            crate::font_names::family_name(bold).expect("family"),
+            "Radiance"
+        );
+        // A font pack and a custom font both write the game's fonts.
+        assert!(verified.has_pak());
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]

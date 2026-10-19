@@ -8,5 +8,15 @@
       "en": "Custom Hero Grids"
     },
     "author": "Egezenn"
+  },
+  {
+    "id": "minify.custom-fonts",
+    "catalogId": "minify-custom-fonts",
+    "kind": "customfont",
+    "name": {
+      "ru": "Свои шрифты",
+      "en": "Custom Fonts"
+    },
+    "author": "Egezenn"
   }
 ]

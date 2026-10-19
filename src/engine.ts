@@ -476,6 +476,13 @@ export type CatalogStatus = {
   error: string | null;
 };
 
+/** The font picked for Minify's Custom Fonts (src-tauri/src/custom_fonts.rs). */
+export type CustomFontInfo = {
+  packageId: string;
+  family: string;
+  bytes: number;
+};
+
 /** A cursor or font pack of a build (src-tauri/src/game_packs.rs). */
 export type GamePackPlanItem = {
   packageId: string;
@@ -639,6 +646,8 @@ export interface EngineBridge {
   ): Promise<GameDeploymentReceipt>;
   currentTreePilot(gamePath: string): Promise<TreePilotCurrentState | null>;
   refreshCatalog(): Promise<CatalogStatus | null>;
+  /** Keeps the font file picked for Minify's Custom Fonts (base64). */
+  storeCustomFont(fontBase64: string): Promise<CustomFontInfo>;
   applyTreeSteamLaunchOptions(request: TreeSteamActivationRequest): Promise<SteamConfigReceipt>;
   applyTreeSteamLaunchOptionsStress(
     request: TreeSteamActivationRequest,
@@ -920,6 +929,15 @@ export const mockEngine: EngineBridge = {
   },
   async refreshCatalog() {
     return null;
+  },
+  async storeCustomFont(fontBase64: string) {
+    // The browser preview cannot keep files; it shows what the app would.
+    const bytes = Math.floor((fontBase64.length * 3) / 4);
+    return {
+      packageId: `minify.custom-fonts.font-${"d".repeat(64)}-${Math.max(bytes, 1)}`,
+      family: "Preview font",
+      bytes,
+    };
   },
   async applyTreeSteamLaunchOptions() {
     throw new EngineFault("desktop_runtime_required", "apply_tree_steam_launch_options");
@@ -1320,6 +1338,15 @@ export const engineBridge: EngineBridge = {
     if (!isTauriRuntime()) return mockEngine.refreshCatalog();
     const { invoke } = await import("@tauri-apps/api/core");
     return guardedEngineCall("refresh_catalog", invoke<CatalogStatus>("refresh_catalog"), 30_000);
+  },
+  async storeCustomFont(fontBase64: string) {
+    if (!isTauriRuntime()) return mockEngine.storeCustomFont(fontBase64);
+    const { invoke } = await import("@tauri-apps/api/core");
+    return guardedEngineCall(
+      "store_custom_font",
+      invoke<CustomFontInfo>("store_custom_font", { fontBase64 }),
+      60_000,
+    );
   },
   async applyTreeSteamLaunchOptions(request) {
     if (!isTauriRuntime()) return mockEngine.applyTreeSteamLaunchOptions(request);

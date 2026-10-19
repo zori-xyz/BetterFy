@@ -6,7 +6,9 @@ mod blacklist;
 mod build_engine;
 mod catalog_index;
 mod content_store;
+mod custom_fonts;
 mod evidence_reports;
+mod font_names;
 mod game_deployment;
 mod game_files;
 mod game_language;
@@ -297,6 +299,22 @@ async fn refresh_catalog(app: AppHandle) -> Result<catalog_index::CatalogStatus,
     tauri::async_runtime::spawn_blocking(move || catalog_index::refresh(&app_data))
         .await
         .map_err(|_| "runtime_worker_failed".to_string())
+}
+
+/// Keeps the font file the player picked for Minify's Custom Fonts and
+/// returns the package ID that installs it.
+#[tauri::command]
+async fn store_custom_font(
+    app: AppHandle,
+    font_base64: String,
+) -> Result<custom_fonts::CustomFontInfo, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "custom_font_invalid".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || custom_fonts::store(&app_data, &font_base64))
+        .await
+        .map_err(|_| "runtime_worker_failed".to_string())?
 }
 
 /// Packages that can be installed now: the embedded manifests, merged with a
@@ -1403,6 +1421,7 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             discover_game,
+            store_custom_font,
             list_installable_packages,
             refresh_catalog,
             validate_game_path,

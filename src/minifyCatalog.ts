@@ -47,6 +47,10 @@ const descriptions: Record<string, Record<Language, string>> = {
     ru: "Набор небольших правок интерфейса от автора Minify: убрать портрет героя, баннеры, анимации и затемнения. Отметь нужные ниже — в сборку попадут только они.",
     en: "A set of small interface tweaks from Minify's author: hide the hero portrait, banners, animations and dims. Tick the ones you want below; only those go into the build.",
   },
+  "minify-custom-fonts": {
+    ru: "Ставит твой шрифт вместо шрифтов интерфейса Dota: выбери файл .ttf или .otf в карточке ниже. BetterFy переименует его под каждое начертание игры, а откат вернёт стандартные шрифты.",
+    en: "Puts your own font in place of Dota's interface fonts: choose a .ttf or .otf file in the card below. BetterFy renames it for every weight the game uses, and restore brings the standard fonts back.",
+  },
   "minify-custom-hero-grids": {
     ru: "Добавляет готовые сетки героев (Stratz — мета Immortal по позициям и другие) к твоим собственным во всех профилях Steam, где есть Dota. Твои сетки не трогаем; откат убирает только добавленные.",
     en: "Adds ready-made hero grids (Stratz Immortal meta by position and more) beside your own in every Steam profile that has Dota. Your grids stay untouched; restore removes only the added ones.",

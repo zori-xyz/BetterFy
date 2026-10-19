@@ -53,6 +53,7 @@ import { Choice, ChoiceCards, ChoiceMenu, type ChoiceOption } from "./builder/Ch
 import { getStorageItem, setStorageItem } from "../storage";
 import { PackReview, WardrobeReview, formatBytes } from "./WardrobeReview";
 import { USER_STYLES_ID, userStylesRequestId, useUserStylesMask } from "./userStyles";
+import { CUSTOM_FONTS_ID, customFontRequestId, useCustomFont } from "./customFont";
 import { MapReview } from "./MapReview";
 
 const LANGUAGE_KEY = "betterfy:build-language";
@@ -201,11 +202,15 @@ export default function TreePilot({
   const [keepShared, setKeepShared] = useState<ReadonlySet<string>>(() => new Set());
   // User Styles carries the player's pick of snippets in its ID.
   const userStylesMask = useUserStylesMask();
+  // Custom Fonts carries the picked font file in its ID.
+  const customFont = useCustomFont();
   const idsFor = (keep: ReadonlySet<string>) =>
     ids.map((id) =>
       engineIdFor(id) === USER_STYLES_ID
         ? userStylesRequestId(userStylesMask)
-        : withSharedMode(id, keep.has(engineIdFor(id))),
+        : engineIdFor(id) === CUSTOM_FONTS_ID
+          ? customFontRequestId(customFont)
+          : withSharedMode(id, keep.has(engineIdFor(id))),
     );
   // What the engine is asked for: the ID of each item in the chosen mode, so
   // the mode is part of the reviewed plan.

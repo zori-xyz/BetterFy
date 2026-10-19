@@ -31,7 +31,7 @@ pub(crate) const PACKAGE_ID: &str = "minify.custom-hero-grids";
 pub(crate) const CATALOG_ID: &str = "minify-custom-hero-grids";
 const GRIDS: &str = include_str!("../herogrids/hero_grid_config.json");
 #[cfg(test)]
-const INDEX: &str = include_str!("../herogrids/index.json");
+const INDEX: &str = include_str!("../extras/index.json");
 const SUFFIX: &str = " #BetterFy";
 const FILE_NAME: &str = "hero_grid_config.json";
 const SCHEMA_VERSION: u32 = 1;

@@ -182,3 +182,32 @@
   margin-top: 6px;
   line-height: 1.6;
 }
+
+/* Custom Fonts: the picked font and a file button. */
+.s-font-picker {
+  gap: 10px;
+}
+.s-font-picker > strong {
+  font-size: var(--s-text-sm);
+}
+.s-font-picker > p {
+  font-size: var(--s-text-sm);
+  color: var(--s-muted);
+}
+.s-font-picker > p b {
+  color: var(--s-text);
+}
+.s-font-picker > label.s-btn {
+  justify-content: center;
+  cursor: pointer;
+}
+.s-font-picker > label.s-btn input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.s-font-picker .s-font-error {
+  color: var(--s-danger, #ff7a7a);
+}

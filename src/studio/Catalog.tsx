@@ -29,6 +29,9 @@ import { categoryHelp } from "./categoryHelp";
 import { findPackage, usePackagesRevision } from "./packages";
 import { formatBytes } from "./WardrobeReview";
 import { Empty, Media, Modal, ModCard, PageHead } from "./ui";
+import { CUSTOM_FONTS_CATALOG_ID, setCustomFont, useCustomFont } from "./customFont";
+import { engineBridge } from "../engine";
+import { noticeFor } from "./builder/notices";
 import {
   USER_STYLES_CATALOG_ID,
   setUserStylesMask,
@@ -360,6 +363,7 @@ export function ModDetails({
         </div>
         <p className="s-detail-description">{mod.description[language].split("\n\n")[0]}</p>
         {mod.id === USER_STYLES_CATALOG_ID && <UserStylesPicker />}
+        {mod.id === CUSTOM_FONTS_CATALOG_ID && <CustomFontPicker />}
         {mod.variants.length > 1 && (
           <fieldset className="s-variants">
             <legend>{isRu ? "Вариант" : "Style"}</legend>
@@ -512,5 +516,72 @@ function UserStylesPicker() {
           : "Your pick is saved and goes into the build. After a change, prepare the build again."}
       </small>
     </fieldset>
+  );
+}
+
+/** Minify's Custom Fonts: the player's own font file, checked by the engine. */
+function CustomFontPicker() {
+  const { isRu } = useLocale();
+  const font = useCustomFont();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ""));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      setCustomFont(await engineBridge.storeCustomFont(base64));
+    } catch (cause) {
+      const code =
+        typeof cause === "object" && cause && "code" in cause
+          ? String((cause as { code: unknown }).code)
+          : String(cause);
+      setError(noticeFor(code, isRu)?.body ?? code);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="s-style-picker s-font-picker">
+      <strong>{isRu ? "Шрифт" : "Font"}</strong>
+      {font ? (
+        <p>
+          <b>{font.family}</b> · {formatBytes(font.bytes, isRu)}
+        </p>
+      ) : (
+        <p>{isRu ? "Шрифт ещё не выбран." : "No font picked yet."}</p>
+      )}
+      <label className="s-btn">
+        <input
+          type="file"
+          accept=".ttf,.otf,font/ttf,font/otf"
+          disabled={busy}
+          onChange={(event) => void pick(event.target.files?.[0])}
+        />
+        {busy
+          ? isRu
+            ? "Проверяем…"
+            : "Checking…"
+          : font
+            ? isRu
+              ? "Выбрать другой файл"
+              : "Choose another file"
+            : isRu
+              ? "Выбрать файл .ttf или .otf"
+              : "Choose a .ttf or .otf file"}
+      </label>
+      {error && <p className="s-font-error">{error}</p>}
+      <small>
+        {isRu
+          ? "Шрифт заменит Radiance и Reaver во всём интерфейсе Dota. Нужны русские буквы — выбирай шрифт с кириллицей. Шрифты Windows лежат в C:\\Windows\\Fonts."
+          : "The font replaces Radiance and Reaver across Dota's interface. Pick a font with the letters your language needs. Windows keeps its fonts in C:\\Windows\\Fonts."}
+      </small>
+    </div>
   );
 }

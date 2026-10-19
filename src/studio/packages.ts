@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { Language } from "../i18n";
 import { userStylesBase } from "./userStyles";
+import { customFontBase } from "./customFont";
 
 // The same manifest files the Rust engine embeds (src-tauri/packages for game
 // tuning; src-tauri/wardrobe/index.json is the interface's copy of the audited
@@ -54,8 +55,9 @@ const packIndex = import.meta.glob<PackageManifest[]>("../../src-tauri/gamefiles
   eager: true,
   import: "default",
 });
-// Minify's Custom Hero Grids: grids compiled into the app (src-tauri/herogrids).
-const gridIndex = import.meta.glob<PackageManifest[]>("../../src-tauri/herogrids/index.json", {
+// Minify's mods whose content is compiled into the app or picked by the
+// player: Custom Hero Grids and Custom Fonts (src-tauri/extras).
+const gridIndex = import.meta.glob<PackageManifest[]>("../../src-tauri/extras/index.json", {
   eager: true,
   import: "default",
 });
@@ -145,7 +147,7 @@ function hasKeepSharedMode(manifest: PackageManifest | undefined) {
 
 /** Catalog, engine or `.strip` engine ID; the suffix only exists on hero skins. */
 export function findPackage(id: string) {
-  const { base, strip } = splitMode(userStylesBase(id));
+  const { base, strip } = splitMode(customFontBase(userStylesBase(id)));
   const manifest = byAnyId.get(base);
   return strip && !hasKeepSharedMode(manifest) ? undefined : manifest;
 }
