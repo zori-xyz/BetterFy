@@ -347,9 +347,15 @@
   animation: h-bot-breathe 7s ease-in-out infinite;
   transition: background 0.8s ease;
 }
-.h-bot-chat {
+/* The chat and its stickers move together; the stickers peek from behind
+   the frame and never cover a message. */
+.h-bot-device {
   position: relative;
   width: min(392px, 100%);
+}
+.h-bot-chat {
+  position: relative;
+  width: 100%;
   height: 452px;
   display: flex;
   flex-direction: column;
@@ -542,20 +548,20 @@
   animation: h-bot-float 7s ease-in-out infinite;
 }
 .h-bot-sticker.is-0 {
-  top: -1%;
-  left: 3%;
+  top: -34px;
+  right: -26px;
   --tilt: -12deg;
 }
 .h-bot-sticker.is-1 {
-  top: 40%;
-  right: 2%;
+  top: 34%;
+  left: -58px;
   --tilt: 14deg;
   animation-duration: 8.5s;
   animation-delay: -3s;
 }
 .h-bot-sticker.is-2 {
-  bottom: 2%;
-  left: 12%;
+  bottom: -28px;
+  right: -30px;
   --tilt: 8deg;
   animation-duration: 6.2s;
   animation-delay: -1.5s;
@@ -652,6 +658,25 @@
     color: var(--s-text);
   }
 }
+@media (max-width: 560px) {
+  .h-nudge-fan {
+    display: none;
+  }
+  .h-nudge {
+    padding-left: 16px;
+  }
+  .h-bot-sticker {
+    width: 46px;
+    height: 46px;
+  }
+  .h-bot-sticker.is-1 {
+    left: -16px;
+  }
+  .h-bot-sticker.is-0,
+  .h-bot-sticker.is-2 {
+    right: -10px;
+  }
+}
 @media (max-width: 980px) {
   .h-bot {
     grid-template-columns: minmax(0, 1fr);
@@ -669,3 +694,8 @@
 /* Layout */
 
 
+
+/* Notifications rise above the build reminder while it is on screen. */
+.s-app:has(.h-nudge) .s-toast-region {
+  bottom: 92px;
+}

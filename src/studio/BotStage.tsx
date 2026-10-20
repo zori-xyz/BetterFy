@@ -271,46 +271,48 @@ export function BotStage({ motion }: { motion: boolean }) {
           event.currentTarget.style.setProperty("--py", "0");
         }}
       >
-        {stickers.map((mood, index) => (
-          <img key={mood.name} className={`h-bot-sticker is-${index}`} src={mood.still} alt="" />
-        ))}
-        <div className="h-bot-chat">
-          <header>
-            <img src={botAvatar} alt="" />
-            <span>
-              <strong>BetterFy</strong>
-              <small>{typing ? t("печатает…", "typing…") : t("бот", "bot")}</small>
-            </span>
-          </header>
-          <ol key={current.id}>
-            {current.lines.slice(0, shown).map((line, index) => (
-              <li key={index} className={`h-bot-line is-${line.from}`}>
-                <p>{line.text[isRu ? 0 : 1]}</p>
-                {line.from === "bot" && line.keys && (
-                  <span className={`h-bot-keys ${line.keys.length !== 2 ? "is-column" : ""}`}>
-                    {line.keys.map((key, keyIndex) => {
-                      const pressed = line.pressed === keyIndex && index < shown - 1;
-                      return (
-                        <i key={key[1]} className={pressed ? "is-pressed" : ""}>
-                          {pressed && <Check />}
-                          {key[isRu ? 0 : 1]}
-                        </i>
-                      );
-                    })}
-                  </span>
-                )}
-              </li>
-            ))}
-            {typing && (
-              <li className="h-bot-line is-bot is-typing">
-                <p>
-                  <i />
-                  <i />
-                  <i />
-                </p>
-              </li>
-            )}
-          </ol>
+        <div className="h-bot-device">
+          {stickers.map((mood, index) => (
+            <img key={mood.name} className={`h-bot-sticker is-${index}`} src={mood.still} alt="" />
+          ))}
+          <div className="h-bot-chat">
+            <header>
+              <img src={botAvatar} alt="" />
+              <span>
+                <strong>BetterFy</strong>
+                <small>{typing ? t("печатает…", "typing…") : t("бот", "bot")}</small>
+              </span>
+            </header>
+            <ol key={current.id}>
+              {current.lines.slice(0, shown).map((line, index) => (
+                <li key={index} className={`h-bot-line is-${line.from}`}>
+                  <p>{line.text[isRu ? 0 : 1]}</p>
+                  {line.from === "bot" && line.keys && (
+                    <span className={`h-bot-keys ${line.keys.length !== 2 ? "is-column" : ""}`}>
+                      {line.keys.map((key, keyIndex) => {
+                        const pressed = line.pressed === keyIndex && index < shown - 1;
+                        return (
+                          <i key={key[1]} className={pressed ? "is-pressed" : ""}>
+                            {pressed && <Check />}
+                            {key[isRu ? 0 : 1]}
+                          </i>
+                        );
+                      })}
+                    </span>
+                  )}
+                </li>
+              ))}
+              {typing && (
+                <li className="h-bot-line is-bot is-typing">
+                  <p>
+                    <i />
+                    <i />
+                    <i />
+                  </p>
+                </li>
+              )}
+            </ol>
+          </div>
         </div>
       </div>
     </section>

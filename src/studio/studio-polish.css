@@ -299,3 +299,6 @@
 .motion-disabled .s-hero-backdrop img,.motion-disabled .s-hero-sticker .s-emote-portrait{transition:none}
 @media(prefers-reduced-motion:reduce){.s-hero-backdrop img,.s-hero-sticker .s-emote-portrait{transition:none}}
 @media(max-width:760px){.s-hero-sticker{right:-.45em;top:-.85em}.s-hero-sticker .s-emote-portrait{width:48px;height:48px}.s-hero-sticker .s-emote-portrait img{width:44px;height:44px}}
+/* Light theme: the mood's light shade is for dark backgrounds; small mood
+   labels use its ink shade there, like the headline's accent word. */
+:root[data-theme=light] .s-hero-copy>.s-eyebrow,:root[data-theme=light] .s-carousel-heading>span{color:var(--mood-ink)}
