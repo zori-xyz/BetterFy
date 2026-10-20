@@ -62,23 +62,6 @@
 
 .s-page {display:flex;flex-direction:column;min-height:100%;}
 .s-page-footer {margin-top:auto;padding-top:30px;}
-.s-page-build>.s-empty,
-.s-page-library .s-empty {
-  align-items:flex-start;
-  text-align:left;
-  min-height:0;
-  margin-top:20px;
-  padding:33px 0 48px;
-  border-top:1px solid var(--s-line);
-}
-.s-page-build>.s-empty>span,
-.s-page-library .s-empty>span {width:55px;height:55px;margin-bottom:22px;border-color:var(--s-accent);color:var(--s-accent);background:var(--s-tint)}
-.s-page-build>.s-empty h2,
-.s-page-library .s-empty h2 {max-width:550px;font-size:clamp(25px,2.8vw,37px)}
-.s-page-build>.s-empty>p,
-.s-page-library .s-empty>p {max-width:490px;font-size:var(--s-text-base);line-height:1.7}
-.s-page-build>.s-empty>.s-btn,
-.s-page-library .s-empty>.s-btn {margin-top:25px;min-height:42px}
 
 .s-theme-mini {position:relative;display:flex;align-items:center;justify-content:center;gap:0;padding:14px;background:#131218;border-color:#39323d}
 .s-theme-option.is-light .s-theme-mini {background:#f6f3f8;border-color:#d7d0dc}
@@ -110,8 +93,6 @@
   .s-mod-category,.s-results-head,.s-preset-content p {font-size:var(--s-text-xs)}
 }
 @media (max-width:760px) {
-  .s-page-build>.s-empty,.s-page-library .s-empty {padding:25px 0 35px;margin-top:8px}
-  .s-page-build>.s-empty>p,.s-page-library .s-empty>p {font-size:var(--s-text-md)}
   .s-theme-mini>.wordmark {transform:scale(.66)}
 }
 @media (prefers-reduced-motion:reduce) {
@@ -242,3 +223,47 @@
   font-size: var(--s-text-2xs);
   white-space: nowrap;
 }
+
+/* The source catalog's author, credited in every look's details. */
+.s-detail-credit { display: inline-flex; align-items: center; gap: 5px; margin-top: 7px; font-size: var(--s-text-sm); font-weight: 600; color: var(--s-accent); }
+.s-detail-credit:hover { color: var(--s-accent-hover); text-decoration: underline; text-underline-offset: 3px; }
+.s-detail-credit svg { width: 12px; height: 12px; }
+
+/* Catalog: four columns once there is room, so more than one row of looks
+   fits on a laptop screen. The count lives once, above the results. */
+@media (min-width: 1300px) {
+  .s-catalog .s-mod-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+}
+
+/* Empty states, one look everywhere: a die-cut emoticon sticker with the
+   screen's icon pinned to it, then the line, the text and one action. */
+.s-empty { align-items: center; text-align: center; min-height: 0; padding: 56px 20px 64px; }
+.s-empty > .s-empty-art { position: relative; width: 92px; height: 92px; margin-bottom: 22px; border: 0; background: none; transform: rotate(-6deg); }
+.s-empty-art img { width: 100%; height: 100%; image-rendering: pixelated; filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff) drop-shadow(0 10px 14px rgb(0 0 0 / .35)); animation: s-empty-float 6s ease-in-out infinite; }
+.s-empty-art i { position: absolute; right: -10px; bottom: -6px; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--s-accent); color: var(--s-accent-text); box-shadow: 0 6px 16px rgb(0 0 0 / .3); transform: rotate(6deg); }
+.s-empty-art i svg { width: 16px; height: 16px; animation: none; }
+.s-empty h2 { max-width: 520px; font-size: clamp(22px, 2.2vw, 30px); line-height: 1.2; }
+.s-empty > p { max-width: 440px; font-size: var(--s-text-base); line-height: 1.7; }
+.s-empty > .s-btn { margin-top: 24px; min-height: 42px; }
+@keyframes s-empty-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.motion-disabled .s-empty-art img { animation: none; }
+@media (prefers-reduced-motion: reduce) { .s-empty-art img { animation: none; } }
+
+/* Profile: a player card, no cover band. The avatar sits in a slowly
+   turning ring of the account's emoticon colour with that emoticon pinned to
+   its corner; a faint glow of the same colour sits behind it. */
+.s-profile-person { position: relative; isolation: isolate; gap: 22px; margin-top: 0; padding: 30px 30px 28px; }
+.s-profile-person::before { content: ""; position: absolute; left: -40px; top: -60px; z-index: -1; width: 340px; height: 260px; background: radial-gradient(closest-side, rgb(var(--card-rgb) / .22), transparent); pointer-events: none; }
+.s-profile-person > div { padding-top: 0; }
+.s-profile-person h2 { font: 400 clamp(22px, 2.2vw, 30px) / 1.15 "Days One BetterFy", Manrope, system-ui, sans-serif; letter-spacing: -.035em; }
+.s-profile-person > .s-chip { margin-top: 0; align-self: center; }
+.s-profile-avatar { position: relative; flex: none; display: grid; place-items: center; width: 96px; height: 96px; }
+.s-profile-avatar::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from var(--ring-turn, 0deg), rgb(var(--card-rgb)), rgb(var(--card-rgb) / .15), rgb(var(--card-rgb)) 55%, rgb(var(--card-rgb) / .15), rgb(var(--card-rgb))); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px)); mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px)); animation: s-ring-turn 9s linear infinite; }
+.s-profile-avatar .s-avatar { width: 84px; height: 84px; border: 0; }
+.s-profile-badge { position: absolute; right: -8px; bottom: -6px; width: 40px; height: 40px; image-rendering: pixelated; transform: rotate(10deg); filter: drop-shadow(1.5px 0 0 #fff) drop-shadow(-1.5px 0 0 #fff) drop-shadow(0 1.5px 0 #fff) drop-shadow(0 -1.5px 0 #fff) drop-shadow(0 6px 8px rgb(0 0 0 / .4)); transition: transform .45s var(--s-ease-spring); }
+@property --ring-turn { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@keyframes s-ring-turn { to { --ring-turn: 360deg; } }
+@media (hover: hover) and (pointer: fine) { .s-profile-avatar:hover .s-profile-badge { transform: rotate(-6deg) scale(1.15); } }
+.motion-disabled .s-profile-avatar::before { animation: none; }
+@media (prefers-reduced-motion: reduce) { .s-profile-avatar::before { animation: none; } }
+@media (max-width: 760px) { .s-profile-person { padding: 24px 20px; gap: 16px; } .s-profile-avatar { width: 76px; height: 76px; } .s-profile-avatar .s-avatar { width: 66px; height: 66px; } }

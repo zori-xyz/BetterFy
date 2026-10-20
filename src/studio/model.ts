@@ -13,9 +13,7 @@ export const installableIds = pilotCatalogIds;
  * for it. The catalog shows only these; anything else is not offered at all.
  */
 export function isInstallable(id: string) {
-  if (installableIds.has(id)) return true;
-  // A pack is offered when any of its items installs.
-  return packMembers(id).some((member) => installableIds.has(member));
+  return installableIds.has(id);
 }
 
 /**
@@ -88,7 +86,9 @@ type RawItem = {
   styles?: { label?: string; preview?: string; color?: string }[];
 };
 const rawById = new Map((rawCatalog.items as RawItem[]).map((item) => [item.id, item]));
-const previewRoot = "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/previews/";
+// The same fixed commit as PREVIEW_ROOT in modCatalog.ts.
+const previewRoot =
+  "https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/511426c/assets/previews/";
 const singleSlots = new Set([
   "terrains",
   "river",
@@ -116,9 +116,8 @@ export const mods: StudioMod[] = [
       group: item.metadata.group,
       description: item.presentation.description,
       image: item.presentation.previewUrl,
-      // Cards without a named author show the catalog's public name; the
-      // upstream project stays in provenance and behind "Open source".
-      author: item.provenance.author ?? "BetterFy Web",
+      // Cards without a named author credit the source catalog, never BetterFy.
+      author: item.provenance.author ?? "Dota2PornFxWeb",
       source: item.provenance.sourceUrl,
       date: item.verification.updatedAt ?? 0,
       tags: item.metadata.tags,
@@ -155,30 +154,6 @@ export const mods: StudioMod[] = [
     }),
   ),
 ];
-// The catalog's packs, as cards of their own.
-for (const pack of packsById.values()) {
-  const raw = rawById.get(pack.id) as (RawItem & { preview?: string }) | undefined;
-  mods.push({
-    id: pack.id,
-    domain: "wardrobe",
-    name: { ru: pack.name, en: pack.name },
-    category: "packs",
-    categoryName: { ru: "Наборы", en: "Packs" },
-    group: "packs",
-    description: {
-      ru: `Готовый набор от авторов каталога: ${pack.members.length} предметов в одном стиле. Добавит в сборку всё из набора, что ставится; любой предмет потом можно убрать.`,
-      en: `A ready-made set from the catalog's authors: ${pack.members.length} items in one style. Adds everything in the set that installs; you can drop any item later.`,
-    },
-    image: raw?.preview ? `${previewRoot}packs/${encodeURIComponent(raw.preview)}` : null,
-    author: "BetterFy Web",
-    source: "https://github.com/h6rd/Dota2PornFxWeb",
-    date: 0,
-    tags: [],
-    variants: [],
-    slot: null,
-    members: pack.members,
-  });
-}
 export const modById = new Map(mods.map((mod) => [mod.id, mod]));
 export const wardrobeGroups = [
   { id: "all", ru: "Всё", en: "All" },

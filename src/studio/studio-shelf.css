@@ -214,52 +214,38 @@
   }
 }
 
-/* Dots: the front one fills while the shelf counts down to the next look. */
-.s-shelf-dots {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-  margin-top: 10px;
-}
-.s-shelf-dots button {
+/* Countdown: one short track that fills while the shelf waits for the next
+   look. */
+.s-shelf-timer {
   position: relative;
-  width: 6px;
-  height: 6px;
-  padding: 0;
+  width: 44px;
+  height: 4px;
+  margin: 12px auto 0;
   overflow: hidden;
-  border-radius: 6px;
-  background: #ffffff38;
-  transition:
-    width 0.35s var(--s-ease-out),
-    background 0.35s;
-}
-.s-shelf-dots button::before {
-  content: "";
-  position: absolute;
-  inset: -8px -3px;
-}
-.s-shelf-dots button.is-active {
-  width: 26px;
+  border-radius: 4px;
   background: #ffffff2a;
 }
-.s-shelf-dots i {
+.s-shelf-timer i {
   position: absolute;
   inset: 0;
   border-radius: inherit;
   background: var(--shelf-glow);
+  transform: scaleX(0);
   transform-origin: left center;
 }
-.s-shelf.is-running .s-shelf-dots i {
+.s-shelf.is-running .s-shelf-timer i {
   animation: s-shelf-count 4.6s linear both;
 }
 @keyframes s-shelf-count {
   from {
     transform: scaleX(0);
   }
+  to {
+    transform: scaleX(1);
+  }
 }
-.s-shelf-dots button:focus-visible {
-  outline: 2px solid var(--s-accent);
-  outline-offset: 3px;
+:root[data-theme="light"] .s-shelf-timer {
+  background: #2113271f;
 }
 
 .s-shelf-live {

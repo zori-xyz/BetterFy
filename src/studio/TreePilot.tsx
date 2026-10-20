@@ -1613,13 +1613,16 @@ export default function TreePilot({
           )}
         </small>
         <h2 id="tree-pilot-title">{title}</h2>
-        <span className="b-pilot-count" title={isRu ? "Моды для установки" : "Mods to install"}>
-          {String(operationId ? installedPackageIds.length || ids.length : ids.length).padStart(
-            2,
-            "0",
-          )}
-          <i>/{String(Math.min(installablePackages.length, MAX_BUNDLE_PACKAGES)).padStart(2, "0")}</i>
-        </span>
+        {/* The build's limit matters only near it; the count itself is in the
+            page heading already. */}
+        {ids.length >= MAX_BUNDLE_PACKAGES - 4 && (
+          <span className="b-pilot-count" title={isRu ? "Лимит сборки" : "Build limit"}>
+            {ids.length}
+            <i>
+              /{MAX_BUNDLE_PACKAGES} {isRu ? "в сборке" : "in a build"}
+            </i>
+          </span>
+        )}
       </header>
       {demo && <DemoPanel />}
       <ol className="b-steps">

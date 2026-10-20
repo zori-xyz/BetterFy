@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { useLocale } from "../i18n";
-import { featuredMods, isInstallable, mods, type StudioMod } from "./model";
+import { isInstallable, mods, type StudioMod } from "./model";
 import { Media } from "./ui";
 import { useMotion } from "./useMotion";
 import "./studio-shelf.css";
@@ -14,18 +14,17 @@ import "./studio-shelf.css";
 // look in front.
 const AUTO_ADVANCE = 4600;
 const VISIBLE_SIDE = 2;
-const displayIds = [
-  ...featuredMods.map((mod) => mod.id),
-  "couriers-baby-roshan-crownfall",
-  "trees-crystals-trees",
-  "roshan-winter-roshan",
-  "huds-blue-web-hud",
-  "river-blue-river",
-  "wards-curious-snaptrap",
-];
-const looks = displayIds.flatMap(
-  (id) => mods.find((mod) => mod.id === id && mod.image && isInstallable(mod.id)) ?? [],
-);
+// The whole wardrobe that installs and has a preview, in a new random order
+// every time Home opens. Only the looks near the front are rendered.
+const looks = mods.filter((mod) => mod.domain === "wardrobe" && mod.image && isInstallable(mod.id));
+function shuffled<T>(items: T[]) {
+  const copy = [...items];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const other = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[other]] = [copy[other], copy[index]];
+  }
+  return copy;
+}
 
 // Average colour of an image, sampled small. Previews come from
 // raw.githubusercontent.com, which sends CORS headers, so the sample is loaded
@@ -107,7 +106,7 @@ export default function LookCarousel({
 }) {
   const { language, isRu } = useLocale();
   const { animated, visible } = useMotion(motion);
-  const list = useMemo(() => looks.filter((mod) => mod.image), []);
+  const list = useMemo(() => shuffled(looks), []);
   const total = list.length;
   const [active, setActive] = useState(0);
   const [hovered, setHovered] = useState(false);
@@ -193,11 +192,6 @@ export default function LookCarousel({
     >
       <div className="s-carousel-heading">
         <span>{isRu ? "В ВИТРИНЕ СЕЙЧАС" : "ON THE DISPLAY"}</span>
-        <span>
-          <b>{String(active + 1).padStart(2, "0")}</b>
-          <i>/</i>
-          {String(total).padStart(2, "0")} {isRu ? "ОБЛИКОВ" : "LOOKS"}
-        </span>
       </div>
       <div
         className={`s-shelf-stage ${dragging ? "is-dragging" : ""}`}
@@ -261,6 +255,8 @@ export default function LookCarousel({
         {list.map((mod, index) => {
           const offset = offsetOf(index, active, total);
           const distance = Math.abs(offset);
+          // One card past each side stays mounted so it can slide in.
+          if (distance > VISIBLE_SIDE + 1) return null;
           const isFront = offset === 0;
           const hidden = distance > VISIBLE_SIDE;
           return (
@@ -278,7 +274,9 @@ export default function LookCarousel({
               }
               tabIndex={isFront ? 0 : -1}
               aria-hidden={hidden || undefined}
-              aria-label={isFront ? undefined : `${isRu ? "Показать" : "Show"}: ${mod.name[language]}`}
+              aria-label={
+                isFront ? undefined : `${isRu ? "Показать" : "Show"}: ${mod.name[language]}`
+              }
               onClick={() => (isFront ? onOpen(mod) : go(offset))}
               onPointerMove={(event) => {
                 if (!isFront || event.pointerType !== "mouse" || dragging) return;
@@ -330,20 +328,10 @@ export default function LookCarousel({
           <ChevronRight />
         </button>
       </div>
-      <div className="s-shelf-dots" role="tablist" aria-label={isRu ? "Облики" : "Looks"}>
-        {list.map((mod, index) => (
-          <button
-            key={mod.id}
-            type="button"
-            role="tab"
-            aria-selected={index === active}
-            aria-label={mod.name[language]}
-            className={index === active ? "is-active" : ""}
-            onClick={() => setActive(index)}
-          >
-            {index === active && <i key={`${active}-${running}`} />}
-          </button>
-        ))}
+      {/* The countdown to the next look; with the whole wardrobe in the shelf a
+          dot per look would be a thousand dots. */}
+      <div className="s-shelf-timer" aria-hidden="true">
+        <i key={`${active}-${running}`} />
       </div>
       <p className="s-shelf-live" aria-live="polite">
         {front.categoryName[language]} · {front.name[language]}

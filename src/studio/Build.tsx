@@ -25,7 +25,6 @@ import { Empty } from "./ui";
 import TreePilot, { type PilotState, type RelationFix } from "./TreePilot";
 import { useEngineActive } from "./engineActivity";
 import type { GameInstallation } from "../engine";
-import { CountUp } from "./delight";
 import { useBuildName } from "./builder/buildName";
 import { BuildJournal } from "./builder/BuildJournal";
 import { journal } from "./builder/journal";
@@ -53,9 +52,6 @@ const emptyLines: Array<[string, string, string, string]> = [
     "Start in the catalog: the first mod gets its slot right away.",
   ],
 ];
-
-// Mods whose files are replaced with silent blanks.
-const silencing = (id: string) => /mute|remove-pings/.test(id);
 
 function launchDota() {
   if (demoActive()) {
@@ -176,12 +172,6 @@ export default function Build({
       }
     : undefined;
   const installed = Boolean(pilot?.installed);
-  const plan = pilot?.plan ?? null;
-  const muted = plan
-    ? plan.contributions
-        .filter((item) => silencing(item.packageId))
-        .reduce((sum, item) => sum + item.effectiveResources, 0)
-    : 0;
   const installedHasMapFile = (pilot?.installedPackageIds ?? []).some(isMapPackage);
   const installedMods = (pilot?.installedPackageIds ?? []).flatMap((packageId) => {
     const catalogId = findPackage(packageId)?.catalogId;
@@ -201,26 +191,6 @@ export default function Build({
         <TreePilot ids={[]} installation={installation} preview={preview} onState={setPilot} />
       </div>
     );
-
-  const stats: Array<{ label: string; value: number | null; hint?: string; tone?: string }> = [
-    { label: isRu ? "Модов в сборке" : "Mods in build", value: chosen.length },
-    {
-      label: isRu ? "Ставятся в Dota" : "Go into Dota",
-      value: pilotIds.length,
-    },
-    {
-      label: isRu ? "Файлов в сборке" : "Files in build",
-      value: plan?.resourceCount ?? null,
-      hint: plan ? undefined : isRu ? "после проверки" : "after checking",
-    },
-    muted > 0
-      ? { label: isRu ? "Звуков заглушено" : "Sounds muted", value: muted, tone: "quiet" }
-      : {
-          label: isRu ? "Совпадений решено" : "Overlaps resolved",
-          value: plan ? plan.duplicateResources + plan.overriddenResources : null,
-          hint: plan ? undefined : isRu ? "после проверки" : "after checking",
-        },
-  ];
 
   const list = (["game", "wardrobe"] as const).map((domain) => {
     const items = chosen.filter((mod) => mod.domain === domain);
@@ -244,7 +214,7 @@ export default function Build({
         <ol>
           {items.map((mod, index) => (
             <li
-              className={`b-row ${fresh === mod.id ? "is-fresh" : ""}`}
+              className={`b-row ${domain === "game" ? "has-priority" : ""} ${fresh === mod.id ? "is-fresh" : ""}`}
               key={mod.id}
               style={{ ["--i" as string]: index }}
             >
@@ -360,22 +330,6 @@ export default function Build({
           </button>
         </div>
       </header>
-
-      <dl className="b-stats">
-        {stats.map((stat) => (
-          <div key={stat.label} className={stat.tone ? `is-${stat.tone}` : ""}>
-            <dt>{stat.label}</dt>
-            <dd>
-              {stat.value === null ? (
-                <span className="b-stat-pending">—</span>
-              ) : (
-                <CountUp value={stat.value} locale={isRu ? "ru-RU" : "en-US"} />
-              )}
-            </dd>
-            {stat.hint && <dd className="b-stat-hint">{stat.hint}</dd>}
-          </div>
-        ))}
-      </dl>
 
       <div className="b-layout">
         <section className="b-composition" aria-label={isRu ? "Состав сборки" : "Build contents"}>

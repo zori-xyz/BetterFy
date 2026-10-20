@@ -26,6 +26,12 @@ import {
   type DeviceSession,
 } from "../auth";
 import { PageHead } from "./ui";
+import { emoteMoods } from "./EmoteStage";
+
+const profileMood = (id: string) =>
+  emoteMoods[
+    [...id].reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) % 9973, 7) % emoteMoods.length
+  ];
 import EmailIdentity from "./EmailIdentity";
 import BetterFyWordmark from "../BetterFyWordmark";
 import { revealTheme } from "./delight";
@@ -351,10 +357,22 @@ export function Profile({
         }
       />
       <section className="s-profile-card">
-        <div className="s-profile-cover" />
-        <div className="s-profile-person">
-          <span className="s-avatar">
-            {avatarUrl ? <img src={avatarUrl} alt="" /> : <CircleUserRound />}
+        {/* A player card: the avatar in a ring of the account's own emoticon
+            colour, with that emoticon pinned to it like a badge. The same
+            account always gets the same one. */}
+        <div
+          className="s-profile-person"
+          style={{ ["--card-rgb" as string]: profileMood(session?.userId ?? "guest").rgb }}
+        >
+          <span className="s-profile-avatar">
+            <span className="s-avatar">
+              {avatarUrl ? <img src={avatarUrl} alt="" /> : <CircleUserRound />}
+            </span>
+            <img
+              className="s-profile-badge"
+              src={profileMood(session?.userId ?? "guest").still}
+              alt=""
+            />
           </span>
           <div>
             <h2>{preview ? (isRu ? "Гость BetterFy" : "BetterFy guest") : session.displayName}</h2>
