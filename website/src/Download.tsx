@@ -61,7 +61,6 @@ export function Download({
   release,
   releaseState,
   retry,
-  openProfile,
   download,
   error,
 }: {
@@ -72,7 +71,6 @@ export function Download({
   release: ReleaseMeta | null;
   releaseState: ReleaseState;
   retry: () => void;
-  openProfile: () => void;
   download: () => void;
   error: string;
 }) {
@@ -99,7 +97,11 @@ export function Download({
       text: loading ? d.locating : release ? d.found : releaseState === "unavailable" ? d.network : d.unavailable,
       icon: release ? <Check size={14} /> : releaseState === "unavailable" ? <WifiOff size={14} /> : "2",
     },
-    { state: session ? "done" : "todo", text: session ? session.displayName : d.login, icon: session ? <Check size={14} /> : "3" },
+    {
+      state: session ? "done" : "todo",
+      text: session ? session.displayName : d.login,
+      icon: session ? <Check size={14} /> : <CircleUserRound size={14} />,
+    },
   ];
 
   return (
@@ -147,9 +149,9 @@ export function Download({
             {d.retry}
           </button>
         )}
-        <button className="w-primary" onClick={session ? download : openProfile} disabled={loading || (Boolean(session) && !release)}>
-          {session ? <ArrowDownToLine size={17} /> : <CircleUserRound size={17} />}
-          {session ? d.cta : d.continue}
+        <button className="w-primary" onClick={download} disabled={loading || !release}>
+          <ArrowDownToLine size={17} />
+          {d.cta}
           <ArrowRight size={16} />
         </button>
         {error && (

@@ -10,6 +10,24 @@ Versions before 0.5.0 were all `0.1.x`; the version was raised to 0.5.0 in
 October 2026 to reflect what the product has become (engine, builder, catalog
 of audited skins, bot, site and installer), not a change in stability.
 
+## 0.6.3 (Early Access)
+
+Built and tested on a Mac and in CI, not run on Windows.
+
+- New home screen: an emote hero, the whole wardrobe shuffled in the carousel,
+  Telegram bot scenes and a reminder for an unfinished build; the profile is a
+  player card; every screen polished (pull request #47).
+- Tester program: an in-app journal of clicks, failures, notes and window
+  snapshots, sent to the founder's Telegram chat (pull request #46).
+- The website is rebuilt on the app's own styles and components, with
+  BetterFy ID registration; the installer downloads straight from GitHub
+  Releases without an account.
+- Dependencies: `rustls` 0.23.45, `source-map-js` 1.2.2 and, in the auth
+  worker's local tooling, `sharp` 0.35.5. `glib` 0.18 stays: it is pulled in
+  only by Tauri's Linux GTK stack and is not built for Windows.
+- The studio bundle is split so the catalog data and third-party libraries
+  load as their own chunks.
+
 ## 0.6.0 (Early Access)
 
 Version bump for the complete catalog below.
