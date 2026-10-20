@@ -1,343 +1,926 @@
-import { useEffect, useRef, useState } from "react";
-import { Activity, AlertTriangle, ArrowDownToLine, ArrowRight, Ban, Braces, Bug, Check, ChevronDown, CircleUserRound, Dices, ExternalLink, Eye, Gamepad2, KeyRound, Languages, Layers, LifeBuoy, Link2, LogOut, Mail, Menu, Monitor, Moon, Pencil, Plus, RotateCcw, Send, ShieldCheck, Sparkles, Sun, Timer, WifiOff, X } from "lucide-react";
-import Ambient from "./Ambient";
-import "./spotlight";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ArrowDownToLine,
+  ArrowRight,
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  CircleDashed,
+  CircleUserRound,
+  Eye,
+  Github,
+  Layers3,
+  Menu,
+  Moon,
+  PenLine,
+  RotateCcw,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+  Wand2,
+  X,
+} from "lucide-react";
+import EmoteStage, { EmoteBackdrop, emoteStyle } from "../../src/studio/EmoteStage";
+import { BotStage } from "../../src/studio/BotStage";
+import { LocaleBridge } from "../../src/i18n";
+import type { StudioMod } from "../../src/studio/model";
+import { copy, type Copy, type Language } from "./copy";
+import { Account, authUrl, type AuthStage, type DeviceSession, type WebSession } from "./Account";
+import { Download, pickRelease, releasesUrl, repo, safeReleaseUrl, type ReleaseMeta, type ReleaseState } from "./Download";
 
-type Language = "ru" | "en";
-type AuthStage = "idle" | "checking" | "code" | "verifying" | "ready" | "unavailable";
-type ReleaseState = "idle" | "loading" | "ready" | "missing" | "unavailable";
-type WebSession = { userId:string; displayName:string; username?:string; accessTier:string; accessExpiresAt?:number; sessionId?:string; avatarAvailable:boolean };
-type DeviceSession = { sessionId:string; clientKind:"web"|"desktop"|"unknown"; lastUsedAt:number; expiresAt:number; current:boolean };
-type ReleaseMeta = { version:string; fileName:string; size:number; publishedAt:string; prerelease:boolean };
-type GithubRelease = { tag_name?:string; name?:string; published_at?:string; draft?:boolean; prerelease?:boolean; assets?:Array<{name?:string;size?:number}> };
-
-const repo = "https://github.com/zori-xyz/BetterFy";
-const bot = "https://t.me/BeterFyBot?start=web_login";
-const authUrl = import.meta.env.VITE_BETTERFY_AUTH_URL || "https://betterfy-auth.zori-xyz.workers.dev";
-const sessionKey = "betterfy:web-session";
-const asset = (name:string) => `${import.meta.env.BASE_URL}${name}`;
-// Same choice as the auth worker's resolver: a stable release first, else the
-// newest Early Access pre-release, BetterFy Setup before the older NSIS name.
-const installerNames = ["BetterFy-Setup.exe", "BetterFy-Windows-x64-setup.exe"];
-export const releasesUrl = "https://api.github.com/repos/zori-xyz/BetterFy/releases?per_page=20";
-
-// The page answers, in order: what is this, what can I install today, how
-// does it work, what else is inside, the usual questions, and where to get it.
-const copy = {
-  ru: {
-    nav:["Статус","Моды","Безопасность","Сборка","Вопросы"], profile:"Профиль", light:"Светлая", dark:"Тёмная", toLight:"Включить светлую тему", toDark:"Включить тёмную тему", open:"Открыть", menu:"Меню", close:"Закрыть", skip:"Перейти к содержанию", meta:{title:"BetterFy: моды для Dota 2 с проверкой и откатом",description:"Приложение для Windows: собирает моды Dota 2 в один проверенный VPK с резервной копией и откатывает одной кнопкой. Ранний доступ: 25 модов настройки игры из Minify и сотни обликов, звуков и эффектов из каталога в Windows-пилоте.",short:"Приложение для Windows: моды Dota 2 в один проверенный VPK с резервной копией и откатом. Ранний доступ."},
-    hero:{tag:"Dota 2 · Windows · ранний доступ",a:"Моды для Dota\u00a02.",b:"Поставил — и откатил.",body:"BetterFy — приложение для Windows. Выбираешь моды, а BetterFy скачивает их, сверяет каждый файл, собирает всё в один проверенный VPK с резервной копией и одной кнопкой возвращает игру как была.",cta:"Скачать для Windows",how:"Как это работает",status:"Ставятся 25 модов настройки игры из Minify и более 900 проверенных архивов каталога: герои, звуки, карты, курьеры, эффекты. Часть проверена в игре, остальные пока нет.",slides:[{label:"Обзор",text:"Главный экран приложения"},{label:"Каталог",text:"Моды и облики с превью"},{label:"Моя сборка",text:"Установка и откат"}]},
-    status:{tag:"СТАТУС РАННЕГО ДОСТУПА",a:"Что проверено,",b:"а что ещё нет.",body:"Здесь только то, что мы видели сами. Всё проверенное — на одном компьютере с Windows; остальное прямо помечено как непроверенное.",timeline:"Сборки раннего доступа",releases:"Все сборки на GitHub",builds:[
-      {when:"27 сен",tag:"EA.18",title:"Свой установщик",text:"BetterFy Setup ставит, обновляет и удаляет приложение. Основатель прошёл его на Windows.",state:"done"},
-      {when:"30 сен",tag:"EA.19–21",title:"Моды как данные",text:"Каждый мод описан манифестом с закреплёнными SHA-256, каталог пакетов подписан.",state:"done"},
-      {when:"30 сен",tag:"EA.22",title:"Первые моды в игре",text:"Река, деревья, Net Worth и HUD цели проверены в игре на русском слоте.",state:"done"},
-      {when:"3 окт",tag:"EA.24",title:"Движок пакетов",text:"25 модов Minify в одном VPK: блэклисты, стили и разметка Panorama, два скрипта после аудита.",state:"done"},
-      {when:"3–4 окт",tag:"EA.25–27",title:"Исправления",text:"Откат возвращает параметры запуска, даже если Steam переписал свой конфиг. Стресс-тесты видны только разработчикам.",state:"done"},
-      {when:"Дальше",tag:"В работе",title:"Новый экран сборки",text:"Имя сборки, журнал, язык из Steam и исправления в один клик.",state:"now"},
-      {when:"Потом",tag:"План",title:"Скины и каталог",text:"Герои, звуки, карты, курьеры и другие категории ставятся в Windows-пилоте. Проверены выборочно, на одном компьютере.",state:"now"}],
-      journal:"Журнал проверок",journalLast:"24 мода → Dota → откат",tones:{ok:"проверено",open:"не проверено",risk:"риск"},rows:[
-      {key:"build",tone:"ok",text:"Сборка из 24 модов установилась, работала в Dota и чисто откатилась."},
-      {key:"vpk",tone:"ok",text:"Пять установок дали один и тот же VPK, в том числе на четырёх языковых слотах."},
-      {key:"slots",tone:"ok",text:"В игре проверены русский и нидерландский слоты."},
-      {key:"setup",tone:"ok",text:"BetterFy Setup: установка, обновление, удаление и запуск (EA.18)."},
-      {key:"langs",tone:"open",text:"Другие языки Dota в игре не проверялись."},
-      {key:"english",tone:"open",text:"Английский слот экспериментальный: подхватит ли его Dota, неизвестно."},
-      {key:"pcs",tone:"open",text:"Другие компьютеры с Windows пока не проверялись."},
-      {key:"skins",tone:"open",text:"Скины и категории каталога проверены в игре выборочно, на одном компьютере; остальное ещё нет."},
-      {key:"signing",tone:"risk",text:"Установщик не подписан: Windows может предупредить о неизвестном издателе."},
-      {key:"vac",tone:"risk",text:"Никаких обещаний про VAC и баны: Valve не одобряет сторонние моды."}],
-      note:"Все проверки — на компьютере основателя.",plan:"План проверки на Windows"},
-    mods:{tag:"СТАВИТСЯ СЕГОДНЯ",a:"25 модов настройки",b:"из Minify.",body:"Моды из открытого проекта dota2-minify, закреплённые на одном коммите. BetterFy скачивает только проверенные файлы и собирает выбранные моды в один VPK.",by:"автор",badges:{verified:"Проверено в игре",script:"Скрипт после аудита"},items:[
-      {id:"remove-river",name:"Убрать реку",text:"Убирает воду, брызги и звуки шагов по реке.",author:"robbyz512",image:"mods/remove-river.jpg",badge:"verified"},
-      {id:"tree-mod",name:"Упрощённые деревья",text:"Превращает деревья в маленькие круглые кусты.",author:"robbyz512",image:"mods/tree-mod.jpg",badge:"verified"},
-      {id:"show-networth",name:"Показывать свой Net Worth",text:"Добавляет твой networth в панель быстрой статистики.",author:"MeGaNeKoS",image:"mods/show-networth.jpg",badge:"verified"},
-      {id:"auto-accept",name:"Автопринятие матча",text:"Принимает найденный матч через заданную задержку. Ползунок появляется в настройках Dota.",author:"MeGaNeKoS",image:"",badge:"script"}],
-      all:"Все моды",scriptTag:"скрипт",scripts:["Автопринятие матча","Кнопки сервисов статистики"],groups:[
-      {id:"files",title:"Файлы",text:"Готовые файлы мода ложатся в VPK как есть.",items:["Упрощённые деревья","Показывать свой Net Worth","Убрать реку","Тёмный ландшафт"]},
-      {id:"layouts",title:"Разметка Panorama",text:"Правки макетов интерфейса. Два мода подключают скрипты, прошедшие аудит.",items:["Автопринятие матча","Кнопки сервисов статистики","Вернуть расширенный HUD цели"]},
-      {id:"blacklist",title:"Блэклист",text:"Лишние эффекты и звуки заменяются пустыми файлами по списку Minify.",items:["Облегчённые базовые атаки","Облегчённые способности и предметы","Общая оптимизация","Убрать звуки окружения","Убрать стандартного диктора","Убрать звуки насмешек","Убрать реплики героев","Убрать растительность","Убрать пинги","Убрать граффити","Убрать погодные эффекты","Вернуть классические звуки пингов"]},
-      {id:"styles",title:"Стили Panorama",text:"CSS мода дописывается к стилям интерфейса игры.",items:["Убрать рендеры героев","Убрать фон главного меню","Убрать витрины профиля","Позиция и масштаб HUD","Прозрачный HUD","Новая сетка выбора героев"]}],
-      relations:"«Убрать пинги» и «Вернуть классические звуки пингов» не ставятся вместе, а «Тёмному ландшафту» нужна «Убрать растительность». BetterFy скажет об этом до установки."},
-    how:{tag:"КАК ЭТО РАБОТАЕТ",a:"Три шага.",b:"Без ручной возни с файлами.",steps:[
-      {title:"Выбери моды",text:"Добавь моды в сборку и расставь их по порядку: если два мода меняют одно и то же, побеждает верхний. Конфликты видны сразу."},
-      {title:"BetterFy проверит и соберёт",text:"Скачивает файлы с закреплённого коммита, сверяет каждый по SHA-256, собирает один VPK, делает резервную копию и ставит его в языковой слот игры."},
-      {title:"Не понравилось — откатил",text:"Одна кнопка возвращает файлы игры и параметры запуска Steam. Журнал не даст затереть чужие изменения."}],scene:["Загрузка","Проверка SHA-256","Сборка VPK","Бэкап и установка"],restored:"Игра как была"},
-    safety:{tag:"ЧТО ТРОГАЕТ BETTERFY",a:"Что BetterFy меняет",b:"на твоём компьютере.",body:"Коротко и без магии: что программа читает, что пишет и чего не трогает. Точные пути и порядок работы описаны в открытом репозитории.",cards:[
-      {id:"read",title:"Только читает",chip:"чтение",items:["Библиотеки Steam и манифест Dota 2, чтобы найти игру.","Оригинальные VPK игры в game/dota и game/core: из них берутся исходные файлы для сборки.","steam.inf, чтобы заметить обновление Dota."]},
-      {id:"write",title:"Пишет",chip:"запись",items:["Один VPK BetterFy в папку языкового слота: game/dota_<язык>/.","Один аргумент -language в параметрах запуска Dota в Steam. Остальные параметры остаются как были.","Журнал и резервные копии в папку данных BetterFy."]},
-      {id:"never",title:"Не трогает",chip:"никогда",items:["Файлы Valve в game/dota и game/core.","Чужие папки языков и чужие моды.","Процессы игры и Steam: BetterFy ждёт, пока ты их закроешь, и не завершает принудительно.","Игру во время матча: работа идёт до запуска."]}],
-      rollback:"Откат возвращает записанное по журналу и удаляет только то, что BetterFy пометил своим и что с тех пор не менялось.",caveat:"Проверено на одном компьютере с Windows. Восстановление после прерванной установки пока покрыто тестами, а вручную на Windows не проверялось."},
-    builder:{tag:"НОВЫЙ ЭКРАН СБОРКИ · С EA.28",a:"Собери, назови,",b:"откати одной кнопкой.",body:"Новый экран «Моя сборка» вышел в сборке раннего доступа 28. На Windows его ещё проверяем: определение языка из Steam и английский слот пока не проверены в игре.",gallery:{tag:"КАК ЭТО ВЫГЛЯДИТ",a:"Настоящие экраны приложения",items:[{id:"language",text:"Язык как в Dota сейчас: BetterFy читает его из Steam."},{id:"ready-made-sets",text:"Готовые наборы: видно, что внутри и что уже в сборке."},{id:"clear-errors",text:"Понятные ошибки: что случилось и что сделать дальше."},{id:"game-tuning",text:"Каталог: 25 модов настройки игры ставятся сегодня."}]},points:[
-      {title:"Имя по содержимому",text:"Три заглушённых звука — «Тишина в таверне». Кубик предложит другое имя."},
-      {title:"Журнал",text:"Каждый шаг подготовки, установки и отката одной строкой. Его можно скопировать для поддержки."},
-      {title:"Язык как в Dota сейчас",text:"BetterFy читает язык игры из Steam и сам выбирает языковой слот."},
-      {title:"Исправление в один клик",text:"Конфликт или недостающий мод: одна кнопка вместо поиска по списку."},
-      {title:"Откат",text:"Одна кнопка возвращает файлы игры и параметры запуска Steam как были."}],
-      mock:{label:"МОЯ СБОРКА",name:"Тишина в таверне",sub:"3 мода · звук",chips:["Убрать звуки окружения","Убрать пинги","Вернуть классические звуки пингов"],lang:"Язык",langValue:"Русский",langNote:"как в Dota сейчас",conflict:"Конфликт",conflictText:"Эти два мода про пинги не ставятся вместе.",fix:"Оставить «Убрать пинги»",install:"Установить",restore:"Откатить",journal:"Журнал BetterFy",journalLast:"Язык Dota из Steam: russian"}},
-    looks:{tag:"ЕЩЁ ВНУТРИ",a:"Каталог обликов",b:"для героев и интерфейса.",body:"1 135 вариантов для героев, интерфейса, мира, эффектов и звука. Более 900 архивов (герои, звуки, карты, курьеры, эффекты) ставятся в Windows-пилоте; фоны меню и HUD ещё впереди.",items:["Поиск по герою и категории","Живое превью варианта","Светлая и тёмная тема"]},
-    faq:{tag:"ВОПРОСЫ",a:"Коротко о главном.",items:[
-      {q:"Что такое BetterFy?",a:"Приложение для Windows, которое ставит моды в клиент Dota 2 и умеет их убирать. Оно работает с файлами игры до запуска и не встраивается в игру во время матча."},
-      {q:"Какие моды ставятся сейчас?",a:"25 модов настройки игры из открытого проекта dota2-minify: убирают лишние эффекты и звуки, меняют стили и разметку интерфейса, в том числе «Автопринятие матча» и «Кнопки сервисов статистики». Облики героев, звуки, карты и курьеры из каталога ставятся в Windows-пилоте: проверены выборочно."},
-      {q:"Что именно меняется на диске?",a:"Один VPK BetterFy в папке языкового слота Dota и один аргумент -language в параметрах запуска Dota в Steam. Файлы Valve BetterFy только читает. Подробнее в разделе «Безопасность».",more:{href:"#safety",label:"Раздел «Безопасность»"}},
-      {q:"Как убрать мод?",a:"В приложении открой «Моя сборка» и нажми «Откатить». BetterFy вернёт файлы из резервной копии и сверит результат."},
-      {q:"Это безопасно для аккаунта?",a:"Моды меняют только клиентские файлы оформления и интерфейса. Valve официально не одобряет сторонние моды, поэтому решение за тобой. Мы не обещаем того, что не проверили."},
-      {q:"Что нужно для работы?",a:"Windows x64 и Dota 2 из Steam. В игре проверены русский и нидерландский языковые слоты на одном компьютере; другие языки, английский слот и другие компьютеры ещё не проверены."},
-      {q:"Работает ли на macOS или Linux?",a:"Нет. В раннем доступе только Windows x64: на нём BetterFy и проверяется."},
-      {q:"Почему Windows предупреждает при запуске?",a:"Сборки раннего доступа пока не подписаны сертификатом, поэтому Windows может показать предупреждение о неизвестном издателе. Рядом с каждым установщиком на GitHub лежит файл с его SHA-256."},
-      {q:"Зачем входить в BetterFy ID?",a:"Вход нужен, чтобы скачать сборку. Осмотреться в приложении можно и без входа."},
-      {q:"Сколько это стоит?",a:"Сборки раннего доступа скачиваются после входа в BetterFy ID или Telegram. Платный доступ оформляется в боте @BeterFyBot: условия и цену бот показывает перед оплатой, поэтому на сайте мы их не дублируем."},
-      {q:"Какие данные вы храните?",a:"На сайте нет аналитики и cookie. Сервис входа хранит идентификатор Telegram или BetterFy ID, хэши пароля и почты и список сессий без IP-адресов и названий устройств. Кнопки удаления аккаунта пока нет.",more:{href:"privacy.html",label:"Страница «Приватность»",asset:true}},
-      {q:"Как сообщить об ошибке или связаться?",a:"Вопросы и помощь с установкой: Telegram @BeterHelp. Воспроизводимые ошибки: GitHub Issues, лучше с тегом сборки и диагностикой из настроек приложения. Уязвимости: только приватно, через вкладку Security на GitHub."}]},
-    download:{tag:"СКАЧАТЬ",a:"BetterFy для",b:"Windows.",body:"Сборки раннего доступа выходят как pre-release на GitHub. Для скачивания нужен BetterFy ID или вход через Telegram.",cta:"Скачать BetterFy",check:"Скачать для Windows",versions:"Все версии на GitHub",title:"BetterFy для Windows",checking:"Ищем актуальную сборку раннего доступа.",ready:"Сборка найдена. Для скачивания войди в BetterFy ID.",readySigned:"Сборка найдена и готова к скачиванию.",missingLead:"Как только сборка выйдет, здесь появятся версия, дата и размер.",offlineLead:"Сейчас не получилось проверить сборку.",system:"Windows x64",found:"Сборка найдена",login:"Войди в BetterFy ID",continue:"Войти и продолжить",error:"Не удалось открыть сборку. Попробуй ещё раз.",version:"ВЕРСИЯ",package:"РАЗМЕР",published:"ОБНОВЛЕНО",locating:"Ищем последнюю сборку…",unavailable:"Публичная сборка ещё не выпущена",network:"Не удалось связаться с GitHub. Проверь сеть и повтори.",retry:"Повторить",prerelease:"Ранний доступ · pre-release",dialogTag:"WINDOWS · РАННИЙ ДОСТУП"},
-    account:{current:"ТЕКУЩИЙ"},
-    auth:{tag:"BETTERFY ID",title:"Твой BetterFy ID",body:"Войди с паролем или через Telegram.",id:"Войти через BetterFy ID",telegram:"Войти через Telegram",identifier:"Почта или никнейм",username:"Никнейм латиницей",password:"Пароль — от 12 символов",create:"Создать BetterFy ID",forgot:"Забыл пароль? Получить код на почту",registerNote:"Подтверди почту кодом из письма.",email:"Адрес почты",send:"Получить код",emailCode:"Код из письма",emailNote:"Если почта подключена, письмо придёт в течение минуты. Код действует 10 минут.",first:"Для входа с паролем создай BetterFy ID. Telegram — отдельный быстрый вход.",link:"Подключить почту",linked:"Почта подключена",linkNote:"Подтверди адрес, чтобы входить с ним в тот же профиль BetterFy.",back:"Назад",retry:"Попробовать ещё раз",access:"ДОСТУП",notConnected:"Не подключён",sessions:"СЕССИИ",none:"Нет активных",code:"КОД",minutes:"10 минут",get:"Получить код в Telegram",have:"У меня уже есть код",label:"Код подтверждения",enter:"Войти",oneTime:"Код одноразовый и действует 10 минут.",safe:"Профиль под контролем.",safeText:"Способы входа не объединяются автоматически. Активные сеансы можно завершить здесь.",security:"Безопасность",source:"Исходный код",checking:"Проверяем…",invalid:"Проверь данные и попробуй ещё раз.",offline:"Сервис авторизации сейчас недоступен. Твоя локальная сессия сохранена.",storage:"Вход выполнен только для этой вкладки: браузер запретил сохранение сессии.",active:"Активные устройства",until:"до",revoke:"Завершить",signout:"Выйти",early:"Ранний доступ",premium:"Premium"},
-    footer:{tag:"Моды для Dota 2 с проверкой и откатом.",product:"Продукт",project:"Проект",help:"Помощь",telegram:"Telegram-бот",roadmap:"Планы",releases:"Сборки",bug:"Сообщить об ошибке",security:"Уязвимость",privacy:"Приватность",terms:"Условия",legal:"Независимый проект. Не связан с Valve Corporation. Dota 2 и Steam — товарные знаки Valve.",helpTitle:"Не нашёл ответ?",helpBody:"BetterFy делает один человек, поэтому отвечаем вручную и не всегда сразу."}
-  },
-  en: {
-    nav:["Status","Mods","Safety","Build","FAQ"], profile:"Profile", light:"Light", dark:"Dark", toLight:"Switch to light theme", toDark:"Switch to dark theme", open:"Open", menu:"Menu", close:"Close", skip:"Skip to content", meta:{title:"BetterFy: Dota 2 mods with checks and rollback",description:"A Windows app that packs Dota 2 mods into one verified VPK with a backup and one-button rollback. Early Access: 25 game tuning mods from Minify and hundreds of looks, sounds and effects from the catalog in the Windows pilot.",short:"Windows app: Dota 2 mods in one verified VPK with a backup and rollback. Early Access."},
-    hero:{tag:"Dota 2 · Windows · early access",a:"Mods for Dota\u00a02.",b:"Install, then undo.",body:"BetterFy is a Windows app. Pick mods and BetterFy downloads them, checks every file, packs them into one verified VPK with a backup, and puts the game back with one button.",cta:"Download for Windows",how:"How it works",status:"25 game tuning mods from Minify and more than 900 audited catalog archives install today: heroes, sounds, maps, couriers, effects. Some were checked in game, the rest not yet.",slides:[{label:"Overview",text:"The app's home screen"},{label:"Catalog",text:"Mods and looks with previews"},{label:"My build",text:"Install and restore"}]},
-    status:{tag:"EARLY ACCESS STATUS",a:"What is verified,",b:"and what is not yet.",body:"Only what we have seen ourselves. Everything verified was seen on one Windows PC; everything else is plainly marked as not verified.",timeline:"Early Access builds",releases:"All builds on GitHub",builds:[
-      {when:"27 Sep",tag:"EA.18",title:"Our own installer",text:"BetterFy Setup installs, updates and removes the app. The founder ran it on Windows.",state:"done"},
-      {when:"30 Sep",tag:"EA.19–21",title:"Mods as data",text:"Every mod is a manifest with pinned SHA-256 hashes; the package catalog is signed.",state:"done"},
-      {when:"30 Sep",tag:"EA.22",title:"First mods in game",text:"River, trees, net worth and unit HUD checked in game on the Russian slot.",state:"done"},
-      {when:"3 Oct",tag:"EA.24",title:"Package engine",text:"25 Minify mods in one VPK: blacklists, Panorama styles and layouts, two audited scripts.",state:"done"},
-      {when:"3–4 Oct",tag:"EA.25–27",title:"Fixes",text:"Restore brings launch options back even after Steam rewrote its own config. Stress tests show for developer accounts only.",state:"done"},
-      {when:"Next",tag:"In progress",title:"New build screen",text:"Build names, a journal, the language from Steam and one-click fixes.",state:"now"},
-      {when:"Later",tag:"Planned",title:"Skins and catalog",text:"Heroes, sounds, maps, couriers and other categories install in the Windows pilot. Checked selectively, on one computer.",state:"now"}],
-      journal:"Verification journal",journalLast:"24 mods → Dota → restore",tones:{ok:"verified",open:"not verified",risk:"risk"},rows:[
-      {key:"build",tone:"ok",text:"A 24-mod build installed, worked in Dota and restored cleanly."},
-      {key:"vpk",tone:"ok",text:"Five installs produced the identical VPK, across four language slots."},
-      {key:"slots",tone:"ok",text:"Checked in game on the Russian and Dutch slots."},
-      {key:"setup",tone:"ok",text:"BetterFy Setup: install, update, uninstall and launch (EA.18)."},
-      {key:"langs",tone:"open",text:"Other Dota languages have not been checked in game."},
-      {key:"english",tone:"open",text:"The English slot is experimental: whether Dota loads it is unknown."},
-      {key:"pcs",tone:"open",text:"Other Windows PCs have not been checked yet."},
-      {key:"skins",tone:"open",text:"Skins and catalog categories were checked in game selectively, on one computer; the rest not yet."},
-      {key:"signing",tone:"risk",text:"The installer is unsigned: Windows may warn about an unknown publisher."},
-      {key:"vac",tone:"risk",text:"No VAC or ban promises: Valve does not endorse third-party mods."}],
-      note:"All checks ran on the founder's PC.",plan:"Windows test plan"},
-    mods:{tag:"INSTALLS TODAY",a:"25 game tuning mods",b:"from Minify.",body:"Mods from the open dota2-minify project, pinned to one commit. BetterFy downloads only verified files and packs the mods you pick into one VPK.",by:"by",badges:{verified:"Checked in game",script:"Audited script"},items:[
-      {id:"remove-river",name:"Remove River",text:"Removes river water, splashes and wading sounds.",author:"robbyz512",image:"mods/remove-river.jpg",badge:"verified"},
-      {id:"tree-mod",name:"Tree Mod",text:"Turns trees into small round bushes.",author:"robbyz512",image:"mods/tree-mod.jpg",badge:"verified"},
-      {id:"show-networth",name:"Show NetWorth",text:"Adds your net worth to the quick stats panel.",author:"MeGaNeKoS",image:"mods/show-networth.jpg",badge:"verified"},
-      {id:"auto-accept",name:"Auto Accept Match",text:"Accepts a found match after a delay you set. The slider appears in Dota's settings.",author:"MeGaNeKoS",image:"",badge:"script"}],
-      all:"Every mod",scriptTag:"script",scripts:["Auto Accept Match","Stat Site Buttons"],groups:[
-      {id:"files",title:"Files",text:"The mod's own files go into the VPK as they are.",items:["Tree Mod","Show NetWorth","Remove River","Dark Terrain"]},
-      {id:"layouts",title:"Panorama layouts",text:"Edits to interface layouts. Two of them load audited scripts.",items:["Auto Accept Match","Stat Site Buttons","Repopulate Unit Query HUD"]},
-      {id:"blacklist",title:"Blacklist",text:"Extra effects and sounds are replaced with blank files from Minify's list.",items:["Minify Base Attacks","Minify Spells & Items","Misc Optimization","Mute Ambient Sounds","Mute Default Announcer","Mute Taunt Sounds","Mute Voice Line Sounds","Remove Foilage","Remove Pings","Remove Sprays","Remove Weather Effects","Revert Ping Sounds"]},
-      {id:"styles",title:"Panorama styles",text:"The mod's CSS is appended to the game's interface styles.",items:["Remove Hero Renders","Remove Main Menu Background","Remove Showcases","Reposition & Rescale HUD","Transparent HUD","Revamp Hero Grid Layout"]}],
-      relations:"Remove Pings and Revert Ping Sounds cannot go together, and Dark Terrain needs Remove Foilage. BetterFy says so before anything is installed."},
-    how:{tag:"HOW IT WORKS",a:"Three steps.",b:"No manual file work.",steps:[
-      {title:"Pick mods",text:"Add mods to your build and order them: when two mods change the same thing, the higher one wins. Conflicts show up right away."},
-      {title:"BetterFy checks and builds",text:"It downloads files from a pinned commit, checks each by SHA-256, builds one VPK, makes a backup and installs it into the game's language slot."},
-      {title:"Changed your mind? Restore",text:"One button puts the game files and Steam launch options back. The journal will not overwrite changes made by something else."}],scene:["Download","SHA-256 check","Build VPK","Backup and install"],restored:"Game restored"},
-    safety:{tag:"WHAT BETTERFY TOUCHES",a:"What BetterFy changes",b:"on your computer.",body:"Short and plain: what the app reads, what it writes and what it leaves alone. Exact paths and the order of operations are in the open repository.",cards:[
-      {id:"read",title:"Read only",chip:"read",items:["Steam libraries and the Dota 2 manifest, to find the game.","The original game VPKs in game/dota and game/core: source files for the build come from them.","steam.inf, to notice a Dota update."]},
-      {id:"write",title:"Writes",chip:"write",items:["One BetterFy VPK into the language slot folder: game/dota_<language>/.","One -language argument in Dota's Steam launch options. Every other option stays as it was.","The journal and backups, into BetterFy's own data folder."]},
-      {id:"never",title:"Never touches",chip:"never",items:["Valve's files in game/dota and game/core.","Other language folders and other people's mods.","The game and Steam processes: BetterFy waits for you to close them and never force-kills them.","The game during a match: it works before launch."]}],
-      rollback:"Restore puts back what the journal recorded and deletes only what BetterFy marked as its own and what has not changed since.",caveat:"Verified on one Windows PC. Recovery after an interrupted install is covered by tests, but has not been checked by hand on Windows."},
-    builder:{tag:"NEW BUILD SCREEN · SINCE EA.28",a:"Build it, name it,",b:"undo it with one button.",body:"The new My build screen shipped in Early Access build 28. We are still checking it on Windows: Steam language detection and the English slot are not verified in game yet.",gallery:{tag:"WHAT IT LOOKS LIKE",a:"Real screens from the app",items:[{id:"language",text:"Same language as Dota now: BetterFy reads it from Steam."},{id:"ready-made-sets",text:"Ready-made sets show what is inside and what is already in your build."},{id:"clear-errors",text:"Clear errors: what happened and what to do next."},{id:"game-tuning",text:"Catalog: 25 game tuning mods install today."}]},points:[
-      {title:"Named by what is in it",text:"Three muted sound mods read as “Quiet in the Tavern”. The dice offers another name."},
-      {title:"Journal",text:"Every step of preparing, installing and restoring, one line each. Copy it for support."},
-      {title:"Language as in Dota now",text:"BetterFy reads the game's language from Steam and picks the language slot itself."},
-      {title:"One-click fixes",text:"A conflict or a missing mod: one button instead of hunting through the list."},
-      {title:"Restore",text:"One button puts the game files and Steam launch options back."}],
-      mock:{label:"MY BUILD",name:"Quiet in the Tavern",sub:"3 mods · audio",chips:["Mute Ambient Sounds","Remove Pings","Revert Ping Sounds"],lang:"Language",langValue:"Russian",langNote:"as in Dota now",conflict:"Conflict",conflictText:"These two ping mods cannot go together.",fix:"Keep Remove Pings",install:"Install",restore:"Restore",journal:"BetterFy journal",journalLast:"Dota language from Steam: russian"}},
-    looks:{tag:"ALSO INSIDE",a:"A looks catalog",b:"for heroes and the HUD.",body:"1,135 options for heroes, interface, world, effects and audio. More than 900 archives (heroes, sounds, maps, couriers, effects) install in the Windows pilot; menu backgrounds and the HUD are still ahead.",items:["Search by hero and category","Live preview of the variant","Light and dark themes"]},
-    faq:{tag:"FAQ",a:"The short version.",items:[
-      {q:"What is BetterFy?",a:"A Windows app that installs mods into the Dota 2 client and can remove them. It works with game files before launch and does not hook into the game during a match."},
-      {q:"Which mods install today?",a:"25 game tuning mods from the open dota2-minify project: they remove extra effects and sounds and change interface styles and layouts, including Auto Accept Match and Stat Site Buttons. Hero looks, sounds, maps and couriers from the catalog install in the Windows pilot: checked selectively."},
-      {q:"What exactly changes on disk?",a:"One BetterFy VPK in Dota's language slot folder and one -language argument in Dota's Steam launch options. BetterFy only reads Valve's files. More in the Safety section.",more:{href:"#safety",label:"The Safety section"}},
-      {q:"How do I remove a mod?",a:"Open My build in the app and press Restore. BetterFy puts the files back from the backup and checks the result."},
-      {q:"Is it safe for my account?",a:"Mods change only client-side visual and interface files. Valve does not officially endorse third-party mods, so the choice is yours. We do not promise what we have not verified."},
-      {q:"What do I need?",a:"Windows x64 and Dota 2 from Steam. The Russian and Dutch language slots have been checked in game on one PC; other languages, the English slot and other PCs are not checked yet."},
-      {q:"Does it work on macOS or Linux?",a:"No. Early Access is Windows x64 only, which is also where BetterFy is tested."},
-      {q:"Why does Windows warn me when I run it?",a:"Early Access builds are not signed with a certificate yet, so Windows may warn about an unknown publisher. Each installer on GitHub has a file with its SHA-256 next to it."},
-      {q:"Why sign in to BetterFy ID?",a:"Signing in is needed to download the build. You can look around the app without it."},
-      {q:"How much does it cost?",a:"Early Access builds download after you sign in with BetterFy ID or Telegram. Paid access is handled by the @BeterFyBot bot: it shows the terms and price before you pay, so we do not repeat them on the site."},
-      {q:"What data do you keep?",a:"The site has no analytics and no cookies. The sign-in service keeps a Telegram or BetterFy ID identifier, hashes of the password and email, and a list of sessions without IP addresses or device names. There is no account deletion button yet.",more:{href:"privacy.html",label:"The Privacy page",asset:true}},
-      {q:"How do I report a bug or get in touch?",a:"Questions and install help: Telegram @BeterHelp. Reproducible bugs: GitHub Issues, ideally with the build tag and the diagnostics from the app settings. Vulnerabilities: privately only, through the Security tab on GitHub."}]},
-    download:{tag:"DOWNLOAD",a:"BetterFy for",b:"Windows.",body:"Early access builds are published as GitHub pre-releases. Downloading needs a BetterFy ID or a Telegram sign-in.",cta:"Download BetterFy",check:"Download for Windows",versions:"All versions on GitHub",title:"BetterFy for Windows",checking:"Looking for the current early access build.",ready:"Build found. Sign in to BetterFy ID to download.",readySigned:"Build found and ready to download.",missingLead:"As soon as a build is out, its version, date and size appear here.",offlineLead:"The build could not be checked right now.",system:"Windows x64",found:"Build found",login:"Sign in to BetterFy ID",continue:"Sign in and continue",error:"The build could not be opened. Please try again.",version:"VERSION",package:"SIZE",published:"UPDATED",locating:"Looking for the latest build…",unavailable:"No public build has been released yet",network:"GitHub could not be reached. Check your connection and try again.",retry:"Try again",prerelease:"Early access · pre-release",dialogTag:"WINDOWS · EARLY ACCESS"},
-    account:{current:"CURRENT"},
-    auth:{tag:"BETTERFY ID",title:"Your BetterFy ID",body:"Use a password or sign in through Telegram.",id:"Sign in with BetterFy ID",telegram:"Sign in with Telegram",identifier:"Email or username",username:"Username",password:"Password — at least 12 characters",create:"Create BetterFy ID",forgot:"Forgot password? Get an email code",registerNote:"Verify your email with the code we send.",email:"Email address",send:"Send a code",emailCode:"Email code",emailNote:"If the email is linked, the message will arrive shortly. The code is valid for 10 minutes.",first:"Create BetterFy ID for password sign-in. Telegram is a separate quick option.",link:"Link an email",linked:"Email linked",linkNote:"Verify an address to sign in to this same BetterFy profile.",back:"Back",retry:"Try again",access:"ACCESS",notConnected:"Not connected",sessions:"SESSIONS",none:"No active sessions",code:"CODE",minutes:"10 minutes",get:"Get a code in Telegram",have:"I already have a code",label:"Confirmation code",enter:"Sign in",oneTime:"The code is single-use and valid for 10 minutes.",safe:"You stay in control.",safeText:"Sign-in methods are not merged automatically. End active sessions here anytime.",security:"Security",source:"Source code",checking:"Checking…",invalid:"Check your details and try again.",offline:"The sign-in service is unavailable. Your local session has been kept.",storage:"Signed in for this tab only because the browser blocked session storage.",active:"Active devices",until:"until",revoke:"End",signout:"Sign out",early:"Early access",premium:"Premium"},
-    footer:{tag:"Dota 2 mods with checks and rollback.",product:"Product",project:"Project",help:"Help",telegram:"Telegram bot",roadmap:"Roadmap",releases:"Releases",bug:"Report a bug",security:"Report a vulnerability",privacy:"Privacy",terms:"Terms",legal:"Independent project. Not affiliated with Valve Corporation. Dota 2 and Steam are trademarks of Valve.",helpTitle:"Did not find an answer?",helpBody:"BetterFy is built by one person, so replies are manual and not always instant."}
-  }
-} as const;
-
-const Wordmark=({compact=false,onFy}:{compact?:boolean;onFy?:()=>void})=><span className={`wordmark ${compact?"compact":""}`} aria-label="BetterFy"><span className="wordmark-better">Better</span><span className="wordmark-fy" onClick={onFy}>Fy</span></span>;
-
-function pickRelease(releases:GithubRelease[]):ReleaseMeta|null{
-  const available=releases.filter(release=>release&&release.draft!==true);
-  const installer=(release:GithubRelease)=>{for(const name of installerNames){const found=release.assets?.find(item=>item?.name===name&&item.size);if(found)return found}return null};
-  const release=available.find(item=>item.prerelease!==true&&installer(item))??available.find(item=>item.prerelease===true&&installer(item));
-  const file=release&&installer(release);
-  if(!release||!file?.name||!file.size||!release.tag_name||!release.published_at)return null;
-  return {version:release.tag_name,fileName:file.name,size:file.size,publishedAt:release.published_at,prerelease:release.prerelease===true};
-}
-function safeReleaseUrl(value?:string){try{if(!value)return null;const url=new URL(value);return url.protocol==="https:"&&url.hostname==="github.com"&&url.pathname.startsWith("/zori-xyz/BetterFy/releases/")?url.toString():null}catch{return null}}
-function readStorage(storage:"local"|"session",key:string){try{return (storage==="local"?localStorage:sessionStorage).getItem(key)}catch{return null}}
-function writeSession(key:string,value:string){try{sessionStorage.setItem(key,value);return true}catch{return false}}
-function removeSession(key:string){try{sessionStorage.removeItem(key)}catch{}}
-const reducedMotion=()=>typeof window!=="undefined"&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-
-type Copy = typeof copy.ru | typeof copy.en;
 type Theme = "dark" | "light";
-const themeKey = "betterfy-site-theme";
-function initialLanguage():Language{try{const param=new URLSearchParams(window.location.search).get("lang");if(param==="en"||param==="ru")return param}catch{}return readStorage("local","betterfy-site-language")==="en"?"en":"ru"}
-function initialTheme():Theme{const saved=readStorage("local",themeKey);if(saved==="light"||saved==="dark")return saved;try{return window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"}catch{return "dark"}}
+type Catalog = typeof import("./catalogData");
 
-// Small live pieces of the app, one per step of "How it works".
-function StepScene({index,language,t}:{index:number;language:Language;t:Copy}){
-  const ru=language==="ru";
-  if(index===0)return <div className="scene scene-select" aria-hidden="true">{(ru?[["Убрать реку","mods/remove-river.jpg"],["Упрощённые деревья","mods/tree-mod.jpg"],["Показывать Net Worth","mods/show-networth.jpg"]]:[["Remove River","mods/remove-river.jpg"],["Tree Mod","mods/tree-mod.jpg"],["Show NetWorth","mods/show-networth.jpg"]]).map(([name,image],i)=><div className={`mini-card ${i===1?"is-picked":""}`} key={name}><i style={{backgroundImage:`url(${asset(image)})`}}/><b>{name}</b><span>{i===1?<Check size={13}/>:<Plus size={13}/>}</span></div>)}</div>;
-  if(index===1)return <div className="scene scene-install" aria-hidden="true">{t.how.scene.map((label,i)=><div className="install-step" key={label} style={{animationDelay:`${i*.9}s`}}><i>{String(i+1).padStart(2,"0")}</i><span>{label}</span></div>)}<div className="install-bar"><i/></div></div>;
-  return <div className="scene scene-restore" aria-hidden="true"><code><b>backupVerified</b> true</code><code><b>phase</b> rolled_back</code><code><b>rollbackVerified</b> true</code><span className="restore-badge"><RotateCcw size={15}/>{t.how.restored}</span></div>;
+const sessionKey = "betterfy:web-session";
+const themeKey = "betterfy-site-theme";
+const languageKey = "betterfy-site-language";
+
+function readStorage(storage: "local" | "session", key: string) {
+  try {
+    return (storage === "local" ? localStorage : sessionStorage).getItem(key);
+  } catch {
+    return null;
+  }
+}
+function writeSession(key: string, value: string) {
+  try {
+    sessionStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function removeSession(key: string) {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // Nothing stored.
+  }
+}
+const reducedMotion = () =>
+  typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function initialLanguage(): Language {
+  try {
+    const param = new URLSearchParams(window.location.search).get("lang");
+    if (param === "en" || param === "ru") return param;
+  } catch {
+    // Fall through to the stored choice.
+  }
+  return readStorage("local", languageKey) === "en" ? "en" : "ru";
+}
+function initialTheme(): Theme {
+  const saved = readStorage("local", themeKey);
+  if (saved === "light" || saved === "dark") return saved;
+  try {
+    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
 }
 
-// Early Access history on the left, the verification journal on the right.
-// The journal mirrors the app's build journal: one line per fact, a tone
-// label in words (never colour alone), lime only for what was verified.
-function StatusSection({t}:{t:Copy}){
-  const s=t.status;
-  return <section className="status shell" id="status" aria-labelledby="status-title">
-    <div className="section-intro reveal"><p className="eyebrow"><Activity size={13}/>{s.tag}</p><h2 id="status-title">{s.a}<br/><strong>{s.b}</strong></h2><p>{s.body}</p></div>
-    <div className="status-grid">
-      <div className="ea-timeline reveal">
-        <h3 className="block-title">{s.timeline}</h3>
-        <ol>{s.builds.map(build=><li key={build.tag} className={`is-${build.state}`}><span className="ea-node" aria-hidden="true">{build.state==="done"?<Check size={11}/>:<i/>}</span><div><p className="ea-meta"><b>{build.tag}</b><span>{build.when}</span></p><h4>{build.title}</h4><p>{build.text}</p></div></li>)}</ol>
-        <a className="quiet-link" href={`${repo}/releases`}>{s.releases}<ExternalLink size={12}/></a>
-      </div>
-      <section className="console reveal" aria-labelledby="console-title">
-        <div className="console-bar"><span className="console-dot" aria-hidden="true"/><h3 id="console-title">{s.journal}</h3><span className="console-last">{s.journalLast}</span><small aria-hidden="true">{s.rows.length}</small></div>
-        <ol className="console-list">{s.rows.map(row=><li key={row.key} className={`is-${row.tone}`}><code>{row.key}</code><span className="console-tone">{s.tones[row.tone]}</span><span className="console-text">{row.text}</span></li>)}</ol>
-        <div className="console-foot"><span>{s.note}</span><a href={`${repo}/blob/main/docs/EA24_WINDOWS_TEST_PLAN.md`}>{s.plan}<ExternalLink size={12}/></a></div>
+function Wordmark() {
+  return (
+    <span className="wordmark" aria-label="BetterFy">
+      <span className="wordmark-better">Better</span>
+      <span className="wordmark-fy">Fy</span>
+    </span>
+  );
+}
+
+// The app's own catalog and showcase, loaded after the first screen.
+function useCatalog() {
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  useEffect(() => {
+    let active = true;
+    import("./catalogData").then((module) => {
+      if (active) setCatalog(module);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+  return catalog;
+}
+
+function Hero({
+  t,
+  catalog,
+  onDownload,
+  onOpen,
+}: {
+  t: Copy;
+  catalog: Catalog | null;
+  onDownload: () => void;
+  onOpen: (mod: StudioMod) => void;
+}) {
+  const [mood, setMood] = useState(0);
+  const Carousel = catalog?.LookCarousel;
+  const number = (value: number) => new Intl.NumberFormat(t === copy.ru ? "ru-RU" : "en-GB").format(value);
+  return (
+    <div className="w-hero-scene" style={emoteStyle(mood)}>
+      <section id="top" className="s-hero w-hero">
+        <EmoteBackdrop active={mood} />
+        <div className="s-hero-copy">
+          <span className="s-eyebrow">
+            <Sparkles />
+            {t.hero.tag}
+          </span>
+          <h1>
+            {t.hero.a}
+            <span className="s-hero-accent">
+              {t.hero.b}
+              <span className="s-hero-sticker">
+                <EmoteStage motion active={mood} onChange={setMood} />
+              </span>
+            </span>
+          </h1>
+          <p>{t.hero.body}</p>
+          <div className="s-hero-actions">
+            <button className="s-btn s-btn-primary" onClick={onDownload}>
+              <ArrowDownToLine />
+              {t.hero.download}
+            </button>
+            <a className="s-btn s-btn-ghost" href="#how">
+              {t.hero.how}
+              <ChevronDown />
+            </a>
+          </div>
+        </div>
+        {Carousel ? <Carousel motion onOpen={onOpen} /> : <div className="w-carousel-slot" aria-hidden="true" />}
+        <p className="w-hero-facts">
+          {catalog && (
+            <>
+              <b>{number(catalog.looksCount)}</b> {t.hero.looks} · <b>{catalog.tuningCount}</b> {t.hero.tuning} ·{" "}
+            </>
+          )}
+          {t.hero.rollback}
+        </p>
       </section>
     </div>
-  </section>;
+  );
 }
 
-// Every installable package, grouped by how the engine applies it.
-function SafetySection({t}:{t:Copy}){
-  const s=t.safety;
-  const icons={read:<Eye size={18}/>,write:<Pencil size={18}/>,never:<Ban size={18}/>};
-  return <section className="safety shell" id="safety" aria-labelledby="safety-title">
-    <div className="section-intro reveal"><p className="eyebrow"><ShieldCheck size={13}/>{s.tag}</p><h2 id="safety-title">{s.a}<br/><strong>{s.b}</strong></h2><p>{s.body}</p></div>
-    <div className="safety-grid">{s.cards.map((card,index)=><article className={`safety-card is-${card.id} reveal`} key={card.id} style={{transitionDelay:`${index*.08}s`}}><header><span className="safety-icon" aria-hidden="true">{icons[card.id as keyof typeof icons]}</span><h3>{card.title}</h3><em>{card.chip}</em></header><ul>{card.items.map(item=><li key={item}>{item}</li>)}</ul></article>)}</div>
-    <p className="safety-foot reveal"><RotateCcw size={15} aria-hidden="true"/><span><b>{s.rollback}</b> {s.caveat}</span></p>
-  </section>;
+function Inside({ t, language, catalog }: { t: Copy; language: Language; catalog: Catalog | null }) {
+  const [looks, setLooks] = useState<string[]>([]);
+  const [tuning, setTuning] = useState<string[]>([]);
+  useEffect(() => {
+    if (!catalog) return;
+    setLooks(catalog.samplePreviews("wardrobe", 3));
+    setTuning(catalog.samplePreviews("game", 3));
+  }, [catalog]);
+  const groups = catalog?.tuningGroups(language) ?? [];
+  const number = (value: number) => new Intl.NumberFormat(language === "ru" ? "ru-RU" : "en-GB").format(value);
+  return (
+    <section className="w-section" id="inside">
+      <header className="w-section-head reveal">
+        <span className="s-eyebrow">
+          <Layers3 />
+          {t.inside.tag}
+        </span>
+        <h2>
+          {t.inside.a}
+          <span>{t.inside.b}</span>
+        </h2>
+      </header>
+      <div className="w-inside">
+        <article className="w-tile reveal" data-spotlight>
+          <div className="w-fan" aria-hidden="true">
+            {looks.map((src, index) => (
+              <img key={src} src={src} alt="" loading="lazy" style={{ ["--i" as string]: index }} />
+            ))}
+          </div>
+          <div className="w-tile-copy">
+            <strong className="w-count">{catalog ? number(catalog.looksCount) : "—"}</strong>
+            <h3>{t.inside.looks.title}</h3>
+            <p>{t.inside.looks.text}</p>
+            <ul className="w-chips">
+              {t.inside.looks.chips.map((chip) => (
+                <li key={chip}>{chip}</li>
+              ))}
+            </ul>
+            <small className="w-credit">{t.inside.credit}</small>
+          </div>
+        </article>
+        <article className="w-tile reveal" data-spotlight id="mods">
+          <div className="w-fan is-game" aria-hidden="true">
+            {tuning.map((src, index) => (
+              <img key={src} src={src} alt="" loading="lazy" style={{ ["--i" as string]: index }} />
+            ))}
+          </div>
+          <div className="w-tile-copy">
+            <strong className="w-count">{catalog ? catalog.tuningCount : "—"}</strong>
+            <h3>{t.inside.tuning.title}</h3>
+            <p>{t.inside.tuning.text}</p>
+            <details className="w-mod-list">
+              <summary>
+                {t.inside.tuning.all}
+                <ChevronDown size={15} />
+              </summary>
+              {groups.map((group) => (
+                <div className="mod-group" key={group.id}>
+                  <h4>{group.title}</h4>
+                  <ul>
+                    {group.names.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </details>
+          </div>
+        </article>
+      </div>
+    </section>
+  );
 }
-function ModCatalog({t}:{t:Copy}){
-  const m=t.mods;
-  const scripts=new Set<string>(m.scripts);
-  const total=m.groups.reduce((sum,group)=>sum+group.items.length,0);
-  return <div className="mod-catalog reveal">
-    <div className="mod-catalog-head"><h3 className="block-title">{m.all}</h3><span className="count-tag">{total}</span></div>
-    <div className="mod-groups">{m.groups.map(group=><section className="mod-group" key={group.id} aria-labelledby={`group-${group.id}`}>
-      <header><h4 id={`group-${group.id}`}>{group.title}</h4><span className="count-tag">{group.items.length}</span></header>
-      <p>{group.text}</p>
-      <ul>{group.items.map(item=><li key={item}><span>{item}</span>{scripts.has(item)&&<em><Braces size={11}/>{m.scriptTag}</em>}</li>)}</ul>
-    </section>)}</div>
-    <p className="mods-relations"><Link2 size={15}/><span>{m.relations}</span></p>
-  </div>;
+
+function How({ t }: { t: Copy }) {
+  const icons = [<PenLine key="pick" />, <Wand2 key="check" />, <RotateCcw key="back" />];
+  return (
+    <section className="w-section" id="how">
+      <header className="w-section-head reveal">
+        <span className="s-eyebrow">{t.how.tag}</span>
+        <h2>
+          {t.how.a}
+          <span>{t.how.b}</span>
+        </h2>
+      </header>
+      <ol className="w-steps-row">
+        {t.how.steps.map((step, index) => (
+          <li key={step.title} className="w-step reveal" style={{ ["--i" as string]: index }}>
+            <span className="w-step-mark">
+              {icons[index]}
+              <b>{String(index + 1).padStart(2, "0")}</b>
+            </span>
+            <h3>{step.title}</h3>
+            <p>{step.text}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
 }
 
-// A still picture of the new build screen, drawn in HTML so it follows the
-// language and theme. It is decorative: the list next to it says the same.
-function ProfilePanel({language,t,close,stage,session,token,onEmailSignedIn,code,setCode,error,storageWarning,verify,avatar,sessions,revoke,logout}:{language:Language;t:typeof copy.ru|typeof copy.en;close:()=>void;stage:AuthStage;session:WebSession|null;token:string|null;onEmailSignedIn:(data:WebSession&{sessionToken:string})=>void;code:string;setCode:(v:string)=>void;error:string;storageWarning:boolean;verify:()=>void;avatar:string|null;sessions:DeviceSession[];revoke:(s:DeviceSession)=>void;logout:()=>void}){
-  const access=session?.accessTier==="premium"?t.auth.premium:t.auth.early;
-  const[emailMode,setEmailMode]=useState<"choice"|"address"|"code">("choice"),[email,setEmail]=useState(""),[emailCode,setEmailCode]=useState(""),[emailBusy,setEmailBusy]=useState(false),[emailError,setEmailError]=useState(""),[emailIdentity,setEmailIdentity]=useState<{linked:boolean;emailHint:string|null}|null>(null);
-  const[idMode,setIdMode]=useState<"choice"|"login"|"register"|"register-code">("choice"),[identifier,setIdentifier]=useState(""),[username,setUsername]=useState(""),[password,setPassword]=useState(""),[idBusy,setIdBusy]=useState(false),[idError,setIdError]=useState("");
-  const idRequest=async(path:string,payload:object)=>{const response=await fetch(new URL(path,authUrl),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload),credentials:"omit"});if(!response.ok)throw new Error();return response.json()};
-  const submitId=async()=>{setIdBusy(true);setIdError("");try{if(idMode==="register"){await idRequest("/v1/auth/id/register/start",{username,email,password,language});setPassword("");setEmailCode("");setIdMode("register-code");return}const path=idMode==="login"?"/v1/auth/id/login":"/v1/auth/id/register/verify";const data=await idRequest(path,idMode==="login"?{identifier,password,clientKind:"web"}:{email,code:emailCode,clientKind:"web"});if(!data.sessionToken||!data.displayName)throw new Error();setPassword("");onEmailSignedIn(data);setIdMode("choice")}catch{setIdError(t.auth.invalid)}finally{setIdBusy(false)}};
-  useEffect(()=>{if(!token)return;const controller=new AbortController();fetch(new URL("/v1/session/email",authUrl),{headers:{Authorization:`Bearer ${token}`},credentials:"omit",signal:controller.signal}).then(r=>r.ok?r.json():Promise.reject()).then(data=>setEmailIdentity(data)).catch(()=>{});return()=>controller.abort()},[token]);
-  const startEmail=async()=>{setEmailBusy(true);setEmailError("");try{const path=session?"/v1/session/email/start":"/v1/auth/email/start";const response=await fetch(new URL(path,authUrl),{method:"POST",headers:{"content-type":"application/json",...(session&&token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify({email,language}),credentials:"omit"});if(!response.ok)throw new Error();setEmailMode("code");setEmailCode("")}catch{setEmailError(t.auth.offline)}finally{setEmailBusy(false)}};
-  const verifyEmail=async()=>{setEmailBusy(true);setEmailError("");try{const path=session?"/v1/session/email/verify":"/v1/auth/email/verify";const response=await fetch(new URL(path,authUrl),{method:"POST",headers:{"content-type":"application/json",...(session&&token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify({email,code:emailCode,...(!session?{clientKind:"web"}:{})}),credentials:"omit"});if(!response.ok)throw new Error();const data=await response.json();if(session){setEmailIdentity({linked:true,emailHint:data.emailHint});setEmailMode("choice")}else if(data.sessionToken&&data.displayName){onEmailSignedIn(data);setEmailMode("choice")}else throw new Error()}catch{setEmailError(t.auth.invalid)}finally{setEmailBusy(false)}};
-  return <div className="modal-backdrop" onMouseDown={close}><section className="profile-panel" role="dialog" aria-modal="true" aria-labelledby="profile-title" onMouseDown={e=>e.stopPropagation()}>
-    <button className="modal-close" onClick={close} aria-label={t.close}><X size={17}/></button>
-    <div className="profile-head"><div className={`profile-avatar ${avatar?"":"is-logo"}`}>{avatar?<img src={avatar} alt=""/>:<img src={asset("betterfy-logo.png")} alt=""/>}</div><div><p className="micro">{t.auth.tag}</p><h2 id="profile-title">{session?session.displayName:t.auth.title}</h2><p>{session?(session.username?`@${session.username} · ${access}`:access):t.auth.body}</p></div></div>
-    {storageWarning&&<p className="status-note warning" role="status"><AlertTriangle size={16}/>{t.auth.storage}</p>}
-    {stage==="unavailable"&&!session&&<p className="status-note error" role="alert"><WifiOff size={16}/>{t.auth.offline}</p>}
-    {!session&&idMode!=="choice"&&<form className="site-id-form" onSubmit={e=>{e.preventDefault();void submitId()}}><button className="site-id-back" type="button" onClick={()=>{setIdMode("choice");setIdError("")}}>{t.auth.back}</button><h3>{idMode==="login"?t.auth.id:idMode==="register"?t.auth.create:t.auth.emailCode}</h3>{idMode==="register"&&<p>{t.auth.registerNote}</p>}{idMode==="login"&&<input aria-label={t.auth.identifier} autoComplete="username" required maxLength={254} placeholder={t.auth.identifier} value={identifier} onChange={e=>setIdentifier(e.target.value)}/ >}{idMode==="register"&&<><input aria-label={t.auth.username} autoComplete="username" required minLength={3} maxLength={24} pattern="[A-Za-z][A-Za-z0-9_]{2,23}" placeholder={t.auth.username} value={username} onChange={e=>setUsername(e.target.value)}/><input aria-label={t.auth.email} type="email" autoComplete="email" required maxLength={254} placeholder={t.auth.email} value={email} onChange={e=>setEmail(e.target.value)}/></>}{(idMode==="login"||idMode==="register")&&<input aria-label={t.auth.password} type="password" autoComplete={idMode==="register"?"new-password":"current-password"} required minLength={12} maxLength={128} placeholder={t.auth.password} value={password} onChange={e=>setPassword(e.target.value)}/ >}{idMode==="register-code"&&<><p>{t.auth.registerNote}</p><input aria-label={t.auth.emailCode} inputMode="numeric" autoComplete="one-time-code" required pattern="[0-9]{6}" maxLength={6} value={emailCode} onChange={e=>setEmailCode(e.target.value.replace(/\D/g,"").slice(0,6))}/></>}{idError&&<small role="alert" className="is-error">{idError}</small>}<button className="site-id-primary" disabled={idBusy||(idMode==="register-code"&&emailCode.length!==6)}>{idBusy?t.auth.checking:idMode==="login"?t.auth.enter:idMode==="register"?t.auth.create:t.auth.emailCode}<ArrowRight size={16}/></button>{idMode==="login"&&<><button className="site-id-back" type="button" onClick={()=>setIdMode("register")}>{t.auth.create}</button><button className="site-id-back" type="button" onClick={()=>{setEmail(identifier.includes("@")?identifier:"");setIdMode("choice");setEmailMode("address")}}>{t.auth.forgot}</button></>}</form>}
-    {idMode==="choice"&&emailMode!=="choice"&&<form className="site-id-form" onSubmit={e=>{e.preventDefault();void(emailMode==="address"?startEmail():verifyEmail())}}><button className="site-id-back" type="button" onClick={()=>{setEmailMode("choice");setEmailError("")}}>{t.auth.back}</button><h3>{emailMode==="address"?t.auth.email:t.auth.emailCode}</h3><p>{emailMode==="address"?session?t.auth.linkNote:t.auth.first:t.auth.emailNote}</p>{emailMode==="address"?<input aria-label={t.auth.email} type="email" autoComplete="email" required maxLength={254} value={email} onChange={e=>setEmail(e.target.value)}/>:<input aria-label={t.auth.emailCode} type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={emailCode} onChange={e=>setEmailCode(e.target.value.replace(/\D/g,"").slice(0,6))}/ >}{emailError&&<small role="alert" className="is-error">{emailError}</small>}<button className="site-id-primary" disabled={emailBusy||(emailMode==="code"&&emailCode.length!==6)}>{emailBusy?t.auth.checking:emailMode==="address"?t.auth.send:t.auth.enter}<ArrowRight size={16}/></button>{emailMode==="code"&&<button className="site-id-back" type="button" disabled={emailBusy} onClick={()=>void startEmail()}>{t.auth.retry}</button>}</form>}
-    {idMode==="choice"&&emailMode==="choice"&&(session?<>
-      <div className="profile-summary"><div><ShieldCheck size={18}/><span>{t.auth.access}</span><strong>{access}</strong></div><div><Monitor size={18}/><span>{t.auth.sessions}</span><strong>{sessions.length}</strong></div><div><KeyRound size={18}/><span>ID</span><strong>{session.userId.slice(0,8)}</strong></div></div>
-      <div className="site-id-link"><span className="site-id-icon"><Mail size={20}/></span><div><b>{language==="ru"?"Почта для входа по коду":"Email code sign-in"}</b><small>{emailIdentity?.linked?`${t.auth.linked} · ${emailIdentity.emailHint}`:t.auth.linkNote}</small></div>{!emailIdentity?.linked&&emailMode==="choice"&&<button type="button" onClick={()=>setEmailMode("address")}>{t.auth.link}<ArrowRight size={15}/></button>}</div>
-      <div className="device-list"><h3>{t.auth.active}</h3>{sessions.map(item=><article key={item.sessionId}><span className="device-icon">{item.clientKind==="desktop"?<Gamepad2 size={17}/>:<Monitor size={17}/>}</span><div><b>{item.clientKind==="desktop"?"BetterFy Windows":language==="ru"?"Веб-сайт BetterFy":"BetterFy website"}</b><small>{t.auth.until} {new Intl.DateTimeFormat(language==="ru"?"ru-RU":"en-GB",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(item.expiresAt*1000))}</small></div>{item.current?<em>{t.account.current}</em>:<button onClick={()=>revoke(item)}>{t.auth.revoke}</button>}</article>)}</div>
-      <button className="signout-button" onClick={logout}><LogOut size={15}/>{t.auth.signout}</button>
-    </>:<>
-      {emailMode==="choice"&&<div className="site-id-choices"><button className="site-id-primary" type="button" onClick={()=>setIdMode("login")}><KeyRound size={18}/><b>{t.auth.id}</b><ArrowRight size={17}/></button><a className="site-id-telegram" href={bot} target="_blank" rel="noreferrer" onClick={()=>setCode("")}><Send size={18}/><b>{t.auth.telegram}</b><ExternalLink size={16}/></a><p>{t.auth.first}</p></div>}
-      {emailMode==="choice"&&stage==="idle"&&<button className="have-code-button" type="button" onClick={()=>setCode("")}><KeyRound size={14}/>{t.auth.have}</button>}
-      {(stage==="code"||stage==="verifying")&&<form className="code-row otp-form" onSubmit={e=>{e.preventDefault();verify()}}><label htmlFor="access-code">{t.auth.label}</label><div className="code-entry"><div className="otp-control"><div className="otp-slots" aria-hidden="true">{Array.from({length:6},(_,index)=><span key={index} className={code.length===index?"current":""}>{code[index]||""}</span>)}</div><input className="otp-input" id="access-code" aria-label={t.auth.label} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,"").slice(0,6))} disabled={stage==="verifying"}/></div><button className="otp-submit" type="submit" disabled={stage==="verifying"||code.length!==6}>{stage==="verifying"?t.auth.checking:t.auth.enter}<ArrowRight size={15}/></button></div><small className={error?"is-error":""}>{error||t.auth.oneTime}</small></form>}
-      <div className="profile-note"><ShieldCheck size={16}/><p><b>{t.auth.safe}</b><span>{t.auth.safeText}</span></p></div>
-    </>)}
-    <div className="profile-links"><a href={`${repo}/blob/main/docs/IDENTITY_AND_WEB_ARCHITECTURE.md`}>{t.auth.security}<ExternalLink size={12}/></a><a href={repo}>{t.auth.source}<ExternalLink size={12}/></a></div>
-  </section></div>
+function Safety({ t }: { t: Copy }) {
+  return (
+    <section className="w-section" id="safety">
+      <header className="w-section-head reveal">
+        <span className="s-eyebrow">
+          <ShieldCheck />
+          {t.safety.tag}
+        </span>
+        <h2>
+          {t.safety.a}
+          <span>{t.safety.b}</span>
+        </h2>
+        <p>{t.safety.body}</p>
+      </header>
+      <div className="w-safety">
+        {t.safety.cards.map((card) => (
+          <article key={card.id} className={`safety-card is-${card.id} reveal`}>
+            <header>
+              <h3>{card.title}</h3>
+              <span>{card.chip}</span>
+            </header>
+            <ul>
+              {card.items.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </article>
+        ))}
+      </div>
+      <p className="w-footnote reveal">
+        <RotateCcw size={15} />
+        {t.safety.rollback}
+      </p>
+    </section>
+  );
 }
 
-function DownloadPanel({language,t,close,session,release,releaseState,retry,openProfile,download,error}:{language:Language;t:typeof copy.ru|typeof copy.en;close:()=>void;session:WebSession|null;release:ReleaseMeta|null;releaseState:ReleaseState;retry:()=>void;openProfile:()=>void;download:()=>void;error:string}){
-  const date=release?new Intl.DateTimeFormat(language==="ru"?"ru-RU":"en-GB",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(release.publishedAt)):"-";
-  const size=release?`${(release.size/1048576).toFixed(1)} MB`:"-";
-  const loading=releaseState==="loading";
-  const lead=loading||releaseState==="idle"?t.download.checking:release?(session?t.download.readySigned:t.download.ready):releaseState==="unavailable"?t.download.offlineLead:t.download.missingLead;
-  return <div className="modal-backdrop" onMouseDown={close}><section className="download-panel" role="dialog" aria-modal="true" aria-labelledby="download-title" onMouseDown={e=>e.stopPropagation()}><button className="modal-close" onClick={close} aria-label={t.close}><X size={17}/></button><div className="download-mark"><Wordmark/></div><p className="micro">{t.download.dialogTag}</p><h2 id="download-title">{t.download.title}</h2><p>{lead}</p><div className="download-checks"><span className="active"><i><Monitor size={14}/></i>{t.download.system}</span><span className={release?"active":releaseState==="unavailable"?"error":""}><i>{release?<Check size={14}/>:releaseState==="unavailable"?<WifiOff size={14}/>:"2"}</i>{loading?t.download.locating:release?t.download.found:releaseState==="unavailable"?t.download.network:t.download.unavailable}</span><span className={session?"active":""}><i>{session?<Check size={14}/>:"3"}</i>{session?session.displayName:t.download.login}</span></div>{release&&<div className="release-details"><span><small>{t.download.version}</small><b>{release.version}</b></span><span><small>{t.download.package}</small><b title={release.fileName}>{size}</b></span><span><small>{t.download.published}</small><b>{date}</b></span></div>}{release?.prerelease&&<p className="release-note">{t.download.prerelease}</p>}{releaseState==="unavailable"&&<button className="retry-button" onClick={retry}>{t.download.retry}</button>}<button className="action primary wide" onClick={session?download:openProfile} disabled={loading||(Boolean(session)&&!release)}><span className="action-icon">{session?<ArrowDownToLine size={17}/>:<CircleUserRound size={17}/>}</span><b>{session?t.download.cta:t.download.continue}</b><ArrowRight size={17}/></button>{error&&<p className="download-error" role="alert">{error}</p>}<a className="quiet-link" href={`${repo}/releases`}>{t.download.versions}<ExternalLink size={12}/></a></section></div>
+function Status({ t }: { t: Copy }) {
+  return (
+    <section className="w-section" id="status">
+      <header className="w-section-head reveal">
+        <span className="s-eyebrow">{t.status.tag}</span>
+        <h2>
+          {t.status.a}
+          <span>{t.status.b}</span>
+        </h2>
+        <p>{t.status.body}</p>
+      </header>
+      <div className="w-status reveal">
+        <div>
+          <h3>
+            <Check size={16} />
+            {t.status.seen}
+          </h3>
+          <ul className="console-list">
+            {t.status.seenItems.map(([tag, text]) => (
+              <li key={tag} className="is-ok">
+                <code>{tag}</code>
+                <span>{text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h3>
+            <CircleDashed size={16} />
+            {t.status.open}
+          </h3>
+          <ul className="console-list">
+            {t.status.openItems.map((text) => (
+              <li key={text} className="is-open">
+                <CircleDashed size={14} />
+                <span>{text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
 }
 
-const sections=["status","mods","safety","builder","faq"] as const;
+function Faq({ t }: { t: Copy }) {
+  const [open, setOpen] = useState<number | null>(0);
+  return (
+    <section className="w-section" id="faq">
+      <header className="w-section-head reveal">
+        <span className="s-eyebrow">{t.faq.tag}</span>
+        <h2>{t.faq.a}</h2>
+      </header>
+      <div className="w-faq reveal">
+        {t.faq.items.map((item, index) => {
+          const expanded = open === index;
+          return (
+            <div className={`faq-item ${expanded ? "is-open" : ""}`} key={item.q}>
+              <button
+                aria-expanded={expanded}
+                aria-controls={`faq-${index}`}
+                onClick={() => setOpen(expanded ? null : index)}
+              >
+                {item.q}
+                <ChevronDown size={18} />
+              </button>
+              <div id={`faq-${index}`} role="region" hidden={!expanded}>
+                <p>{item.a}</p>
+                {item.more && (
+                  <a href={`${import.meta.env.BASE_URL}${item.more.href}`}>
+                    {item.more.label}
+                    <ArrowUpRight size={13} />
+                  </a>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
-export default function Site(){
-  const[theme,setTheme]=useState<Theme>(initialTheme);
-  const[language,setLanguage]=useState<Language>(initialLanguage),[profile,setProfile]=useState(false),[download,setDownload]=useState(false),[mobileMenu,setMobileMenu]=useState(false),[darkLooks,setDarkLooks]=useState(theme==="dark"),[slide,setSlide]=useState(0),[slidePaused,setSlidePaused]=useState(false),[preview,setPreview]=useState<{src:string;alt:string}|null>(null),[fyClicks,setFyClicks]=useState(0),[openFaq,setOpenFaq]=useState<number|null>(0);
-  const[authStage,setAuthStage]=useState<AuthStage>("checking"),[authSession,setAuthSession]=useState<WebSession|null>(null),[sessionToken,setSessionToken]=useState<string|null>(null),[authCode,setAuthCode]=useState(""),[authError,setAuthError]=useState(""),[storageWarning,setStorageWarning]=useState(false),[avatarUrl,setAvatarUrl]=useState<string|null>(null),[deviceSessions,setDeviceSessions]=useState<DeviceSession[]>([]),[downloadError,setDownloadError]=useState(""),[releaseMeta,setReleaseMeta]=useState<ReleaseMeta|null>(null),[releaseState,setReleaseState]=useState<ReleaseState>("idle"),[releaseAttempt,setReleaseAttempt]=useState(0);
-  const returnFocus=useRef<HTMLElement|null>(null),langRef=useRef<HTMLDivElement>(null),[langPill,setLangPill]=useState<{left:number;width:number}|null>(null);
-  const t=copy[language];
-  const modalOpen=profile||download||Boolean(preview);
-  const slides=[`site-hero-${language}.webp`,`site-catalog-${language}.webp`,`site-build-${language}.webp`].map(asset);
-  const looksImage=asset(`site-wardrobe-${language}-${darkLooks?"dark":"light"}.webp`);
+export default function Site() {
+  const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [language, setLanguage] = useState<Language>(initialLanguage);
+  const [profile, setProfile] = useState(false);
+  const [download, setDownload] = useState(false);
+  const [mobileMenu, setMobileMenu] = useState(false);
+  const [preview, setPreview] = useState<StudioMod | null>(null);
+  const [authStage, setAuthStage] = useState<AuthStage>("checking");
+  const [authSession, setAuthSession] = useState<WebSession | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [authCode, setAuthCode] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [storageWarning, setStorageWarning] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [devices, setDevices] = useState<DeviceSession[]>([]);
+  const [downloadError, setDownloadError] = useState("");
+  const [release, setRelease] = useState<ReleaseMeta | null>(null);
+  const [releaseState, setReleaseState] = useState<ReleaseState>("idle");
+  const [releaseAttempt, setReleaseAttempt] = useState(0);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const catalog = useCatalog();
+  const t = copy[language];
+  const modalOpen = profile || download || Boolean(preview);
+  const setLanguageStable = useCallback((next: Language) => setLanguage(next), []);
 
-  useEffect(()=>{const stored=readStorage("session",sessionKey);if(stored)setSessionToken(stored);else setAuthStage("idle")},[]);
-  useEffect(()=>{const root=document.documentElement;root.dataset.theme=theme;root.style.colorScheme=theme;document.querySelector('meta[name="theme-color"]')?.setAttribute("content",theme==="light"?"#f7f5fa":"#111116")},[theme]);
-  useEffect(()=>{document.documentElement.lang=language;document.title=t.meta.title;const setMeta=(selector:string,value:string)=>document.querySelector(selector)?.setAttribute("content",value);setMeta('meta[name="description"]',t.meta.description);setMeta('meta[property="og:title"]',t.meta.title);setMeta('meta[name="twitter:title"]',t.meta.title);setMeta('meta[property="og:description"]',t.meta.short);setMeta('meta[name="twitter:description"]',t.meta.short);setMeta('meta[property="og:locale"]',language==="ru"?"ru_RU":"en_US");try{localStorage.setItem("betterfy-site-language",language)}catch{}try{const url=new URL(window.location.href);if(url.searchParams.has("lang")){url.searchParams.set("lang",language);window.history.replaceState(null,"",url)}}catch{}},[language,t]);
-  useEffect(()=>{if(!modalOpen)return;returnFocus.current=document.activeElement instanceof HTMLElement?document.activeElement:null;const background=[document.querySelector<HTMLElement>(".site-header"),document.querySelector<HTMLElement>("main")].filter((node):node is HTMLElement=>Boolean(node));background.forEach(node=>{node.inert=true;node.setAttribute("aria-hidden","true")});document.body.style.overflow="hidden";const onKey=(event:KeyboardEvent)=>{if(event.key==="Escape"){event.preventDefault();setProfile(false);setDownload(false);setPreview(null);return}if(event.key!=="Tab")return;const dialog=document.querySelector<HTMLElement>('[role="dialog"]');if(!dialog)return;const focusable=Array.from(dialog.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),[tabindex]:not([tabindex="-1"])')).filter(node=>node.offsetParent!==null);if(focusable.length===0){event.preventDefault();dialog.focus();return}const first=focusable[0],last=focusable[focusable.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}};window.addEventListener("keydown",onKey);return()=>{window.removeEventListener("keydown",onKey);background.forEach(node=>{node.inert=false;node.removeAttribute("aria-hidden")});document.body.style.overflow="";returnFocus.current?.focus();returnFocus.current=null}},[modalOpen]);
-  useEffect(()=>{if(!modalOpen)return;const frame=requestAnimationFrame(()=>document.querySelector<HTMLElement>('[role="dialog"] .modal-close')?.focus());return()=>cancelAnimationFrame(frame)},[modalOpen,profile,download,preview]);
-  useEffect(()=>{if(!mobileMenu)return;const closeMenu=(event:KeyboardEvent)=>{if(event.key==="Escape"){event.preventDefault();setMobileMenu(false);requestAnimationFrame(()=>document.querySelector<HTMLElement>(".menu-button")?.focus())}};window.addEventListener("keydown",closeMenu);return()=>window.removeEventListener("keydown",closeMenu)},[mobileMenu]);
-  // Re-run on language change: re-keyed nodes would otherwise stay hidden.
-  useEffect(()=>{const nodes=Array.from(document.querySelectorAll<HTMLElement>(".reveal:not(.is-visible)"));if(reducedMotion()||typeof IntersectionObserver==="undefined"){nodes.forEach(n=>n.classList.add("is-visible"));return}const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add("is-visible");observer.unobserve(entry.target)}}),{threshold:.12,rootMargin:"0px 0px -7%"});nodes.forEach(node=>observer.observe(node));return()=>observer.disconnect()},[language]);
-  useEffect(()=>{if(slidePaused||reducedMotion())return;const timer=window.setTimeout(()=>setSlide(value=>(value+1)%3),6000);return()=>window.clearTimeout(timer)},[slide,slidePaused]);
-  useEffect(()=>{const measure=()=>{const lang=langRef.current?.querySelector<HTMLElement>("button.active");setLangPill(lang?{left:lang.offsetLeft,width:lang.offsetWidth}:null)};measure();window.addEventListener("resize",measure);return()=>window.removeEventListener("resize",measure)},[language]);
-  useEffect(()=>{if(fyClicks<5)return;const timer=window.setTimeout(()=>setFyClicks(0),1600);return()=>window.clearTimeout(timer)},[fyClicks]);
-  useEffect(()=>{if(!sessionToken){setAuthSession(null);setAuthStage("idle");return}const controller=new AbortController();setAuthStage("checking");fetch(new URL("/v1/session/profile",authUrl),{headers:{Authorization:`Bearer ${sessionToken}`},credentials:"omit",signal:controller.signal}).then(async response=>{if(response.status===401||response.status===403){removeSession(sessionKey);setSessionToken(null);setAuthSession(null);setAuthStage("idle");return null}if(!response.ok)throw new Error("profile_unavailable");return response.json() as Promise<WebSession>}).then(data=>{if(!data)return;setAuthSession(data);setAuthStage("ready")}).catch(e=>{if(e instanceof DOMException&&e.name==="AbortError")return;setAuthStage("unavailable")});return()=>controller.abort()},[sessionToken]);
-  useEffect(()=>{if(!sessionToken||!authSession?.avatarAvailable){setAvatarUrl(null);return}const controller=new AbortController();let objectUrl:string|null=null;fetch(new URL("/v1/session/avatar",authUrl),{headers:{Authorization:`Bearer ${sessionToken}`},credentials:"omit",signal:controller.signal}).then(r=>r.ok?r.blob():Promise.reject()).then(blob=>{objectUrl=URL.createObjectURL(blob);setAvatarUrl(objectUrl)}).catch(()=>setAvatarUrl(null));return()=>{controller.abort();if(objectUrl)URL.revokeObjectURL(objectUrl)}},[sessionToken,authSession?.avatarAvailable]);
-  useEffect(()=>{if(!profile||!sessionToken||!authSession)return;const controller=new AbortController();fetch(new URL("/v1/session/devices",authUrl),{headers:{Authorization:`Bearer ${sessionToken}`},credentials:"omit",signal:controller.signal}).then(r=>r.ok?r.json():Promise.reject()).then((data:{sessions?:DeviceSession[]})=>setDeviceSessions(Array.isArray(data.sessions)?data.sessions:[])).catch(()=>setDeviceSessions([]));return()=>controller.abort()},[profile,sessionToken,authSession]);
-  useEffect(()=>{if(!download)return;const controller=new AbortController();setReleaseState("loading");fetch(releasesUrl,{headers:{Accept:"application/vnd.github+json"},signal:controller.signal}).then(async response=>{if(!response.ok)throw new Error("release_unavailable");return response.json() as Promise<GithubRelease[]>}).then(data=>{const picked=Array.isArray(data)?pickRelease(data):null;if(!picked){setReleaseState("missing");return}setReleaseMeta(picked);setReleaseState("ready")}).catch(()=>{if(!controller.signal.aborted)setReleaseState("unavailable")});return()=>controller.abort()},[download,releaseAttempt]);
+  useEffect(() => {
+    const stored = readStorage("session", sessionKey);
+    if (stored) setSessionToken(stored);
+    else setAuthStage("idle");
+  }, []);
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.theme = theme;
+    root.style.colorScheme = theme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#f7f5fa" : "#111116");
+  }, [theme]);
+  useEffect(() => {
+    document.documentElement.lang = language;
+    document.title = t.meta.title;
+    const setMeta = (selector: string, value: string) => document.querySelector(selector)?.setAttribute("content", value);
+    setMeta('meta[name="description"]', t.meta.description);
+    setMeta('meta[property="og:title"]', t.meta.title);
+    setMeta('meta[name="twitter:title"]', t.meta.title);
+    setMeta('meta[property="og:description"]', t.meta.short);
+    setMeta('meta[name="twitter:description"]', t.meta.short);
+    setMeta('meta[property="og:locale"]', language === "ru" ? "ru_RU" : "en_US");
+    try {
+      localStorage.setItem(languageKey, language);
+    } catch {
+      // The choice lives for this visit only.
+    }
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("lang")) {
+        url.searchParams.set("lang", language);
+        window.history.replaceState(null, "", url);
+      }
+    } catch {
+      // History is optional.
+    }
+  }, [language, t]);
 
-  const verifyCode=async()=>{if(!/^\d{6}$/.test(authCode)){setAuthError(t.auth.invalid);return}setAuthStage("verifying");setAuthError("");try{const response=await fetch(new URL("/v1/auth/telegram/code",authUrl),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({code:authCode,clientKind:"web"}),credentials:"omit"});if(!response.ok)throw new Error("invalid_code");const data=await response.json() as WebSession&{sessionToken?:string};if(!data.sessionToken||!data.displayName)throw new Error("invalid_response");setStorageWarning(!writeSession(sessionKey,data.sessionToken));setSessionToken(data.sessionToken);setAuthSession(data);setAuthStage("ready");setAuthCode("")}catch(error){setAuthStage("code");setAuthError(error instanceof TypeError?t.auth.offline:t.auth.invalid)}};
-  const revoke=async(item:DeviceSession)=>{if(!sessionToken)return;try{const response=await fetch(new URL("/v1/session/devices/revoke",authUrl),{method:"POST",headers:{Authorization:`Bearer ${sessionToken}`,"content-type":"application/json"},body:JSON.stringify({sessionId:item.sessionId}),credentials:"omit"});if(!response.ok)throw new Error();if(item.current){logout();return}setDeviceSessions(v=>v.filter(x=>x.sessionId!==item.sessionId))}catch{}};
-  const logout=()=>{const token=sessionToken;removeSession(sessionKey);setStorageWarning(false);setSessionToken(null);setAuthSession(null);setAvatarUrl(null);setDeviceSessions([]);setAuthStage("idle");if(token)fetch(new URL("/v1/session/logout",authUrl),{method:"POST",headers:{Authorization:`Bearer ${token}`},credentials:"omit"}).catch(()=>undefined)};
-  const downloadBuild=async()=>{setDownloadError("");if(!sessionToken||!authSession){setDownload(false);setProfile(true);return}try{const response=await fetch(new URL("/v1/releases/latest",authUrl),{headers:{Authorization:`Bearer ${sessionToken}`},credentials:"omit"});if(!response.ok)throw new Error();const data=await response.json() as{downloadUrl?:string};const url=safeReleaseUrl(data.downloadUrl);if(!url)throw new Error();window.location.assign(url)}catch{setDownloadError(t.download.error)}};
+  // Dialogs: the page behind goes inert, Tab stays inside, Escape closes and
+  // focus returns to what opened the dialog.
+  useEffect(() => {
+    if (!modalOpen) return undefined;
+    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const background = [document.querySelector<HTMLElement>(".site-header"), document.querySelector<HTMLElement>("main")].filter(
+      (node): node is HTMLElement => Boolean(node),
+    );
+    background.forEach((node) => {
+      node.inert = true;
+      node.setAttribute("aria-hidden", "true");
+    });
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setProfile(false);
+        setDownload(false);
+        setPreview(null);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+      if (!dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),summary,[tabindex]:not([tabindex="-1"])'),
+      ).filter((node) => node.offsetParent !== null);
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      background.forEach((node) => {
+        node.inert = false;
+        node.removeAttribute("aria-hidden");
+      });
+      document.body.style.overflow = "";
+      returnFocus.current?.focus();
+      returnFocus.current = null;
+    };
+  }, [modalOpen]);
+  useEffect(() => {
+    if (!modalOpen) return undefined;
+    const frame = requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="dialog"] .modal-close')?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [modalOpen, profile, download, preview]);
+  useEffect(() => {
+    if (!mobileMenu) return undefined;
+    const closeMenu = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setMobileMenu(false);
+      requestAnimationFrame(() => document.querySelector<HTMLElement>(".menu-button")?.focus());
+    };
+    window.addEventListener("keydown", closeMenu);
+    return () => window.removeEventListener("keydown", closeMenu);
+  }, [mobileMenu]);
+  // Sections rise in as they enter the view; with reduced motion or without
+  // IntersectionObserver they are simply shown. Re-run on language change and
+  // once the catalog arrives, since both re-key nodes.
+  useEffect(() => {
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>(".reveal:not(.is-visible)"));
+    if (reducedMotion() || typeof IntersectionObserver === "undefined") {
+      nodes.forEach((node) => node.classList.add("is-visible"));
+      return undefined;
+    }
+    const observer = new IntersectionObserver(
+      (entries) =>
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        }),
+      { threshold: 0.12, rootMargin: "0px 0px -7%" },
+    );
+    nodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [language, catalog]);
 
-  const closeMobileMenu=()=>setMobileMenu(false);
-  const toggleTheme=()=>{const next:Theme=theme==="dark"?"light":"dark";setTheme(next);setDarkLooks(next==="dark");try{localStorage.setItem(themeKey,next)}catch{}};
-  const themeLabel=theme==="dark"?t.toLight:t.toDark;
-  const go=(id:string)=>document.getElementById(id)?.scrollIntoView({behavior:reducedMotion()?"auto":"smooth"});
-  const slideAlt=t.hero.slides.map(item=>`BetterFy · ${item.label}: ${item.text}`);
-  return <><a className="skip-link" href="#content">{t.skip}</a>
-  <header className="site-header"><a href="#top" aria-label="BetterFy"><Wordmark compact/></a><nav className="site-nav" aria-label={t.menu}>{sections.map((id,index)=><a key={id} href={`#${id}`}>{t.nav[index]}</a>)}</nav><div className="header-actions"><div className="language-switch" ref={langRef} role="group" aria-label={language==="ru"?"Язык":"Language"}>{langPill&&<span className="switch-pill" aria-hidden="true" style={{transform:`translateX(${langPill.left-3}px)`,width:langPill.width}}/>}<button aria-pressed={language==="ru"} className={language==="ru"?"active":""} onClick={()=>setLanguage("ru")}>RU</button><button aria-pressed={language==="en"} className={language==="en"?"active":""} onClick={()=>setLanguage("en")}>EN</button></div><button className="theme-button" type="button" aria-label={themeLabel} title={themeLabel} onClick={toggleTheme}>{theme==="dark"?<Sun size={16}/>:<Moon size={16}/>}</button><button className="profile-button" onClick={()=>setProfile(true)}>{avatarUrl?<img src={avatarUrl} alt=""/>:<CircleUserRound size={16}/>} <span>{authSession?.displayName||t.profile}</span></button><button className="header-download" onClick={()=>setDownload(true)}><ArrowDownToLine size={15}/><span>{t.download.check}</span></button><button className="menu-button" type="button" aria-label={mobileMenu?t.close:t.menu} aria-expanded={mobileMenu} aria-controls="mobile-navigation" onClick={()=>setMobileMenu(value=>!value)}>{mobileMenu?<X size={19}/>:<Menu size={19}/>}</button></div>{mobileMenu&&<nav className="mobile-navigation" id="mobile-navigation" aria-label={t.menu}>{sections.map((id,index)=><a key={id} href={`#${id}`} onClick={closeMobileMenu}>{t.nav[index]}</a>)}<button onClick={()=>{closeMobileMenu();setProfile(true)}}>{t.profile}</button><button type="button" onClick={toggleTheme}>{theme==="dark"?<Sun size={16}/>:<Moon size={16}/>}{themeLabel}</button></nav>}</header>
-  <main id="content">
-    <section id="top" className="hero-wrap"><Ambient/><div className="hero shell"><div className="hero-copy"><p className="eyebrow"><Sparkles size={13}/>{t.hero.tag}</p><h1>{t.hero.a}<br/><strong>{t.hero.b}</strong></h1><p className="lead">{t.hero.body}</p><div className="hero-actions"><button className="action primary sheen" onClick={()=>setDownload(true)}><span className="action-icon"><ArrowDownToLine size={18}/></span><b>{t.hero.cta}</b><ArrowRight size={18}/></button><button className="text-action" onClick={()=>go("how")}>{t.hero.how}<ChevronDown size={15}/></button></div><p className="hero-status"><i/>{t.hero.status}</p></div>
-      <div className="hero-showcase" onMouseEnter={()=>setSlidePaused(true)} onMouseLeave={()=>setSlidePaused(false)} onFocus={()=>setSlidePaused(true)} onBlur={()=>setSlidePaused(false)}><figure className="hero-poster" data-spotlight="tilt"><div className="poster-glow"/>{slides.map((src,index)=>{const offset=((index-slide+4)%3)-1;return <img key={src} src={src} width="1600" height="1000" alt={slideAlt[index]} draggable={false} className={`shelf-card ${offset===0?"is-current":""}`} style={{["--offset" as string]:offset,["--distance" as string]:Math.abs(offset)}} aria-hidden={index!==slide} onClick={offset===0?undefined:()=>setSlide(index)}/>})}<figcaption><span>{t.hero.slides[slide].label}</span><b>{t.hero.slides[slide].text}</b></figcaption></figure><div className="hero-carousel" role="group" aria-label={language==="ru"?"Экраны BetterFy":"BetterFy screens"}>{t.hero.slides.map((item,index)=><button key={item.label} type="button" aria-pressed={slide===index} onClick={()=>setSlide(index)}><span>{String(index+1).padStart(2,"0")}</span><b>{item.label}</b><i aria-hidden="true" className={slide===index&&!slidePaused?"is-running":""}/></button>)}</div></div></div></section>
-    <StatusSection t={t}/>
-    <section className="mods shell" id="mods"><div className="section-intro reveal"><p className="eyebrow"><ShieldCheck size={13}/>{t.mods.tag}</p><h2>{t.mods.a}<br/><strong>{t.mods.b}</strong></h2><p>{t.mods.body}</p></div><div className="mod-grid">{t.mods.items.map((mod,index)=><article className="mod-card reveal" key={mod.id} data-spotlight style={{transitionDelay:`${index*.06}s`}}><div className="mod-image">{mod.image?<img src={asset(mod.image)} alt="" loading="lazy"/>:<span className="mod-image-icon"><Timer size={30}/></span>}<em className={`badge-${mod.badge}`}>{mod.badge==="verified"?<Check size={12}/>:<Braces size={12}/>}{t.mods.badges[mod.badge]}</em></div><div className="mod-copy"><h3>{mod.name}</h3><p>{mod.text}</p><small>{t.mods.by} {mod.author}</small></div></article>)}</div><ModCatalog t={t}/></section>
-    <section className="how" id="how"><div className="shell"><div className="section-intro reveal"><p className="eyebrow">{t.how.tag}</p><h2>{t.how.a}<br/><strong>{t.how.b}</strong></h2></div><ol className="how-steps">{t.how.steps.map((item,index)=><li className="how-step reveal" key={index} data-spotlight style={{transitionDelay:`${index*.08}s`}}><div className="stage-visual"><StepScene index={index} language={language} t={t}/></div><div className="how-copy"><span>{String(index+1).padStart(2,"0")}</span><h3>{item.title}</h3><p>{item.text}</p></div></li>)}</ol></div></section>
-    <SafetySection t={t}/>
-    <section className="builder shell" id="builder" aria-labelledby="builder-title"><div className="builder-inner reveal" data-spotlight><div className="builder-copy"><p className="eyebrow"><Layers size={13}/>{t.builder.tag}</p><h2 id="builder-title">{t.builder.a}<br/><strong>{t.builder.b}</strong></h2><p>{t.builder.body}</p><ul className="builder-points">{t.builder.points.map(point=><li key={point.title}><Check size={15}/><span><b>{point.title}</b>{point.text}</span></li>)}</ul></div><button type="button" className="poster-button builder-shot" onClick={()=>setPreview({src:asset(`site-mkt-install-undo-${language}.webp`),alt:t.builder.a})} aria-label={language==="ru"?"Открыть экран сборки":"Open the build screen"}><img src={asset(`site-mkt-install-undo-${language}.webp`)} width="1600" height="1200" loading="lazy" alt={language==="ru"?"Готовая сборка BetterFy с откатом и журналом установки":"Finished BetterFy build with restore and the install journal"}/><span>{t.open}<ExternalLink size={12}/></span></button></div><div className="shot-gallery reveal"><p className="eyebrow">{t.builder.gallery.tag}</p><h3>{t.builder.gallery.a}</h3><div className="shot-grid">{t.builder.gallery.items.map(item=><figure key={item.id}><button type="button" className="poster-button" onClick={()=>setPreview({src:asset(`site-mkt-${item.id}-${language}.webp`),alt:item.text})} aria-label={item.text}><img src={asset(`site-mkt-${item.id}-${language}.webp`)} width="1600" height="1200" loading="lazy" alt={item.text}/></button><figcaption>{item.text}</figcaption></figure>)}</div></div></section>
-    <section className="looks shell"><div className="reveal"><article className={`feature feature-reverse ${darkLooks?"is-dark":"is-light"}`} data-spotlight><button className="poster-button" onClick={()=>setPreview({src:looksImage,alt:t.looks.a})} aria-label={language==="ru"?"Открыть экран обликов":"Open the looks screen"}><img key={looksImage} src={looksImage} width="1536" height="1024" loading="lazy" alt={language==="ru"?"Каталог обликов BetterFy":"BetterFy looks catalog"}/><span>{t.open}<ExternalLink size={12}/></span></button><div className="feature-copy"><div className="theme-switch" role="group" aria-label={language==="ru"?"Тема превью":"Preview theme"}><span className="switch-pill" aria-hidden="true" style={{transform:`translateX(${darkLooks?100:0}%)`}}/><button type="button" aria-pressed={!darkLooks} className={!darkLooks?"active":""} onClick={()=>setDarkLooks(false)}><Sun size={13}/>{t.light}</button><button type="button" aria-pressed={darkLooks} className={darkLooks?"active":""} onClick={()=>setDarkLooks(true)}><Moon size={13}/>{t.dark}</button></div><p className="micro">{t.looks.tag}</p><h3>{t.looks.a}<br/>{t.looks.b}</h3><p>{t.looks.body}</p><ul>{t.looks.items.map(x=><li key={x}><Check size={14}/>{x}</li>)}</ul></div></article></div></section>
-    <section className="faq shell" id="faq"><div className="section-intro reveal"><p className="eyebrow">{t.faq.tag}</p><h2>{t.faq.a}</h2></div><div className="faq-layout"><div className="faq-list reveal">{t.faq.items.map((item,index)=>{const open=openFaq===index;const more=(item as {more?:{href:string;label:string;asset?:boolean}}).more;return <div className={`faq-item ${open?"is-open":""}`} key={item.q}><button type="button" aria-expanded={open} aria-controls={`faq-${index}`} id={`faq-q-${index}`} onClick={()=>setOpenFaq(open?null:index)}><span>{item.q}</span><Plus size={18}/></button><div className="faq-answer" id={`faq-${index}`} role="region" aria-labelledby={`faq-q-${index}`}><div><p>{item.a}</p>{more&&<a className="faq-more" href={more.asset?asset(more.href):more.href}>{more.label}<ArrowRight size={13}/></a>}</div></div></div>})}</div>
-    <aside className="faq-help reveal" aria-labelledby="faq-help-title"><span className="faq-help-icon" aria-hidden="true"><LifeBuoy size={20}/></span><h3 id="faq-help-title">{t.footer.helpTitle}</h3><p>{t.footer.helpBody}</p><a href={bot}><Send size={14}/>{t.footer.telegram}</a><a href={`${repo}/issues/new?template=bug.yml`}><Bug size={14}/>{t.footer.bug}<ExternalLink size={11}/></a></aside></div></section>
-    <section className="download-section" id="download"><div className="shell download-inner reveal" data-spotlight><div><p className="eyebrow">{t.download.tag}</p><h2>{t.download.a}<br/><strong>{t.download.b}</strong></h2><p>{t.download.body}</p></div><div className="download-cta"><button className="action primary huge sheen" onClick={()=>setDownload(true)}><span className="action-icon"><ArrowDownToLine size={19}/></span><b>{t.download.check}</b><ArrowRight size={19}/></button><span>{t.download.system} · {t.download.prerelease}</span><a href={`${repo}/releases`}>{t.download.versions}<ExternalLink size={12}/></a></div></div></section>
-    <footer className="site-footer shell"><div><span className={`footer-mark ${fyClicks>=5?"is-party":""}`}><Wordmark onFy={()=>setFyClicks(value=>value+1)}/>{fyClicks>=5&&<span className="fy-burst" aria-hidden="true">{Array.from({length:16},(_,i)=><i key={i} style={{["--a" as string]:`${i*22.5}deg`,["--d" as string]:`${40+(i%3)*16}px`}}/>)}</span>}</span><p>{t.footer.tag}</p></div><div><b>{t.footer.product}</b>{sections.map((id,index)=><a key={id} href={`#${id}`}>{t.nav[index]}</a>)}<button onClick={()=>setProfile(true)}>{t.profile}</button></div><div><b>{t.footer.project}</b><a href={repo}>GitHub<ExternalLink size={11}/></a><a href={`${repo}/releases`}>{t.footer.releases}<ExternalLink size={11}/></a><a href={`${repo}/blob/main/docs/ROADMAP.md`}>{t.footer.roadmap}<ExternalLink size={11}/></a></div><div><b>{t.footer.help}</b><a href={bot}>{t.footer.telegram}<Send size={11}/></a><a href={`${repo}/issues/new?template=bug.yml`}>{t.footer.bug}<ExternalLink size={11}/></a><a href={`${repo}/security`}>{t.footer.security}<ExternalLink size={11}/></a></div><div className="footer-legal"><a href={asset("privacy.html")}>{t.footer.privacy}</a><a href={asset("terms.html")}>{t.footer.terms}</a><span>{t.footer.legal}</span></div></footer>
-  </main>
-  {profile&&<ProfilePanel language={language} t={t} close={()=>setProfile(false)} stage={authStage} session={authSession} token={sessionToken} onEmailSignedIn={data=>{setStorageWarning(!writeSession(sessionKey,data.sessionToken));setSessionToken(data.sessionToken);setAuthSession(data);setAuthStage("ready")}} code={authCode} setCode={v=>{setAuthCode(v);setAuthError("");setAuthStage("code")}} error={authError} storageWarning={storageWarning} verify={verifyCode} avatar={avatarUrl} sessions={deviceSessions} revoke={revoke} logout={logout}/>} {download&&<DownloadPanel language={language} t={t} close={()=>setDownload(false)} session={authSession} release={releaseMeta} releaseState={releaseState} retry={()=>{setReleaseMeta(null);setReleaseAttempt(value=>value+1)}} openProfile={()=>{setDownload(false);setProfile(true)}} download={downloadBuild} error={downloadError}/>}
-  {preview&&<div className="modal-backdrop" onMouseDown={()=>setPreview(null)}><section className="preview-panel" role="dialog" aria-modal="true" aria-label={preview.alt} onMouseDown={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setPreview(null)} aria-label={t.close}><X size={17}/></button><img src={preview.src} alt={preview.alt}/></section></div>}
-  </>;
+  useEffect(() => {
+    if (!sessionToken) {
+      setAuthSession(null);
+      setAuthStage("idle");
+      return undefined;
+    }
+    const controller = new AbortController();
+    setAuthStage("checking");
+    fetch(new URL("/v1/session/profile", authUrl), {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+      credentials: "omit",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (response.status === 401 || response.status === 403) {
+          removeSession(sessionKey);
+          setSessionToken(null);
+          setAuthSession(null);
+          setAuthStage("idle");
+          return null;
+        }
+        if (!response.ok) throw new Error("profile_unavailable");
+        return response.json() as Promise<WebSession>;
+      })
+      .then((data) => {
+        if (!data) return;
+        setAuthSession(data);
+        setAuthStage("ready");
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setAuthStage("unavailable");
+      });
+    return () => controller.abort();
+  }, [sessionToken]);
+  useEffect(() => {
+    if (!sessionToken || !authSession?.avatarAvailable) {
+      setAvatarUrl(null);
+      return undefined;
+    }
+    const controller = new AbortController();
+    let objectUrl: string | null = null;
+    fetch(new URL("/v1/session/avatar", authUrl), {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+      credentials: "omit",
+      signal: controller.signal,
+    })
+      .then((response) => (response.ok ? response.blob() : Promise.reject()))
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        setAvatarUrl(objectUrl);
+      })
+      .catch(() => setAvatarUrl(null));
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [sessionToken, authSession?.avatarAvailable]);
+  useEffect(() => {
+    if (!profile || !sessionToken || !authSession) return undefined;
+    const controller = new AbortController();
+    fetch(new URL("/v1/session/devices", authUrl), {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+      credentials: "omit",
+      signal: controller.signal,
+    })
+      .then((response) => (response.ok ? response.json() : Promise.reject()))
+      .then((data: { sessions?: DeviceSession[] }) => setDevices(Array.isArray(data.sessions) ? data.sessions : []))
+      .catch(() => setDevices([]));
+    return () => controller.abort();
+  }, [profile, sessionToken, authSession]);
+  useEffect(() => {
+    if (!download) return undefined;
+    const controller = new AbortController();
+    setReleaseState("loading");
+    fetch(releasesUrl, { headers: { Accept: "application/vnd.github+json" }, signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("release_unavailable");
+        return response.json();
+      })
+      .then((data) => {
+        const picked = Array.isArray(data) ? pickRelease(data) : null;
+        if (!picked) {
+          setReleaseState("missing");
+          return;
+        }
+        setRelease(picked);
+        setReleaseState("ready");
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setReleaseState("unavailable");
+      });
+    return () => controller.abort();
+  }, [download, releaseAttempt]);
+
+  const signedIn = (data: WebSession & { sessionToken: string }) => {
+    setStorageWarning(!writeSession(sessionKey, data.sessionToken));
+    setSessionToken(data.sessionToken);
+    setAuthSession(data);
+    setAuthStage("ready");
+  };
+  const verifyCode = async () => {
+    if (!/^\d{6}$/.test(authCode)) {
+      setAuthError(t.auth.invalid);
+      return;
+    }
+    setAuthStage("verifying");
+    setAuthError("");
+    try {
+      const response = await fetch(new URL("/v1/auth/telegram/code", authUrl), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code: authCode, clientKind: "web" }),
+        credentials: "omit",
+      });
+      if (!response.ok) throw new Error("invalid_code");
+      const data = (await response.json()) as WebSession & { sessionToken?: string };
+      if (!data.sessionToken || !data.displayName) throw new Error("invalid_response");
+      signedIn(data as WebSession & { sessionToken: string });
+      setAuthCode("");
+    } catch (error) {
+      setAuthStage("code");
+      setAuthError(error instanceof TypeError ? t.auth.offline : t.auth.invalid);
+    }
+  };
+  const logout = () => {
+    const token = sessionToken;
+    removeSession(sessionKey);
+    setStorageWarning(false);
+    setSessionToken(null);
+    setAuthSession(null);
+    setAvatarUrl(null);
+    setDevices([]);
+    setAuthStage("idle");
+    if (token)
+      fetch(new URL("/v1/session/logout", authUrl), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: "omit",
+      }).catch(() => undefined);
+  };
+  const revoke = async (item: DeviceSession) => {
+    if (!sessionToken) return;
+    try {
+      const response = await fetch(new URL("/v1/session/devices/revoke", authUrl), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: item.sessionId }),
+        credentials: "omit",
+      });
+      if (!response.ok) throw new Error();
+      if (item.current) logout();
+      else setDevices((value) => value.filter((other) => other.sessionId !== item.sessionId));
+    } catch {
+      // The list stays as it was.
+    }
+  };
+  const downloadBuild = async () => {
+    setDownloadError("");
+    if (!sessionToken || !authSession) {
+      setDownload(false);
+      setProfile(true);
+      return;
+    }
+    try {
+      const response = await fetch(new URL("/v1/releases/latest", authUrl), {
+        headers: { Authorization: `Bearer ${sessionToken}` },
+        credentials: "omit",
+      });
+      if (!response.ok) throw new Error();
+      const data = (await response.json()) as { downloadUrl?: string };
+      const url = safeReleaseUrl(data.downloadUrl);
+      if (!url) throw new Error();
+      window.location.assign(url);
+    } catch {
+      setDownloadError(t.download.error);
+    }
+  };
+  const toggleTheme = () => {
+    const next: Theme = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    try {
+      localStorage.setItem(themeKey, next);
+    } catch {
+      // The choice lives for this visit only.
+    }
+  };
+
+  const nav = (
+    <nav className="site-nav" aria-label={t.menu}>
+      {t.nav.map(([id, label]) => (
+        <a key={id} href={`#${id}`} onClick={() => setMobileMenu(false)}>
+          {label}
+        </a>
+      ))}
+    </nav>
+  );
+
+  return (
+    <LocaleBridge language={language} setLanguage={setLanguageStable}>
+      <a className="skip-link" href="#content">
+        {t.skip}
+      </a>
+      <header className="site-header">
+        <a href="#top" className="w-brand" aria-label="BetterFy">
+          <Wordmark />
+        </a>
+        {nav}
+        <div className="w-header-actions">
+          <div className="w-lang" role="group" aria-label="Language">
+            {(["ru", "en"] as const).map((value) => (
+              <button
+                key={value}
+                className={language === value ? "active" : ""}
+                aria-pressed={language === value}
+                onClick={() => setLanguage(value)}
+              >
+                {value.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          <button className="w-icon-button" onClick={toggleTheme} aria-label={theme === "dark" ? t.toLight : t.toDark}>
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+          <button className="w-profile-button" aria-label={t.profile} onClick={() => setProfile(true)}>
+            {avatarUrl ? <img src={avatarUrl} alt="" /> : <CircleUserRound size={16} />}
+            <span>{t.profile}</span>
+          </button>
+          <button
+            className="s-btn s-btn-primary w-header-download"
+            aria-label={t.hero.download}
+            onClick={() => setDownload(true)}
+          >
+            <ArrowDownToLine />
+            <span>{t.hero.download}</span>
+          </button>
+          <button
+            className="w-icon-button menu-button"
+            aria-label={t.menu}
+            aria-expanded={mobileMenu}
+            aria-controls="mobile-navigation"
+            onClick={() => setMobileMenu((value) => !value)}
+          >
+            {mobileMenu ? <X size={18} /> : <Menu size={18} />}
+          </button>
+        </div>
+        {mobileMenu && (
+          <div className="w-mobile-nav" id="mobile-navigation">
+            {nav}
+          </div>
+        )}
+      </header>
+
+      <main id="content">
+        <Hero t={t} catalog={catalog} onDownload={() => setDownload(true)} onOpen={setPreview} />
+        <div className="w-page">
+          <Inside t={t} language={language} catalog={catalog} />
+          <How t={t} />
+          <Safety t={t} />
+          <Status t={t} />
+          <div className="w-bot reveal">
+            <BotStage motion />
+          </div>
+          <Faq t={t} />
+          <section className="w-download-cta reveal" id="download" data-spotlight>
+            <div>
+              <span className="s-eyebrow">{t.download.tag}</span>
+              <h2>
+                {t.download.a}
+                <span>{t.download.b}</span>
+              </h2>
+              <p>{t.download.body}</p>
+            </div>
+            <button className="s-btn s-btn-primary" onClick={() => setDownload(true)}>
+              <ArrowDownToLine />
+              {t.hero.download}
+            </button>
+          </section>
+        </div>
+        <footer className="site-footer">
+          <div className="w-footer-brand">
+            <Wordmark />
+            <p>{t.footer.tag}</p>
+          </div>
+          <div className="w-footer-links">
+            <div>
+              <h3>{t.footer.product}</h3>
+              <a href="#inside">{t.nav[0][1]}</a>
+              <a href={`${repo}/releases`}>{t.footer.releases}</a>
+              <a href={`${repo}/blob/main/docs/ROADMAP.md`}>{t.footer.roadmap}</a>
+            </div>
+            <div>
+              <h3>{t.footer.help}</h3>
+              <a href="https://t.me/BeterFyBot">{t.footer.telegram}</a>
+              <a href="https://t.me/BeterHelp">{t.footer.support}</a>
+              <a href={`${repo}/issues`}>{t.footer.bug}</a>
+            </div>
+            <div>
+              <h3>{t.footer.project}</h3>
+              <a href={repo}>
+                <Github size={13} /> GitHub
+              </a>
+              <a href={`${repo}/security`}>{t.footer.security}</a>
+              <a href={`${import.meta.env.BASE_URL}privacy.html`}>{t.footer.privacy}</a>
+              <a href={`${import.meta.env.BASE_URL}terms.html`}>{t.footer.terms}</a>
+            </div>
+          </div>
+          <p className="w-legal">{t.footer.legal}</p>
+        </footer>
+      </main>
+
+      {profile && (
+        <Account
+          language={language}
+          t={t}
+          close={() => setProfile(false)}
+          stage={authStage}
+          session={authSession}
+          token={sessionToken}
+          avatar={avatarUrl}
+          sessions={devices}
+          storageWarning={storageWarning}
+          code={authCode}
+          setCode={(value) => {
+            setAuthCode(value);
+            setAuthError("");
+          }}
+          codeError={authError}
+          verifyCode={() => void verifyCode()}
+          onSignedIn={signedIn}
+          revoke={(item) => void revoke(item)}
+          logout={logout}
+        />
+      )}
+      {download && (
+        <Download
+          language={language}
+          t={t}
+          close={() => setDownload(false)}
+          session={authSession}
+          release={release}
+          releaseState={releaseState}
+          retry={() => setReleaseAttempt((value) => value + 1)}
+          openProfile={() => {
+            setDownload(false);
+            setProfile(true);
+          }}
+          download={() => void downloadBuild()}
+          error={downloadError}
+        />
+      )}
+      {preview && (
+        <div className="modal-backdrop" onMouseDown={() => setPreview(null)}>
+          <section
+            className="w-dialog w-preview"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="w-preview-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button className="modal-close" onClick={() => setPreview(null)} aria-label={t.close}>
+              <X size={17} />
+            </button>
+            {preview.image && <img src={preview.image} alt="" />}
+            <div>
+              <p className="w-micro">{preview.categoryName[language]}</p>
+              <h2 id="w-preview-title">{preview.name[language]}</h2>
+              <p className="w-credit">
+                <Eye size={13} />
+                {t.inside.credit}
+              </p>
+              <button
+                className="s-btn s-btn-primary"
+                onClick={() => {
+                  setPreview(null);
+                  setDownload(true);
+                }}
+              >
+                <ArrowDownToLine />
+                {t.hero.download}
+                <ArrowRight />
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+    </LocaleBridge>
+  );
 }

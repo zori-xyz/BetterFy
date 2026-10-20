@@ -1,11 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { getStorageItem, setStorageItem } from "./storage";
 
 export type Language = "ru" | "en";
@@ -29,11 +22,26 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = language;
   }, [language]);
 
+  const value = useMemo(() => ({ language, setLanguage, isRu: language === "ru" }), [language]);
+
+  return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
+}
+
+/** For pages that keep their own language state (the website): the app's
+ * components inside read that language instead of the app's stored one. */
+export function LocaleBridge({
+  language,
+  setLanguage,
+  children,
+}: {
+  language: Language;
+  setLanguage: (language: Language) => void;
+  children: ReactNode;
+}) {
   const value = useMemo(
     () => ({ language, setLanguage, isRu: language === "ru" }),
-    [language],
+    [language, setLanguage],
   );
-
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
 }
 
