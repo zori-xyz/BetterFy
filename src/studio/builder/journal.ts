@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { testerRecorder } from "../../tester/recorder";
 
 // What BetterFy is doing, in order, for the activity journal under the
 // builder. Lives in memory for the session: it explains the current work and
@@ -32,6 +33,7 @@ export const journal = {
       { id: sequence, at: Date.now(), tone, text: [ru, en] as [string, string], detail },
     ].slice(-LIMIT);
     emit();
+    if (tone !== "dev") testerRecorder.journal(tone, ru);
   },
   clear() {
     entries = [];

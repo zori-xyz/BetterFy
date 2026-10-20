@@ -1,3 +1,5 @@
+import { testerRecorder } from "./tester/recorder";
+
 export type EnginePhase =
   | "idle"
   | "checking"
@@ -710,6 +712,7 @@ function backendErrorCode(error: unknown) {
 
 async function guardedEngineCall<T>(operation: string, task: Promise<T>, timeoutMs = engineTimeoutMs) {
   let timer = 0;
+  const started = performance.now();
   const timeout = new Promise<never>((_, reject) => {
     timer = window.setTimeout(
       () => reject(new EngineFault("timeout", operation)),
@@ -717,10 +720,15 @@ async function guardedEngineCall<T>(operation: string, task: Promise<T>, timeout
     );
   });
   try {
-    return await Promise.race([task, timeout]);
+    const result = await Promise.race([task, timeout]);
+    testerRecorder.engine(operation, true, performance.now() - started);
+    return result;
   } catch (error) {
-    if (error instanceof EngineFault) throw error;
-    throw new EngineFault(backendErrorCode(error), operation, { cause: error });
+    const fault = error instanceof EngineFault
+      ? error
+      : new EngineFault(backendErrorCode(error), operation, { cause: error });
+    testerRecorder.engine(operation, false, performance.now() - started, fault.code);
+    throw fault;
   } finally {
     window.clearTimeout(timer);
   }

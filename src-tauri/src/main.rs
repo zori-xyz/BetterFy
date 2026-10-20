@@ -35,6 +35,7 @@ mod skin_archive;
 mod steam_accounts;
 pub mod steam_config;
 mod system_diagnostics;
+mod tester_reports;
 mod tree_pilot;
 mod user_styles;
 mod vpk;
@@ -1505,7 +1506,8 @@ fn main() {
             auth_profile,
             auth_list_sessions,
             auth_revoke_device,
-            auth_logout
+            auth_logout,
+            tester_reports::send_tester_report
         ])
         .run(tauri::generate_context!())
         .expect("error while running BetterFy");

@@ -84,4 +84,15 @@ test("sign-in emails carry the code in HTML and plain text, per language and pur
   assert.equal(en.subject, "Your BetterFy ID sign-in code");
   assert.ok(en.html.includes("654 321"));
   assert.throws(() => emailContent("<b>1</b>", "en", "signin"));
+  // The brand wordmark is a served picture, not text in fonts mail clients lack.
+  assert.ok(en.html.includes('src="https://betterfy-auth.zori-xyz.workers.dev/email-wordmark.png"'));
+  assert.ok(en.html.includes('alt="BetterFy"'));
+  assert.ok(!en.html.includes("font-style:italic"));
+  assert.ok(emailContent("654321", "en", "signin", "https://assets.example/bot/").html.includes('src="https://assets.example/email-wordmark.png"'));
+  assert.throws(() => emailContent("654321", "en", "signin", "http://assets.example"));
+  const { readFile } = await import("node:fs/promises");
+  const png = await readFile(new URL("../../../website/public/bot/email-wordmark.png", import.meta.url));
+  assert.deepEqual([...png.subarray(1, 4)], [0x50, 0x4e, 0x47]);
+  assert.equal(png.readUInt32BE(16), 393);
+  assert.equal(png.readUInt32BE(20), 177);
 });

@@ -11,6 +11,9 @@ export type AuthSession = {
   avatarAvailable?: boolean | null;
   // false for standalone BetterFy ID accounts, which cannot buy Premium yet.
   telegramLinked?: boolean | null;
+  // Read from the profile, never from sign-in answers: whether the account is
+  // in the tester program (the tester journal window).
+  tester?: boolean | null;
   // "offline": credentials are stored on this device but the auth service
   // could not be reached at startup. Local features keep working.
   source: "demo" | "server" | "offline";
@@ -170,6 +173,7 @@ const isAuthSession = (value: unknown): value is Omit<AuthSession, "source"> => 
     && (record.sessionToken == null || typeof record.sessionToken === "string")
     && (record.telegramLinked == null || typeof record.telegramLinked === "boolean")
     && (record.avatarAvailable == null || typeof record.avatarAvailable === "boolean")
+    && (record.tester == null || typeof record.tester === "boolean")
   );
 };
 

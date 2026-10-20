@@ -1,11 +1,11 @@
 import { useId } from "react";
-import { FlaskConical } from "lucide-react";
+import { Bug, FlaskConical } from "lucide-react";
 import { useLocale } from "../../i18n";
 import { ChoiceCards } from "./Choice";
 import { setDemoSettings, useDemoSettings, type DemoScenario } from "./demo";
 
 // Controls for the browser preview: which way the simulated install goes,
-// and whether the preview account is a developer.
+// and whether the preview account is a developer or a tester.
 export function DemoPanel() {
   const { isRu } = useLocale();
   const settings = useDemoSettings();
@@ -63,6 +63,16 @@ export function DemoPanel() {
         <i aria-hidden="true" />
         <FlaskConical />
         {isRu ? "Аккаунт разработчика" : "Developer account"}
+      </label>
+      <label className="b-switch">
+        <input
+          type="checkbox"
+          checked={settings.tester}
+          onChange={(event) => setDemoSettings({ tester: event.target.checked })}
+        />
+        <i aria-hidden="true" />
+        <Bug />
+        {isRu ? "Аккаунт тестировщика" : "Tester account"}
       </label>
     </div>
   );

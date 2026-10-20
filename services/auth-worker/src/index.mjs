@@ -36,6 +36,19 @@ import {
   validateCheckout,
   validateSuccessfulPayment,
 } from "./payments.mjs";
+import {
+  MAX_TESTER_BODY_BYTES,
+  MAX_TESTER_IMAGE_BYTES,
+  MAX_TESTER_IMAGES,
+  MAX_TESTER_REPORT_BYTES,
+  TESTER_REPORTS_PER_DAY,
+  imageKind,
+  parseTesterReport,
+  testerImageCaption,
+  testerLogins,
+  testerReportsChat,
+  testerSummary,
+} from "./tester.mjs";
 
 const TELEGRAM_HEADER = "X-Telegram-Bot-Api-Secret-Token";
 const ISSUE_LIMIT = 3;
@@ -135,6 +148,17 @@ async function telegram(env, method, payload) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(`telegram_${method}_failed`);
+  const result = await response.json();
+  if (!result.ok) throw new Error(`telegram_${method}_rejected`);
+  return result.result;
+}
+
+async function telegramForm(env, method, form) {
+  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
+    method: "POST",
+    body: form,
   });
   if (!response.ok) throw new Error(`telegram_${method}_failed`);
   const result = await response.json();
@@ -382,6 +406,7 @@ async function sessionProfile(request, env, origin) {
     sessionExpiresAt: user.expires_at,
     sessionId: user.session_id ?? undefined,
     developer,
+    tester: await isTesterAccount(env, user.user_id),
   }, 200, headers);
 }
 
@@ -394,12 +419,134 @@ export function developerLogins(env) {
   return new Set(raw.split(",").map((value) => normalizeIdUsername(value.trim())).filter(Boolean));
 }
 
-async function isDeveloperAccount(env, userId) {
-  const logins = developerLogins(env);
-  if (logins.size === 0) return false;
+async function listedIdLogin(env, userId, logins) {
+  if (logins.size === 0) return null;
   const credential = await env.AUTH_DB.prepare("SELECT username_key FROM betterfy_id_credentials WHERE user_id = ?")
     .bind(userId).first();
-  return Boolean(credential && logins.has(credential.username_key));
+  return credential && logins.has(credential.username_key) ? credential.username_key : null;
+}
+
+async function isDeveloperAccount(env, userId) {
+  return Boolean(await listedIdLogin(env, userId, developerLogins(env)));
+}
+
+// Tester accounts see the tester journal in the desktop app and may send
+// reports. Like developers, they are BetterFy ID logins listed in a Worker
+// setting (BETTERFY_TESTER_LOGINS), at most three.
+async function testerLogin(env, userId) {
+  return listedIdLogin(env, userId, testerLogins(env, normalizeIdUsername));
+}
+
+async function isTesterAccount(env, userId) {
+  return Boolean(await testerLogin(env, userId));
+}
+
+async function sendTesterImages(env, chatId, images, replyTo) {
+  if (images.length === 0) return;
+  const reply = JSON.stringify({ message_id: replyTo, allow_sending_without_reply: true });
+  const send = async (type) => {
+    const form = new FormData();
+    form.set("chat_id", chatId);
+    form.set("reply_parameters", reply);
+    if (images.length === 1) {
+      const [image] = images;
+      form.set(type, image.blob, image.name);
+      form.set("caption", image.caption);
+      return telegramForm(env, type === "photo" ? "sendPhoto" : "sendDocument", form);
+    }
+    form.set("media", JSON.stringify(images.map((image, index) => ({
+      type,
+      media: `attach://image${index}`,
+      caption: image.caption,
+    }))));
+    images.forEach((image, index) => form.set(`image${index}`, image.blob, image.name));
+    return telegramForm(env, "sendMediaGroup", form);
+  };
+  try {
+    await send("photo");
+  } catch {
+    // Telegram refuses photos past its size and proportion limits; the same
+    // pictures still arrive as files.
+    await send("document");
+  }
+}
+
+async function submitTesterReport(request, env, origin) {
+  const headers = corsHeaders(origin);
+  const now = Math.floor(Date.now() / 1000);
+  const user = await authenticatedUser(request, env, now);
+  if (!user) return json({ error: "unauthorized" }, 401, headers);
+  const login = await testerLogin(env, user.user_id);
+  if (!login) return json({ error: "not_a_tester" }, 403, headers);
+  const chatId = testerReportsChat(env);
+  if (!chatId) return json({ error: "tester_reports_unavailable" }, 503, headers);
+  const length = Number(request.headers.get("content-length") ?? NaN);
+  if (!Number.isSafeInteger(length)) return json({ error: "length_required" }, 411, headers);
+  if (length > MAX_TESTER_BODY_BYTES) return json({ error: "report_too_large" }, 413, headers);
+  if (!(request.headers.get("content-type") ?? "").startsWith("multipart/form-data")) {
+    return json({ error: "invalid_report" }, 400, headers);
+  }
+  let form;
+  try {
+    form = await request.formData();
+  } catch {
+    return json({ error: "invalid_report" }, 400, headers);
+  }
+  const reportPart = form.getAll("report");
+  const imageParts = form.getAll("image");
+  if (reportPart.length !== 1 || imageParts.length > MAX_TESTER_IMAGES) return json({ error: "invalid_report" }, 400, headers);
+  const reportText = typeof reportPart[0] === "string" ? reportPart[0] : await reportPart[0].text();
+  if (new TextEncoder().encode(reportText).length > MAX_TESTER_REPORT_BYTES) {
+    return json({ error: "report_too_large" }, 413, headers);
+  }
+  const report = parseTesterReport(reportText, imageParts.length);
+  if (!report) return json({ error: "invalid_report" }, 400, headers);
+  const images = [];
+  for (const [index, part] of imageParts.entries()) {
+    if (typeof part === "string" || part.size > MAX_TESTER_IMAGE_BYTES) return json({ error: "invalid_image" }, 400, headers);
+    const bytes = new Uint8Array(await part.arrayBuffer());
+    const kind = imageKind(bytes);
+    if (!kind) return json({ error: "invalid_image" }, 400, headers);
+    images.push({
+      blob: new Blob([bytes], { type: `image/${kind}` }),
+      name: `${report.images[index].kind}-${index + 1}.${kind === "jpeg" ? "jpg" : "png"}`,
+      caption: testerImageCaption(report.images[index], index),
+    });
+  }
+  if (!await consumeBucketLimit(env, user.user_id, now, "tester-report", TESTER_REPORTS_PER_DAY, 24 * 60 * 60)) {
+    return json({ error: "rate_limited" }, 429, headers);
+  }
+
+  const reportId = crypto.randomUUID();
+  let delivered = false;
+  try {
+    const summary = await telegram(env, "sendMessage", {
+      chat_id: chatId,
+      text: testerSummary(report, login, now),
+      parse_mode: "HTML",
+      link_preview_options: { is_disabled: true },
+    });
+    await sendTesterImages(env, chatId, images, summary.message_id);
+    const document = new FormData();
+    document.set("chat_id", chatId);
+    document.set("reply_parameters", JSON.stringify({ message_id: summary.message_id, allow_sending_without_reply: true }));
+    const stamp = new Date(now * 1000).toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+    document.set("document", new Blob([reportText], { type: "application/json" }), `report-${login}-${stamp}.json`);
+    await telegramForm(env, "sendDocument", document);
+    delivered = true;
+  } catch {
+    delivered = false;
+  }
+  await env.AUTH_DB.prepare(
+    `INSERT INTO tester_reports
+       (report_id, user_id, created_at, app_version, event_count, failure_count, note_count, image_count, delivered)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    reportId, user.user_id, now, report.appVersion, report.events.length,
+    report.counts.failures, report.notes.length, images.length, delivered ? 1 : 0,
+  ).run();
+  if (!delivered) return json({ error: "report_delivery_failed" }, 502, headers);
+  return json({ ok: true, reportId }, 200, headers);
 }
 
 async function emailIdentityStatus(request, env, origin) {
@@ -1634,7 +1781,7 @@ async function verifyCode(request, env, origin) {
 
 async function sendEmailCode(env, email, code, language, purpose) {
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) throw new Error("email_not_configured");
-  const content = emailContent(code, language, purpose);
+  const content = emailContent(code, language, purpose, env.BOT_ASSET_BASE_URL);
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
@@ -1906,6 +2053,13 @@ export async function route(request, env) {
     if (request.method === "POST" && url.pathname === "/v1/session/email/start") return requestEmailCode(request, env, origin, "link");
     if (request.method === "POST" && url.pathname === "/v1/session/email/verify") return verifyEmailCode(request, env, origin, "link");
     if (request.method === "GET" && url.pathname === "/v1/releases/latest") return latestRelease(request, env, origin);
+    return json({ error: "method_not_allowed" }, 405, corsHeaders(origin));
+  }
+  if (url.pathname === "/v1/tester/reports") {
+    const origin = allowedOrigin(request, env);
+    if (origin === false) return json({ error: "origin_not_allowed" }, 403);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    if (request.method === "POST") return submitTesterReport(request, env, origin);
     return json({ error: "method_not_allowed" }, 405, corsHeaders(origin));
   }
   if (url.pathname === "/v1/auth/telegram/code") {

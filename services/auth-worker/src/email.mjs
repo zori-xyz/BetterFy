@@ -46,8 +46,16 @@ const COPY = {
   },
 };
 
-export function emailContent(code, language, purpose) {
+// The wordmark is a picture (scripts/render-email-wordmark.mjs): mail clients
+// do not load the brand fonts, and without them "Fy" fell back to a plain
+// italic.
+const DEFAULT_ASSET_BASE = "https://betterfy-auth.zori-xyz.workers.dev";
+
+export function emailContent(code, language, purpose, assetBase = DEFAULT_ASSET_BASE) {
   if (!/^\d{6}$/.test(code)) throw new Error("email_code_invalid");
+  const base = new URL(assetBase);
+  if (base.protocol !== "https:") throw new Error("email_asset_base_invalid");
+  const wordmark = new URL("/email-wordmark.png", base).href;
   const lang = language === "ru" ? "ru" : "en";
   const copy = COPY[lang];
   const kind = copy[purpose] ?? copy.signin;
@@ -68,7 +76,7 @@ export function emailContent(code, language, purpose) {
 <tr><td align="center" style="padding:40px 16px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
 <tr><td style="padding:0 4px 20px;font-family:${font};">
-<span style="font-size:26px;font-weight:800;letter-spacing:-0.03em;color:#f7f5fb;">Better</span><span style="font-size:30px;font-weight:700;font-style:italic;color:#ce57f4;">Fy</span>
+<img src="${wordmark}" width="131" height="59" alt="BetterFy" style="display:block;border:0;outline:none;width:131px;height:59px;color:#f7f5fb;font-size:24px;font-weight:800;">
 </td></tr>
 <tr><td bgcolor="#19191f" style="background:#19191f;border:1px solid #3b3844;border-radius:18px;padding:0;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
