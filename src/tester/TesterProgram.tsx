@@ -16,6 +16,7 @@ import {
   Plus,
   Send,
   Settings2,
+  Skull,
   Trash2,
   X,
 } from "lucide-react";
@@ -255,6 +256,15 @@ export function TesterProgram({ session }: { session: AuthSession | null }) {
   });
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"feed" | "notes">("feed");
+  // A Roshan-style clock for the session, ticking only while the window is open.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!open) return undefined;
+    const tick = () => setElapsed(Math.max(0, Math.round((Date.now() - Date.parse(journal.startedAt)) / 1000)));
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [open, journal.startedAt]);
   const [sending, setSending] = useState<SendState>("idle");
   const [problem, setProblem] = useState("");
   const [bubble, setBubble] = useState<"failure" | "ping" | "crash" | null>(null);
@@ -394,6 +404,12 @@ export function TesterProgram({ session }: { session: AuthSession | null }) {
     done: t("Курьер доставил!", "Delivered by courier!"),
   }[sending];
 
+  const actions = journal.counts.clicks + journal.counts.screens;
+  const hp = Math.max(
+    0,
+    Math.min(100, Math.round(100 - (journal.counts.failures / Math.max(actions, 5)) * 400)),
+  );
+
   return (
     <div className="t-root" data-tester-ui>
       {bubble && !open && (
@@ -487,6 +503,46 @@ export function TesterProgram({ session }: { session: AuthSession | null }) {
               <X />
             </button>
           </header>
+
+          <div
+            className="t-hp"
+            role="img"
+            aria-label={t("Прочность сессии", "Session health")}
+            title={t(
+              "Доля действий без сбоя: чем больше сбоев на клики и экраны, тем ниже.",
+              "Share of actions without a failure: the more failures per click and screen, the lower.",
+            )}
+          >
+            <i
+              style={{
+                width: `${hp}%`,
+                background: `hsl(${Math.round(hp * 1.2)} 62% 46%)`,
+              }}
+            />
+            <span>
+              {t("Прочность", "Health")} {hp}%
+            </span>
+            <time>
+              {String(Math.floor(elapsed / 60)).padStart(2, "0")}:{String(elapsed % 60).padStart(2, "0")}
+            </time>
+          </div>
+          {(journal.previousRun?.uncleanExit || journal.previousRun?.panic) && (
+            <div className="t-grave" role="status">
+              <Skull />
+              <div>
+                <strong>{t("Прошлый запуск оборвался", "The last run ended abruptly")}</strong>
+                <small>
+                  {journal.previousRun?.panic
+                    ? `${journal.previousRun.panic.message} · ${journal.previousRun.panic.location}`
+                    : t(
+                        "Приложение закрылось без обычного выхода. Опиши, что делал, и отправь.",
+                        "The app closed without a normal exit. Say what you were doing and send it.",
+                      )}
+                </small>
+              </div>
+              <button onClick={() => setTab("notes")}>{t("Описать", "Describe")}</button>
+            </div>
+          )}
 
           <div className="t-scoreboard">
             <Score value={journal.counts.screens} label={t("экраны", "screens")} />
