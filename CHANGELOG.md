@@ -51,6 +51,8 @@ First Windows observation of skins: three catalog skins installed together by EA
 
 Version bump together with the work below.
 
+First tester round: the build limit rises from 32 to 128 items (the app refused larger builds, which a tester hit with 45 mods; a clear message names the limit), a RU/EN switch sits in the top bar of every screen, and a second skin of the same hero can be kept beside the first (the review lists overlapping files).
+
 ### Skins (wardrobe)
 - Menu backgrounds, HUD skins and versus screens are installable through the
   audited-archive pipeline: 62 backgrounds, 3 of 4 HUD skins and 7 versus screens

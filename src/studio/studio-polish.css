@@ -302,3 +302,21 @@
 /* Light theme: the mood's light shade is for dark backgrounds; small mood
    labels use its ink shade there, like the headline's accent word. */
 :root[data-theme=light] .s-hero-copy>.s-eyebrow,:root[data-theme=light] .s-carousel-heading>span{color:var(--mood-ink)}
+
+/* Language switch in the top bar: any screen can change language. */
+.s-lang-switch {
+  display: inline-flex;
+  border: 1px solid var(--s-line-soft);
+  border-radius: var(--s-radius-control);
+  overflow: hidden;
+}
+.s-lang-switch button {
+  padding: 7px 10px;
+  color: var(--s-muted);
+  font-size: var(--s-text-xs);
+  font-weight: 700;
+}
+.s-lang-switch button[aria-pressed="true"] {
+  background: var(--s-tint);
+  color: var(--s-accent);
+}

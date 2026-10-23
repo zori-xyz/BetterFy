@@ -125,7 +125,7 @@ export function usePackagesRevision() {
 
 /** Catalog ID (`minify-tree-mod`) or engine ID (`minify.tree-mod`). */
 /** Upper bound on packages the engine merges into one build (tree_pilot.rs). */
-export const MAX_BUNDLE_PACKAGES = 32;
+export const MAX_BUNDLE_PACKAGES = 128;
 
 /**
  * The engine ID suffix of the opt-in mode of a wardrobe item that leaves the

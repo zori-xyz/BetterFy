@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::vpk::{self, VpkInput};
 
-const MAX_PACKAGES: usize = 64;
+const MAX_PACKAGES: usize = 256;
 /// Limits of one merged VPK (`vpk.rs` writes at most this many entries and
 /// bytes). The builder checks a wardrobe selection against them before it
 /// downloads anything.
