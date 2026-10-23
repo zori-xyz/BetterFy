@@ -195,6 +195,10 @@ export const explainError = (code: string, isRu: boolean) => {
       "Архив меняет общие файлы игры, а для него выбрано «отказать». Установка остановлена.",
       "The archive changes shared game files and is set to refuse them. Installation stopped.",
     ],
+    bundle_package_limit: [
+      "В сборке слишком много наборов. Убери часть или собери остальное второй сборкой.",
+      "This build has too many items. Remove some, or put the rest in a second build.",
+    ],
     build_too_large: [
       "Всё выбранное вместе больше 512 МБ, а это предел одной сборки. Убери один из крупных обликов или собери его отдельно от остального.",
       "Everything selected adds up to more than 512 MB, the limit for one build. Remove one of the large skins or build it separately from the rest.",
@@ -407,7 +411,7 @@ const groups: Array<{
     tone: "warn",
   },
   {
-    codes: ["bundle_limit_exceeded", "build_too_large"],
+    codes: ["bundle_limit_exceeded", "build_too_large", "bundle_package_limit"],
     title: ["Сборка слишком большая", "The build is too big"],
     action: null,
     tone: "warn",

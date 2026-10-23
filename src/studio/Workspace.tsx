@@ -721,8 +721,8 @@ export default function Workspace({
           <div className="s-dialog-body">
             <p>
               {isRu
-                ? "Эти варианты занимают один слот. В сборке может остаться один из них."
-                : "These options share a slot. Keep one of them in your build."}
+                ? "Два разных образа для одного героя вместе не работают: в игре виден только один. В сборке остаётся один из них."
+                : "Two different looks for one hero do not work together: only one shows in the game. One of them stays in your build."}
             </p>
             <div className="s-replacement">
               <div>
