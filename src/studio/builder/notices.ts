@@ -223,6 +223,30 @@ export const explainError = (code: string, isRu: boolean) => {
       "Путь записи проходит через ссылку (symlink или junction). BetterFy не пишет через ссылки. Ничего не записано.",
       "The write path goes through a link (a symlink or a junction). BetterFy does not write through links. Nothing was written.",
     ],
+    english_text_missing: [
+      "Английский текст из твоей игры не найден или изменился. Подготовь сборку заново: BetterFy прочитает его из файлов Dota ещё раз.",
+      "The English text from your game is missing or changed. Prepare the build again: BetterFy will read it from Dota's files once more.",
+    ],
+    english_text_too_large: [
+      "Английского текста в твоей игре больше, чем BetterFy готов положить в сборку. Ничего не записано. Пришли отчёт, это нужно проверить на реальной игре.",
+      "Your game has more English text than BetterFy will put in a build. Nothing was written. Send a report; this needs checking against a real game.",
+    ],
+    english_text_invalid: [
+      "В английском тексте игры есть путь, который BetterFy не принимает. Ничего не записано. Пришли отчёт.",
+      "The game's English text has a path BetterFy does not accept. Nothing was written. Send a report.",
+    ],
+    english_text_store_failed: [
+      "Не удалось сохранить английский текст в папке данных BetterFy. Проверь место на диске и повтори.",
+      "The English text could not be saved in BetterFy's data folder. Check free disk space and retry.",
+    ],
+    english_text_not_needed: [
+      "Английский текст нужен только когда Steam запускает Dota на английском. Для другого языка выбери его папку без этого слоя.",
+      "The English text is only for a Dota that Steam starts in English. For another language pick that language's folder without this layer.",
+    ],
+    english_text_slot_invalid: [
+      "Английский текст кладётся только в папку нидерландского (-language dutch). Ничего не записано. Выбери «Как в Dota сейчас» и подготовь сборку заново.",
+      "The English text goes only into the Dutch folder (-language dutch). Nothing was written. Choose \"Same as Dota now\" and prepare the build again.",
+    ],
     map_terrain_conflict: [
       "В сборке две карты, а ставится только одна: карта заменяет файл карты целиком. Оставь одну из них, остальное в сборке не изменится.",
       "The build has two maps, and only one can be installed: a map replaces the game's map file as a whole. Keep one of them; the rest of the build stays as is.",
@@ -389,6 +413,24 @@ const groups: Array<{
   {
     codes: ["package_conflict", "package_dependency_missing"],
     title: ["Моды не уживаются вместе", "These mods do not fit together"],
+    action: null,
+    tone: "warn",
+  },
+  {
+    codes: ["english_text_missing", "english_text_store_failed"],
+    title: ["Нужно заново прочитать английский текст", "The English text needs reading again"],
+    action: "prepare",
+    tone: "warn",
+  },
+  {
+    codes: ["english_text_too_large", "english_text_invalid"],
+    title: ["Английский текст игры не подошёл", "The game's English text did not fit"],
+    action: "report",
+    tone: "warn",
+  },
+  {
+    codes: ["english_text_not_needed", "english_text_slot_invalid"],
+    title: ["Английский текст сюда не подходит", "The English text does not apply here"],
     action: null,
     tone: "warn",
   },

@@ -14,6 +14,20 @@ of audited skins, bot, site and installer), not a change in stability.
 
 Version bump for the complete catalog below.
 
+### English text layer (built and tested on a Mac; not run on Windows or in Dota)
+
+- A tester whose Dota is in English installed through the recommended
+  `betterfy` slot and saw no change: Dota ignores language folders Valve does
+  not ship. For an English Dota, "Same as Dota now" now installs through
+  `dota_dutch` with `-language dutch` and adds the English text layer, the
+  player's own `*_english.txt` / `*_english.vtt` read from their game and renamed
+  to `*_dutch`, inside BetterFy's single VPK (never downloaded, bound into the
+  reviewed plan, removed by the normal restore). The build review shows it as
+  its own line. The `betterfy` slot stays for experts, labelled as not working
+  on the current Dota. Design, limits and what is not replicated from Minify:
+  [docs/ENGINE_ARCHITECTURE.md](docs/ENGINE_ARCHITECTURE.md), "Language slots";
+  test plan: [docs/EN_WINDOWS_TEST_PLAN.md](docs/EN_WINDOWS_TEST_PLAN.md).
+
 ### Complete catalog (pull request #45; built and tested on a Mac and in CI, not run on Windows)
 
 - Screens offer only what installs: the Windows-pilot and preview-only badges,

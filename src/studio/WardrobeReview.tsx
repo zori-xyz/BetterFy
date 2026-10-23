@@ -160,6 +160,32 @@ export function WardrobeReview({
 }
 
 /**
+ * The English text layer: the player's own English text, read from their game
+ * and put into the Dutch folder so Dota (which ignores folders it does not
+ * ship) keeps showing English.
+ */
+export function EnglishTextReview({ plan }: { plan: TreePilotPlan }) {
+  const { isRu } = useLocale();
+  const layer = plan.englishText;
+  if (!layer) return null;
+  return (
+    <section className="b-wardrobe" aria-label={isRu ? "Английский текст" : "English text"}>
+      <h3>{isRu ? "Английский текст" : "English text"}</h3>
+      <p>
+        {isRu
+          ? `Английский текст: ${layer.files} файлов, ${formatBytes(layer.bytes, isRu)}, из твоей игры.`
+          : `English text: ${layer.files} files, ${formatBytes(layer.bytes, isRu)}, from your own game.`}
+      </p>
+      <p className="b-pilot-hint">
+        {isRu
+          ? "Dota не принимает чужие папки языка, поэтому BetterFy использует папку нидерландского и кладёт в неё английский текст. Файлы читаются из твоей игры, ничего не скачивается, а откат убирает их вместе со сборкой. Если Dota обновится, подготовь сборку заново."
+          : "Dota ignores custom language folders, so BetterFy uses Dutch's folder and puts English text in it. The files are read from your own game, nothing is downloaded, and restore removes them with the build. If Dota updates, prepare the build again."}
+      </p>
+    </section>
+  );
+}
+
+/**
  * Cursor and font packs of the build: they replace the game's own files in
  * its folders, so the review says that and how it is undone.
  */

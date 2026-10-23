@@ -9,6 +9,7 @@ mod content_store;
 mod crash_report;
 mod custom_backgrounds;
 mod custom_fonts;
+mod english_text;
 mod evidence_reports;
 mod font_names;
 mod game_deployment;
@@ -793,6 +794,15 @@ fn build_verified_tree_pilot(
 ) -> Result<tree_pilot::VerifiedTreeVpk, String> {
     require_patch_ready_runtime()?;
     validate_candidate(Path::new(&request.game_path), "manual")?;
+    // The English text layer is written for the Dutch folder only.
+    if request.language != GameLanguage::Dutch
+        && request
+            .package_ids
+            .iter()
+            .any(|id| id == english_text::PACKAGE_ID)
+    {
+        return Err("english_text_slot_invalid".to_string());
+    }
     let verified = tree_pilot::build_from_verified_store(app_data, &request.package_ids)?;
     if request.expected_plan_id != verified.plan_id() {
         return Err("build_plan_stale".to_string());

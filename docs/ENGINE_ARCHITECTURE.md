@@ -358,8 +358,69 @@ restore when BetterFy created it. Evidence from the pinned Minify commit
   left a populated `dota_minify` on the founder's PC), not Minify now. Whether the
   current Dota client still mounts a non-Valve `-language` folder has not been
   observed on Windows. Minify's current workaround is not copied: it rewrites
-  Valve's own files in `game/core` outside the single BetterFy-owned VPK, and it
-  needs Valve's multi-part VPKs, which this engine rejects.
+  Valve's own files in `game/core` outside the single BetterFy-owned VPK. Its
+  VPK part is reproduced by the English text layer below.
+
+#### Why custom slots fail on the current Dota, and the English text layer
+
+Real evidence changed the picture above. A tester whose Dota runs in English
+chose the recommended `betterfy` slot; the build installed and the app reported
+success, and nothing changed in game. The upstream install guide
+(https://d2pfxwiki.pages.dev/en/install.html, "English Language") says Dota does
+not use custom language folders such as `dota_123` or `dota_minify`, and that for
+English the player should use Minify's English Fix with `-language dutch` and put
+the other mods in the `dota_dutch` folder. This is one tester's observation plus
+the upstream guide; it has not been reproduced by the founder, and it is not
+known to be impossible on every Dota build, so the `betterfy` slot stays
+selectable (labelled as not working on the current Dota) and is no longer the
+recommendation.
+
+For a Dota whose Steam language is `english`, the recommended install is the
+`dutch` slot (`game/dota_dutch/pakNN_dir.vpk`, `-language dutch`) plus the
+**English text layer** (`english_text.rs`), a package of the merged VPK:
+
+- Derived from the player's own game at prepare time, never downloaded and never
+  committed. `game/dota/pak01_dir.vpk` and its numbered `pak01_NNN.vpk` side
+  archives are listed (`vpk::list_directory_paths`), every path ending
+  `_english.txt` or `_english.vtt` is read with `vpk::read_game_resources` (each
+  resource CRC-checked against the directory), and `_english` is renamed to
+  `_dutch`. Paths the VPK writer would refuse make the layer fail
+  (`english_text_invalid`) rather than be skipped.
+- Prepared only when the package list carries `betterfy.english-text` and Steam
+  says the game is in English (`english_text_not_needed` otherwise); installed
+  only with the `dutch` slot (`english_text_slot_invalid` otherwise). The UI adds
+  the package only for "Same as Dota now" on an English Dota; a Dutch player, or an
+  English player who picks Dutch by hand, gets no layer.
+- The result is stored in BetterFy's own app-data folder (`english_text/`: a VPK
+  and a record with its SHA-256, file and byte counts, re-checked on every read),
+  like the blacklist resolutions, so every later rebuild of a reviewed plan is
+  byte-identical and `matches_receipt`, the Steam launch-option check and the
+  start step keep working. Preparing again after a Dota update re-reads the game:
+  a different text is a different layer, a different merged VPK and a different
+  plan ID, i.e. a new reviewed plan. (Until the new plan is installed, the app's
+  "package verified" check of the old install compares against the new layer,
+  the same behaviour as a blacklist resolution.)
+- It is an ordinary package of the bundle, so the plan ID, the journal's package
+  list and the deployment receipt bind it; it is placed last, so a mod that ships
+  its own `*_dutch` file wins over the game's English one. The plan shows its own
+  line: file count and size, "from your own game".
+- Restore needs nothing special: the layer is inside BetterFy's one VPK, which
+  restore removes (and then the folder, when BetterFy created it); the Steam
+  `-language dutch` option is restored by the existing targeted restore.
+- Bounds: at most 32,768 files and 128 MiB of text, refused (not cut) beyond
+  that (`english_text_too_large`), on top of the merged VPK's 65,536 entries and
+  512 MiB and the 16 MiB per-resource limit of `read_game_resources`. The first
+  two numbers are estimates: no real game pak was available when they were set
+  (the player's Dota is a Windows install), so the real count and size are still
+  to be recorded from a real game ([EN_WINDOWS_TEST_PLAN.md](EN_WINDOWS_TEST_PLAN.md)).
+
+What is deliberately not replicated from Minify's English Fix: it also
+overwrites `*_dutch.txt` files under `game/core` and `game/dota_addons` with
+English copies (keeping a backup). BetterFy writes nothing outside its own VPK
+and the journaled game files, so that step is not copied. Whether the game also
+needs those on-disk files for a fully English interface is an open question that
+only an in-game observation can answer; if it does, the layer alone will leave
+some Dutch text, and that has to be reported rather than assumed away.
 
 `detect_dota_language` is read-only. It validates the Dota folder like manual
 selection, then reads `steamapps/appmanifest_570.acf` of the library holding it:

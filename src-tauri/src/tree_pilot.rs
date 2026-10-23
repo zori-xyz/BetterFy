@@ -688,6 +688,9 @@ enum Contract {
     /// Minify's Custom Hero Grids: grids compiled into the app, added to the
     /// Steam accounts' own (`hero_grids`).
     HeroGrids,
+    /// The English text layer: the player's own English text, renamed for the
+    /// Dutch language folder (`english_text`).
+    EnglishText,
     /// Minify's Custom Fonts: the font file the player picked (its SHA-256
     /// and size), stored by `custom_fonts::store`.
     CustomFont(String, usize),
@@ -707,6 +710,7 @@ impl Contract {
             Self::Pack(item) => item.id.clone(),
             Self::UserStyles(_, mask) => crate::user_styles::variant_id(*mask),
             Self::HeroGrids => crate::hero_grids::PACKAGE_ID.to_string(),
+            Self::EnglishText => crate::english_text::PACKAGE_ID.to_string(),
             Self::CustomFont(sha, bytes) => crate::custom_fonts::variant_id(sha, *bytes),
             Self::CustomBackground(_, background) => {
                 crate::custom_backgrounds::variant_id(background)
@@ -724,6 +728,7 @@ impl Contract {
             Self::Pack(item) => &item.id,
             Self::UserStyles(manifest, _) => &manifest.id,
             Self::HeroGrids => crate::hero_grids::PACKAGE_ID,
+            Self::EnglishText => crate::english_text::PACKAGE_ID,
             Self::CustomFont(..) => crate::custom_fonts::PACKAGE_ID,
             Self::CustomBackground(manifest, _) => &manifest.id,
         }
@@ -742,6 +747,9 @@ fn resolve(id: &str) -> Result<Contract, String> {
     }
     if id == crate::hero_grids::PACKAGE_ID || id == crate::hero_grids::CATALOG_ID {
         return Ok(Contract::HeroGrids);
+    }
+    if id == crate::english_text::PACKAGE_ID {
+        return Ok(Contract::EnglishText);
     }
     if id == crate::custom_fonts::PACKAGE_ID || id == crate::custom_fonts::CATALOG_ID {
         return Err("custom_font_required".to_string());
@@ -770,6 +778,7 @@ fn tuning(id: &str) -> Result<Option<&'static PackageManifest>, String> {
         | Contract::Map(_)
         | Contract::Pack(_)
         | Contract::HeroGrids
+        | Contract::EnglishText
         | Contract::CustomFont(..) => Ok(None),
     }
 }
@@ -807,6 +816,9 @@ pub(crate) struct VerifiedTreeVpk {
     packs: Vec<crate::game_packs::PackPlanItem>,
     /// The build adds the pinned hero grids to the Steam accounts' own.
     hero_grids: bool,
+    /// The build carries the player's own English text under the Dutch names.
+    /// It is a package of the VPK, so the plan ID binds it.
+    english_text: Option<crate::english_text::EnglishTextPlanItem>,
 }
 
 #[derive(Clone, Serialize)]
@@ -839,6 +851,9 @@ pub(crate) struct TreePilotPlan {
     wardrobe_conflicts: Vec<WardrobeConflict>,
     /// Cursor and font packs: the game's own files they replace or remove.
     packs: Vec<crate::game_packs::PackPlanItem>,
+    /// The English text taken from the player's own game, when the build
+    /// installs through the Dutch folder for an English-language Dota.
+    english_text: Option<crate::english_text::EnglishTextPlanItem>,
     compatibility: &'static str,
     distribution: &'static str,
     deploy_enabled: bool,
@@ -959,6 +974,7 @@ pub(crate) fn verified_test_vpk() -> VerifiedTreeVpk {
         game_files: BTreeMap::new(),
         packs: Vec::new(),
         hero_grids: false,
+        english_text: None,
     }
 }
 
@@ -1042,6 +1058,13 @@ fn acquire_verified_resources_with_progress(
             Contract::CustomFont(sha, bytes) => {
                 crate::content_store::read_pinned_resource(app_data_root, bytes, &sha)
                     .map_err(|_| "custom_font_missing".to_string())?;
+                index += 1;
+                progress(index);
+                continue;
+            }
+            // Read from the player's own game when the build is prepared:
+            // nothing to download.
+            Contract::EnglishText => {
                 index += 1;
                 progress(index);
                 continue;
@@ -1130,6 +1153,21 @@ pub(crate) fn begin_download(
     {
         return Err("game_path_required".to_string());
     }
+    // The English text layer is for a Dota that runs in English, and it is
+    // read from that game. Anything else is refused before work starts.
+    let wants_english_text = package_ids
+        .iter()
+        .any(|id| id == crate::english_text::PACKAGE_ID);
+    if wants_english_text {
+        let root = game_path
+            .as_deref()
+            .ok_or_else(|| "game_path_required".to_string())?;
+        let english = crate::game_language::detect_for_game_root(root)?
+            .is_some_and(|detected| detected.steam_language.eq_ignore_ascii_case("english"));
+        if !english {
+            return Err("english_text_not_needed".to_string());
+        }
+    }
     let mut slot = download_slot()
         .lock()
         .map_err(|_| "download_failed".to_string())?;
@@ -1182,6 +1220,12 @@ pub(crate) fn begin_download(
             resolve_wardrobe_game_checks(&app_data_root, &package_ids, game_path.as_deref())?;
             resolve_styles(&app_data_root, &package_ids, game_path.as_deref())?;
             resolve_layouts(&app_data_root, &package_ids, game_path.as_deref())?;
+            if wants_english_text {
+                let root = game_path
+                    .as_deref()
+                    .ok_or_else(|| "game_path_required".to_string())?;
+                crate::english_text::resolve(&app_data_root, root)?;
+            }
             plan_from_verified_store(&app_data_root, &package_ids)
         });
         if let Ok(mut status) = operation.status.lock() {
@@ -1265,6 +1309,7 @@ pub(crate) fn build_from_verified_store(
     let mut game_files = BTreeMap::new();
     let mut packs = Vec::new();
     let mut hero_grids = false;
+    let mut english_text = None;
     let packages = bundle_ids
         .iter()
         .map(|package_id| {
@@ -1314,6 +1359,14 @@ pub(crate) fn build_from_verified_store(
                     return Ok(BundlePackage {
                         package_id: package_id.clone(),
                         resources: BTreeMap::from([(marker, text)]),
+                    });
+                }
+                Contract::EnglishText => {
+                    let layer = crate::english_text::load(app_data_root)?;
+                    english_text = Some(layer.item);
+                    return Ok(BundlePackage {
+                        package_id: package_id.clone(),
+                        resources: layer.resources,
                     });
                 }
                 Contract::HeroGrids => {
@@ -1397,6 +1450,7 @@ pub(crate) fn build_from_verified_store(
     verified.game_files = game_files;
     verified.packs = packs;
     verified.hero_grids = hero_grids;
+    verified.english_text = english_text;
     Ok(verified)
 }
 
@@ -1452,6 +1506,7 @@ fn assemble(
             game_files: BTreeMap::new(),
             packs: Vec::new(),
             hero_grids: false,
+            english_text: None,
         }
     } else {
         build_verified_bundle(packages, wardrobe)?
@@ -1493,6 +1548,7 @@ fn plan_for(verified: &VerifiedTreeVpk) -> TreePilotPlan {
         wardrobe: verified.wardrobe.clone(),
         wardrobe_conflicts: verified.wardrobe_conflicts.clone(),
         packs: verified.packs.clone(),
+        english_text: verified.english_text.clone(),
         compatibility: "unknown",
         distribution: "internal_pilot",
         deploy_enabled: cfg!(target_os = "windows"),
@@ -1610,6 +1666,7 @@ fn build_verified_bundle(
         game_files: BTreeMap::new(),
         packs: Vec::new(),
         hero_grids: false,
+        english_text: None,
     })
 }
 
@@ -2757,6 +2814,121 @@ mod tests {
         assert!(dota.join("game/dota_russian/maps/dota.vpk").is_file());
         deployment::rollback(&app, &dota, &receipt.operation_id).expect("restore");
         assert!(!dota.join("game/dota_russian").exists());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    fn english_ids() -> Vec<String> {
+        vec![crate::english_text::PACKAGE_ID.to_string()]
+    }
+
+    #[test]
+    fn the_english_text_layer_is_in_the_vpk_and_bound_into_the_plan() {
+        use crate::english_text::tests as synthetic;
+        let root = wardrobe_root("english-plan");
+        let game = root.join("game-a");
+        synthetic::game(&game, &synthetic::sample());
+        crate::english_text::resolve(&root, &game).expect("layer");
+        let first = build_from_verified_store(&root, &english_ids()).expect("builds");
+        let again = build_from_verified_store(&root, &english_ids()).expect("builds again");
+        assert_eq!(first.plan_id(), again.plan_id());
+        assert_eq!(first.sha256(), again.sha256());
+        assert_eq!(first.package_ids(), english_ids());
+        // Only the English files, renamed; no other language, no unrelated path.
+        let inside = vpk::extract_embedded(first.bytes()).expect("vpk");
+        assert_eq!(inside.len(), 3);
+        assert!(inside.keys().all(|path| path.contains("_dutch.")));
+        let plan = serde_json::to_value(plan_for(&first)).expect("plan json");
+        assert_eq!(plan["englishText"]["files"], 3);
+        assert_eq!(plan["englishText"]["bytes"], 31);
+        // A Dota update that changes the English text is a new reviewed plan.
+        let updated = root.join("game-b");
+        let mut changed = synthetic::sample();
+        changed[0].1 = b"\"english\" two";
+        synthetic::game(&updated, &changed);
+        crate::english_text::resolve(&root, &updated).expect("new layer");
+        let second = build_from_verified_store(&root, &english_ids()).expect("rebuilds");
+        assert_ne!(first.plan_id(), second.plan_id());
+        assert_ne!(first.sha256(), second.sha256());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn without_a_prepared_layer_the_build_is_refused() {
+        let root = wardrobe_root("english-missing");
+        assert_eq!(
+            build_from_verified_store(&root, &english_ids())
+                .err()
+                .as_deref(),
+            Some("english_text_missing")
+        );
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn the_layer_is_only_prepared_for_a_dota_that_runs_in_english() {
+        use crate::english_text::tests as synthetic;
+        let root = wardrobe_root("english-gate");
+        let steamapps = root.join("steamapps");
+        let game = steamapps.join("common").join("dota 2 beta");
+        synthetic::game(&game, &synthetic::sample());
+        let manifest = |language: &str| {
+            format!(
+                "\"AppState\"\n{{\n\t\"appid\"\t\t\"570\"\n\t\"UserConfig\"\n\t{{\n\t\t\"language\"\t\t\"{language}\"\n\t}}\n}}\n"
+            )
+        };
+        let app_data = root.join("app");
+        std::fs::write(steamapps.join("appmanifest_570.acf"), manifest("dutch")).expect("acf");
+        assert_eq!(
+            begin_download(app_data.clone(), english_ids(), Some(game.clone()))
+                .err()
+                .as_deref(),
+            Some("english_text_not_needed")
+        );
+        assert_eq!(
+            begin_download(app_data, english_ids(), None)
+                .err()
+                .as_deref(),
+            Some("game_path_required")
+        );
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn the_english_layer_installs_into_the_dutch_folder_and_restores_to_nothing() {
+        use crate::english_text::tests as synthetic;
+        use crate::game_deployment as deployment;
+        let root = wardrobe_root("english-e2e");
+        let dota = fake_game(&root);
+        synthetic::game(&dota, &synthetic::sample());
+        let official = std::fs::read(dota.join("game/dota/pak01_dir.vpk")).expect("official");
+        let app = root.clone();
+        crate::english_text::resolve(&root, &dota).expect("layer");
+        let verified = build_from_verified_store(&root, &english_ids()).expect("builds");
+        let receipt = deployment::deploy_verified_payload_for_language(
+            &app,
+            &dota,
+            verified.payload(),
+            crate::game_language::GameLanguage::Dutch,
+            deployment::DeploymentBundleIdentity {
+                plan_id: Some(verified.plan_id().to_string()),
+                package_ids: verified.package_ids().to_vec(),
+            },
+        )
+        .expect("deploys");
+        assert!(verified.matches_receipt(&receipt));
+        let folder = dota.join("game/dota_dutch");
+        let written = std::fs::read_dir(&folder)
+            .expect("folder")
+            .map(|entry| entry.expect("entry").file_name())
+            .collect::<Vec<_>>();
+        assert_eq!(written.len(), 1);
+        assert!(written[0].to_string_lossy().ends_with("_dir.vpk"));
+        deployment::rollback(&app, &dota, &receipt.operation_id).expect("restore");
+        assert!(!folder.exists());
+        assert_eq!(
+            std::fs::read(dota.join("game/dota/pak01_dir.vpk")).expect("still there"),
+            official
+        );
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 }

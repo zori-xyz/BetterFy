@@ -48,13 +48,21 @@ import { demoActive, demoBridge, isDesktopRuntime, useDemoSettings } from "./bui
 import { usePhrase } from "./builder/phrases";
 import { NoticeCard } from "./builder/NoticeCard";
 import { DemoPanel } from "./builder/DemoPanel";
-import { buildLanguages, languageLabel as languageName } from "./builder/languages";
+import {
+  ENGLISH_TEXT_ID,
+  buildLanguages,
+  languageLabel as languageName,
+} from "./builder/languages";
 import { Choice, ChoiceCards, ChoiceMenu, type ChoiceOption } from "./builder/Choice";
 import { getStorageItem, setStorageItem } from "../storage";
-import { PackReview, WardrobeReview, formatBytes } from "./WardrobeReview";
+import { EnglishTextReview, PackReview, WardrobeReview, formatBytes } from "./WardrobeReview";
 import { USER_STYLES_ID, userStylesRequestId, useUserStylesMask } from "./userStyles";
 import { CUSTOM_FONTS_ID, customFontRequestId, useCustomFont } from "./customFont";
-import { CUSTOM_BACKGROUNDS_ID, backgroundRequestId, useBackgroundChoice } from "./customBackground";
+import {
+  CUSTOM_BACKGROUNDS_ID,
+  backgroundRequestId,
+  useBackgroundChoice,
+} from "./customBackground";
 import { MapReview } from "./MapReview";
 
 const LANGUAGE_KEY = "betterfy:build-language";
@@ -149,9 +157,14 @@ export default function TreePilot({
     return isRu ? "russian" : "";
   });
   const [detection, setDetection] = useState<Detection>({ status: "idle" });
-  const detected = detection.status === "done" ? (detection.result?.language ?? null) : null;
   // Steam's own name for it, e.g. "english" for the BetterFy slot.
   const steamName = detection.status === "done" ? (detection.result?.steamLanguage ?? null) : null;
+  // Dota ignores a language folder Valve does not ship, so an English Dota is
+  // served through the Dutch folder plus the player's own English text.
+  const englishDota = steamName?.toLowerCase() === "english";
+  const detectedSlot = detection.status === "done" ? (detection.result?.language ?? null) : null;
+  const detected: GameLanguage | null =
+    detectedSlot === "betterfy" && englishDota ? "dutch" : detectedSlot;
   // Empty while Steam is still being asked, so Install never runs on a guess.
   const selectedLanguage: GameLanguage | "" = followDota
     ? detection.status === "loading"
@@ -159,7 +172,9 @@ export default function TreePilot({
       : (detected ?? chosenLanguage)
     : chosenLanguage;
   const chooseLanguage = (value: LanguagePick) => {
-    if (value === "auto" || value === detected) {
+    // For an English Dota the Dutch card means Dutch text; only "auto" is
+    // Dutch's folder with English text in it.
+    if (value === "auto" || (value === detected && !englishDota)) {
       setFollowDota(true);
       setStorageItem(LANGUAGE_MODE_KEY, "auto");
       return;
@@ -169,6 +184,7 @@ export default function TreePilot({
     setStorageItem(LANGUAGE_MODE_KEY, "manual");
     setStorageItem(LANGUAGE_KEY, value);
   };
+  const withEnglishText = followDota && englishDota && selectedLanguage === "dutch";
   const languageFieldRef = useRef<HTMLDivElement>(null);
   const [installedLanguage, setInstalledLanguage] = useState<GameLanguage | null>(null);
   const [installedPackageIds, setInstalledPackageIds] = useState<string[]>([]);
@@ -207,8 +223,8 @@ export default function TreePilot({
   const customFont = useCustomFont();
   // Custom Backgrounds carries the chosen screen or video in its ID.
   const backgroundChoice = useBackgroundChoice();
-  const idsFor = (keep: ReadonlySet<string>) =>
-    ids.map((id) =>
+  const idsFor = (keep: ReadonlySet<string>) => [
+    ...ids.map((id) =>
       engineIdFor(id) === USER_STYLES_ID
         ? userStylesRequestId(userStylesMask)
         : engineIdFor(id) === CUSTOM_FONTS_ID
@@ -216,7 +232,9 @@ export default function TreePilot({
           : engineIdFor(id) === CUSTOM_BACKGROUNDS_ID
             ? backgroundRequestId(backgroundChoice)
             : withSharedMode(id, keep.has(engineIdFor(id))),
-    );
+    ),
+    ...(withEnglishText ? [ENGLISH_TEXT_ID] : []),
+  ];
   // What the engine is asked for: the ID of each item in the chosen mode, so
   // the mode is part of the reviewed plan.
   const requestIds = idsFor(keepShared);
@@ -235,7 +253,12 @@ export default function TreePilot({
       setEngineActive(true);
   }, [phase, recovering]);
   const catalogName = (id: string) => modById.get(id)?.name[language];
-  const packageLabel = (id: string) => packageName(id, language);
+  const packageLabel = (id: string) =>
+    id === ENGLISH_TEXT_ID
+      ? isRu
+        ? "Английский текст из твоей игры"
+        : "English text from your game"
+      : packageName(id, language);
   const supportedBundle =
     ids.length > 0 &&
     ids.length <= Math.min(installablePackages.length, MAX_BUNDLE_PACKAGES) &&
@@ -427,8 +450,8 @@ export default function TreePilot({
           note(
             key,
             "ok",
-            `Steam запускает Dota на языке: ${languageName(result.language, true)}.`,
-            `Steam starts Dota in ${languageName(result.language, false)}.`,
+            `Steam запускает Dota на языке: ${result.steamLanguage === "english" ? "Английский" : languageName(result.language, true)}.`,
+            `Steam starts Dota in ${result.steamLanguage === "english" ? "English" : languageName(result.language, false)}.`,
             `steam: ${result.steamLanguage}`,
           );
         else if (result)
@@ -607,9 +630,7 @@ export default function TreePilot({
       // The journal names every file the build wrote and where.
       const written = [
         ...(receipt.hasPak ? [`dota_${receipt.language}/${receipt.vpkName}`] : []),
-        ...(receipt.map?.installedSha256
-          ? [`dota_${receipt.language}/${receipt.map.file}`]
-          : []),
+        ...(receipt.map?.installedSha256 ? [`dota_${receipt.language}/${receipt.map.file}`] : []),
       ].join(", ");
       say("ok", "Сборка записана, бэкап проверен.", "Build written, backup verified.", written);
       // Which file BetterFy took and what it left alone, from a read-only look
@@ -1353,7 +1374,15 @@ export default function TreePilot({
           ? "Язык задан в профиле"
           : "Language set in the profile"
         : (installedLanguage ?? selectedLanguage)
-          ? `${isRu ? "Язык" : "Language"}: ${languageLabel((installedLanguage ?? selectedLanguage) as GameLanguage)}`
+          ? `${isRu ? "Язык" : "Language"}: ${languageLabel((installedLanguage ?? selectedLanguage) as GameLanguage)}${
+              (installedLanguage ?? selectedLanguage) === "dutch" &&
+              (installedPackageIds.includes(ENGLISH_TEXT_ID) ||
+                (!installedLanguage && withEnglishText))
+                ? isRu
+                  ? " + английский текст"
+                  : " + English text"
+                : ""
+            }`
           : isRu
             ? "Язык игры"
             : "Game language",
@@ -1431,24 +1460,24 @@ export default function TreePilot({
             ? "Отпустить старую установку"
             : "Let go of the old install"
           : notice?.action === "report"
-          ? reportCopied
-            ? isRu
-              ? "Отчёт скопирован"
-              : "Report copied"
-            : isRu
-              ? "Скопировать отчёт"
-              : "Copy report"
-          : notice?.action === "steam" && installedLanguage
-            ? copied
+            ? reportCopied
               ? isRu
-                ? "Скопировано"
-                : "Copied"
+                ? "Отчёт скопирован"
+                : "Report copied"
               : isRu
-                ? "Скопировать -language"
-                : "Copy -language"
-            : notice?.action === "settings"
-              ? settingsActionLabel
-              : null;
+                ? "Скопировать отчёт"
+                : "Copy report"
+            : notice?.action === "steam" && installedLanguage
+              ? copied
+                ? isRu
+                  ? "Скопировано"
+                  : "Copied"
+                : isRu
+                  ? "Скопировать -language"
+                  : "Copy -language"
+              : notice?.action === "settings"
+                ? settingsActionLabel
+                : null;
   // Profiles are numbered, never named: the report and the screen carry no
   // Steam IDs or account names.
   const profileOptions: ChoiceOption<string>[] = [
@@ -1498,8 +1527,8 @@ export default function TreePilot({
       label: languageLabel(value),
       hint: experimental
         ? isRu
-          ? "эксперимент"
-          : "experimental"
+          ? "не работает в текущей Dota"
+          : "does not work on current Dota"
         : option?.verified
           ? isRu
             ? "проверен в игре"
@@ -1526,10 +1555,20 @@ export default function TreePilot({
               ...languageOption(detected),
               value: "auto",
               label: isRu
-                ? `Как в Dota сейчас · ${languageLabel(detected)}`
-                : `Same as Dota now · ${languageLabel(detected)}`,
-              // English is the BetterFy slot and not proven since the patch.
-              badge: detected === "betterfy" ? undefined : isRu ? "рекомендуем" : "recommended",
+                ? `Как в Dota сейчас · ${englishDota ? "Английский" : languageLabel(detected)}`
+                : `Same as Dota now · ${englishDota ? "English" : languageLabel(detected)}`,
+              // English runs through the Dutch folder with the English text
+              // layer, which is new and not yet checked in game.
+              ...(englishDota
+                ? {
+                    hint: isRu
+                      ? "английский текст через папку Dutch"
+                      : "English text via the Dutch folder",
+                    hintIcon: <FlaskConical />,
+                    tone: "warn" as const,
+                  }
+                : {}),
+              badge: isRu ? "рекомендуем" : "recommended",
               meta: steamName ? `steam: ${steamName}` : undefined,
               wide: true,
             }
@@ -1556,7 +1595,7 @@ export default function TreePilot({
             };
   const languageCards = [
     ...(autoOption ? [autoOption] : []),
-    ...PINNED_LANGUAGES.filter((value) => value !== detected).map(languageOption),
+    ...PINNED_LANGUAGES.filter((value) => value !== detected || englishDota).map(languageOption),
   ];
   const otherLanguages = buildLanguages
     .filter((option) => !PINNED_LANGUAGES.includes(option.value))
@@ -1589,12 +1628,19 @@ export default function TreePilot({
         ? `Steam не подсказал язык — выбран: ${languageLabel(selectedLanguage)}. `
         : `Steam did not say, so ${languageLabel(selectedLanguage)} is selected. `
       : "";
+    if (withEnglishText)
+      return (
+        fallback +
+        (isRu
+          ? "Dota не принимает чужие папки языка, поэтому BetterFy использует папку нидерландского (-language dutch) и кладёт в неё английский текст из твоей игры. Интерфейс остаётся английским. Способ новый и ещё не проверен в игре; откат в один клик."
+          : "Dota ignores custom language folders, so BetterFy uses Dutch's folder (-language dutch) and puts English text from your own game in it. The interface stays English. This is new and not yet checked in game; restore is one click.")
+      );
     if (selectedLanguage === "betterfy")
       return (
         fallback +
         (isRu
-          ? "Текст Dota останется английским. С патча 23.07.2026 Dota может не принять язык, которого нет у Valve, — поэтому Minify ушёл от своей папки. Если язык окажется не тот, откат в один клик."
-          : "Dota text stays English. Since the 23 July 2026 patch Dota may refuse a language Valve does not ship, which is why Minify dropped its own folder. If the language is wrong, restore in one click.")
+          ? "Не работает в текущей Dota: она не принимает папку языка, которой нет у Valve (так же ушёл от своей папки Minify), поэтому сборка встанет в файлы, но в игре не появится. Для английской Dota выбери «Как в Dota сейчас». Здесь только для экспертов; откат в один клик."
+          : 'Does not work on the current Dota: it ignores a language folder Valve does not ship (Minify dropped its own folder for the same reason), so the build installs but will not show in game. For an English Dota choose "Same as Dota now". Kept here for experts only; restore is one click.')
       );
     const option = buildLanguages.find((item) => item.value === selectedLanguage);
     return fallback + (option ? (isRu ? option.noteRu : option.noteEn) : "");
@@ -1728,7 +1774,9 @@ export default function TreePilot({
         </p>
       )}
       {!plan && !operationId && skinBytes > MAX_BUNDLE_BYTES / 2 && (
-        <p className={`b-pilot-hint${skinBytes > MAX_BUNDLE_BYTES ? " b-pilot-blocker is-warning" : ""}`}>
+        <p
+          className={`b-pilot-hint${skinBytes > MAX_BUNDLE_BYTES ? " b-pilot-blocker is-warning" : ""}`}
+        >
           {skinBytes > MAX_BUNDLE_BYTES
             ? isRu
               ? `Облики и пакеты в сборке весят ${formatBytes(skinBytes, true)}, а в один файл помещается не больше ${formatBytes(MAX_BUNDLE_BYTES, true)}. Убери один из них, иначе подготовка сборки остановится.`
@@ -1749,12 +1797,9 @@ export default function TreePilot({
         />
       )}
       {plan && !operationId && <PackReview plan={plan} packageLabel={packageLabel} />}
+      {plan && !operationId && plan.englishText && <EnglishTextReview plan={plan} />}
       {plan && !operationId && plan.map && (
-        <MapReview
-          plan={plan}
-          language={selectedLanguage}
-          packageLabel={packageLabel}
-        />
+        <MapReview plan={plan} language={selectedLanguage} packageLabel={packageLabel} />
       )}
       {plan && !operationId && (
         <div className="b-fields">

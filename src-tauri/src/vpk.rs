@@ -509,6 +509,68 @@ pub(crate) fn build_unchecked(version: u32, entries: &[(&str, &[u8])]) -> Vec<u8
     output
 }
 
+/// Test helper: writes a synthetic game archive like Valve's, a version 2
+/// `pak01_dir.vpk` plus numbered side archives, into `folder`. Each entry
+/// names the archive that holds its bytes: `0x7fff` for the directory file
+/// itself, otherwise the number of a `pak01_NNN.vpk`.
+#[cfg(test)]
+pub(crate) fn write_test_game_pak(folder: &Path, entries: &[(&str, &[u8], u16)]) {
+    type Files<'a> = Vec<(String, &'a [u8], u16)>;
+    let mut grouped: BTreeMap<String, BTreeMap<String, Files<'_>>> = BTreeMap::new();
+    for (path, bytes, archive) in entries {
+        let (directory, file) = path.rsplit_once('/').unwrap_or((" ", path));
+        let (stem, extension) = file.rsplit_once('.').expect("test path has an extension");
+        grouped
+            .entry(extension.to_string())
+            .or_default()
+            .entry(directory.to_string())
+            .or_default()
+            .push((stem.to_string(), *bytes, *archive));
+    }
+    let mut tree = Vec::new();
+    let mut embedded: Vec<u8> = Vec::new();
+    let mut sides: BTreeMap<u16, Vec<u8>> = BTreeMap::new();
+    for (extension, directories) in grouped {
+        write_cstring(&mut tree, &extension);
+        for (directory, files) in directories {
+            write_cstring(&mut tree, &directory);
+            for (stem, bytes, archive) in files {
+                write_cstring(&mut tree, &stem);
+                let mut crc = Crc32::new();
+                crc.update(bytes);
+                tree.extend_from_slice(&crc.finalize().to_le_bytes());
+                tree.extend_from_slice(&0u16.to_le_bytes());
+                tree.extend_from_slice(&archive.to_le_bytes());
+                let target = if archive == DIRECTORY_ARCHIVE_INDEX {
+                    &mut embedded
+                } else {
+                    sides.entry(archive).or_default()
+                };
+                tree.extend_from_slice(&(target.len() as u32).to_le_bytes());
+                tree.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+                tree.extend_from_slice(&ENTRY_TERMINATOR.to_le_bytes());
+                target.extend_from_slice(bytes);
+            }
+            tree.push(0);
+        }
+        tree.push(0);
+    }
+    tree.push(0);
+    let mut output = Vec::new();
+    output.extend_from_slice(&VPK_SIGNATURE.to_le_bytes());
+    output.extend_from_slice(&2u32.to_le_bytes());
+    output.extend_from_slice(&(tree.len() as u32).to_le_bytes());
+    output.extend_from_slice(&(embedded.len() as u32).to_le_bytes());
+    output.extend_from_slice(&[0u8; 12]);
+    output.extend_from_slice(&tree);
+    output.extend_from_slice(&embedded);
+    std::fs::write(folder.join("pak01_dir.vpk"), output).expect("directory archive");
+    for (archive, bytes) in sides {
+        std::fs::write(folder.join(format!("pak01_{archive:03}.vpk")), bytes)
+            .expect("side archive");
+    }
+}
+
 /// Valve's own archives (`game/dota/pak01_dir.vpk`) are version 2 and keep
 /// their data in numbered side archives. Only the directory tree is read here.
 const GAME_VPK_MAX_DIRECTORY_BYTES: usize = 1024 * 1024 * 1024;

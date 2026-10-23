@@ -19,6 +19,7 @@ import {
   isSharedKept,
   isWardrobePackage,
 } from "../packages";
+import { ENGLISH_TEXT_ID } from "./languages";
 
 // The browser preview has no Rust engine. To show the whole builder there,
 // this bridge plays the Windows flow with timers: nothing is downloaded and
@@ -37,7 +38,8 @@ export type DemoScenario =
   | "minify_replaced"
   | "minify_beside"
   | "map_foreign"
-  | "map_changed";
+  | "map_changed"
+  | "english_dota";
 
 type DemoSettings = { scenario: DemoScenario; developer: boolean; tester: boolean };
 const key = "betterfy:builder-demo";
@@ -55,6 +57,7 @@ let settings: DemoSettings = (() => {
         "minify_beside",
         "map_foreign",
         "map_changed",
+        "english_dota",
       ].includes(
         stored.scenario,
       )
@@ -99,6 +102,8 @@ function seeded(value: string, min: number, max: number) {
 function resourcesFor(packageId: string) {
   // A map is one archive, fetched and stored as a unit.
   if (isMapPackage(packageId)) return 1;
+  // The English text is read from the player's game, not downloaded.
+  if (packageId === ENGLISH_TEXT_ID) return 1;
   const manifest = findPackage(packageId) as { resources?: unknown[] } | undefined;
   return Array.isArray(manifest?.resources) && manifest.resources.length
     ? manifest.resources.length
@@ -313,6 +318,9 @@ function demoMapItem(packageId: string): MapPlanItem {
   };
 }
 
+// Shaped like the layer of a real game: the numbers only show how it looks.
+const DEMO_ENGLISH_TEXT = { files: 212, bytes: 31_457_280 };
+
 function demoPlan(ids: string[]): TreePilotPlan {
   const allIds = ids.map(engineIdFor);
   const mapId = allIds.find(isMapPackage);
@@ -379,6 +387,7 @@ function demoPlan(ids: string[]): TreePilotPlan {
           ]
         : [],
     // Cursor and font packs replace the game's own loose files.
+    englishText: allIds.includes(ENGLISH_TEXT_ID) ? DEMO_ENGLISH_TEXT : null,
     packs: packageIds.flatMap((id) => {
       const pack = findPackage(id);
       if (pack?.kind !== "gamefiles") return [];
@@ -516,6 +525,10 @@ export const demoBridge: EngineBridge = {
   // The founder's Steam reports Russian for Dota, so the demo does too.
   async detectDotaLanguage() {
     await wait(450);
+    // An English Dota is most players: Steam says "english", which the
+    // engine reports as the BetterFy slot.
+    if (settings.scenario === "english_dota")
+      return { steamLanguage: "english", language: "betterfy" };
     return { steamLanguage: "russian", language: "russian" };
   },
   async previewSteamLaunchOptions(profileToken, language = "russian") {
@@ -611,6 +624,9 @@ export const demoBridge: EngineBridge = {
       throw new EngineFault("deployment_target_foreign", "install_tree_pilot");
     if (settings.scenario === "map_foreign" && ids.some(isMapPackage))
       throw new EngineFault("map_target_foreign", "install_tree_pilot");
+    // The engine writes the English text only into the Dutch folder.
+    if (ids.includes(ENGLISH_TEXT_ID) && language !== "dutch")
+      throw new EngineFault("english_text_slot_invalid", "install_tree_pilot");
     await wait(2400);
     installed = {
       operationId: `demo-${Date.now()}`,
