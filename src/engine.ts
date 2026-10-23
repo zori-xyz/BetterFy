@@ -446,6 +446,8 @@ export type TreePilotPlan = {
   wardrobeConflicts: WardrobeConflict[];
   /** Cursor and font packs: the game's own files they replace or remove. */
   packs: GamePackPlanItem[];
+  /** The player's own English text, renamed for the Dutch folder (english_text.rs). */
+  englishText: { files: number; bytes: number } | null;
   compatibility: "unknown";
   distribution: "internal_pilot";
   deployEnabled: boolean;

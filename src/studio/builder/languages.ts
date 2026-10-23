@@ -16,6 +16,9 @@ export type BuildLanguageOption = {
 
 type Details = Omit<BuildLanguageOption, "value">;
 
+/** The engine package that adds the player's own English text to the Dutch slot. */
+export const ENGLISH_TEXT_ID = "betterfy.english-text";
+
 const untestedRu = "Текст Dota сменится на этот язык.";
 const untestedEn = "Dota text switches to this language.";
 
@@ -31,14 +34,14 @@ const untested = (ru: string, en: string, native: string): Details => ({
 // A Record, so a language added to the engine cannot be forgotten here.
 const details: Record<GameLanguage, Details> = {
   betterfy: {
-    ru: "Английский",
-    en: "English",
+    ru: "Английский (своя папка)",
+    en: "English (own folder)",
     native: "English",
     verified: false,
     noteRu:
-      "Своя папка BetterFy без перевода, поэтому Dota должна остаться на английском. Так делал Minify до патча Dota 23.07.2026; после него способ не проверен.",
+      "Для экспертов. Свою папку BetterFy текущая Dota не принимает: сборка встаёт в файлы, но в игре ничего не меняется. Для английской Dota выбери «Как в Dota сейчас».",
     noteEn:
-      "BetterFy's own folder with no translation, so Dota should stay in English. Minify worked this way before Dota's 23 July 2026 patch; not checked since.",
+      "For experts. The current Dota does not accept BetterFy's own folder: the build installs but nothing changes in game. For an English Dota choose \"Same as Dota now\".",
   },
   russian: {
     ru: "Русский",

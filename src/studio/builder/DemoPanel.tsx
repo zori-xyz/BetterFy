@@ -31,6 +31,7 @@ export function DemoPanel() {
       "map_target_foreign",
     ],
     ["map_changed", "Dota обновила карту", "Dota updated the map", "map_conflict"],
+    ["english_dota", "Dota на английском", "Dota in English"],
   ];
   return (
     <div className="b-demo">
