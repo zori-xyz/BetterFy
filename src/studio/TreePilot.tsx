@@ -374,7 +374,9 @@ export default function TreePilot({
         setGameFilesReplaced((receipt?.gameFiles?.replaced ?? 0) > 0);
       })
       .catch((cause) => {
-        if (active) setError(codeOf(cause));
+        // A read made while an install holds the lock is not a failure of the
+        // install: the state is read again when the screen next refreshes.
+        if (active && codeOf(cause) !== "deployment_locked") setError(codeOf(cause));
       });
     return () => {
       active = false;

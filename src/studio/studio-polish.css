@@ -302,3 +302,7 @@
 /* Light theme: the mood's light shade is for dark backgrounds; small mood
    labels use its ink shade there, like the headline's accent word. */
 :root[data-theme=light] .s-hero-copy>.s-eyebrow,:root[data-theme=light] .s-carousel-heading>span{color:var(--mood-ink)}
+
+/* The sidebar build card keeps its count on one line while work is running. */
+.s-sidebar-build > span { white-space: nowrap; }
+.s-sidebar-build small { line-height: 1.35; overflow: hidden; text-overflow: ellipsis; }

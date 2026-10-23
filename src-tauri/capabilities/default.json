@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "updater:default",
+    "core:window:allow-start-dragging",
     "process:allow-restart",
     {
       "identifier": "opener:allow-open-url",
