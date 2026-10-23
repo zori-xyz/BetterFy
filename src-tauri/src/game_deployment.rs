@@ -626,9 +626,10 @@ fn transaction_lock(root: &Path) -> Result<TransactionLock, String> {
     // The lock is exclusive, and the build screen asks for the deployment
     // state with several read-only commands at once. A second caller that
     // arrives while the first holds the lock for a few milliseconds waits
-    // briefly instead of failing; a lock held by a long operation still ends
-    // as `deployment_locked` after the bound.
-    const LOCK_WAIT: std::time::Duration = std::time::Duration::from_millis(3_000);
+    // instead of failing. An install holds the lock for tens of seconds (the
+    // build screen may be reopened meanwhile), so the bound is long; a lock
+    // that is still held after it ends as `deployment_locked`.
+    const LOCK_WAIT: std::time::Duration = std::time::Duration::from_millis(45_000);
     const LOCK_STEP: std::time::Duration = std::time::Duration::from_millis(25);
     let started = std::time::Instant::now();
     loop {
