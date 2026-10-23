@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import {
   Bug,
@@ -23,7 +24,12 @@ import { useLocale } from "../i18n";
 import { getStorageItem, setStorageItem } from "../storage";
 import { useDemoSettings } from "../studio/builder/demo";
 import { attachPicture, snapshotWindow } from "./pictures";
-import { testerRecorder, useTesterJournal, type TesterEvent } from "./recorder";
+import {
+  testerRecorder,
+  useTesterJournal,
+  type PreviousRun,
+  type TesterEvent,
+} from "./recorder";
 import { sendTesterReport } from "./send";
 import "./tester.css";
 
@@ -251,7 +257,7 @@ export function TesterProgram({ session }: { session: AuthSession | null }) {
   const [tab, setTab] = useState<"feed" | "notes">("feed");
   const [sending, setSending] = useState<SendState>("idle");
   const [problem, setProblem] = useState("");
-  const [bubble, setBubble] = useState<"failure" | "ping" | null>(null);
+  const [bubble, setBubble] = useState<"failure" | "ping" | "crash" | null>(null);
   const [bounce, setBounce] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const t = (ru: string, en: string) => (isRu ? ru : en);
@@ -261,6 +267,22 @@ export function TesterProgram({ session }: { session: AuthSession | null }) {
     else testerRecorder.stop();
   }, [enrolled, consent]);
   useEffect(() => () => testerRecorder.stop(), []);
+
+  // If the last run did not end normally, say so once and offer to send it.
+  useEffect(() => {
+    if (!enrolled || !("__TAURI_INTERNALS__" in window)) return undefined;
+    let active = true;
+    invoke<PreviousRun | null>("take_previous_run")
+      .then((run) => {
+        if (!active || !run) return;
+        testerRecorder.setPreviousRun(run);
+        if (run.uncleanExit || run.panic) setBubble("crash");
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [enrolled]);
 
   // A failure makes the bug jump and, with the window closed, offers to send.
   const lastPulse = useRef(journal.failurePulse);
@@ -380,6 +402,32 @@ export function TesterProgram({ session }: { session: AuthSession | null }) {
             <>
               <MapPin />
               {t("Пинг поставлен", "Ping placed")}
+            </>
+          ) : bubble === "crash" ? (
+            <>
+              <CircleAlert />
+              <span>
+                {t(
+                  "В прошлый раз приложение закрылось само. Опиши, что делал, и отправь.",
+                  "The app closed by itself last time. Say what you were doing and send it.",
+                )}
+              </span>
+              <button
+                onClick={() => {
+                  setBubble(null);
+                  setOpen(true);
+                  setTab("notes");
+                }}
+              >
+                {t("Описать и отправить", "Describe and send")}
+              </button>
+              <button
+                className="t-bubble-close"
+                aria-label={t("Позже", "Later")}
+                onClick={() => setBubble(null)}
+              >
+                <X />
+              </button>
             </>
           ) : (
             <>

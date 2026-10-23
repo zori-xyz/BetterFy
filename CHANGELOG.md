@@ -51,6 +51,8 @@ First Windows observation of skins: three catalog skins installed together by EA
 
 Version bump together with the work below.
 
+Crash capture for the tester program: the app notes when a run did not end normally and keeps a sanitised panic message, the tester window offers to send it, and it appears at the top of the Telegram summary; the plan for turning the tester journal into opt-in product diagnostics is in [docs/DIAGNOSTICS_ROADMAP.md](docs/DIAGNOSTICS_ROADMAP.md).
+
 First tester round: there is no practical limit on the number of items in a build any more (the app refused builds above 32 items; only the size and file-count caps of one VPK remain, each with its own message), and the replace dialog now says plainly that two different looks for one hero do not work together.
 
 ### Skins (wardrobe)

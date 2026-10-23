@@ -240,3 +240,19 @@ test("the summary fits one Telegram message however long the notes are", () => {
   assert.equal(parseTesterReport(JSON.stringify(report({ notes: [{ at: "x", text: "a" }] })), 0), null);
   assert.equal(parseTesterReport(JSON.stringify(report({ counts: { screens: -1, clicks: 0, failures: 0, flags: 0 } })), 0), null);
 });
+
+test("a crash note is validated, summarised for the founder, and dropped when malformed", () => {
+  const good = parseTesterReport(JSON.stringify(report({
+    previousRun: { uncleanExit: true, version: "0.5.0", panic: { message: "index out of bounds <x>", location: "src/main.rs:12" } },
+  })), 0);
+  assert.ok(good);
+  assert.equal(good.previousRun.uncleanExit, true);
+  const text = testerSummary(good, "bettertest1", Math.floor(Date.now() / 1000));
+  assert.match(text, /Прошлый запуск закончился аварийно/);
+  assert.match(text, /index out of bounds &lt;x&gt;/);
+
+  const bad = parseTesterReport(JSON.stringify(report({ previousRun: { uncleanExit: "yes", panic: { message: 5 } } })), 0);
+  assert.ok(bad, "the rest of the report stays valid");
+  assert.equal(bad.previousRun, null);
+  assert.equal(parseTesterReport(JSON.stringify(report()), 0).previousRun, null);
+});

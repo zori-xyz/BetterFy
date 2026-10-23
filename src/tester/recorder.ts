@@ -17,6 +17,13 @@ export type TesterEvent =
   | { type: "flag"; at: string; screen: string };
 
 export type TesterNote = { at: string; text: string };
+/** How the previous run ended, as reported by the app's own crash notes. */
+export type PreviousRun = {
+  uncleanExit: boolean;
+  startedAtMs?: number | null;
+  version?: string | null;
+  panic?: { atMs: number; message: string; location: string } | null;
+};
 export type TesterImage = {
   id: number;
   kind: "snapshot" | "attachment";
@@ -36,6 +43,8 @@ type State = {
   images: TesterImage[];
   /** Bumped on every failure, so the window can react to one. */
   failurePulse: number;
+  /** Not stored: read from the app once per start. */
+  previousRun: PreviousRun | null;
 };
 
 const LIMIT = 2000;
@@ -53,6 +62,7 @@ function restored(): State {
     draft: "",
     images: [],
     failurePulse: 0,
+    previousRun: null,
   };
   try {
     const stored = JSON.parse(getStorageItem(key) ?? "null");
@@ -188,6 +198,9 @@ export const testerRecorder = {
   },
   flag() {
     push({ type: "flag", at: now(), screen }, { flags: 1 });
+  },
+  setPreviousRun(run: PreviousRun | null) {
+    update({ previousRun: run }, false);
   },
   setDraft(draft: string) {
     update({ draft: draft.slice(0, 4000) });

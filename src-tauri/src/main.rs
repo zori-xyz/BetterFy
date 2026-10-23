@@ -6,6 +6,7 @@ mod blacklist;
 mod build_engine;
 mod catalog_index;
 mod content_store;
+mod crash_report;
 mod custom_backgrounds;
 mod custom_fonts;
 mod evidence_reports;
@@ -1436,6 +1437,12 @@ async fn start_steam_after_restore(request: SteamStartRequest) -> Result<Runtime
 fn main() {
     tauri::Builder::default()
         .manage(AuthState::default())
+        .setup(|app| {
+            if let Ok(dir) = app.path().app_data_dir() {
+                crash_report::begin(&dir, env!("CARGO_PKG_VERSION"));
+            }
+            Ok(())
+        })
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -1507,10 +1514,16 @@ fn main() {
             auth_list_sessions,
             auth_revoke_device,
             auth_logout,
-            tester_reports::send_tester_report
+            tester_reports::send_tester_report,
+            crash_report::take_previous_run
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running BetterFy");
+        .build(tauri::generate_context!())
+        .expect("error while building BetterFy")
+        .run(|_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                crash_report::clean_exit();
+            }
+        });
 }
 
 #[cfg(test)]
