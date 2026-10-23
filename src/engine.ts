@@ -1351,11 +1351,21 @@ export const engineBridge: EngineBridge = {
   async currentTreePilot(gamePath) {
     if (!isTauriRuntime()) return mockEngine.currentTreePilot(gamePath);
     const { invoke } = await import("@tauri-apps/api/core");
-    return guardedEngineCall(
-      "current_tree_pilot",
-      invoke<TreePilotCurrentState | null>("current_tree_pilot", { gamePath }),
-      30_000,
-    );
+    // A read-only question must not fail because another read held the
+    // deployment lock at that moment: ask again shortly, a few times.
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await guardedEngineCall(
+          "current_tree_pilot",
+          invoke<TreePilotCurrentState | null>("current_tree_pilot", { gamePath }),
+          30_000,
+        );
+      } catch (cause) {
+        const code = cause instanceof EngineFault ? cause.code : "";
+        if (code !== "deployment_locked" || attempt >= 3) throw cause;
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
+      }
+    }
   },
   async refreshCatalog() {
     if (!isTauriRuntime()) return mockEngine.refreshCatalog();

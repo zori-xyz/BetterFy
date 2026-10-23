@@ -623,21 +623,39 @@ fn transaction_lock(root: &Path) -> Result<TransactionLock, String> {
         .encode_wide()
         .chain(std::iter::once(0))
         .collect::<Vec<_>>();
-    let handle = unsafe {
-        CreateFileW(
-            path.as_ptr(),
-            GENERIC_READ | GENERIC_WRITE,
-            0,
-            std::ptr::null(),
-            OPEN_ALWAYS,
-            FILE_ATTRIBUTE_HIDDEN,
-            std::ptr::null_mut(),
-        )
-    };
-    if handle == INVALID_HANDLE_VALUE {
-        return Err("deployment_locked".to_string());
+    // The lock is exclusive, and the build screen asks for the deployment
+    // state with several read-only commands at once. A second caller that
+    // arrives while the first holds the lock for a few milliseconds waits
+    // briefly instead of failing; a lock held by a long operation still ends
+    // as `deployment_locked` after the bound.
+    const LOCK_WAIT: std::time::Duration = std::time::Duration::from_millis(3_000);
+    const LOCK_STEP: std::time::Duration = std::time::Duration::from_millis(25);
+    let started = std::time::Instant::now();
+    loop {
+        let handle = unsafe {
+            CreateFileW(
+                path.as_ptr(),
+                GENERIC_READ | GENERIC_WRITE,
+                0,
+                std::ptr::null(),
+                OPEN_ALWAYS,
+                FILE_ATTRIBUTE_HIDDEN,
+                std::ptr::null_mut(),
+            )
+        };
+        if handle != INVALID_HANDLE_VALUE {
+            return Ok(TransactionLock { handle });
+        }
+        // 32 = sharing violation, 33 = lock violation: someone else holds it.
+        let busy = matches!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(32 | 33)
+        );
+        if !busy || started.elapsed() >= LOCK_WAIT {
+            return Err("deployment_locked".to_string());
+        }
+        std::thread::sleep(LOCK_STEP);
     }
-    Ok(TransactionLock { handle })
 }
 
 #[cfg(not(target_os = "windows"))]
