@@ -40,7 +40,7 @@ test("a Premium ending soon gets one reminder with a renew button, then is marke
     assert.equal(await sendPremiumReminders(run.env, NOW), 1);
     assert.equal(run.sent[0].method, "sendPhoto");
     assert.match(run.sent[0].body.caption, /заканчивается/);
-    assert.equal(run.sent[0].body.reply_markup.inline_keyboard[0][0].callback_data, "plans");
+    assert.equal(run.sent[0].body.reply_markup.inline_keyboard[0][0].url, "https://t.me/BeterHelp");
     assert.deepEqual(run.marked[0].slice(0, 2), [row.active_until, "u1"]);
   } finally {
     run.restore();

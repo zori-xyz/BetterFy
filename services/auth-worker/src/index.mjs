@@ -841,8 +841,7 @@ async function configureTelegram(env) {
       { command: "devices", description: "Where you are signed in" },
       { command: "language", description: "Switch Russian / English" },
       { command: "support", description: "Contact support" },
-      { command: "subscribe", description: "Open a Stars subscription" },
-      { command: "subscription", description: "View or stop your subscription" },
+      { command: "subscription", description: "Your earlier subscription, if you have one" },
       { command: "paysupport", description: "Payment support" },
       { command: "help", description: "How sign-in works" },
       { command: "privacy", description: "What the bot stores" },
@@ -859,8 +858,7 @@ async function configureTelegram(env) {
       { command: "devices", description: "Где ты вошёл" },
       { command: "language", description: "Русский / English" },
       { command: "support", description: "Связаться с поддержкой" },
-      { command: "subscribe", description: "Оформить подписку за Stars" },
-      { command: "subscription", description: "Статус и продление подписки" },
+      { command: "subscription", description: "Прежняя подписка, если она у тебя была" },
       { command: "paysupport", description: "Помощь с оплатой" },
       { command: "help", description: "Как работает вход" },
       { command: "privacy", description: "Что хранит бот" },
@@ -917,7 +915,6 @@ function welcomeKeyboard(language) {
         { text: copy.language, callback_data: language === "ru" ? "lang_en" : "lang_ru" },
       ],
       [{ text: copy.support, url: SUPPORT_URL }],
-      [{ text: `⭐ ${copy.subscribe}`, callback_data: "plans" }],
     ],
   };
 }
@@ -965,8 +962,12 @@ function plansKeyboard(language) {
   };
 }
 
+// Nothing is sold for now: Premium has no benefit that a copied file does not
+// already give, so the old purchase buttons answer with a plain note.
 async function sendPlans(env, target) {
-  await showCard(env, target, "premium", COPY[target.language].choosePlan, plansKeyboard(target.language));
+  await showCard(env, target, "mainMenu", COPY[target.language].freeNow, {
+    inline_keyboard: [backRow(target.language)],
+  });
 }
 
 function formatExpiry(timestamp, language) {
@@ -1276,7 +1277,7 @@ async function sendSubscriptionStatus(env, chatId, from, language, now) {
       chat_id: chatId,
       photo: cardUrl(env, botCardFile("premium", language)),
       caption: COPY[language].subscriptionInactive,
-      reply_markup: { inline_keyboard: [[{ text: `⭐ ${COPY[language].subscribe}`, callback_data: "plans" }]] },
+      reply_markup: { inline_keyboard: [backRow(language)] },
     });
     return false;
   }
@@ -1555,7 +1556,7 @@ async function handleCallback(env, callback, now) {
   if (callback.data === "signout_yes") return signOutEverywhere(env, target, callback.from, now);
   if (callback.data === "plans") return sendPlans(env, target);
   if (typeof callback.data === "string" && callback.data.startsWith("buy_")) {
-    return sendAccessInvoice(env, chatId, callback.from, language, now, callback.data.slice(4));
+    return sendPlans(env, target);
   }
   if (callback.data === "cancel_subscription") return cancelSubscription(env, chatId, callback.from, language, now);
   if (callback.data === "lang_ru" || callback.data === "lang_en") {
@@ -2148,7 +2149,7 @@ export async function sendPremiumReminders(env, now) {
           chat_id: row.telegram_user_id,
           photo: cardUrl(env, botCardFile("premium", language)),
           caption: COPY[language].premiumEnding.replace("{date}", formatExpiry(row.active_until, language)),
-          reply_markup: { inline_keyboard: [[{ text: `⭐ ${COPY[language].renew}`, callback_data: "plans" }]] },
+          reply_markup: { inline_keyboard: [[{ text: COPY[language].support, url: SUPPORT_URL }]] },
         });
         sent += 1;
       } catch {
@@ -2166,7 +2167,7 @@ export default {
   async scheduled(controller, env, context) {
     const now = Math.floor(Date.now() / 1000);
     context.waitUntil(cleanupExpiredRows(env, now));
-    context.waitUntil(sendPremiumReminders(env, now).catch(() => undefined));
+    // Premium is not on sale, so there is nothing to renew: no reminders.
   },
   async fetch(request, env) {
     try {
