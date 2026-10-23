@@ -44,6 +44,7 @@ export async function sendTesterReport() {
     notes: state.notes,
     images: state.images.map(({ kind, note }) => ({ kind, note })),
     events: state.events,
+    previousRun: state.previousRun,
   };
   if (!isDesktop()) {
     // The browser preview has no engine and no session: the report is

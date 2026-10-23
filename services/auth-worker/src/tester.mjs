@@ -50,6 +50,26 @@ const isCount = (value) => Number.isSafeInteger(value) && value >= 0 && value <=
 const isIsoTime = (value) => typeof value === "string" && value.length <= 40 && !Number.isNaN(Date.parse(value));
 const isShortText = (value, max) => typeof value === "string" && value.length <= max && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value);
 
+/**
+ * How the previous run ended, from the app's own crash note. Anything that is
+ * not the expected shape is dropped, never forwarded: the rest of the report
+ * stays valid without it.
+ */
+function cleanPreviousRun(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (typeof value.uncleanExit !== "boolean") return null;
+  const panic = value.panic && typeof value.panic === "object" ? value.panic : null;
+  const note = panic && isShortText(panic.message, 300) && isShortText(panic.location, 300)
+    ? { message: panic.message, location: panic.location }
+    : null;
+  if (!value.uncleanExit && !note) return null;
+  return {
+    uncleanExit: value.uncleanExit,
+    version: isShortText(value.version, 32) ? value.version : null,
+    panic: note,
+  };
+}
+
 /** The report part, parsed and checked against the image parts that came with it. */
 export function parseTesterReport(text, imageCount) {
   let report;
@@ -73,6 +93,7 @@ export function parseTesterReport(text, imageCount) {
     noteChars += note.text.length;
   }
   if (noteChars > MAX_NOTES_TOTAL_CHARS) return null;
+  report.previousRun = cleanPreviousRun(report.previousRun);
   if (!Array.isArray(report.images) || report.images.length !== imageCount) return null;
   for (const image of report.images) {
     if (!image || !["snapshot", "attachment"].includes(image.kind)) return null;
@@ -105,6 +126,14 @@ export function testerSummary(report, login, now) {
     `BetterFy ${escapeHtml(report.appVersion)} · ${escapeHtml(report.platform)}`,
     `Сессия ${sessionLength(report.startedAt, now)} · экраны ${counts.screens} · клики ${counts.clicks} · сбои ${counts.failures} · пинги ${counts.flags}`,
   ];
+  const previous = report.previousRun;
+  if (previous) {
+    const version = previous.version ? ` (BetterFy ${escapeHtml(previous.version)})` : "";
+    head.push(previous.uncleanExit
+      ? `💥 Прошлый запуск закончился аварийно${version}`
+      : `⚠️ В прошлом запуске была паника${version}`);
+    if (previous.panic) head.push(`<code>${escapeHtml(previous.panic.message)}</code> · ${escapeHtml(previous.panic.location)}`);
+  }
   const tail = [];
   const snapshots = report.images.filter((image) => image.kind === "snapshot").length;
   const pictures = report.images.length - snapshots;
