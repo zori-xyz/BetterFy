@@ -692,26 +692,17 @@ export default function Site() {
       // The list stays as it was.
     }
   };
-  const downloadBuild = async () => {
+  // The installer is public on GitHub Releases, so no account is needed to
+  // download it; signing in stays optional and happens later, in the app.
+  const downloadBuild = () => {
     setDownloadError("");
-    if (!sessionToken || !authSession) {
-      setDownload(false);
-      setProfile(true);
-      return;
-    }
-    try {
-      const response = await fetch(new URL("/v1/releases/latest", authUrl), {
-        headers: { Authorization: `Bearer ${sessionToken}` },
-        credentials: "omit",
-      });
-      if (!response.ok) throw new Error();
-      const data = (await response.json()) as { downloadUrl?: string };
-      const url = safeReleaseUrl(data.downloadUrl);
-      if (!url) throw new Error();
-      window.location.assign(url);
-    } catch {
-      setDownloadError(t.download.error);
-    }
+    const url =
+      release &&
+      safeReleaseUrl(
+        `${repo}/releases/download/${encodeURIComponent(release.version)}/${encodeURIComponent(release.fileName)}`,
+      );
+    if (url) window.location.assign(url);
+    else setDownloadError(t.download.error);
   };
   const toggleTheme = () => {
     const next: Theme = theme === "dark" ? "light" : "dark";
@@ -878,11 +869,7 @@ export default function Site() {
           release={release}
           releaseState={releaseState}
           retry={() => setReleaseAttempt((value) => value + 1)}
-          openProfile={() => {
-            setDownload(false);
-            setProfile(true);
-          }}
-          download={() => void downloadBuild()}
+          download={downloadBuild}
           error={downloadError}
         />
       )}

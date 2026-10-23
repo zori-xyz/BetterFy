@@ -5,8 +5,8 @@ on:
     branches: [main]
     paths:
       - "website/**"
-      - "src/BetterFyWordmark.tsx"
-      - "src/assets/fonts/**"
+      # The site reuses the app's styles, components and catalog data.
+      - "src/**"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/pages.yml"

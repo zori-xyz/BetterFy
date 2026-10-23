@@ -276,7 +276,11 @@ async function assertThemeAndStatus() {
   if (verified === 0 || unverified === 0)
     throw new Error("Status journal must list both verified and unverified facts");
   const mods = await page.locator("#mods .mod-group li").count();
-  if (mods !== 30) throw new Error(`Mod catalog lists ${mods} packages, expected 30`);
+  // The count comes from the app's own catalog, so compare the list with the
+  // number the page shows instead of pinning a figure that drifts.
+  const shown = Number(await page.locator("#mods .w-count").textContent());
+  if (!mods || mods !== shown)
+    throw new Error(`Mod catalog lists ${mods} packages, but the page says ${shown}`);
   await page.close();
 }
 
