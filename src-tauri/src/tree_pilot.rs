@@ -603,7 +603,7 @@ fn download_slot() -> &'static Mutex<Option<Arc<TreeDownload>>> {
 pub(crate) const PACKAGE_ID: &str = "minify.tree-mod";
 pub(crate) const TARGET_FILE: &str = "pak66_dir.vpk";
 /// Upper bound on packages merged into one VPK.
-const MAX_BUNDLE_PACKAGES: usize = 128;
+const MAX_BUNDLE_PACKAGES: usize = 4096;
 
 fn normalize_package_ids(ids: &[String]) -> Result<Vec<String>, String> {
     if ids.is_empty() {

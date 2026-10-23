@@ -82,7 +82,7 @@ export default function Workspace({
   onReconnect: () => void;
   onSignOut: () => Promise<boolean>;
 }) {
-  const { isRu, language, setLanguage } = useLocale();
+  const { isRu, language } = useLocale();
   const [route, setRoute] = useState<Route>("home");
   const [selected, setSelected] = useState<string[]>(() => [
     ...new Set([
@@ -580,18 +580,6 @@ export default function Workspace({
             <span>{isRu ? "Найти мод" : "Find a mod"}</span>
             <kbd>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘ K" : "Ctrl K"}</kbd>
           </button>
-          <div className="s-lang-switch" role="group" aria-label={isRu ? "Язык" : "Language"}>
-            {(["ru", "en"] as const).map((code) => (
-              <button
-                key={code}
-                type="button"
-                aria-pressed={language === code}
-                onClick={() => setLanguage(code)}
-              >
-                {code.toUpperCase()}
-              </button>
-            ))}
-          </div>
           <button
             className={`s-prototype-badge ${delivery.gameIds.length ? "is-pilot" : ""}`}
             onClick={() => navigate("build")}
@@ -733,8 +721,8 @@ export default function Workspace({
           <div className="s-dialog-body">
             <p>
               {isRu
-                ? "Эти варианты занимают один слот. Обычно остаётся один из них; скины можно оставить оба, пересечения файлов покажет обзор сборки."
-                : "These options share a slot. Usually one stays; skins can be kept together, and the build review lists any file overlaps."}
+                ? "Два разных образа для одного героя вместе не работают: в игре виден только один. В сборке остаётся один из них."
+                : "Two different looks for one hero do not work together: only one shows in the game. One of them stays in your build."}
             </p>
             <div className="s-replacement">
               <div>
@@ -753,23 +741,6 @@ export default function Workspace({
               <button className="s-btn" onClick={() => setReplacement(null)}>
                 {isRu ? "Оставить текущий" : "Keep current"}
               </button>
-              {replacement.mod.domain === "wardrobe" && (
-                <button
-                  className="s-btn"
-                  onClick={() => {
-                    saveSelection([...selected, replacement.mod.id]);
-                    flyToBuild(replacement.mod.image);
-                    setReplacement(null);
-                    notify(
-                      isRu
-                        ? "Оба в сборке. Если они меняют одни и те же файлы, обзор покажет пересечения"
-                        : "Both are in your build. If they change the same files, the review lists the overlaps",
-                    );
-                  }}
-                >
-                  {isRu ? "Оставить оба" : "Keep both"}
-                </button>
-              )}
               <button
                 className="s-btn s-btn-primary"
                 onClick={() => {

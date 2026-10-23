@@ -125,7 +125,9 @@ export function usePackagesRevision() {
 
 /** Catalog ID (`minify-tree-mod`) or engine ID (`minify.tree-mod`). */
 /** Upper bound on packages the engine merges into one build (tree_pilot.rs). */
-export const MAX_BUNDLE_PACKAGES = 128;
+// A sanity bound only: the real limits are the size and file-count caps of
+// one VPK, which refuse with their own messages.
+export const MAX_BUNDLE_PACKAGES = 4096;
 
 /**
  * The engine ID suffix of the opt-in mode of a wardrobe item that leaves the

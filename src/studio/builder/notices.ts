@@ -196,8 +196,8 @@ export const explainError = (code: string, isRu: boolean) => {
       "The archive changes shared game files and is set to refuse them. Installation stopped.",
     ],
     bundle_package_limit: [
-      "В одной сборке может быть не больше 128 наборов (модов, скинов, звуков). Убери часть или собери остальное второй сборкой.",
-      "One build can hold at most 128 items (mods, skins, sounds). Remove some, or put the rest in a second build.",
+      "В сборке слишком много наборов. Убери часть или собери остальное второй сборкой.",
+      "This build has too many items. Remove some, or put the rest in a second build.",
     ],
     build_too_large: [
       "Всё выбранное вместе больше 512 МБ, а это предел одной сборки. Убери один из крупных обликов или собери его отдельно от остального.",
