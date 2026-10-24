@@ -43,7 +43,8 @@ export const COPY = {
     rateLimited: "Слишком много запросов. Подожди несколько минут и попробуй снова.",
     languageChanged: "Язык переключён на русский.",
     privacy: "Мы используем Telegram ID, имя и язык только для профиля BetterFy. Переписки бот не читает.",
-    terms: "Покупка открывает Premium на выбранный срок. План на 30 дней продлевается автоматически; отключить продление можно командой /subscription. Возвраты рассматриваются через /paysupport.",
+    terms: "BetterFy сейчас бесплатен, платных функций нет. Если они появятся, условия и цена будут показаны до оплаты. Возвраты по прошлым платежам рассматриваются через /paysupport.",
+    freeNow: "BetterFy сейчас полностью бесплатен, платных функций нет. Если проект тебе нравится, можно поддержать его по желанию: подробности на сайте. Спасибо!",
     subscribe: "Выбрать доступ",
     choosePlan: "Выбери срок доступа. 3 и 15 дней оплачиваются один раз. План на 30 дней продлевается автоматически — его можно отключить в любой момент.",
     plans: {
@@ -105,7 +106,8 @@ export const COPY = {
     rateLimited: "Too many requests. Wait a few minutes and try again.",
     languageChanged: "Language switched to English.",
     privacy: "We use your Telegram ID, name, and language for your BetterFy profile. The bot cannot read your chats.",
-    terms: "A purchase unlocks Premium for the selected period. The 30-day plan renews automatically; use /subscription to stop renewal. Refund requests are handled through /paysupport.",
+    terms: "BetterFy is free right now and nothing is for sale. If paid features appear, the terms and price will be shown before payment. Refunds for earlier payments are handled through /paysupport.",
+    freeNow: "BetterFy is fully free right now and nothing is for sale. If you like the project you can support it if you wish: details are on the website. Thank you!",
     subscribe: "Choose access",
     choosePlan: "Choose an access period. The 3-day and 15-day passes are one-time purchases. The 30-day plan renews automatically and can be stopped at any time.",
     plans: {

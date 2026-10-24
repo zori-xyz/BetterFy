@@ -247,7 +247,7 @@ const ru = {
       },
       {
         q: "Сколько это стоит?",
-        a: "Сборки раннего доступа скачиваются после входа. Premium оформляется в боте @BeterFyBot за Telegram Stars: условия и цену бот показывает перед оплатой.",
+        a: "BetterFy сейчас бесплатен, платных функций нет. Если проект тебе нравится, его можно поддержать по желанию: это ни на что не влияет в приложении.",
       },
       {
         q: "Какие данные вы храните?",
@@ -520,7 +520,7 @@ const en: typeof ru = {
       },
       {
         q: "How much does it cost?",
-        a: "Early Access builds download after you sign in. Premium is bought in the @BeterFyBot bot with Telegram Stars: the bot shows the terms and price before payment.",
+        a: "BetterFy is free right now and nothing is for sale. If you like the project you can support it if you wish; it changes nothing in the app.",
       },
       {
         q: "What data do you keep?",
