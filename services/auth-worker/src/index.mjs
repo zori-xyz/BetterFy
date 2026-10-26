@@ -1556,7 +1556,9 @@ async function handleCallback(env, callback, now) {
   if (callback.data === "signout_yes") return signOutEverywhere(env, target, callback.from, now);
   if (callback.data === "plans") return sendPlans(env, target);
   if (typeof callback.data === "string" && callback.data.startsWith("buy_")) {
-    return sendPlans(env, target);
+    // Sales are closed unless the deployment turns them on explicitly.
+    if (env.PREMIUM_SALES_OPEN !== "1") return sendPlans(env, target);
+    return sendAccessInvoice(env, chatId, callback.from, language, now, callback.data.slice(4));
   }
   if (callback.data === "cancel_subscription") return cancelSubscription(env, chatId, callback.from, language, now);
   if (callback.data === "lang_ru" || callback.data === "lang_en") {
