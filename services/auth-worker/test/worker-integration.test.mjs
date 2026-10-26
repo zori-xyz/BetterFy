@@ -33,6 +33,7 @@ test("worker flows against a real D1 schema", async (t) => {
         BOT_USERNAME: "BeterFyBot",
         PUBLIC_WORKER_URL: "https://example.test",
         BOT_ASSET_BASE_URL: "https://example.test",
+        PREMIUM_SALES_OPEN: "1",
         ALLOWED_ORIGINS: "https://zori-xyz.github.io",
         VERIFY_GLOBAL_FAILURE_LIMIT: "3",
         RESEND_API_KEY: "re_test",
