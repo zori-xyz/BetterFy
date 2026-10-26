@@ -9,6 +9,17 @@
 > Older Telegram-only and email-code-only auth composition notes below are
 > historical where they conflict with this decision.
 
+> October 20, 2026: the founder confirmed that today's look is the direction
+> and that older principles below are out of date where they differ. What
+> holds now: refine the current studio style, remove clutter, no ready-made
+> packs. The home screen uses emote stickers (12 moods) as its playful layer,
+> the whole wardrobe shuffled in the carousel with no counters, Telegram bot
+> scenes instead of a tuning shelf, and a floating reminder for an unfinished
+> build; the profile is a player card. Every user-facing screen should carry a
+> small, meaningful, playful detail. The public website reuses the app's own
+> tokens, fonts and components (`website/src/main.tsx`) so both read as one
+> product.
+
 This document is the durable visual authority for BetterFy. Read
 `docs/EXPERIENCE_CONSTITUTION.md` before designing a surface or flow.
 
