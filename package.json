@@ -47,6 +47,6 @@
     "playwright": "^1.57.0",
     "prettier": "3.6.2",
     "typescript": "^5.7.2",
-    "vite": "^6.0.5"
+    "vite": "^6.4.5"
   }
 }
